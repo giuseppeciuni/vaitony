@@ -3,6 +3,56 @@ import os
 from django.conf import settings
 
 
+import pytesseract
+from PIL import Image
+from PyPDF2 import PdfReader
+from bs4 import BeautifulSoup
+
+
+
+
+def extract_text_from_pdf(pdf_path: str) -> str:
+    """Estrae il testo da un file PDF"""
+    reader = PdfReader(pdf_path)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
+
+
+
+def extract_text_from_html(html_path: str) -> str:
+    """Estrae il testo da un file HTML"""
+    with open(html_path, 'r', encoding='utf-8') as file:
+        soup = BeautifulSoup(file.read(), 'html.parser')
+        return soup.get_text()
+
+
+
+def extract_text_from_image(image_path: str) -> str:
+    """Estrae il testo da un'immagine usando OCR"""
+    try:
+        image = Image.open(image_path)
+        text = pytesseract.image_to_string(image, lang='ita+eng')
+        return text
+    except Exception as e:
+        print(f"Errore nell'estrazione del testo dall'immagine {image_path}: {str(e)}")
+        return ""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def process_user_files(user_dir, documents_list, search_query='', owner_username=None):
 	"""

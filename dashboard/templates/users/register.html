@@ -1,0 +1,100 @@
+{% extends 'users/base_users.html' %}
+{% load static %}
+
+{% block user_content %}
+
+    {% if form.errors %}
+        <div class="alert alert-danger" role="alert">
+            {% for  key,value in form.errors.items %}
+            {{key}}: {{value.0}}<br/>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <body class="register-page bg-body-secondary">
+        <div class="register-box"> <!-- /.register-logo -->
+            <div class="card card-outline card-primary">
+                <div class="card-header"> <a href="#" class="link-dark text-center link-offset-2 link-opacity-100 link-opacity-50-hover">
+                        <h1 class="mb-0"> <b>Admin</b>LTE
+                        </h1>
+                    </a> </div>
+                <div class="card-body register-card-body">
+                    <p class="register-box-msg">Register a new membership</p>
+                    <form action="{% url 'register' %}" method="post">
+                        {% csrf_token %}
+                        <div class="input-group mb-1">
+                            <div class="form-floating"> <input type="text" class="form-control" placeholder="Username" name="username"> <label for="registerEmail">Username</label> </div>
+                            <div class="input-group-text"> <span class="bi bi-person"></span> </div>
+                        </div>
+                        <div class="input-group mb-1">
+                            <div class="form-floating"> <input type="email" class="form-control" placeholder="Email" name="email"> <label for="registerEmail">Email</label> </div>
+                            <div class="input-group-text"> <span class="bi bi-envelope"></span> </div>
+                        </div>
+                        <div class="input-group mb-1">
+                            <div class="form-floating"> <input type="password" class="form-control" placeholder="Password" name="password1"> <label for="registerPassword">Password</label> </div>
+                            <div class="input-group-text"> <span class="bi bi-lock-fill"></span> </div>
+                        </div> <!--begin::Row-->
+                        <div class="input-group mb-1">
+                            <div class="form-floating"> <input type="password" class="form-control" placeholder="Retype password" name="password2"> <label for="registerPassword">Retype Password</label> </div>
+                            <div class="input-group-text"> <span class="bi bi-lock-fill"></span> </div>
+                        </div> <!--begin::Row-->
+                        <div class="row">
+                            <div class="col-8 d-inline-flex align-items-center">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" agreement_terms value="" id="flexCheckDefault" required>
+                                    <label class="form-check-label" for="flexCheckDefault">
+                                        I agree to the <a href="#">terms</a> </label>
+                                </div>
+                            </div> <!-- /.col -->
+                            <div class="col-4">
+                                <div class="d-grid gap-2"> <button type="submit" class="btn btn-primary">Sign Up</button> </div>
+                            </div> <!-- /.col -->
+                        </div> <!--end::Row-->
+                    </form>
+                    <div class="text-center mt-5 text-lg fs-4">
+                        <p class='text-gray-600'>Hai già un account? <a href="{% url 'login' %}" class="font-bold">Accedi</a></p>
+                    </div>
+
+                    <div class="social-auth-links text-center mb-3 d-grid gap-2">
+                        <p>- OR -</p>
+                        <a href="#" class="btn btn-primary"> <i class="bi bi-facebook me-2"></i> Sign in using Facebook</a>
+                        <a href="#" class="btn btn-danger"> <i class="bi bi-google me-2"></i> Sign in using Google+</a>
+                    </div> <!-- /.social-auth-links -->
+
+                    <p class="mb-0"> <a href="login.html" class="link-primary text-center">
+                            I already have a membership
+                        </a> </p>
+
+                </div>
+            </div>
+        </div> <!-- /.register-box --> <!--begin::Third Party Plugin(OverlayScrollbars)-->
+        <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js" integrity="sha256-H2VM7BKda+v2Z4+DRy69uknwxjyDRhszjXFhsL4gD3w=" crossorigin="anonymous"></script> <!--end::Third Party Plugin(OverlayScrollbars)--><!--begin::Required Plugin(popperjs for Bootstrap 5)-->
+        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha256-whL0tQWoY1Ku1iskqPFvmZ+CHsvmRWx/PIoEvIeWh4I=" crossorigin="anonymous"></script> <!--end::Required Plugin(popperjs for Bootstrap 5)--><!--begin::Required Plugin(Bootstrap 5)-->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" integrity="sha256-YMa+wAM6QkVyz999odX7lPRxkoYAan8suedu4k2Zur8=" crossorigin="anonymous"></script> <!--end::Required Plugin(Bootstrap 5)--><!--begin::Required Plugin(AdminLTE)-->
+        <script src="{% static 'dist/js/adminlte.js' %}"></script> <!--end::Required Plugin(AdminLTE)--><!--begin::OverlayScrollbars Configure-->
+        <script>
+            const SELECTOR_SIDEBAR_WRAPPER = ".sidebar-wrapper";
+            const Default = {
+                scrollbarTheme: "os-theme-light",
+                scrollbarAutoHide: "leave",
+                scrollbarClickScroll: true,
+            };
+            document.addEventListener("DOMContentLoaded", function() {
+                const sidebarWrapper = document.querySelector(SELECTOR_SIDEBAR_WRAPPER);
+                if (
+                    sidebarWrapper &&
+                    typeof OverlayScrollbarsGlobal?.OverlayScrollbars !== "undefined"
+                ) {
+                    OverlayScrollbarsGlobal.OverlayScrollbars(sidebarWrapper, {
+                        scrollbars: {
+                            theme: Default.scrollbarTheme,
+                            autoHide: Default.scrollbarAutoHide,
+                            clickScroll: Default.scrollbarClickScroll,
+                        },
+                    });
+                }
+            });
+        </script> <!--end::OverlayScrollbars Configure--> <!--end::Script-->
+    </body><!--end::Body-->
+
+{% endblock %}

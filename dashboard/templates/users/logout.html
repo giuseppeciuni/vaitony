@@ -1,0 +1,38 @@
+{% extends 'users/base_users.html' %}
+{% load static %}
+
+{% block user_content %}
+
+    {% if form.errors %}
+        <div class="alert alert-danger" role="alert">
+            {% for key, value in form.errors.items %}
+                {{ key }}: {{ value.0 }}<br/>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <body class="login-page bg-body-secondary">
+        <div class="login-box">
+            <div class="card card-outline card-primary">
+                <div class="card-header">
+                    <a href="{% url 'login' %}" class="link-dark text-center link-offset-2 link-opacity-100 link-opacity-50-hover">
+                        <img src="{% static 'dist/img/logodefinitivo.png' %}" alt="Logo" class="mb-0">
+                    </a>
+                </div>
+                <div class="card-body login-card-body">
+                    <h1 class="auth-title">Log out</h1>
+                    <p class="auth-subtitle mb-5">Vuoi effettuare il logout dalla piattaforma?</p>
+
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary btn-block btn-lg shadow-lg mt-5">Logout</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </body>
+
+{% endblock %}
+

@@ -1,0 +1,28 @@
+django-admin startproject django-dashboard-kickstarter
+
+# libraries
+pip3 install django
+pip3 install mysql
+pip3 install mysqlclient
+pip3 install requests
+pip3 install django-cors-headers
+pip3 install Pillow
+pip3 install djangorestframework
+
+# Project Apps
+python3 manage.py startapp profiles
+python3 manage.py startapp dashboard
+
+# Database migrations
+python3 manage.py makemigrations
+python3 manage.py migrate
+
+# Root management
+python3 manage.py createsuperuser
+
+# Generate requirements.txt
+pip3 freeze > requirements.txt
+
+# Build up the environment using requirements:
+pip3 install -r requirements.txt
+~                                    

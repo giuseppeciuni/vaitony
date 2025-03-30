@@ -1,0 +1,394 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .drop-zone {
+        max-width: 100%;
+        height: 200px;
+        padding: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-weight: 500;
+        font-size: 20px;
+        cursor: pointer;
+        color: #cccccc;
+        border: 4px dashed #0d6efd;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .drop-zone--over {
+        border-style: solid;
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
+    .drop-zone__input {
+        display: none;
+    }
+
+    .files-info {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+
+    .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .file-item:last-child {
+        border-bottom: none;
+    }
+
+    .file-icon {
+        margin-right: 10px;
+        color: #0d6efd;
+    }
+
+    .file-remove {
+        cursor: pointer;
+        color: #dc3545;
+    }
+
+    .folder-structure {
+        margin-top: 15px;
+        font-family: monospace;
+    }
+
+    .folder-node {
+        padding-left: 20px;
+    }
+
+    .summary-card {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# INIZIO NAVIGAZIONE SOTTONAVBAR #}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0">Upload Folder</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'documents_uploaded' %}">Documents</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Upload Folder</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{# FINE NAVIGAZIONE SOTTONAVBAR #}
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Upload a folder</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Drag and drop an entire folder to upload all its contents. Supported file types: PDF, DOCX, TXT, CSV, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, GIF.
+                </div>
+
+                <form action="{% url 'upload_folder' %}" method="post" enctype="multipart/form-data" id="upload-form">
+                    {% csrf_token %}
+
+                    <div class="drop-zone">
+                        <span class="drop-zone__prompt">
+                            <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
+                            Drop folder here or click to select
+                        </span>
+                        <input type="file" name="files[]" class="drop-zone__input" webkitdirectory directory multiple accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
+                    </div>
+
+                    <div class="summary-card d-none" id="folder-summary">
+                        <h5 class="mb-3">Folder Summary</h5>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Folder name:</strong> <span id="folder-name"></span></p>
+                                <p class="mb-0"><strong>Total files:</strong> <span id="file-count">0</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Total size:</strong> <span id="total-size">0 KB</span></p>
+                                <p class="mb-0"><strong>Valid files:</strong> <span id="valid-files">0</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Invalid files:</strong> <span id="invalid-files">0</span></p>
+                                <p class="mb-0"><strong>Subfolder count:</strong> <span id="subfolder-count">0</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="files-info d-none" id="files-info">
+                        <h5 class="mb-3">Files to upload</h5>
+                        <div id="file-list"></div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary" id="upload-btn" disabled>
+                            <i class="bi bi-cloud-upload me-2"></i>Upload Folder
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="reset-btn">
+                            <i class="bi bi-x-circle me-2"></i>Reset
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Drag and drop functionality for folders
+        const dropZoneElement = document.querySelector(".drop-zone");
+        const fileInput = dropZoneElement.querySelector(".drop-zone__input");
+        const folderSummary = document.getElementById("folder-summary");
+        const filesInfo = document.getElementById("files-info");
+        const fileList = document.getElementById("file-list");
+        const uploadBtn = document.getElementById("upload-btn");
+        const resetBtn = document.getElementById("reset-btn");
+
+        // File statistics
+        const folderNameElement = document.getElementById("folder-name");
+        const fileCountElement = document.getElementById("file-count");
+        const totalSizeElement = document.getElementById("total-size");
+        const validFilesElement = document.getElementById("valid-files");
+        const invalidFilesElement = document.getElementById("invalid-files");
+        const subfolderCountElement = document.getElementById("subfolder-count");
+
+        dropZoneElement.addEventListener("click", (e) => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener("change", (e) => {
+            handleFiles(fileInput.files);
+        });
+
+        dropZoneElement.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dropZoneElement.classList.add("drop-zone--over");
+        });
+
+        ["dragleave", "dragend"].forEach((type) => {
+            dropZoneElement.addEventListener(type, (e) => {
+                dropZoneElement.classList.remove("drop-zone--over");
+            });
+        });
+
+        dropZoneElement.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropZoneElement.classList.remove("drop-zone--over");
+
+            if (e.dataTransfer.items) {
+                for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                    if (e.dataTransfer.items[i].webkitGetAsEntry().isDirectory) {
+                        // We need to process a folder drop here
+                        // Since this is complex with the webkitGetAsEntry API, we'll ask the user to use the folder input
+                        alert("Please use the 'Select Folder' button as drag and drop for folders requires additional permissions.");
+                        return;
+                    }
+                }
+            }
+
+            // If we reached here, user may have tried to drop files, not a folder
+            alert("Please select or drop an entire folder, not individual files.");
+        });
+
+        resetBtn.addEventListener("click", () => {
+            resetUpload();
+        });
+
+        function handleFiles(files) {
+            // Reset the file list
+            fileList.innerHTML = "";
+
+            if (files.length === 0) {
+                return;
+            }
+
+            // Get the root folder name from the first file's path
+            const firstFilePath = files[0].webkitRelativePath;
+            const rootFolder = firstFilePath.split('/')[0];
+            folderNameElement.textContent = rootFolder;
+
+            // Initialize counters
+            let totalSize = 0;
+            let validFiles = 0;
+            let invalidFiles = 0;
+            let subfolders = new Set();
+
+            // Track valid file extensions
+            const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+
+            // Process all files
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const filePath = file.webkitRelativePath;
+                const pathParts = filePath.split('/');
+
+                // Count subfolders
+                if (pathParts.length > 2) {
+                    // Add each subfolder to the set
+                    for (let j = 1; j < pathParts.length - 1; j++) {
+                        subfolders.add(pathParts.slice(0, j + 1).join('/'));
+                    }
+                }
+
+                // Get file extension
+                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+                // Check if this is a valid file type
+                const isValid = validExtensions.includes(fileExtension);
+
+                // Update counters
+                totalSize += file.size;
+                if (isValid) {
+                    validFiles++;
+                } else {
+                    invalidFiles++;
+                }
+
+                // Only display valid files
+                if (isValid) {
+                    // Create a file item
+                    const fileItem = document.createElement("div");
+                    fileItem.className = "file-item";
+
+                    // Get icon based on file extension
+                    let iconClass = "bi-file-earmark";
+                    if (fileExtension === ".pdf") {
+                        iconClass = "bi-file-earmark-pdf";
+                    } else if ([".doc", ".docx"].includes(fileExtension)) {
+                        iconClass = "bi-file-earmark-word";
+                    } else if ([".xls", ".xlsx"].includes(fileExtension)) {
+                        iconClass = "bi-file-earmark-excel";
+                    } else if ([".ppt", ".pptx"].includes(fileExtension)) {
+                        iconClass = "bi-file-earmark-slides";
+                    } else if ([".jpg", ".jpeg", ".png", ".gif"].includes(fileExtension)) {
+                        iconClass = "bi-file-earmark-image";
+                    } else if (fileExtension === ".txt") {
+                        iconClass = "bi-file-earmark-text";
+                    } else if (fileExtension === ".csv") {
+                        iconClass = "bi-file-earmark-spreadsheet";
+                    }
+
+                    // Format file size
+                    const fileSizeKB = Math.round(file.size / 1024);
+                    const fileSizeDisplay = fileSizeKB < 1024
+                        ? fileSizeKB + " KB"
+                        : (fileSizeKB / 1024).toFixed(2) + " MB";
+
+                    // Set the file item HTML
+                    fileItem.innerHTML = `
+                        <div>
+                            <i class="bi ${iconClass} file-icon"></i>
+                            <span>${filePath}</span>
+                        </div>
+                        <div>
+                            <span class="badge bg-secondary">${fileSizeDisplay}</span>
+                        </div>
+                    `;
+
+                    fileList.appendChild(fileItem);
+                }
+            }
+
+            // Update summary
+            fileCountElement.textContent = files.length;
+
+            // Format total size
+            const totalSizeKB = Math.round(totalSize / 1024);
+            totalSizeElement.textContent = totalSizeKB < 1024
+                ? totalSizeKB + " KB"
+                : (totalSizeKB / 1024).toFixed(2) + " MB";
+
+            validFilesElement.textContent = validFiles;
+            invalidFilesElement.textContent = invalidFiles;
+            subfolderCountElement.textContent = subfolders.size;
+
+            // Show summaries
+            folderSummary.classList.remove("d-none");
+            filesInfo.classList.remove("d-none");
+
+            // Enable the upload button if we have valid files
+            uploadBtn.disabled = validFiles === 0;
+
+            // Remove the prompt element
+            if (dropZoneElement.querySelector(".drop-zone__prompt")) {
+                dropZoneElement.querySelector(".drop-zone__prompt").remove();
+            }
+
+            // Add a success indicator to the drop zone
+            const successIndicator = document.createElement("div");
+            successIndicator.innerHTML = `
+                <i class="bi bi-folder-check text-success" style="font-size: 64px;"></i>
+                <p class="mt-2 mb-0">Folder ready for upload</p>
+                <p class="small text-muted">${validFiles} files selected</p>
+            `;
+            dropZoneElement.appendChild(successIndicator);
+        }
+
+        function resetUpload() {
+            // Clear the file input
+            fileInput.value = "";
+
+            // Reset summaries
+            folderSummary.classList.add("d-none");
+            filesInfo.classList.add("d-none");
+            fileList.innerHTML = "";
+
+            // Disable upload button
+            uploadBtn.disabled = true;
+
+            // Clear the drop zone
+            dropZoneElement.innerHTML = `
+                <span class="drop-zone__prompt">
+                    <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
+                    Drop folder here or click to select
+                </span>
+                <input type="file" name="files[]" class="drop-zone__input" webkitdirectory directory multiple>
+            `;
+
+            // Reattach event listener to the new input
+            const newFileInput = dropZoneElement.querySelector(".drop-zone__input");
+            newFileInput.addEventListener("change", (e) => {
+                handleFiles(newFileInput.files);
+            });
+        }
+    });
+</script>
+{% endblock %}

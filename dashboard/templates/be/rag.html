@@ -87,6 +87,62 @@
         margin: 0 0 1rem;
         border-left: 0.25rem solid #e9ecef;
     }
+
+    .source-card {
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem !important;
+    }
+
+    .source-header {
+        background-color: #f8f9fa;
+        font-weight: 500;
+    }
+
+    .source-icon {
+        font-size: 1.25rem;
+        color: #0d6efd;
+    }
+
+    .source-content {
+        padding: 1rem;
+    }
+
+    .source-chunk {
+        font-family: var(--bs-font-monospace);
+        font-size: 0.875rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 200px;
+        overflow-y: auto;
+        border-left: 3px solid #0d6efd;
+    }
+
+    /* Styling per evidenziare parti del testo */
+    .highlight {
+        background-color: rgba(255, 255, 0, 0.3);
+        padding: 2px 0;
+    }
+
+    /* Pulsante per espandere/comprimere i chunk */
+    .source-expand-btn {
+        cursor: pointer;
+        color: #0d6efd;
+        text-align: center;
+        font-size: 0.8rem;
+        padding: 5px;
+        margin-top: 5px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+
+    /* Stile quando il chunk è espanso */
+    .source-chunk.expanded {
+        max-height: none;
+    }
+
 </style>
 {% endblock %}
 
@@ -148,28 +204,36 @@
                             </div>
                             <div class="answer-content">
                                 <div class="answer-text mb-4">{{ answer|linebreaks }}</div>
-
-                                {% if sources %}
-                                    <h6>Sources:</h6>
-                                    <div class="sources-list">
-                                        {% for source in sources %}
-                                            <div class="source-item">
-                                                {% if source.filename|lower|slice:"-4:" == ".pdf" %}
-                                                    <i class="bi bi-file-earmark-pdf source-icon"></i>
-                                                {% elif source.filename|lower|slice:"-5:" == ".docx" or source.filename|lower|slice:"-4:" == ".doc" %}
-                                                    <i class="bi bi-file-earmark-word source-icon"></i>
-                                                {% elif source.filename|lower|slice:"-4:" == ".txt" %}
-                                                    <i class="bi bi-file-earmark-text source-icon"></i>
-                                                {% elif source.filename|lower|slice:"-4:" == ".csv" %}
-                                                    <i class="bi bi-file-earmark-spreadsheet source-icon"></i>
-                                                {% else %}
-                                                    <i class="bi bi-file-earmark source-icon"></i>
-                                                {% endif %}
-                                                <span>{{ source.filename }}</span>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
+                                    {% if sources %}
+                                        <h6 class="mt-4">Sources:</h6>
+                                        <div class="sources-list">
+                                            {% for source in sources %}
+                                                <div class="card mb-3 source-card">
+                                                    <div class="card-header d-flex align-items-center source-header">
+                                                        {% if source.type == ".pdf" %}
+                                                            <i class="bi bi-file-earmark-pdf source-icon me-2"></i>
+                                                        {% elif source.type == ".docx" or source.type == ".doc" %}
+                                                            <i class="bi bi-file-earmark-word source-icon me-2"></i>
+                                                        {% elif source.type == ".txt" %}
+                                                            <i class="bi bi-file-earmark-text source-icon me-2"></i>
+                                                        {% elif source.type == ".csv" %}
+                                                            <i class="bi bi-file-earmark-spreadsheet source-icon me-2"></i>
+                                                        {% elif source.type == ".jpg" or source.type == ".jpeg" or source.type == ".png" or source.type == ".gif" %}
+                                                            <i class="bi bi-file-earmark-image source-icon me-2"></i>
+                                                        {% else %}
+                                                            <i class="bi bi-file-earmark source-icon me-2"></i>
+                                                        {% endif %}
+                                                        <span>{{ source.filename }}</span>
+                                                    </div>
+                                                    <div class="card-body source-content">
+                                                        <div class="source-chunk p-3 bg-light rounded">
+                                                            {{ source.content|linebreaks }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
                             </div>
                         </div>
                     {% else %}
@@ -219,6 +283,63 @@
                     submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
                 }
             });
+        }
+    });
+
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Aggiungi pulsanti per espandere/comprimere i chunk
+        const sourceChunks = document.querySelectorAll('.source-chunk');
+
+        sourceChunks.forEach(chunk => {
+            // Controlla se il contenuto è più lungo del contenitore
+            if (chunk.scrollHeight > chunk.clientHeight) {
+                // Crea il pulsante
+                const expandBtn = document.createElement('div');
+                expandBtn.className = 'source-expand-btn';
+                expandBtn.textContent = 'Mostra tutto';
+                chunk.parentNode.appendChild(expandBtn);
+
+                // Aggiungi event listener
+                expandBtn.addEventListener('click', function() {
+                    if (chunk.classList.contains('expanded')) {
+                        // Comprimi
+                        chunk.classList.remove('expanded');
+                        this.textContent = 'Mostra tutto';
+                        // Scorri verso l'inizio del chunk
+                        chunk.scrollTop = 0;
+                    } else {
+                        // Espandi
+                        chunk.classList.add('expanded');
+                        this.textContent = 'Mostra meno';
+                    }
+                });
+            }
+        });
+
+        // Evidenzia termini della domanda nei chunk (opzionale)
+        const question = document.querySelector('.answer-header h5').textContent.replace('Q: ', '');
+        if (question) {
+            // Estrai parole chiave (escludi parole comuni)
+            const stopWords = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'about', 'è', 'il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra'];
+            const keywords = question.toLowerCase()
+                .replace(/[.,?!;:()"']/g, '')
+                .split(' ')
+                .filter(word => word.length > 2 && !stopWords.includes(word));
+
+            // Evidenzia le parole chiave nei chunk
+            if (keywords.length) {
+                sourceChunks.forEach(chunk => {
+                    let html = chunk.innerHTML;
+                    keywords.forEach(keyword => {
+                        // Usa una regex per sostituire la parola chiave, preservando il case
+                        const regex = new RegExp(`(\\b${keyword}\\w*\\b)`, 'gi');
+                        html = html.replace(regex, '<span class="highlight">$1</span>');
+                    });
+                    chunk.innerHTML = html;
+                });
+            }
         }
     });
 </script>

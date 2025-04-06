@@ -143,6 +143,74 @@
         max-height: none;
     }
 
+    .source-image-container {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 5px;
+        background-color: #fff;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .source-image {
+        max-height: 300px;
+        margin: 0 auto;
+        display: block;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .source-image:hover {
+        transform: scale(1.02);
+    }
+
+    .source-image-caption {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    /* Modal per visualizzare l'immagine a dimensione piena */
+    .image-modal {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.9);
+    }
+
+    .image-modal-content {
+        margin: auto;
+        display: block;
+        max-width: 90%;
+        max-height: 90%;
+        position: relative;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    .image-modal-close {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        transition: 0.3s;
+        cursor: pointer;
+    }
+
+    .image-modal-close:hover,
+    .image-modal-close:focus {
+        color: #bbb;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+
 </style>
 {% endblock %}
 
@@ -342,5 +410,52 @@
             }
         }
     });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Crea il modal per le immagini se non esiste già
+        if (!document.getElementById('imageModal')) {
+            const imageModal = document.createElement('div');
+            imageModal.id = 'imageModal';
+            imageModal.className = 'image-modal';
+            imageModal.innerHTML = `
+                <span class="image-modal-close">&times;</span>
+                <img class="image-modal-content" id="fullSizeImage">
+            `;
+            document.body.appendChild(imageModal);
+
+            // Aggiungi event listener per chiudere il modal
+            const closeBtn = imageModal.querySelector('.image-modal-close');
+            closeBtn.addEventListener('click', function() {
+                imageModal.style.display = 'none';
+            });
+
+            // Chiudi anche cliccando fuori dall'immagine
+            imageModal.addEventListener('click', function(event) {
+                if (event.target === imageModal) {
+                    imageModal.style.display = 'none';
+                }
+            });
+        }
+
+        // Aggiungi event listener a tutte le immagini delle fonti
+        const sourceImages = document.querySelectorAll('.source-image');
+        const imageModal = document.getElementById('imageModal');
+        const fullSizeImage = document.getElementById('fullSizeImage');
+
+        sourceImages.forEach(img => {
+            img.addEventListener('click', function() {
+                fullSizeImage.src = this.src;
+                imageModal.style.display = 'block';
+            });
+        });
+
+        // Supporto per chiusura con tasto Escape
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && imageModal.style.display === 'block') {
+                imageModal.style.display = 'none';
+            }
+        });
+    });
+
 </script>
 {% endblock %}

@@ -141,11 +141,15 @@ def rag(request):
                         score_display = f" - Rilevanza: {score:.2f}" if score is not None else ""
 
                         # Aggiungi alla lista delle fonti
-                        formatted_sources.append({
+                        formatted_source = {
                             'filename': f"{filename}{page_info}{score_display}",
                             'content': source.get('content', ''),
-                            'type': os.path.splitext(filename)[1].lower() if filename != 'Unknown' else ''
-                        })
+                            'type': os.path.splitext(filename)[1].lower() if filename != 'Unknown' else '',
+                            'has_image': source.get('has_image', False),
+                            'image_data': source.get('image_data', ''),
+                        }
+
+                        formatted_sources.append(formatted_source)
 
                     context['sources'] = formatted_sources
                     context['processing_time'] = round(time.time() - start_time, 2)
@@ -153,7 +157,7 @@ def rag(request):
                     # Log di successo
                     logger.info(f"RAG query processed successfully for user {request.user.username}")
                 except Exception as e:
-                    logger.error(f"Error in RAG processing: {e}")
+                    logger.exception(f"Error in RAG processing: {str(e)}")
                     context['answer'] = f"An error occurred while processing your question: {str(e)}"
             else:
                 messages.warning(request, "Please enter a question.")
@@ -162,7 +166,6 @@ def rag(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
-
 
 
 

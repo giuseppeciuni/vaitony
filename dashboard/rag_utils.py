@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 # Prendi la chiave API dalle impostazioni di Django
 os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
 
+GPT_MODEL = settings.GPT_MODEL
+GPT_MODEL_TEMPERATURE = settings.GPT_MODEL_TEMPERATURE
+GPT_MODEL_MAX_TOKENS = settings.GPT_MODEL_MAX_TOKENS
+GPT_MODEL_TIMEOUT = int(settings.GPT_MODEL_TIMEOUT)
+
 
 def process_image(image_path):
 	"""
@@ -30,6 +35,7 @@ def process_image(image_path):
     Returns:
         Un documento LangChain con il contenuto estratto
     """
+	logger.debug("---> process_image")
 	try:
 		# Carica l'immagine
 		with open(image_path, "rb") as image_file:
@@ -117,6 +123,7 @@ def load_document(file_path):
 
 
 def load_all_documents(folder_path):
+	logger.debug("-->load_all_documents")
 	"""
     Carica tutti i documenti supportati dalla directory specificata.
 
@@ -145,6 +152,7 @@ def load_all_documents(folder_path):
 
 
 def load_user_documents(user):
+	logger.debug("-->load_user_documents")
 	"""
     Carica i documenti dell'utente che necessitano di embedding.
 
@@ -173,7 +181,10 @@ def load_user_documents(user):
 	return all_docs, document_ids
 
 
+
+
 def create_rag_chain(user=None, docs=None):
+	logger.debug("-->create_rag_chain:")
 	"""
 	Crea o aggiorna la catena RAG per l'utente.
 
@@ -228,12 +239,24 @@ def create_rag_chain(user=None, docs=None):
 		split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
 
 		if os.path.exists(index_path):
+			logger.info(f"🔁 Caricamento dell'indice FAISS esistente: {index_path}")
+			logger.debug(f"Tipo di index_path: {type(index_path)}")
+
+			# Controlla se è una tupla e stampa i dettagli
+			if isinstance(index_path, tuple):
+				logger.warning(f"index_path è una tupla! Contenuto: {index_path}")
+				# Converti in stringa se è una tupla
+				index_path = str(index_path[0]) if index_path else ""
+				logger.info(f"Convertito index_path a: {index_path}")
+
 			# Se l'indice esiste, caricalo e aggiungi i nuovi documenti
 			try:
 				existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
 				vectordb = existing_vectordb.from_documents(split_docs, embeddings)
 			except Exception as e:
 				logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
+				print(".----------------------aaaaa")
+				print(e)
 				# Se c'è un errore, crea un nuovo indice
 				vectordb = FAISS.from_documents(split_docs, embeddings)
 		else:
@@ -298,10 +321,10 @@ def create_rag_chain(user=None, docs=None):
 
 	# Crea il modello con timeout più alto per risposte complesse
 	llm = ChatOpenAI(
-		model="gpt-4",  # Usa GPT-4 per risposte più dettagliate e di qualità superiore
-		temperature=0.3,  # Leggero aumento della creatività mantenendo accuratezza
-		max_tokens=2000,  # Consenti risposte più lunghe
-		request_timeout=120  # Timeout più lungo per elaborazioni complesse
+		model=GPT_MODEL,  # Usa GPT-4 per risposte più dettagliate e di qualità superiore
+		temperature = GPT_MODEL_TEMPERATURE,  # Leggero aumento della creatività mantenendo accuratezza
+		max_tokens = GPT_MODEL_MAX_TOKENS,  # Consenti risposte più lunghe
+		request_timeout = GPT_MODEL_TIMEOUT  # Timeout più lungo per elaborazioni complesse
 	)
 
 	# Crea la catena RAG con il prompt personalizzato
@@ -316,6 +339,7 @@ def create_rag_chain(user=None, docs=None):
 	return qa
 
 def get_answer_from_rag(user, question):
+	logger.debug("-->get_answer_from_rag")
 	"""
 	Ottiene una risposta dal sistema RAG per la domanda dell'utente.
 

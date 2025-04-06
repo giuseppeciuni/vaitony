@@ -210,7 +210,51 @@
         cursor: pointer;
     }
 
+    .sources-wrapper {
+        border-top: 1px solid #e9ecef;
+        padding-top: 1.5rem;
+    }
 
+    .toggle-icon {
+        transition: transform 0.3s ease;
+    }
+
+    [aria-expanded="true"] .toggle-icon {
+        transform: rotate(180deg);
+    }
+
+    .sources-list {
+        margin-top: 1rem;
+    }
+
+    .collapse.show {
+        animation: fadeIn 0.5s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    /* Stile per il bottone di espansione */
+    .btn-outline-primary {
+        transition: all 0.3s ease;
+    }
+
+    .btn-outline-primary:hover {
+        background-color: rgba(13, 110, 253, 0.1);
+        border-color: #0d6efd;
+    }
+
+    /* Badge per il numero di fonti */
+    .sources-count {
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.75rem;
+        margin-left: 0.5rem;
+    }
 </style>
 {% endblock %}
 
@@ -272,36 +316,53 @@
                             </div>
                             <div class="answer-content">
                                 <div class="answer-text mb-4">{{ answer|linebreaks }}</div>
-                                    {% if sources %}
-                                        <h6 class="mt-4">Sources:</h6>
-                                        <div class="sources-list">
-                                            {% for source in sources %}
-                                                <div class="card mb-3 source-card">
-                                                    <div class="card-header d-flex align-items-center source-header">
-                                                        {% if source.type == ".pdf" %}
-                                                            <i class="bi bi-file-earmark-pdf source-icon me-2"></i>
-                                                        {% elif source.type == ".docx" or source.type == ".doc" %}
-                                                            <i class="bi bi-file-earmark-word source-icon me-2"></i>
-                                                        {% elif source.type == ".txt" %}
-                                                            <i class="bi bi-file-earmark-text source-icon me-2"></i>
-                                                        {% elif source.type == ".csv" %}
-                                                            <i class="bi bi-file-earmark-spreadsheet source-icon me-2"></i>
-                                                        {% elif source.type == ".jpg" or source.type == ".jpeg" or source.type == ".png" or source.type == ".gif" %}
-                                                            <i class="bi bi-file-earmark-image source-icon me-2"></i>
-                                                        {% else %}
-                                                            <i class="bi bi-file-earmark source-icon me-2"></i>
-                                                        {% endif %}
-                                                        <span>{{ source.filename }}</span>
-                                                    </div>
-                                                    <div class="card-body source-content">
-                                                        <div class="source-chunk p-3 bg-light rounded">
-                                                            {{ source.content|linebreaks }}
+                                {% if sources %}
+                                    <div class="sources-wrapper mt-4">
+                                        <button class="btn btn-outline-primary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#sourcesList" aria-expanded="false" aria-controls="sourcesList">
+                                            <i class="bi bi-file-earmark-text me-2"></i>
+                                            Show Sources ({{ sources|length }})
+                                            <i class="bi bi-chevron-down ms-2 toggle-icon"></i>
+                                        </button>
+
+                                        <div class="collapse" id="sourcesList">
+                                            <div class="sources-list">
+                                                {% for source in sources %}
+                                                    <div class="card mb-3 source-card">
+                                                        <div class="card-header d-flex align-items-center source-header">
+                                                            {% if source.type == ".pdf" %}
+                                                                <i class="bi bi-file-earmark-pdf source-icon me-2"></i>
+                                                            {% elif source.type == ".docx" or source.type == ".doc" %}
+                                                                <i class="bi bi-file-earmark-word source-icon me-2"></i>
+                                                            {% elif source.type == ".txt" %}
+                                                                <i class="bi bi-file-earmark-text source-icon me-2"></i>
+                                                            {% elif source.type == ".csv" %}
+                                                                <i class="bi bi-file-earmark-spreadsheet source-icon me-2"></i>
+                                                            {% elif source.type == ".jpg" or source.type == ".jpeg" or source.type == ".png" or source.type == ".gif" %}
+                                                                <i class="bi bi-file-earmark-image source-icon me-2"></i>
+                                                            {% else %}
+                                                                <i class="bi bi-file-earmark source-icon me-2"></i>
+                                                            {% endif %}
+                                                            <span>{{ source.filename }}</span>
+                                                        </div>
+                                                        <div class="card-body source-content">
+                                                            {% if source.has_image %}
+                                                            <div class="source-image-container mb-3">
+                                                                <img src="{{ source.image_data }}" class="source-image img-fluid img-thumbnail" alt="Document preview">
+                                                                <div class="source-image-caption text-center mt-1">
+                                                                    <small class="text-muted">Preview della pagina</small>
+                                                                </div>
+                                                            </div>
+                                                            {% endif %}
+                                                            <div class="source-chunk p-3 bg-light rounded">
+                                                                {{ source.content|linebreaks }}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            {% endfor %}
+                                                {% endfor %}
+                                            </div>
                                         </div>
-                                    {% endif %}
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
                     {% else %}
@@ -455,6 +516,41 @@
                 imageModal.style.display = 'none';
             }
         });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const sourcesButton = document.querySelector('[data-bs-toggle="collapse"]');
+        const sourcesCollapse = document.getElementById('sourcesList');
+
+        if (sourcesButton && sourcesCollapse) {
+            // Cambia il testo del pulsante quando viene cliccato
+            sourcesCollapse.addEventListener('show.bs.collapse', function () {
+                sourcesButton.querySelector('.bi-chevron-down').classList.add('toggle-icon');
+                sourcesButton.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Hide Sources <i class="bi bi-chevron-up ms-2"></i>';
+            });
+
+            sourcesCollapse.addEventListener('hide.bs.collapse', function () {
+                const sourcesCount = document.querySelectorAll('.source-card').length;
+                sourcesButton.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Show Sources (${sourcesCount}) <i class="bi bi-chevron-down ms-2"></i>`;
+            });
+        }
+
+        // Memorizza lo stato di espansione in sessionStorage
+        if (sourcesCollapse) {
+            sourcesCollapse.addEventListener('shown.bs.collapse', function() {
+                sessionStorage.setItem('sourcesExpanded', 'true');
+            });
+
+            sourcesCollapse.addEventListener('hidden.bs.collapse', function() {
+                sessionStorage.setItem('sourcesExpanded', 'false');
+            });
+
+            // Ripristina lo stato all'avvio
+            const isExpanded = sessionStorage.getItem('sourcesExpanded') === 'true';
+            if (isExpanded) {
+                new bootstrap.Collapse(sourcesCollapse).show();
+            }
+        }
     });
 
 </script>

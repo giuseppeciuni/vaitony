@@ -57,6 +57,7 @@ def extract_text_from_image(image_path: str) -> str:
 def process_user_files(user_dir, documents_list, search_query='', owner_username=None):
 	"""
 	Funzione helper per processare i file di un utente e aggiungerli alla lista dei documenti
+	Restituisce una serie di informazioni sui documenti come nome, dimensione, path, estensione etc
 	"""
 	for filename in os.listdir(user_dir):
 		file_path = os.path.join(user_dir, filename)
@@ -83,7 +84,6 @@ def process_user_files(user_dir, documents_list, search_query='', owner_username
 
 		# Ottieni estensione file
 		_, file_extension = os.path.splitext(filename)
-
 		# Ottieni data upload (usando data creazione file)
 		upload_date = datetime.datetime.fromtimestamp(stats.st_ctime).strftime('%Y-%m-%d %H:%M')
 

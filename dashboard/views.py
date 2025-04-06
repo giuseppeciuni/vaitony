@@ -82,18 +82,48 @@ def upload_document(request):
 		return redirect('login')
 
 
-
-
 def rag(request):
+	"""View for RAG interface - allows users to ask questions about their documents"""
 	logger.debug("---> rag")
 	if request.user.is_authenticated:
-		context = {}
-		if request.method == 'POST':
-			# Logica per elaborare una richiesta RAG
-			logger.info("Processing RAG request")
-			# Elaborazione della query
-			# Inserire qui la logica del sistema RAG
-			# context['results'] = results
+		context = {
+			'answer': None,
+			'sources': None,
+			'question': None,
+			'processing_time': None,
+			'has_documents': True  # Will be updated below
+		}
+
+		# Check if user has any documents
+		user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
+		if not os.path.exists(user_upload_dir) or not os.listdir(user_upload_dir):
+			context['has_documents'] = False
+			return render(request, 'be/rag.html', context)
+
+		# Process RAG query if submitted
+		if request.method == 'POST' and 'question' in request.POST:
+			question = request.POST.get('question').strip()
+			context['question'] = question
+
+			if question:
+				from .rag_utils import get_answer_from_rag
+				import time
+
+				# Time the processing
+				start_time = time.time()
+
+				# Get response from RAG system
+				try:
+					rag_response = get_answer_from_rag(request.user, question)
+					context['answer'] = rag_response.get('answer')
+					context['sources'] = rag_response.get('sources')
+					context['processing_time'] = round(time.time() - start_time, 2)
+				except Exception as e:
+					logger.error(f"Error in RAG processing: {e}")
+					context['answer'] = f"An error occurred while processing your question: {str(e)}"
+			else:
+				messages.warning(request, "Please enter a question.")
+
 		return render(request, 'be/rag.html', context)
 	else:
 		logger.warning("User not Authenticated!")
@@ -193,8 +223,6 @@ def documents_uploaded(request):
 
 
 
-
-
 def download_document(request, document_id):
 	logger.debug(f"---> download_document: {document_id}")
 	if request.user.is_authenticated:
@@ -221,6 +249,9 @@ def download_document(request, document_id):
 	else:
 		logger.warning("User not Authenticated!")
 		return redirect('login')
+
+
+
 
 
 def delete_document(request, document_id):

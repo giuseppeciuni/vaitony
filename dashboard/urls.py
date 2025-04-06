@@ -19,6 +19,7 @@ urlpatterns = [
     # percorsi per tools
     path('tools/rag', views.rag, name='rag'),
     path('tools/chiedi', views.chiedi, name='chiedi'),
+
 ]
 
 if settings.DEBUG:

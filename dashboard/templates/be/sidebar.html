@@ -74,6 +74,32 @@
                         </li>
                     </ul>
                 </li>
+
+                <li class="nav-item {% if '/projects/' in request.path %}menu-is-opening menu-open{% endif %}">
+                    <a href="#" class="nav-link {% if '/projects/' in request.path %}active{% endif %}">
+                        <i class="nav-icon bi bi-kanban"></i>
+                        <p>
+                            Projects
+                            <i class="nav-arrow bi bi-chevron-right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a href="{% url 'projects_list' %}" class="nav-link {% if 'projects_list' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-list-check"></i>
+                                <p>Projects List</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'new_project' %}" class="nav-link {% if 'new_project' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-plus-square"></i>
+                                <p>New Project</p>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+
             </ul>
         </nav>
     </div>

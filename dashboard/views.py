@@ -1,14 +1,14 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib import messages
-from django.http import HttpResponse, Http404
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.contrib.auth.models import User  # Aggiungi questa riga
 import logging
-import os
-from .utils import process_user_files
 import mimetypes
+import os
 from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth.models import User  # Aggiungi questa riga
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import HttpResponse, Http404
+from django.shortcuts import render, redirect
 from dashboard.rag_document_utils import register_document
+from .utils import process_user_files
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -84,6 +84,8 @@ def upload_document(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+
+
 
 
 def rag(request):
@@ -182,6 +184,50 @@ def chiedi(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+
+
+
+
+def new_project(request):
+    logger.debug("---> new_project")
+    if request.user.is_authenticated:
+        context = {}
+        if request.method == 'POST':
+            logger.info("Processing 'new_project' request")
+        return render(request, 'be/new_project.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+
+
+def projects_list(request):
+    logger.debug("---> projects_list")
+    if request.user.is_authenticated:
+        context = {}
+        if request.method == 'POST':
+            logger.info("Processing 'projects_list' request")
+        return render(request, 'be/projects_list.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+
+
+def project(request):
+    logger.debug("---> project")
+    if request.user.is_authenticated:
+        context = {}
+        if request.method == 'POST':
+            logger.info("Processing 'project' request")
+        return render(request, 'be/project.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
 
 
 

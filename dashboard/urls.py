@@ -20,6 +20,11 @@ urlpatterns = [
     path('tools/rag', views.rag, name='rag'),
     path('tools/chiedi', views.chiedi, name='chiedi'),
 
+    # percorsi per projects
+    path('projects/new_project', views.new_project, name='new_project'),
+    path('projects/project', views.project, name='project'),
+    path('projets/projects_list', views.projects_list, name='projects_list'),
+
 ]
 
 if settings.DEBUG:

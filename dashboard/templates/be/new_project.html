@@ -1,0 +1,558 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .drop-zone {
+        max-width: 100%;
+        height: 200px;
+        padding: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-weight: 500;
+        font-size: 20px;
+        cursor: pointer;
+        color: #cccccc;
+        border: 4px dashed #0d6efd;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .drop-zone--over {
+        border-style: solid;
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
+    .drop-zone__input {
+        display: none;
+    }
+
+    .files-info {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+
+    .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .file-item:last-child {
+        border-bottom: none;
+    }
+
+    .file-icon {
+        margin-right: 10px;
+        color: #0d6efd;
+    }
+
+    .project-card {
+        border-left: 4px solid #0d6efd;
+        background-color: #f8f9fa;
+        padding: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .project-card:hover {
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .tab-content {
+        padding-top: 20px;
+    }
+
+    .upload-option {
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .upload-option:hover, .upload-option.active {
+        border-color: #0d6efd;
+        background-color: rgba(13, 110, 253, 0.05);
+    }
+
+    .upload-option.active i {
+        color: #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# INIZIO NAVIGAZIONE SOTTONAVBAR #}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0">New Project</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'projects_list' %}">Projects</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">New Project</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{# FINE NAVIGAZIONE SOTTONAVBAR #}
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        {% if messages %}
+        <div class="messages mb-4">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Create a new project</h3>
+            </div>
+            <div class="card-body">
+                <form action="{% url 'project' %}" method="post" enctype="multipart/form-data" id="new-project-form">
+                    {% csrf_token %}
+
+                    <!-- Project Details -->
+                    <div class="project-card mb-4">
+                        <div class="mb-3">
+                            <label for="project-name" class="form-label">Project Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="project-name" name="project_name" required>
+                            <div class="form-text">Choose a clear and descriptive name for your project</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="project-description" class="form-label">Project Description</label>
+                            <textarea class="form-control" id="project-description" name="description" rows="3"></textarea>
+                            <div class="form-text">Brief description of what this project is about (optional)</div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Options -->
+                    <h5 class="mb-3">Project Files</h5>
+                    <div class="mb-4">
+                        <ul class="nav nav-tabs" id="uploadTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button"
+                                    role="tab" aria-controls="files" aria-selected="true">Upload Files</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="folder-tab" data-bs-toggle="tab" data-bs-target="#folder" type="button"
+                                    role="tab" aria-controls="folder" aria-selected="false">Upload Folder</button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="uploadTabsContent">
+                            <!-- Files Tab -->
+                            <div class="tab-pane fade show active" id="files" role="tabpanel" aria-labelledby="files-tab">
+                                <div class="drop-zone" id="file-drop-zone">
+                                    <span class="drop-zone__prompt">
+                                        <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
+                                        Drop files here or click to select
+                                    </span>
+                                    <input type="file" name="files[]" class="drop-zone__input" id="file-input" multiple
+                                        accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
+                                </div>
+
+                                <div class="files-info d-none" id="files-info">
+                                    <h6 class="mb-3">Selected Files</h6>
+                                    <div id="file-list"></div>
+                                </div>
+                            </div>
+
+                            <!-- Folder Tab -->
+                            <div class="tab-pane fade" id="folder" role="tabpanel" aria-labelledby="folder-tab">
+                                <div class="drop-zone" id="folder-drop-zone">
+                                    <span class="drop-zone__prompt">
+                                        <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
+                                        Drop folder here or click to select
+                                    </span>
+                                    <input type="file" name="folder[]" class="drop-zone__input" id="folder-input" webkitdirectory directory multiple
+                                        accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
+                                </div>
+
+                                <div class="files-info d-none" id="folder-info">
+                                    <h6 class="mb-3">Folder Contents</h6>
+                                    <p><strong>Folder name:</strong> <span id="folder-name"></span></p>
+                                    <p><strong>Total files:</strong> <span id="file-count">0</span></p>
+                                    <div id="folder-file-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'projects_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="create-btn" disabled>
+                            <i class="bi bi-plus-square me-2"></i>Create Project
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Form elements
+        const projectNameInput = document.getElementById("project-name");
+        const createButton = document.getElementById("create-btn");
+
+        // File upload elements
+        const fileDropZone = document.getElementById("file-drop-zone");
+        const fileInput = document.getElementById("file-input");
+        const filesInfo = document.getElementById("files-info");
+        const fileList = document.getElementById("file-list");
+
+        // Folder upload elements
+        const folderDropZone = document.getElementById("folder-drop-zone");
+        const folderInput = document.getElementById("folder-input");
+        const folderInfo = document.getElementById("folder-info");
+        const folderName = document.getElementById("folder-name");
+        const fileCount = document.getElementById("file-count");
+        const folderFileList = document.getElementById("folder-file-list");
+
+        // Tab elements
+        const uploadTabs = document.getElementById("uploadTabs");
+
+        // Track upload status
+        let filesUploaded = false;
+        let folderUploaded = false;
+
+        // Check if form can be submitted
+        function checkFormValidity() {
+            const projectName = projectNameInput.value.trim();
+
+            // Il pulsante è attivo con il solo nome del progetto
+            createButton.disabled = !projectName;
+        }
+
+        // Project name input listener
+        projectNameInput.addEventListener("input", checkFormValidity);
+
+        // Setup drag and drop for files
+        setupDropZone(fileDropZone, fileInput, handleFiles);
+
+        // Setup drag and drop for folder
+        setupDropZone(folderDropZone, folderInput, handleFolder);
+
+        // Tab change listener
+        uploadTabs.addEventListener("shown.bs.tab", function(e) {
+            // Reset form validity check when switching tabs
+            checkFormValidity();
+        });
+
+        // Initialize Bootstrap tabs
+        const tabElements = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabElements.forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function (event) {
+                if (event.target.id === 'files-tab') {
+                    // Check which upload method is active
+                    filesUploaded = fileInput.files.length > 0;
+                    folderUploaded = false;
+                } else if (event.target.id === 'folder-tab') {
+                    filesUploaded = false;
+                    folderUploaded = folderInput.files.length > 0;
+                }
+                checkFormValidity();
+            });
+        });
+
+        // Setup drop zone
+        function setupDropZone(dropZoneElement, inputElement, handleFunction) {
+            dropZoneElement.addEventListener("click", () => {
+                inputElement.click();
+            });
+
+            inputElement.addEventListener("change", () => {
+                if (inputElement.files.length) {
+                    handleFunction(inputElement.files);
+                }
+            });
+
+            dropZoneElement.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropZoneElement.classList.add("drop-zone--over");
+            });
+
+            ["dragleave", "dragend"].forEach((type) => {
+                dropZoneElement.addEventListener(type, () => {
+                    dropZoneElement.classList.remove("drop-zone--over");
+                });
+            });
+
+            dropZoneElement.addEventListener("drop", (e) => {
+                e.preventDefault();
+                dropZoneElement.classList.remove("drop-zone--over");
+
+                if (e.dataTransfer.files.length) {
+                    inputElement.files = e.dataTransfer.files;
+                    handleFunction(e.dataTransfer.files);
+                }
+            });
+        }
+
+        // Handle individual files upload
+        function handleFiles(files) {
+            // Reset the file list
+            fileList.innerHTML = "";
+
+            if (files.length === 0) {
+                filesInfo.classList.add("d-none");
+                filesUploaded = false;
+                return;
+            }
+
+            // Valid file extensions
+            const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+
+            // Process all files
+            let validCount = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+                // Check if this is a valid file type
+                const isValid = validExtensions.includes(fileExtension);
+
+                if (isValid) {
+                    validCount++;
+                    // Create file item element
+                    createFileItem(file, fileList, fileExtension);
+                }
+            }
+
+            if (validCount > 0) {
+                // Update the drop zone
+                updateDropZone(fileDropZone, `${validCount} files selected`);
+
+                // Show files info
+                filesInfo.classList.remove("d-none");
+
+                // Update upload status
+                filesUploaded = true;
+            } else {
+                resetDropZone(fileDropZone, 'file');
+                filesInfo.classList.add("d-none");
+                filesUploaded = false;
+            }
+
+            checkFormValidity();
+        }
+
+        // Handle folder upload
+        function handleFolder(files) {
+            // Reset the folder file list
+            folderFileList.innerHTML = "";
+
+            if (files.length === 0) {
+                folderInfo.classList.add("d-none");
+                folderUploaded = false;
+                return;
+            }
+
+            // Get the root folder name from the first file's path
+            const firstFilePath = files[0].webkitRelativePath;
+            const rootFolder = firstFilePath.split('/')[0];
+            folderName.textContent = rootFolder;
+
+            // Valid file extensions
+            const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+
+            // Count valid files
+            let validCount = 0;
+
+            // Process all files
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+                // Check if this is a valid file type
+                const isValid = validExtensions.includes(fileExtension);
+
+                if (isValid) {
+                    validCount++;
+                    // Create file item with relative path
+                    createFileItem(file, folderFileList, fileExtension, file.webkitRelativePath);
+                }
+            }
+
+            // Update file count
+            fileCount.textContent = validCount;
+
+            if (validCount > 0) {
+                // Update the drop zone
+                updateDropZone(folderDropZone, `Folder "${rootFolder}" selected`);
+
+                // Show folder info
+                folderInfo.classList.remove("d-none");
+
+                // Update upload status
+                folderUploaded = true;
+            } else {
+                resetDropZone(folderDropZone, 'folder');
+                folderInfo.classList.add("d-none");
+                folderUploaded = false;
+            }
+
+            checkFormValidity();
+        }
+
+        // Create a file item element
+        function createFileItem(file, listElement, fileExtension, filePath = null) {
+            // Get icon class based on file extension
+            let iconClass = getFileIconClass(fileExtension);
+
+            // Format file size
+            const fileSizeKB = Math.round(file.size / 1024);
+            const fileSizeDisplay = fileSizeKB < 1024
+                ? fileSizeKB + " KB"
+                : (fileSizeKB / 1024).toFixed(2) + " MB";
+
+            // Create file item element
+            const fileItem = document.createElement("div");
+            fileItem.className = "file-item";
+
+            // Set file item content
+            fileItem.innerHTML = `
+                <div>
+                    <i class="bi ${iconClass} file-icon"></i>
+                    <span>${filePath || file.name}</span>
+                </div>
+                <div>
+                    <span class="badge bg-secondary">${fileSizeDisplay}</span>
+                </div>
+            `;
+
+            // Add to list
+            listElement.appendChild(fileItem);
+        }
+
+        // Get file icon class based on extension
+        function getFileIconClass(fileExtension) {
+            if (fileExtension === ".pdf") {
+                return "bi-file-earmark-pdf";
+            } else if ([".doc", ".docx"].includes(fileExtension)) {
+                return "bi-file-earmark-word";
+            } else if ([".xls", ".xlsx"].includes(fileExtension)) {
+                return "bi-file-earmark-excel";
+            } else if ([".ppt", ".pptx"].includes(fileExtension)) {
+                return "bi-file-earmark-slides";
+            } else if ([".jpg", ".jpeg", ".png", ".gif"].includes(fileExtension)) {
+                return "bi-file-earmark-image";
+            } else if (fileExtension === ".txt") {
+                return "bi-file-earmark-text";
+            } else if (fileExtension === ".csv") {
+                return "bi-file-earmark-spreadsheet";
+            }
+            return "bi-file-earmark";
+        }
+
+        // Update drop zone with success message
+        function updateDropZone(dropZoneElement, message) {
+            // Clear existing content
+            dropZoneElement.innerHTML = "";
+
+            // Add success indicator
+            const successIndicator = document.createElement("div");
+            successIndicator.innerHTML = `
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 48px;"></i>
+                <p class="mt-2 mb-0">${message}</p>
+                <p class="small text-muted mt-2">Click to change selection</p>
+            `;
+            dropZoneElement.appendChild(successIndicator);
+
+            // Re-add the input element
+            const inputType = dropZoneElement.id === "file-drop-zone" ? "file" : "folder";
+            const inputElement = document.createElement("input");
+            inputElement.type = "file";
+            inputElement.className = "drop-zone__input";
+
+            if (inputType === "file") {
+                inputElement.name = "files[]";
+                inputElement.id = "file-input";
+                inputElement.multiple = true;
+                inputElement.addEventListener("change", () => {
+                    if (inputElement.files.length) {
+                        handleFiles(inputElement.files);
+                    }
+                });
+            } else {
+                inputElement.name = "folder[]";
+                inputElement.id = "folder-input";
+                inputElement.setAttribute("webkitdirectory", "");
+                inputElement.setAttribute("directory", "");
+                inputElement.multiple = true;
+                inputElement.addEventListener("change", () => {
+                    if (inputElement.files.length) {
+                        handleFolder(inputElement.files);
+                    }
+                });
+            }
+
+            inputElement.accept = ".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif";
+            dropZoneElement.appendChild(inputElement);
+        }
+
+        // Reset drop zone to initial state
+        function resetDropZone(dropZoneElement, type) {
+            // Clear the drop zone
+            dropZoneElement.innerHTML = "";
+
+            // Add back the prompt
+            const promptIcon = type === 'file' ? 'bi-file-earmark-plus' : 'bi-folder-plus';
+            const promptText = type === 'file' ? 'Drop files here or click to select' : 'Drop folder here or click to select';
+
+            dropZoneElement.innerHTML = `
+                <span class="drop-zone__prompt">
+                    <i class="bi ${promptIcon} fs-1 d-block mb-2"></i>
+                    ${promptText}
+                </span>
+                <input type="${type}" name="${type === 'file' ? 'files[]' : 'folder[]'}"
+                    class="drop-zone__input" id="${type}-input" ${type === 'folder' ? 'webkitdirectory directory' : ''} multiple
+                    accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
+            `;
+
+            // Reattach listeners
+            const newInput = dropZoneElement.querySelector(".drop-zone__input");
+            if (type === 'file') {
+                newInput.addEventListener("change", () => {
+                    if (newInput.files.length) {
+                        handleFiles(newInput.files);
+                    }
+                });
+            } else {
+                newInput.addEventListener("change", () => {
+                    if (newInput.files.length) {
+                        handleFolder(newInput.files);
+                    }
+                });
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -387,12 +387,215 @@ def get_answer_from_rag(user, question):
 	return response
 
 
+def get_answer_from_project(project, question):
+	"""
+	Ottiene una risposta dal sistema RAG per la domanda dell'utente su un progetto specifico.
+
+	Args:
+		project: L'oggetto progetto
+		question: La domanda posta dall'utente
+
+	Returns:
+		Un dizionario contenente la risposta e le fonti con i chunk di testo
+	"""
+	logger.debug(f"-->get_answer_from_project: {project.id}")
+	user = project.user
+
+	# Verifica se è necessario aggiornare l'indice
+	from dashboard.rag_document_utils import check_project_index_update_needed
+	update_needed = check_project_index_update_needed(project)
+
+	# Controlla se il progetto ha documenti
+	project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(user.id), str(project.id))
+	if not os.path.exists(project_dir) or not os.listdir(project_dir):
+		return {"answer": "Non ci sono documenti in questo progetto.", "sources": []}
+
+	# Crea o aggiorna la catena RAG se necessario
+	from dashboard.rag_utils import create_project_rag_chain
+	qa_chain = create_project_rag_chain(project=project) if update_needed else create_project_rag_chain(project=project,
+																										docs=[])
+
+	if qa_chain is None:
+		return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.", "sources": []}
+
+	# Ottieni la risposta
+	result = qa_chain.invoke(question)
+
+	# Formato della risposta
+	response = {
+		"answer": result.get('result', 'Nessuna risposta trovata.'),
+		"sources": []
+	}
+
+	# Aggiungi le fonti se disponibili
+	source_documents = result.get('source_documents', [])
+	for doc in source_documents:
+		source = {
+			"content": doc.page_content,  # Questo è il chunk effettivo di testo
+			"metadata": doc.metadata,  # Metadata include il percorso del file e altre info
+			"score": getattr(doc, 'score', None)  # Se disponibile, include il punteggio di rilevanza
+		}
+		response["sources"].append(source)
+
+	return response
 
 
+def create_project_rag_chain(project=None, docs=None):
+	"""
+	Crea o aggiorna la catena RAG per un progetto.
 
+	Args:
+		project: Oggetto Project (opzionale)
+		docs: Lista di documenti LangChain (opzionale)
 
+	Returns:
+		RetrievalQA: Oggetto catena RAG
+	"""
+	logger.debug(f"-->create_project_rag_chain: {project.id if project else 'No project'}")
 
+	# Se il progetto è specificato, usa il suo indice specifico
+	if project:
+		index_name = f"project_index_{project.id}"
+		index_path = os.path.join(settings.MEDIA_ROOT, index_name)
 
+		# Se non sono forniti documenti, carica quelli del progetto che necessitano di embedding
+		if docs is None:
+			# Ottieni tutti i file del progetto che non sono ancora stati embedded
+			from profiles.models import ProjectFile
+			documents_to_embed = ProjectFile.objects.filter(project=project, is_embedded=False)
+
+			docs = []
+			document_ids = []
+
+			for doc_model in documents_to_embed:
+				langchain_docs = load_document(doc_model.file_path)
+				if langchain_docs:
+					docs.extend(langchain_docs)
+					document_ids.append(doc_model.id)
+	else:
+		# Caso di fallback, non dovrebbe essere usato normalmente
+		index_name = "default_index"
+		index_path = os.path.join(settings.MEDIA_ROOT, index_name)
+		document_ids = None
+
+	embeddings = OpenAIEmbeddings()
+	vectordb = None
+
+	# Se non ci sono documenti da processare e l'indice esiste, carica l'indice esistente
+	if (docs is None or len(docs) == 0) and os.path.exists(index_path):
+		logger.info(f"🔁 Caricamento dell'indice FAISS esistente: {index_path}")
+		try:
+			vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+		except Exception as e:
+			logger.error(f"Errore nel caricare l'indice FAISS: {str(e)}")
+			# Se c'è un errore nel caricare l'indice, ricrealo
+			if docs is None:
+				# Se non abbiamo documenti, carica tutti i documenti del progetto
+				if project:
+					project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+					docs = load_all_documents(project_dir)
+				else:
+					# Caso di fallback: usa la directory predefinita
+					docs = load_all_documents(os.path.join(settings.MEDIA_ROOT, "docs"))
+
+	# Se abbiamo documenti da processare o l'indice non esiste o è corrotto (vectordb è ancora None)
+	if docs and len(docs) > 0 and vectordb is None:
+		logger.info(f"⚙️ Creazione o aggiornamento dell'indice FAISS con {len(docs)} documenti")
+
+		# Dividi i documenti in chunk più piccoli
+		splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+		split_docs = splitter.split_documents(docs)
+		split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
+
+		if os.path.exists(index_path):
+			logger.info(f"🔁 Caricamento dell'indice FAISS esistente: {index_path}")
+
+			# Se l'indice esiste, caricalo e aggiungi i nuovi documenti
+			try:
+				existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+				vectordb = existing_vectordb.from_documents(split_docs, embeddings)
+			except Exception as e:
+				logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
+				# Se c'è un errore, crea un nuovo indice
+				vectordb = FAISS.from_documents(split_docs, embeddings)
+		else:
+			# Crea un nuovo indice
+			vectordb = FAISS.from_documents(split_docs, embeddings)
+
+		# Salva l'indice
+		if vectordb:
+			os.makedirs(os.path.dirname(index_path), exist_ok=True)
+			vectordb.save_local(index_path)
+			logger.info(f"💾 Indice FAISS salvato in {index_path}")
+
+			# Aggiorna lo stato dell'indice nel database
+			if project and document_ids:
+				from dashboard.rag_document_utils import update_project_index_status
+				update_project_index_status(project, document_ids)
+
+	# Se l'indice non è stato creato o aggiornato, carica quello esistente
+	if vectordb is None:
+		if os.path.exists(index_path):
+			logger.info(f"🔁 Caricamento dell'indice FAISS esistente: {index_path}")
+			try:
+				vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+			except Exception as e:
+				logger.error(f"Errore nel caricare l'indice FAISS: {str(e)}")
+				# Ritorna None se non c'è un indice e non ci sono documenti
+				return None
+		else:
+			logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
+			# Ritorna None se non c'è un indice e non ci sono documenti
+			return None
+
+	# Crea un template personalizzato per migliorare la qualità delle risposte
+	template = """
+    Sei un assistente esperto che analizza documenti e fornisce risposte dettagliate e complete.
+
+    Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+    Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+    Quando rispondi:
+    1. Fornisci una risposta dettagliata e approfondita di almeno 5-10 frasi
+    2. Organizza le informazioni in modo logico e strutturato
+    3. Cita fatti specifici e dettagli presenti nei documenti
+    4. Se pertinente, suddividi la risposta in sezioni per facilitare la lettura
+    5. Se ci sono più aspetti nella domanda, assicurati di affrontarli tutti
+
+    Contesto:
+    {context}
+
+    Domanda: {question}
+
+    Risposta dettagliata:
+    """
+
+	PROMPT = PromptTemplate(
+		template=template,
+		input_variables=["context", "question"]
+	)
+
+	# Configura il retriever con un numero più alto di documenti da recuperare
+	retriever = vectordb.as_retriever(search_kwargs={"k": 6})
+
+	# Crea il modello con timeout più alto per risposte complesse
+	llm = ChatOpenAI(
+		model=GPT_MODEL,  # Usa GPT-4 per risposte più dettagliate e di qualità superiore
+		temperature=GPT_MODEL_TEMPERATURE,  # Leggero aumento della creatività mantenendo accuratezza
+		max_tokens=GPT_MODEL_MAX_TOKENS,  # Consenti risposte più lunghe
+		request_timeout=GPT_MODEL_TIMEOUT  # Timeout più lungo per elaborazioni complesse
+	)
+
+	# Crea la catena RAG con il prompt personalizzato
+	qa = RetrievalQA.from_chain_type(
+		llm=llm,
+		chain_type="stuff",  # "stuff" combina tutti i documenti in un unico contesto
+		retriever=retriever,
+		chain_type_kwargs={"prompt": PROMPT},
+		return_source_documents=True  # Assicurati di restituire i documenti sorgente
+	)
+
+	return qa
 
 
 

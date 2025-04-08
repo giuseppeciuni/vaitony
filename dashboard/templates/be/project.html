@@ -65,6 +65,7 @@
         border: 1px solid #dee2e6;
         border-radius: 4px;
         margin-bottom: 0.5rem;
+        overflow: hidden;
     }
 
     .document-icon {
@@ -279,6 +280,42 @@
         padding-top: 1rem;
         border-top: 1px solid #dee2e6;
     }
+
+    .document-card {
+        position: relative;
+        width: 150px;
+        overflow: hidden;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .document-actions {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .document-card:hover .document-actions {
+        opacity: 1;
+    }
+
+    .delete-file-btn {
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .delete-file-btn i {
+        font-size: 14px;
+    }
+
 </style>
 {% endblock %}
 
@@ -344,28 +381,44 @@
 
     {% if project_files %}
     <div class="documents-container">
-        {% for file in project_files %}
-        <div class="document-card" data-bs-toggle="modal" data-bs-target="#documentModal" data-file-id="{{ file.id }}" data-file-name="{{ file.name }}" data-file-url="{{ file.url }}">
-            <div class="document-thumb">
+    {% for file in project_files %}
+        <div class="document-card">
+            <div class="document-thumb" data-bs-toggle="modal" data-bs-target="#documentModal"
+                 data-file-id="{{ file.id }}"
+                 data-file-name="{{ file.filename }}"
+                 data-file-url="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}">
                 {% if file.extension == '.pdf' %}
-                <i class="bi bi-file-earmark-pdf document-icon pdf"></i>
+                    <i class="bi bi-file-earmark-pdf document-icon pdf"></i>
                 {% elif file.extension == '.doc' or file.extension == '.docx' %}
-                <i class="bi bi-file-earmark-word document-icon doc"></i>
+                    <i class="bi bi-file-earmark-word document-icon doc"></i>
                 {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
-                <i class="bi bi-file-earmark-excel document-icon xls"></i>
+                    <i class="bi bi-file-earmark-excel document-icon xls"></i>
                 {% elif file.extension == '.ppt' or file.extension == '.pptx' %}
-                <i class="bi bi-file-earmark-slides document-icon ppt"></i>
+                    <i class="bi bi-file-earmark-slides document-icon ppt"></i>
                 {% elif file.extension == '.txt' %}
-                <i class="bi bi-file-earmark-text document-icon txt"></i>
+                    <i class="bi bi-file-earmark-text document-icon txt"></i>
                 {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
-                <i class="bi bi-file-earmark-image document-icon img"></i>
+                    <img src="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}"
+                         alt="{{ file.filename }}"
+                         style="max-height: 100%; max-width: 100%; object-fit: contain;">
                 {% else %}
-                <i class="bi bi-file-earmark document-icon"></i>
+                    <i class="bi bi-file-earmark document-icon"></i>
                 {% endif %}
             </div>
-            <div class="document-name" title="{{ file.name }}">{{ file.name }}</div>
+            <div class="document-name" title="{{ file.filename }}">
+                {{ file.filename|truncatechars:20 }}
+            </div>
+            <div class="document-actions">
+                <button type="button" class="btn btn-sm btn-outline-danger delete-file-btn"
+                        data-file-id="{{ file.id }}"
+                        data-file-name="{{ file.filename }}"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteFileModal">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         </div>
-        {% endfor %}
+    {% endfor %}
     </div>
     {% else %}
     <div class="empty-project mb-4">
@@ -573,19 +626,38 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="ratio ratio-16x9">
-                    <iframe id="document-frame" src="" allowfullscreen></iframe>
+                <!-- Contenitore per diverse visualizzazioni -->
+                <div id="document-preview-container">
+                    <!-- Iframe per PDF -->
+                    <div class="ratio ratio-16x9" id="iframe-container">
+                        <iframe id="document-frame" src="" allowfullscreen style="display:none;"></iframe>
+                    </div>
+
+                    <!-- Contenitore per immagini -->
+                    <div class="text-center d-none" id="image-container">
+                        <img id="image-preview" class="img-fluid" src="" alt="Document Preview">
+                    </div>
+
+                    <!-- Messaggio per tipi di file non supportati -->
+                    <div class="alert alert-info d-none" id="unsupported-file-message">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span>Questo tipo di file non può essere visualizzato in anteprima. Utilizzare i pulsanti qui sotto per aprirlo o scaricarlo.</span>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <a href="#" class="btn btn-primary" id="download-document" download>
+                <a href="#" class="btn btn-primary" id="open-document" target="_blank">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Apri in nuova scheda
+                </a>
+                <a href="#" class="btn btn-success" id="download-document" download>
                     <i class="bi bi-download me-1"></i> Download
                 </a>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
             </div>
         </div>
     </div>
 </div>
+
 
 <!-- Modal: Upload Files -->
 <div class="modal fade" id="uploadFilesModal" tabindex="-1" aria-labelledby="uploadFilesModalLabel" aria-hidden="true">
@@ -704,7 +776,40 @@
         </div>
     </div>
 </div>
+
+<!-- Modal: Delete File Confirmation -->
+<div class="modal fade" id="deleteFileModal" tabindex="-1" aria-labelledby="deleteFileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteFileModalLabel">Conferma eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Attenzione: Questa operazione non può essere annullata!
+                </div>
+                <p>Sei sicuro di voler eliminare il file <strong id="delete-file-name"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <form method="post" action="{% url 'project' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_file">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <input type="hidden" name="file_id" id="delete-file-id">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i> Elimina file
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
+
 
 {% block extra_js %}
 <script>
@@ -716,16 +821,100 @@
                 const button = event.relatedTarget;
                 const fileId = button.getAttribute('data-file-id');
                 const fileName = button.getAttribute('data-file-name');
-                const fileUrl = button.getAttribute('data-file-url');
 
                 const modalTitle = documentModal.querySelector('.modal-title');
                 const documentFrame = document.getElementById('document-frame');
+                const imageContainer = document.getElementById('image-container');
+                const unsupportedMessage = document.getElementById('unsupported-file-message');
+                const iframeContainer = document.getElementById('iframe-container');
                 const downloadButton = document.getElementById('download-document');
+                const openButton = document.getElementById('open-document');
+                const imagePreview = document.getElementById('image-preview');
 
+                // Resetta tutti i contenitori
+                documentFrame.style.display = 'none';
+                iframeContainer.style.display = 'none';
+                imageContainer.classList.add('d-none');
+                unsupportedMessage.classList.add('d-none');
+
+                // Imposta titolo
                 modalTitle.textContent = fileName;
-                documentFrame.src = fileUrl;
-                downloadButton.href = fileUrl;
-                downloadButton.setAttribute('download', fileName);
+
+                // Configura il pulsante "Apri in nuova scheda"
+                if (openButton) {
+                    openButton.href = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
+                    openButton.target = '_blank';
+                    openButton.onclick = null;
+                }
+
+                // Configura il pulsante "Download"
+                if (downloadButton) {
+                    downloadButton.href = `/serve_project_file/${fileId}/?download=1&filename=${encodeURIComponent(fileName)}`;
+                    downloadButton.setAttribute('download', fileName);
+                    downloadButton.onclick = null;
+                }
+
+                // Determina l'estensione del file
+                const fileExtension = fileName.split('.').pop().toLowerCase();
+
+                // Gestisci l'anteprima in base all'estensione
+                switch (fileExtension) {
+                    case 'pdf':
+                        // Mostra PDF nell'iframe
+                        documentFrame.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
+                        documentFrame.style.display = 'block';
+                        iframeContainer.style.display = 'block';
+                        unsupportedMessage.classList.add('d-none');
+                        break;
+
+                    case 'jpg':
+                    case 'jpeg':
+                    case 'png':
+                    case 'gif':
+                        // Mostra immagini
+                        imagePreview.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
+                        imageContainer.classList.remove('d-none');
+                        break;
+
+                    case 'docx':
+                    case 'doc':
+                    case 'txt':
+                    case 'csv':
+                    case 'xls':
+                        console.log('Excel file detected:', fileUrl);
+                        // Mostra un messaggio specifico per i file Excel
+                        unsupportedMessage.innerHTML = `
+                            <i class="bi bi-file-earmark-excel me-2 text-success" style="font-size: 2rem;"></i>
+                            <div>
+                                <p>I file Excel non possono essere visualizzati direttamente nel browser.</p>
+                                <p>Usa i pulsanti qui sotto per aprire o scaricare il file.</p>
+                            </div>
+                        `;
+                        unsupportedMessage.classList.remove('d-none');
+                        break;
+                    case 'xlsx':
+                    case 'ppt':
+                    case 'pptx':
+                        // Mostra messaggio per file non visualizzabili in anteprima
+                        unsupportedMessage.classList.remove('d-none');
+                        imageContainer.classList.add('d-none');
+                        iframeContainer.style.display = 'none';
+                        break;
+
+                    default:
+                        // File non supportato
+                        unsupportedMessage.classList.remove('d-none');
+                        imageContainer.classList.add('d-none');
+                        iframeContainer.style.display = 'none';
+                }
+            });
+
+            // Quando la modale è chiusa, pulisci l'iframe e l'immagine
+            documentModal.addEventListener('hidden.bs.modal', function () {
+                const documentFrame = document.getElementById('document-frame');
+                const imagePreview = document.getElementById('image-preview');
+                if (documentFrame) documentFrame.src = '';
+                if (imagePreview) imagePreview.src = '';
             });
         }
 
@@ -893,6 +1082,26 @@
                 }, 2000);
             });
         }
+
+        const deleteFileModal = document.getElementById('deleteFileModal');
+        if (deleteFileModal) {
+            deleteFileModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const fileId = button.getAttribute('data-file-id');
+                const fileName = button.getAttribute('data-file-name');
+
+                document.getElementById('delete-file-name').textContent = fileName;
+                document.getElementById('delete-file-id').value = fileId;
+            });
+        }
+
+        // Ferma la propagazione del click sul pulsante di eliminazione
+        document.querySelectorAll('.delete-file-btn').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.stopPropagation(); // Impedisce che il click attivi anche il modal del documento
+            });
+        });
+
 
         // Helper functions
         function formatFileSize(bytes) {

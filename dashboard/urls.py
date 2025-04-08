@@ -1,12 +1,13 @@
 from django.urls import path
 from . import views
-from profiles.views import user_login  #Personal login (not the Django login!)
+from profiles.views import user_login
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
     path('', user_login, name='login'),
     path('dashboard', views.dashboard, name='dashboard'),
+
     # percorsi per upload
     path('upload/document', views.upload_document, name='upload_document'),
     path('upload/folder', views.upload_folder, name='upload_folder'),
@@ -20,11 +21,13 @@ urlpatterns = [
     path('tools/rag', views.rag, name='rag'),
     path('tools/chiedi', views.chiedi, name='chiedi'),
 
-    # percorsi per projects
-    path('projects/new_project', views.new_project, name='new_project'),
-    path('projects/project', views.project, name='project'),
-    path('projets/projects_list', views.projects_list, name='projects_list'),
+    # percorsi per projects - aggiornati
+    path('projects/new', views.new_project, name='new_project'),
+    path('projects/list', views.projects_list, name='projects_list'),
+    path('projects/<int:project_id>', views.project, name='project'),
+    path('projects', views.project, name='project'),  # Supporto per POST senza ID
 
+    path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
 ]
 
 if settings.DEBUG:

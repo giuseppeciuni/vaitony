@@ -223,67 +223,129 @@ REST_FRAMEWORK = {
 
 
 # Logging Configuration
+# LOGGING = {
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'formatters': {
+#         'verbose': {
+#             'format': '{levelname} {asctime} {message}',
+#             'style': '{',
+#         },
+#         'simple': {
+#             'format': '{levelname} {message}',
+#             'style': '{',
+#         },
+#     },
+#     'handlers': {
+#         'file': {
+#             'level': 'DEBUG',
+#             'class': 'logging.handlers.RotatingFileHandler',
+#             'filename': os.path.join(BASE_DIR, 'logs/vaitony.log'),
+#             'maxBytes': 1024*1024*5,
+#             'backupCount': 5,
+#             'formatter': 'verbose',
+#         },
+#         'console': {
+#             'level': 'DEBUG',
+#             'class': 'logging.StreamHandler',
+#             'formatter': 'simple',
+#         },
+#     },
+#     'loggers': {
+#         # Logger django principale - solo ERROR in console
+#         'django': {
+#             'handlers': ['file', 'console'],
+#             'level': 'ERROR',
+#             'propagate': False,
+#         },
+#         # Logger per le tue app - tutti i livelli in console
+#         'profiles': {
+#             'handlers': ['file', 'console'],
+#             'level': 'DEBUG',
+#             'propagate': False,
+#         },
+#         'dashboard': {
+#             'handlers': ['file', 'console'],
+#             'level': 'DEBUG',
+#             'propagate': False,
+#         },
+#         # Limita il log di autoreload
+#         'django.utils.autoreload': {
+#             'handlers': ['file'],
+#             'level': 'INFO',
+#             'propagate': False,
+#         },
+#         # Limita i log di accesso
+#         'django.server': {
+#             'handlers': ['file'],
+#             'level': 'INFO',
+#             'propagate': False,
+#         },
+#         # Limita i log delle query SQL
+#         'django.db.backends': {
+#             'handlers': ['file'],
+#             'level': 'INFO',
+#             'propagate': False,
+#         },
+#     },
+# }
+
+
+
+# Configurazione avanzata dei log per Django
+
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '[{levelname}] {asctime} {module} {process:d} {thread:d} - {message}',
             'style': '{',
         },
+        'detailed': {
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+        },
         'simple': {
-            'format': '{levelname} {message}',
+            'format': '[{levelname}] {message}',
             'style': '{',
+        },
+    },
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
         },
     },
     'handlers': {
-        'file': {
-            'level': 'DEBUG',  # Accetta tutti i livelli da DEBUG in su
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs/vaitony.log'),
-            'maxBytes': 1024*1024*5,  # 5 MB
-            'backupCount': 5,
-            'formatter': 'verbose',
-        },
+        # Console handler per lo sviluppo
         'console': {
-            'level': 'DEBUG',
+            'level': 'DEBUG',  # Hai già impostato questo a DEBUG, che è corretto
+            'filters': ['require_debug_true'],
             'class': 'logging.StreamHandler',
-            'stream': sys.stderr,  # Invia i log a stderr (che Apache catturerà)
-            'formatter': 'verbose',
+            'formatter': 'simple',
         },
+        # Qui potresti aggiungere altri handler come 'file' se necessario
     },
     'loggers': {
+        # Aggiungi i logger per le tue app qui
         'django': {
-            'handlers': ['file', 'console'],  # Scrivi sia nel file che in stderr
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        'django.db.backends': {
-            'handlers': ['file'],
-            'level': 'INFO',  # Modifica il livello di log delle query SQL
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
-        'profiles': {
-            'handlers': ['file', 'console'],  # Scrivi sia nel file che in stderr
+        'dashboard': {  # Aggiungi questo per l'app dashboard
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
         },
-        'dashboard': {
-            'handlers': ['file', 'console'],  # Scrivi sia nel file che in stderr
+        'profiles': {  # Aggiungi questo per l'app profiles
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
         },
-        'django.utils.autoreload': {
-            'handlers': ['file', 'console'],  # Scrivi sia nel file che in stderr
-            'level': 'INFO',  # Riduci il livello per il sistema di autoreload
-            'propagate': False,
-        },
-    },
+        # Aggiungi qui altri logger se necessario
+    }
 }
-
-
-
-
 
 
 ############################################################

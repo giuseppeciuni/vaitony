@@ -1,0 +1,197 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .project-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid #0d6efd;
+    }
+
+    .project-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .project-icon {
+        font-size: 2rem;
+        color: #0d6efd;
+    }
+
+    .project-stats {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 1rem;
+    }
+
+    .stat-item {
+        display: flex;
+        align-items: center;
+    }
+
+    .stat-icon {
+        margin-right: 0.5rem;
+        color: #6c757d;
+    }
+
+    .empty-projects {
+        text-align: center;
+        padding: 3rem;
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+    }
+
+    .empty-projects i {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# INIZIO NAVIGAZIONE SOTTONAVBAR #}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0">My Projects</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Projects</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{# FINE NAVIGAZIONE SOTTONAVBAR #}
+
+<div class="container-fluid">
+    {% if messages %}
+    <div class="messages mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4>Your Projects</h4>
+        <a href="{% url 'new_project' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-2"></i> New Project
+        </a>
+    </div>
+
+    {% if projects %}
+        <div class="row">
+            {% for project in projects %}
+            <div class="col-lg-6 col-xl-4 mb-4">
+                <div class="card project-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="me-3">
+                                <i class="bi bi-kanban project-icon"></i>
+                            </div>
+                            <div>
+                                <h5 class="card-title mb-1">{{ project.name }}</h5>
+                                <p class="text-muted small mb-0">Created: {{ project.created_at|date:"M d, Y" }}</p>
+                            </div>
+                        </div>
+
+                        <p class="card-text">
+                            {% if project.description %}
+                                {{ project.description|truncatechars:100 }}
+                            {% else %}
+                                <span class="text-muted">No description</span>
+                            {% endif %}
+                        </p>
+
+                        <div class="project-stats">
+                            <div class="stat-item">
+                                <i class="bi bi-file-earmark stat-icon"></i>
+                                <span>{{ project.files.count }} Files</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="bi bi-chat-dots stat-icon"></i>
+                                <span>{{ project.conversations.count }} Conversations</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent d-flex justify-content-between">
+                        <a href="{% url 'project' project.id %}" class="btn btn-outline-primary">
+                            <i class="bi bi-eye me-1"></i> View
+                        </a>
+                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal" data-project-id="{{ project.id }}" data-project-name="{{ project.name }}">
+                            <i class="bi bi-trash me-1"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-projects">
+            <i class="bi bi-folder-x"></i>
+            <h4>No projects yet</h4>
+            <p class="text-muted">Create your first project to get started</p>
+            <a href="{% url 'new_project' %}" class="btn btn-primary mt-3">
+                <i class="bi bi-plus-lg me-2"></i> Create Project
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal: Delete Project -->
+<div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-labelledby="deleteProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteProjectModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Warning: This action cannot be undone!
+                </div>
+                <p>Are you sure you want to delete the project <strong id="project-name-display"></strong> and all its associated files?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'projects_list' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_project">
+                    <input type="hidden" name="project_id" id="delete-project-id">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i> Delete Project
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Configura il modale di eliminazione
+        const deleteModal = document.getElementById('deleteProjectModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const projectId = button.getAttribute('data-project-id');
+                const projectName = button.getAttribute('data-project-name');
+
+                document.getElementById('delete-project-id').value = projectId;
+                document.getElementById('project-name-display').textContent = projectName;
+            });
+        }
+    });
+</script>
+{% endblock %}

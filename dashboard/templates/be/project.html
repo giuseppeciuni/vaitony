@@ -3,110 +3,90 @@
 
 {% block extra_css %}
 <style>
-    /* Stili generali */
+    /* Stili generali - dimensioni ridotte */
     .project-header {
         background-color: #f8f9fa;
         border-radius: 0.5rem;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
         border-left: 4px solid #0d6efd;
     }
 
     .project-title {
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
         display: flex;
         align-items: center;
+        font-size: 1.2rem;
     }
 
     .project-title i {
-        margin-right: 0.75rem;
+        margin-right: 0.5rem;
         color: #0d6efd;
     }
 
     .project-description {
         color: #6c757d;
         margin-bottom: 0;
+        font-size: 0.9rem;
     }
 
     .section-title {
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         font-weight: 500;
-        margin-bottom: 1.25rem;
-        padding-bottom: 0.75rem;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
         border-bottom: 1px solid #e9ecef;
     }
 
-    /* Stili per i documenti */
+    /* Stili per i documenti - thumbnails più piccole */
     .documents-container {
         display: flex;
         flex-wrap: wrap;
-        /* gap: 1.5rem;
-        margin-bottom: 2rem; */
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-
+        gap: 0.5rem;
+        margin-bottom: 0;
     }
 
     .document-card {
-        /*width: 150px;*/
-        width: 100px;
+        position: relative;
+        width: 90px;  /* Ridotto da 120px */
+        border-radius: 0.5rem;
         overflow: hidden;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         transition: all 0.2s;
         cursor: pointer;
     }
 
     .document-card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-3px);
         box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
 
     .document-thumb {
-        /*height: 150px;*/
-        height: 100px;
+        height: 75px;  /* Ridotto da 100px */
         display: flex;
         align-items: center;
         justify-content: center;
         background-color: #f8f9fa;
         border: 1px solid #dee2e6;
         border-radius: 4px;
-        /*margin-bottom: 0.5rem;*/
         margin-bottom: 0.25rem;
         overflow: hidden;
     }
 
     .document-icon {
-        /*font-size: 3rem;*/
-        font-size: 2rem;
+        font-size: 1.5rem;  /* Ridotto da 2rem */
         color: #6c757d;
     }
 
-    .document-icon.pdf {
-        color: #dc3545;
-    }
-
-    .document-icon.doc, .document-icon.docx {
-        color: #0d6efd;
-    }
-
-    .document-icon.xls, .document-icon.xlsx {
-        color: #198754;
-    }
-
-    .document-icon.ppt, .document-icon.pptx {
-        color: #fd7e14;
-    }
-
-    .document-icon.txt {
-        color: #6c757d;
-    }
-
-    .document-icon.img {
-        color: #6f42c1;
-    }
+    .document-icon.pdf { color: #dc3545; }
+    .document-icon.doc, .document-icon.docx { color: #0d6efd; }
+    .document-icon.xls, .document-icon.xlsx { color: #198754; }
+    .document-icon.ppt, .document-icon.pptx { color: #fd7e14; }
+    .document-icon.txt { color: #6c757d; }
+    .document-icon.img { color: #6f42c1; }
 
     .document-name {
-        /*font-size: 0.875rem;*/
-        font-size: 0.75rem;
+        font-size: 0.7rem;  /* Ridotto da 0.75rem */
         text-align: center;
         white-space: nowrap;
         overflow: hidden;
@@ -114,15 +94,42 @@
         padding: 0 0.5rem;
     }
 
+    .document-actions {
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .document-card:hover .document-actions {
+        opacity: 1;
+    }
+
+    .delete-file-btn {
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        width: 20px;  /* Ridotto da 24px */
+        height: 20px;  /* Ridotto da 24px */
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .delete-file-btn i {
+        font-size: 10px;  /* Ridotto da 12px */
+    }
+
     /* Stili per le notes */
     .notes-container {
         border: 1px solid #dee2e6;
         border-radius: 0.5rem;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;  /* Ridotto da 2rem */
     }
 
     .notes-toolbar {
-        padding: 0.75rem;
+        padding: 0.5rem;  /* Ridotto da 0.75rem */
         border-bottom: 1px solid #dee2e6;
         background-color: #f8f9fa;
         border-top-left-radius: 0.5rem;
@@ -130,16 +137,16 @@
     }
 
     .notes-editor {
-        padding: 1rem;
-        min-height: 200px;
+        padding: 0.75rem;  /* Ridotto da 1rem */
+        min-height: 150px;  /* Ridotto da 200px */
     }
 
     /* Stili per Ask Anything */
     .ask-container {
         background-color: #f8f9fa;
         border-radius: 0.5rem;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
+        padding: 1rem;  /* Ridotto da 1.5rem */
+        margin-bottom: 1.5rem;  /* Ridotto da 2rem */
     }
 
     .chat-messages {
@@ -150,24 +157,32 @@
         border-radius: 0.5rem;
         background-color: white;
         padding: 1rem;
+        display: flex;
+        flex-direction: column;
     }
 
     .message {
+        position: relative;
         margin-bottom: 1rem;
-        padding: 0.75rem;
-        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        max-width: 80%;
     }
 
     .user-message {
         background-color: #e9f5ff;
         border-top-right-radius: 0;
-        margin-left: 2rem;
+        margin-left: auto;
+        margin-right: 0;
+        align-self: flex-end;
     }
 
     .ai-message {
         background-color: #f1f3f5;
         border-top-left-radius: 0;
-        margin-right: 2rem;
+        margin-right: auto;
+        margin-left: 0;
+        align-self: flex-start;
     }
 
     .message-header {
@@ -183,17 +198,41 @@
     .chat-input-container {
         display: flex;
         flex-direction: column;
+        position: relative;
     }
 
     .chat-input {
         resize: none;
         border-radius: 0.5rem;
+        padding-right: 60px;
+    }
+
+    .chat-input-send-btn {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        border-radius: 50%;
+        height: 40px;
+        width: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #0d6efd;
+        color: white;
+        border: none;
+    }
+
+    .chat-input-send-btn:hover {
+        background-color: #0b5ed7;
+    }
+
+    .chat-input-send-btn i {
+        font-size: 1.2rem;
     }
 
     .loader {
-        display: none;
-        margin-top: 1rem;
         text-align: center;
+        margin-top: 0.5rem;
     }
 
     /* Sources styles */
@@ -235,106 +274,31 @@
 
     .empty-project {
         text-align: center;
-        padding: 3rem 2rem;
+        padding: 2rem 1.5rem;  /* Ridotto da 3rem 2rem */
         background-color: #f8f9fa;
-        border-radius: 0.5rem;
-        margin-bottom: 2rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1.5rem;  /* Ridotto da 2rem */
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.2s;
+    }
+
+    .empty-project:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
 
     .empty-project i {
-        font-size: 4rem;
+        font-size: 3rem;  /* Ridotto da 4rem */
         color: #dee2e6;
-        margin-bottom: 1rem;
-    }
-
-    /* Upload buttons */
-    .upload-actions {
-        display: flex;
-        gap: 0.5rem;  /* Ridotto da 1rem */
-        margin-bottom: 1rem;  /* Ridotto da 1.5rem */
-    }
-
-    .upload-button {
-        flex: 1;
-        text-align: center;
-        border: 2px dashed #dee2e6;
-        border-radius: 0.25rem;  /* Ridotto da 0.5rem */
-        padding: 1rem;  /* Ridotto da 1.5rem */
-        background-color: #f8f9fa;
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-
-    .upload-button:hover {
-        border-color: #0d6efd;
-        background-color: #e9f5ff;
-    }
-
-    .upload-icon {
-        font-size: 1.5rem;  /* Ridotto da 2rem */
-        margin-bottom: 0.25rem;  /* Ridotto da 0.5rem */
-        color: #0d6efd;
-    }
-
-    .upload-text {
-        font-weight: 500;
-        font-size: 0.875rem;  /* Aggiunto per rendere il testo leggermente più piccolo */
+        margin-bottom: 0.75rem;  /* Ridotto da 1rem */
     }
 
     /* Bottoni in basso */
     .action-buttons {
         display: flex;
         justify-content: space-between;
-        margin-top: 2rem;
-        padding-top: 1rem;
+        margin-top: 1.5rem;  /* Ridotto da 2rem */
+        padding-top: 0.75rem;  /* Ridotto da 1rem */
         border-top: 1px solid #dee2e6;
-    }
-
-    .document-card {
-        position: relative;
-        width: 150px;
-        overflow: hidden;
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-
-    .document-actions {
-        position: absolute;
-        /*top: 5px;*/
-        /*right: 5px;*/
-        top: 3px;
-        right: 3px;
-        opacity: 0;
-        transition: opacity 0.2s;
-    }
-
-    .document-card:hover .document-actions {
-        opacity: 1;
-    }
-
-    .delete-file-btn {
-        background-color: rgba(255, 255, 255, 0.9);
-        border-radius: 50%;
-        /*width: 28px;*/
-        /*height: 28px;*/
-        width: 24px;
-        height: 24px;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .delete-file-btn i {
-        /*font-size: 14px;*/
-        font-size: 12px;
-    }
-
-    .documents-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-bottom: 0;  /* Rimuovi il margin bottom precedente */
     }
 
     .card-header .document-count {
@@ -343,9 +307,44 @@
     }
 
     .card-body {
-        padding: 1rem;
+        padding: 0.75rem;  /* Ridotto da 1rem */
     }
 
+    /* Keys hint for chat */
+    .keys-hint {
+        display: block;
+        text-align: right;
+        color: #6c757d;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+    }
+
+    /* Chat history and current conversation separator */
+    .chat-history {
+        border-bottom: 1px dashed #dee2e6;
+        padding-bottom: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .current-conversation {
+        padding-top: 0.5rem;
+    }
+
+    /* Message timestamp */
+    .message-time {
+        font-size: 0.7rem;
+        color: #adb5bd;
+        margin-top: 0.25rem;
+        text-align: right;
+    }
+
+    .app-content-header {
+        margin-bottom: 0.75rem;  /* Ridotto */
+    }
+
+    .app-content-header h3 {
+        font-size: 1.5rem;  /* Ridotto */
+    }
 </style>
 {% endblock %}
 
@@ -371,7 +370,7 @@
 
 {% if messages %}
 <div class="container-fluid">
-    <div class="messages mb-4">
+    <div class="messages mb-3">
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
             {{ message }}
@@ -383,10 +382,10 @@
 {% endif %}
 
 <div class="container-fluid">
-    <!-- Project Header -->
+    <!-- Project Header - Ridotto e semplificato -->
     <div class="project-header">
         <div class="row">
-            <div class="col-md-8">
+            <div class="col-md-9">
                 <h4 class="project-title">
                     <i class="bi bi-kanban"></i>
                     {{ project.name }}
@@ -399,9 +398,9 @@
                     {% endif %}
                 </p>
             </div>
-            <div class="col-md-4 text-md-end">
+            <div class="col-md-3 text-md-end">
                 <span class="badge bg-success badge-status">Active</span>
-                <p class="small text-muted mt-2">Created on: {{ project.created_at|date:"M d, Y" }}</p>
+                <p class="small text-muted mt-1">Created: {{ project.created_at|date:"M d, Y" }}</p>
             </div>
         </div>
     </div>
@@ -410,81 +409,80 @@
     <h5 class="section-title">Documents</h5>
 
     {% if project_files %}
-    <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">Project Documents</h6>
-            <div class="document-count badge bg-secondary">
-                {{ project_files|length }} Files
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="documents-container">
-            {% for file in project_files %}
-                <div class="document-card">
-                    <div class="document-thumb" data-bs-toggle="modal" data-bs-target="#documentModal"
-                         data-file-id="{{ file.id }}"
-                         data-file-name="{{ file.filename }}"
-                         data-file-url="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}">
-                        {% if file.extension == '.pdf' %}
-                            <i class="bi bi-file-earmark-pdf document-icon pdf"></i>
-                        {% elif file.extension == '.doc' or file.extension == '.docx' %}
-                            <i class="bi bi-file-earmark-word document-icon doc"></i>
-                        {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
-                            <i class="bi bi-file-earmark-excel document-icon xls"></i>
-                        {% elif file.extension == '.ppt' or file.extension == '.pptx' %}
-                            <i class="bi bi-file-earmark-slides document-icon ppt"></i>
-                        {% elif file.extension == '.txt' %}
-                            <i class="bi bi-file-earmark-text document-icon txt"></i>
-                        {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
-                            <img src="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}"
-                                 alt="{{ file.filename }}"
-                                 style="max-height: 100%; max-width: 100%; object-fit: contain;">
-                        {% else %}
-                            <i class="bi bi-file-earmark document-icon"></i>
-                        {% endif %}
-                    </div>
-                    <div class="document-name" title="{{ file.filename }}">
-                        {{ file.filename|truncatechars:20 }}
-                    </div>
-                    <div class="document-actions">
-                        <button type="button" class="btn btn-sm btn-outline-danger delete-file-btn"
-                                data-file-id="{{ file.id }}"
-                                data-file-name="{{ file.filename }}"
-                                data-bs-toggle="modal"
-                                data-bs-target="#deleteFileModal">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
+        <!-- Upload Actions Card - Semplificata -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                    <i class="bi bi-file-earmark-plus me-1"></i> Upload Files
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#uploadFolderModal">
+                    <i class="bi bi-folder-plus me-1"></i> Upload Folder
+                </button>
+                <div class="document-count badge bg-secondary">
+                    {{ project_files|length }} Files
                 </div>
-            {% endfor %}
+            </div>
+            <div class="card-body">
+                <div class="documents-container">
+                {% for file in project_files %}
+                    <div class="document-card">
+                        <div class="document-thumb" data-bs-toggle="modal" data-bs-target="#documentModal"
+                             data-file-id="{{ file.id }}"
+                             data-file-name="{{ file.filename }}"
+                             data-file-url="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}">
+                            {% if file.extension == '.pdf' %}
+                                <i class="bi bi-file-earmark-pdf document-icon pdf"></i>
+                            {% elif file.extension == '.doc' or file.extension == '.docx' %}
+                                <i class="bi bi-file-earmark-word document-icon doc"></i>
+                            {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
+                                <i class="bi bi-file-earmark-excel document-icon xls"></i>
+                            {% elif file.extension == '.ppt' or file.extension == '.pptx' %}
+                                <i class="bi bi-file-earmark-slides document-icon ppt"></i>
+                            {% elif file.extension == '.txt' %}
+                                <i class="bi bi-file-earmark-text document-icon txt"></i>
+                            {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
+                                <img src="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}"
+                                     alt="{{ file.filename }}"
+                                     style="max-height: 100%; max-width: 100%; object-fit: contain;">
+                            {% else %}
+                                <i class="bi bi-file-earmark document-icon"></i>
+                            {% endif %}
+                        </div>
+                        <div class="document-name" title="{{ file.filename }}">
+                            {{ file.filename|truncatechars:15 }}
+                        </div>
+                        <div class="document-actions">
+                            <button type="button" class="btn btn-sm btn-outline-danger delete-file-btn"
+                                    data-file-id="{{ file.id }}"
+                                    data-file-name="{{ file.filename }}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#deleteFileModal">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
             </div>
         </div>
-    </div>
     {% else %}
-    <div class="empty-project mb-4">
-        <i class="bi bi-file-earmark-x"></i>
-        <h4>No documents yet</h4>
-        <p class="text-muted">Upload files to start working with this project.</p>
-    </div>
+        <div class="empty-project mb-3">
+            <i class="bi bi-file-earmark-x"></i>
+            <h5>No documents yet</h5>
+            <p class="text-muted">Upload files to start working with this project.</p>
+            <div class="mt-2">
+                <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                    <i class="bi bi-file-earmark-plus me-1"></i> Upload Files
+                </button>
+                <button class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadFolderModal">
+                    <i class="bi bi-folder-plus me-1"></i> Upload Folder
+                </button>
+            </div>
+        </div>
     {% endif %}
 
-    <!-- Upload Buttons -->
-    <div class="upload-actions">
-        <div class="upload-button" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
-            <div class="upload-icon">
-                <i class="bi bi-file-earmark-plus"></i>
-            </div>
-            <div class="upload-text">Upload Files</div>
-        </div>
-        <div class="upload-button" data-bs-toggle="modal" data-bs-target="#uploadFolderModal">
-            <div class="upload-icon">
-                <i class="bi bi-folder-plus"></i>
-            </div>
-            <div class="upload-text">Upload Folder</div>
-        </div>
-    </div>
 
-    <!-- Notes Section -->
+    <!-- Notes Section - Semplificata -->
     <h5 class="section-title">Notes</h5>
     <form method="post" action="{% url 'project' %}" id="notes-form">
         {% csrf_token %}
@@ -493,49 +491,38 @@
 
         <div class="notes-container">
             <div class="notes-toolbar">
-                <div class="btn-group me-2">
+                <div class="btn-group me-1">
                     <button type="button" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-type-bold"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-type-italic"></i>
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-type-underline"></i>
-                    </button>
                 </div>
-                <div class="btn-group me-2">
+                <div class="btn-group">
                     <button type="button" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-list-ul"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-list-ol"></i>
-                    </button>
-                </div>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-link"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-image"></i>
                     </button>
                 </div>
             </div>
 
             <div class="notes-editor">
-                <textarea class="form-control border-0" name="notes" id="project-notes" rows="6" style="resize: none;"
+                <textarea class="form-control border-0" name="notes" id="project-notes" rows="5" style="resize: none;"
                     placeholder="Enter your project notes here...">{{ project.notes }}</textarea>
             </div>
         </div>
 
-        <div class="mt-3 text-end">
-            <button type="submit" class="btn btn-outline-primary">
-                <i class="bi bi-save me-2"></i> Save Notes
+        <div class="mt-2 text-end">
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-save me-1"></i> Save Notes
             </button>
         </div>
     </form>
 
-    <!-- Ask Anything Section -->
+    <!-- Ask Anything Section - AJAX enabled -->
     <h5 class="section-title">Ask Anything</h5>
 
     <div class="ask-container">
@@ -552,17 +539,16 @@
                     </div>
                 {% endfor %}
             {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-chat-square-text mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
+                <div class="text-center py-4">
+                    <i class="bi bi-chat-square-text mb-2" style="font-size: 2.5rem; color: #dee2e6;"></i>
                     <h5>Ask me anything about your documents</h5>
-                    <p class="text-muted">I can analyze your project files and answer questions about their content.</p>
-                    <div class="mt-3">
-                        <p><strong>Examples of questions you can ask:</strong></p>
-                        <ul class="text-start d-inline-block">
+                    <p class="text-muted small">I can analyze your project files and answer questions about their content.</p>
+                    <div class="mt-2">
+                        <p><strong>Example questions:</strong></p>
+                        <ul class="text-start d-inline-block small">
                             <li>Summarize the main points from all documents</li>
                             <li>What does document X say about topic Y?</li>
                             <li>Compare the information in these documents</li>
-                            <li>Extract important dates and events</li>
                         </ul>
                     </div>
                 </div>
@@ -622,37 +608,41 @@
             {% endif %}
         </div>
 
-        <form method="post" action="{% url 'project' %}" id="ask-form">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="ask_question">
-            <input type="hidden" name="project_id" value="{{ project.id }}">
-
+        <div id="ajax-ask-form">
             <div class="chat-input-container">
-                <textarea class="form-control chat-input mb-2" name="question" rows="3"
+                <textarea class="form-control chat-input mb-2" id="question-input" rows="2"
                     placeholder="Type your question here..." required></textarea>
                 <div class="d-grid">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-send me-2"></i> Send
+                    <button type="button" id="send-question-btn" class="btn btn-primary btn-sm">
+                        <i class="bi bi-send me-1"></i> Send
                     </button>
                 </div>
             </div>
-        </form>
+        </div>
 
-        <div class="loader mt-3" id="loading-indicator">
-            <div class="spinner-border text-primary" role="status">
+        <div class="loader mt-2" id="loading-indicator" style="display: none;">
+            <div class="spinner-border text-primary spinner-border-sm" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="mt-2">Processing your question, this may take a moment...</p>
+            <p class="small mt-1">Processing your question...</p>
         </div>
     </div>
 
+    <!-- Hidden form for AJAX fallback -->
+    <form id="hidden-ask-form" method="post" action="{% url 'project' %}" style="display: none;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="ask_question">
+        <input type="hidden" name="project_id" value="{{ project.id }}">
+        <input type="hidden" name="question" id="hidden-question-input">
+    </form>
+
     <!-- Action Buttons (Bottom) -->
     <div class="action-buttons">
-        <a href="{% url 'projects_list' %}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-2"></i> Back to Projects
+        <a href="{% url 'projects_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Back to Projects
         </a>
-        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
-            <i class="bi bi-trash me-2"></i> Delete Project
+        <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
+            <i class="bi bi-trash me-1"></i> Delete Project
         </button>
     </div>
 </div>
@@ -686,18 +676,17 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <a href="#" class="btn btn-primary" id="open-document" target="_blank">
+                <a href="#" class="btn btn-primary btn-sm" id="open-document" target="_blank">
                     <i class="bi bi-box-arrow-up-right me-1"></i> Apri in nuova scheda
                 </a>
-                <a href="#" class="btn btn-success" id="download-document" download>
+                <a href="#" class="btn btn-success btn-sm" id="download-document" download>
                     <i class="bi bi-download me-1"></i> Download
                 </a>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Chiudi</button>
             </div>
         </div>
     </div>
 </div>
-
 
 <!-- Modal: Upload Files -->
 <div class="modal fade" id="uploadFilesModal" tabindex="-1" aria-labelledby="uploadFilesModalLabel" aria-hidden="true">
@@ -718,11 +707,11 @@
                         <input type="file" class="form-control" id="project-files" name="files[]" multiple
                             accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
                         <div class="form-text">
-                            Supported file types: PDF, DOCX, TXT, CSV, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, GIF.
+                            Supported: PDF, DOCX, TXT, CSV, XLS, XLSX, PPT, PPTX, JPG, PNG, GIF.
                         </div>
                     </div>
 
-                    <div id="selected-files-preview" class="d-none mt-4">
+                    <div id="selected-files-preview" class="d-none mt-3">
                         <h6>Selected Files</h6>
                         <div id="files-preview-list" class="list-group">
                             <!-- Selected files will be shown here -->
@@ -731,8 +720,8 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="upload-files-form" class="btn btn-primary">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="upload-files-form" class="btn btn-primary btn-sm">
                     <i class="bi bi-cloud-upload me-1"></i> Upload
                 </button>
             </div>
@@ -749,7 +738,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info">
+                <div class="alert alert-info small">
                     <i class="bi bi-info-circle me-2"></i>
                     Select an entire folder to upload all its contents at once.
                 </div>
@@ -765,7 +754,7 @@
                             accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
                     </div>
 
-                    <div id="selected-folder-info" class="d-none mt-4">
+                    <div id="selected-folder-info" class="d-none mt-3">
                         <div class="card">
                             <div class="card-body">
                                 <h6 class="card-title">Folder Summary</h6>
@@ -778,8 +767,8 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="upload-folder-form" class="btn btn-primary">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="upload-folder-form" class="btn btn-primary btn-sm">
                     <i class="bi bi-cloud-upload me-1"></i> Upload Folder
                 </button>
             </div>
@@ -803,12 +792,12 @@
                 <p>Are you sure you want to delete this project and all its associated files?</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <form method="post" action="{% url 'projects_list' %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="delete_project">
                     <input type="hidden" name="project_id" value="{{ project.id }}">
-                    <button type="submit" class="btn btn-danger">
+                    <button type="submit" class="btn btn-danger btn-sm">
                         <i class="bi bi-trash me-1"></i> Delete Project
                     </button>
                 </form>
@@ -833,13 +822,13 @@
                 <p>Sei sicuro di voler eliminare il file <strong id="delete-file-name"></strong>?</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
                 <form method="post" action="{% url 'project' %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="delete_file">
                     <input type="hidden" name="project_id" value="{{ project.id }}">
                     <input type="hidden" name="file_id" id="delete-file-id">
-                    <button type="submit" class="btn btn-danger">
+                    <button type="submit" class="btn btn-danger btn-sm">
                         <i class="bi bi-trash me-1"></i> Elimina file
                     </button>
                 </form>
@@ -854,329 +843,504 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Document modal
-        const documentModal = document.getElementById('documentModal');
-        if (documentModal) {
-            documentModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                const fileId = button.getAttribute('data-file-id');
-                const fileName = button.getAttribute('data-file-name');
+    // AJAX for Ask Anything section
+    const sendButton = document.getElementById('send-question-btn');
+    const questionInput = document.getElementById('question-input');
+    const chatMessages = document.getElementById('chat-messages');
+    const loadingIndicator = document.getElementById('loading-indicator');
 
-                const modalTitle = documentModal.querySelector('.modal-title');
-                const documentFrame = document.getElementById('document-frame');
-                const imageContainer = document.getElementById('image-container');
-                const unsupportedMessage = document.getElementById('unsupported-file-message');
-                const iframeContainer = document.getElementById('iframe-container');
-                const downloadButton = document.getElementById('download-document');
-                const openButton = document.getElementById('open-document');
-                const imagePreview = document.getElementById('image-preview');
-
-                // Resetta tutti i contenitori
-                documentFrame.style.display = 'none';
-                iframeContainer.style.display = 'none';
-                imageContainer.classList.add('d-none');
-                unsupportedMessage.classList.add('d-none');
-
-                // Imposta titolo
-                modalTitle.textContent = fileName;
-
-                // Configura il pulsante "Apri in nuova scheda"
-                if (openButton) {
-                    openButton.href = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
-                    openButton.target = '_blank';
-                    openButton.onclick = null;
-                }
-
-                // Configura il pulsante "Download"
-                if (downloadButton) {
-                    downloadButton.href = `/serve_project_file/${fileId}/?download=1&filename=${encodeURIComponent(fileName)}`;
-                    downloadButton.setAttribute('download', fileName);
-                    downloadButton.onclick = null;
-                }
-
-                // Determina l'estensione del file
-                const fileExtension = fileName.split('.').pop().toLowerCase();
-
-                // Gestisci l'anteprima in base all'estensione
-                switch (fileExtension) {
-                    case 'pdf':
-                        // Mostra PDF nell'iframe
-                        documentFrame.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
-                        documentFrame.style.display = 'block';
-                        iframeContainer.style.display = 'block';
-                        unsupportedMessage.classList.add('d-none');
-                        break;
-
-                    case 'jpg':
-                    case 'jpeg':
-                    case 'png':
-                    case 'gif':
-                        // Mostra immagini
-                        imagePreview.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
-                        imageContainer.classList.remove('d-none');
-                        break;
-
-                    case 'docx':
-                    case 'doc':
-                    case 'txt':
-                    case 'csv':
-                    case 'xls':
-                        console.log('Excel file detected:', fileUrl);
-                        // Mostra un messaggio specifico per i file Excel
-                        unsupportedMessage.innerHTML = `
-                            <i class="bi bi-file-earmark-excel me-2 text-success" style="font-size: 2rem;"></i>
-                            <div>
-                                <p>I file Excel non possono essere visualizzati direttamente nel browser.</p>
-                                <p>Usa i pulsanti qui sotto per aprire o scaricare il file.</p>
-                            </div>
-                        `;
-                        unsupportedMessage.classList.remove('d-none');
-                        break;
-                    case 'xlsx':
-                    case 'ppt':
-                    case 'pptx':
-                        // Mostra messaggio per file non visualizzabili in anteprima
-                        unsupportedMessage.classList.remove('d-none');
-                        imageContainer.classList.add('d-none');
-                        iframeContainer.style.display = 'none';
-                        break;
-
-                    default:
-                        // File non supportato
-                        unsupportedMessage.classList.remove('d-none');
-                        imageContainer.classList.add('d-none');
-                        iframeContainer.style.display = 'none';
-                }
-            });
-
-            // Quando la modale è chiusa, pulisci l'iframe e l'immagine
-            documentModal.addEventListener('hidden.bs.modal', function () {
-                const documentFrame = document.getElementById('document-frame');
-                const imagePreview = document.getElementById('image-preview');
-                if (documentFrame) documentFrame.src = '';
-                if (imagePreview) imagePreview.src = '';
-            });
-        }
-
-        // File preview in upload modal
-        const fileInput = document.getElementById('project-files');
-        const filePreviewContainer = document.getElementById('selected-files-preview');
-        const filesList = document.getElementById('files-preview-list');
-
-        if (fileInput) {
-            fileInput.addEventListener('change', function() {
-                filesList.innerHTML = '';
-
-                if (this.files.length > 0) {
-                    filePreviewContainer.classList.remove('d-none');
-
-                    for (let i = 0; i < this.files.length; i++) {
-                        const file = this.files[i];
-                        const fileSize = formatFileSize(file.size);
-                        const fileExt = getFileExtension(file.name);
-                        let iconClass = getFileIconClass(fileExt);
-
-                        const listItem = document.createElement('div');
-                        listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
-                        listItem.innerHTML = `
-                            <div>
-                                <i class="bi ${iconClass} me-2"></i>
-                                <span>${file.name}</span>
-                            </div>
-                            <span class="badge bg-secondary rounded-pill">${fileSize}</span>
-                        `;
-
-                        filesList.appendChild(listItem);
-                    }
-                } else {
-                    filePreviewContainer.classList.add('d-none');
-                }
-            });
-        }
-
-        // Folder upload preview
-        const folderInput = document.getElementById('project-folder');
-        const folderInfoContainer = document.getElementById('selected-folder-info');
-        const folderNameElement = document.getElementById('folder-name');
-        const fileCountElement = document.getElementById('file-count');
-        const validFilesElement = document.getElementById('valid-files');
-
-        if (folderInput) {
-            folderInput.addEventListener('change', function() {
-                if (this.files.length > 0) {
-                    folderInfoContainer.classList.remove('d-none');
-
-                    // Get folder name from first file's path
-                    const firstFilePath = this.files[0].webkitRelativePath;
-                    const folderName = firstFilePath.split('/')[0];
-                    folderNameElement.textContent = folderName;
-
-                    // Count valid files
-                    const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
-                    let validCount = 0;
-
-                    for (let i = 0; i < this.files.length; i++) {
-                        const fileExt = getFileExtension(this.files[i].name);
-                        if (validExtensions.includes(fileExt)) {
-                            validCount++;
-                        }
-                    }
-
-                    fileCountElement.textContent = this.files.length;
-                    validFilesElement.textContent = validCount;
-                } else {
-                    folderInfoContainer.classList.add('d-none');
-                }
-            });
-        }
-
-        // Ask form loading indicator
-        const askForm = document.getElementById('ask-form');
-        const loadingIndicator = document.getElementById('loading-indicator');
-
-        if (askForm) {
-            askForm.addEventListener('submit', function() {
-                // Show loading indicator
-                if (loadingIndicator) {
-                    loadingIndicator.style.display = 'block';
-                }
-
-                // Disable submit button
-                const submitButton = askForm.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.disabled = true;
-                    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
-                }
-
-                // Add user message to chat
-                const chatMessages = document.getElementById('chat-messages');
-                const question = askForm.querySelector('textarea[name="question"]').value;
-
-                if (chatMessages && question) {
-                    const userMessage = document.createElement('div');
-                    userMessage.className = 'message user-message';
-                    userMessage.innerHTML = `
-                        <div class="message-header">You</div>
-                        <div class="message-content">${question}</div>
-                    `;
-                    chatMessages.appendChild(userMessage);
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                }
-            });
-        }
-
-        // Scroll to last message
-        const chatMessages = document.getElementById('chat-messages');
-        if (chatMessages) {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        // Sources toggle
-        const sourcesButton = document.querySelector('[data-bs-toggle="collapse"]');
-        const sourcesCollapse = document.getElementById('sourcesList');
-
-        if (sourcesButton && sourcesCollapse) {
-            sourcesCollapse.addEventListener('show.bs.collapse', function () {
-                sourcesButton.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Hide Sources <i class="bi bi-chevron-up ms-2"></i>';
-            });
-
-            sourcesCollapse.addEventListener('hide.bs.collapse', function () {
-                const sourcesCount = document.querySelectorAll('.source-card').length;
-                sourcesButton.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Show Sources (${sourcesCount}) <i class="bi bi-chevron-down ms-2"></i>`;
-            });
-        }
-
-        // Auto-save notes (optional feature)
-        const notesTextarea = document.getElementById('project-notes');
-        let saveTimeout;
-
-        if (notesTextarea) {
-            notesTextarea.addEventListener('input', function() {
-                // Clear existing timeout
-                if (saveTimeout) {
-                    clearTimeout(saveTimeout);
-                }
-
-                // Set new timeout (save after 2 seconds of inactivity)
-                saveTimeout = setTimeout(function() {
-                    const notesForm = document.getElementById('notes-form');
-
-                    // Use fetch to submit the form without page reload
-                    const formData = new FormData(notesForm);
-
-                    fetch(notesForm.action, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log('Notes auto-saved');
-                    })
-                    .catch(error => {
-                        console.error('Error auto-saving notes:', error);
-                    });
-
-                }, 2000);
-            });
-        }
-
-        const deleteFileModal = document.getElementById('deleteFileModal');
-        if (deleteFileModal) {
-            deleteFileModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                const fileId = button.getAttribute('data-file-id');
-                const fileName = button.getAttribute('data-file-name');
-
-                document.getElementById('delete-file-name').textContent = fileName;
-                document.getElementById('delete-file-id').value = fileId;
-            });
-        }
-
-        // Ferma la propagazione del click sul pulsante di eliminazione
-        document.querySelectorAll('.delete-file-btn').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.stopPropagation(); // Impedisce che il click attivi anche il modal del documento
-            });
+    if (sendButton && questionInput) {
+        sendButton.addEventListener('click', function() {
+            // Handle form submission
+            sendQuestion();
         });
 
-
-        // Helper functions
-        function formatFileSize(bytes) {
-            if (bytes < 1024) {
-                return bytes + ' bytes';
-            } else if (bytes < 1024 * 1024) {
-                return (bytes / 1024).toFixed(1) + ' KB';
-            } else {
-                return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        // Handle Enter key in chat input
+        questionInput.addEventListener('keydown', function(e) {
+            // Check if Enter was pressed without Shift key (Shift+Enter for new line)
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                e.preventDefault(); // Prevent default behavior (new line)
+                if (!sendButton.disabled) {
+                    sendQuestion();
+                }
             }
-        }
+        });
 
-        function getFileExtension(filename) {
-            return '.' + filename.split('.').pop().toLowerCase();
-        }
+        // Function to send question via AJAX
+        function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
 
-        function getFileIconClass(extension) {
-            if (extension === '.pdf') {
-                return 'bi-file-earmark-pdf';
-            } else if (['.doc', '.docx'].includes(extension)) {
-                return 'bi-file-earmark-word';
-            } else if (['.xls', '.xlsx'].includes(extension)) {
-                return 'bi-file-earmark-excel';
-            } else if (['.ppt', '.pptx'].includes(extension)) {
-                return 'bi-file-earmark-slides';
-            } else if (extension === '.txt') {
-                return 'bi-file-earmark-text';
-            } else if (extension === '.csv') {
-                return 'bi-file-earmark-spreadsheet';
-            } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(extension)) {
-                return 'bi-file-earmark-image';
-            } else {
-                return 'bi-file-earmark';
+            // Disable input and button
+            questionInput.disabled = true;
+            sendButton.disabled = true;
+
+            // Show loading
+            loadingIndicator.style.display = 'block';
+
+            // Add user message to chat
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user-message';
+            userMessage.innerHTML = `
+                <div class="message-header">You</div>
+                <div class="message-content">${question.replace(/\n/g, '<br>')}</div>
+            `;
+            chatMessages.appendChild(userMessage);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('action', 'ask_question');
+            formData.append('project_id', '{{ project.id }}');
+            formData.append('question', question);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            // Make AJAX request
+            fetch('{% url "project" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return response.json();
+                } else {
+                    // If response is not JSON, extract data we need
+                    return response.text().then(html => {
+                        // Create a temporary element to parse the HTML
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+
+                        // Find the answer and sources in the HTML
+                        const answerElement = tempDiv.querySelector('#last-response .message-content');
+                        const answer = answerElement ? answerElement.innerHTML : 'No answer found';
+
+                        // Extract sources if available
+                        const sourceElements = tempDiv.querySelectorAll('.source-card');
+                        const sources = [];
+
+                        sourceElements.forEach(element => {
+                            const filenameElement = element.querySelector('.source-header span');
+                            const contentElement = element.querySelector('.source-chunk');
+                            const typeClass = element.querySelector('.source-icon').className;
+
+                            let type = '.txt'; // Default
+                            if (typeClass.includes('pdf')) type = '.pdf';
+                            else if (typeClass.includes('word')) type = '.docx';
+                            else if (typeClass.includes('excel')) type = '.xlsx';
+                            else if (typeClass.includes('image')) type = '.jpg';
+
+                            sources.push({
+                                filename: filenameElement ? filenameElement.textContent : 'Unknown source',
+                                content: contentElement ? contentElement.innerHTML : '',
+                                type: type
+                            });
+                        });
+
+                        return { answer, sources };
+                    });
+                }
+            })
+            .then(data => {
+                // Create and add AI message
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'message ai-message';
+
+                let messageContent = `
+                    <div class="message-header">AI Assistant</div>
+                    <div class="message-content">${data.answer.replace(/\n/g, '<br>')}`;
+
+                // Add sources if available
+                if (data.sources && data.sources.length > 0) {
+                    const sourceId = `sourcesList-${Date.now()}`;
+                    messageContent += `
+                        <div class="sources-wrapper mt-3">
+                            <button class="btn btn-sm btn-outline-primary w-100" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#${sourceId}"
+                                aria-expanded="false" aria-controls="${sourceId}">
+                                <i class="bi bi-file-earmark-text me-2"></i>
+                                Show Sources (${data.sources.length})
+                                <i class="bi bi-chevron-down ms-2"></i>
+                            </button>
+
+                            <div class="collapse mt-2" id="${sourceId}">
+                                <div class="sources-list">`;
+
+                    // Add each source
+                    data.sources.forEach(source => {
+                        let iconClass = 'bi-file-earmark';
+                        if (source.type === '.pdf') iconClass = 'bi-file-earmark-pdf';
+                        else if (['.doc', '.docx'].includes(source.type)) iconClass = 'bi-file-earmark-word';
+                        else if (source.type === '.txt') iconClass = 'bi-file-earmark-text';
+                        else if (source.type === '.csv') iconClass = 'bi-file-earmark-spreadsheet';
+                        else if (['.jpg', '.jpeg', '.png', '.gif'].includes(source.type)) iconClass = 'bi-file-earmark-image';
+
+                        messageContent += `
+                            <div class="card mb-2 source-card">
+                                <div class="card-header d-flex align-items-center source-header p-2">
+                                    <i class="bi ${iconClass} source-icon me-2"></i>
+                                    <span class="small">${source.filename}</span>
+                                </div>
+                                <div class="card-body source-content p-2">
+                                    <div class="source-chunk p-2 bg-light rounded">
+                                        ${source.content.replace(/\n/g, '<br>')}
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+
+                    messageContent += `
+                                </div>
+                            </div>
+                        </div>`;
+                }
+
+                messageContent += `</div>`;
+                aiMessage.innerHTML = messageContent;
+
+                chatMessages.appendChild(aiMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                // Initialize Bootstrap collapse for sources
+                const sourcesButton = aiMessage.querySelector('[data-bs-toggle="collapse"]');
+                const sourcesCollapse = aiMessage.querySelector('.collapse');
+
+                if (sourcesButton && sourcesCollapse) {
+                    const collapse = new bootstrap.Collapse(sourcesCollapse, {
+                        toggle: false
+                    });
+
+                    sourcesCollapse.addEventListener('show.bs.collapse', function () {
+                        sourcesButton.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Hide Sources <i class="bi bi-chevron-up ms-2"></i>';
+                    });
+
+                    sourcesCollapse.addEventListener('hide.bs.collapse', function () {
+                        const sourcesCount = aiMessage.querySelectorAll('.source-card').length;
+                        sourcesButton.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Show Sources (${sourcesCount}) <i class="bi bi-chevron-down ms-2"></i>`;
+                    });
+                }
+
+                // Reset form
+                questionInput.value = '';
+                questionInput.disabled = false;
+                sendButton.disabled = false;
+                loadingIndicator.style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Create error message
+                const errorMessage = document.createElement('div');
+                errorMessage.className = 'message ai-message';
+                errorMessage.innerHTML = `
+                    <div class="message-header">System</div>
+                    <div class="message-content">
+                        <div class="alert alert-danger mb-0">
+                            An error occurred while processing your request. Please try again later.
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(errorMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                // Reset form
+                questionInput.disabled = false;
+                sendButton.disabled = false;
+                loadingIndicator.style.display = 'none';
+            });
+        }
+    }
+
+    // Handle document modal
+    const documentModal = document.getElementById('documentModal');
+    if (documentModal) {
+        documentModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const fileId = button.getAttribute('data-file-id');
+            const fileName = button.getAttribute('data-file-name');
+
+            const modalTitle = documentModal.querySelector('.modal-title');
+            const documentFrame = document.getElementById('document-frame');
+            const imageContainer = document.getElementById('image-container');
+            const unsupportedMessage = document.getElementById('unsupported-file-message');
+            const iframeContainer = document.getElementById('iframe-container');
+            const downloadButton = document.getElementById('download-document');
+            const openButton = document.getElementById('open-document');
+            const imagePreview = document.getElementById('image-preview');
+
+            // Resetta tutti i contenitori
+            documentFrame.style.display = 'none';
+            iframeContainer.style.display = 'none';
+            imageContainer.classList.add('d-none');
+            unsupportedMessage.classList.add('d-none');
+
+            // Imposta titolo
+            modalTitle.textContent = fileName;
+
+            // Configura il pulsante "Apri in nuova scheda"
+            if (openButton) {
+                openButton.href = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
+                openButton.target = '_blank';
+                openButton.onclick = null;
             }
-        }
+
+            // Configura il pulsante "Download"
+            if (downloadButton) {
+                downloadButton.href = `/serve_project_file/${fileId}/?download=1&filename=${encodeURIComponent(fileName)}`;
+                downloadButton.setAttribute('download', fileName);
+                downloadButton.onclick = null;
+            }
+
+            // Determina l'estensione del file
+            const fileExtension = fileName.split('.').pop().toLowerCase();
+
+            // Gestisci l'anteprima in base all'estensione
+            switch (fileExtension) {
+                case 'pdf':
+                    // Mostra PDF nell'iframe
+                    documentFrame.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
+                    documentFrame.style.display = 'block';
+                    iframeContainer.style.display = 'block';
+                    unsupportedMessage.classList.add('d-none');
+                    break;
+
+                case 'jpg':
+                case 'jpeg':
+                case 'png':
+                case 'gif':
+                    // Mostra immagini
+                    imagePreview.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
+                    imageContainer.classList.remove('d-none');
+                    break;
+
+                case 'docx':
+                case 'doc':
+                case 'txt':
+                case 'csv':
+                case 'xls':
+                    // Mostra un messaggio specifico per i file Excel
+                    unsupportedMessage.innerHTML = `
+                        <i class="bi bi-file-earmark-excel me-2 text-success" style="font-size: 1.5rem;"></i>
+                        <div>
+                            <p>I file Excel non possono essere visualizzati direttamente nel browser.</p>
+                            <p>Usa i pulsanti qui sotto per aprire o scaricare il file.</p>
+                        </div>
+                    `;
+                    unsupportedMessage.classList.remove('d-none');
+                    break;
+                case 'xlsx':
+                case 'ppt':
+                case 'pptx':
+                    // Mostra messaggio per file non visualizzabili in anteprima
+                    unsupportedMessage.classList.remove('d-none');
+                    imageContainer.classList.add('d-none');
+                    iframeContainer.style.display = 'none';
+                    break;
+
+                default:
+                    // File non supportato
+                    unsupportedMessage.classList.remove('d-none');
+                    imageContainer.classList.add('d-none');
+                    iframeContainer.style.display = 'none';
+            }
+        });
+
+        // Quando la modale è chiusa, pulisci l'iframe e l'immagine
+        documentModal.addEventListener('hidden.bs.modal', function () {
+            const documentFrame = document.getElementById('document-frame');
+            const imagePreview = document.getElementById('image-preview');
+            if (documentFrame) documentFrame.src = '';
+            if (imagePreview) imagePreview.src = '';
+        });
+    }
+
+    // File preview in upload modal
+    const fileInput = document.getElementById('project-files');
+    const filePreviewContainer = document.getElementById('selected-files-preview');
+    const filesList = document.getElementById('files-preview-list');
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            filesList.innerHTML = '';
+
+            if (this.files.length > 0) {
+                filePreviewContainer.classList.remove('d-none');
+
+                for (let i = 0; i < this.files.length; i++) {
+                    const file = this.files[i];
+                    const fileSize = formatFileSize(file.size);
+                    const fileExt = getFileExtension(file.name);
+                    let iconClass = getFileIconClass(fileExt);
+
+                    const listItem = document.createElement('div');
+                    listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    listItem.innerHTML = `
+                        <div>
+                            <i class="bi ${iconClass} me-2"></i>
+                            <span>${file.name}</span>
+                        </div>
+                        <span class="badge bg-secondary rounded-pill">${fileSize}</span>
+                    `;
+
+                    filesList.appendChild(listItem);
+                }
+            } else {
+                filePreviewContainer.classList.add('d-none');
+            }
+        });
+    }
+
+    // Folder upload preview
+    const folderInput = document.getElementById('project-folder');
+    const folderInfoContainer = document.getElementById('selected-folder-info');
+    const folderNameElement = document.getElementById('folder-name');
+    const fileCountElement = document.getElementById('file-count');
+    const validFilesElement = document.getElementById('valid-files');
+
+    if (folderInput) {
+        folderInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                folderInfoContainer.classList.remove('d-none');
+
+                // Get folder name from first file's path
+                const firstFilePath = this.files[0].webkitRelativePath;
+                const folderName = firstFilePath.split('/')[0];
+                folderNameElement.textContent = folderName;
+
+                // Count valid files
+                const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+                let validCount = 0;
+
+                for (let i = 0; i < this.files.length; i++) {
+                    const fileExt = getFileExtension(this.files[i].name);
+                    if (validExtensions.includes(fileExt)) {
+                        validCount++;
+                    }
+                }
+
+                fileCountElement.textContent = this.files.length;
+                validFilesElement.textContent = validCount;
+            } else {
+                folderInfoContainer.classList.add('d-none');
+            }
+        });
+    }
+
+    // Auto-save notes (optional feature)
+    const notesTextarea = document.getElementById('project-notes');
+    let saveTimeout;
+
+    if (notesTextarea) {
+        notesTextarea.addEventListener('input', function() {
+            // Clear existing timeout
+            if (saveTimeout) {
+                clearTimeout(saveTimeout);
+            }
+
+            // Set new timeout (save after 2 seconds of inactivity)
+            saveTimeout = setTimeout(function() {
+                const notesForm = document.getElementById('notes-form');
+
+                // Use fetch to submit the form without page reload
+                const formData = new FormData(notesForm);
+
+                fetch(notesForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Notes auto-saved');
+                })
+                .catch(error => {
+                    console.error('Error auto-saving notes:', error);
+                });
+
+            }, 2000);
+        });
+    }
+
+    const deleteFileModal = document.getElementById('deleteFileModal');
+    if (deleteFileModal) {
+        deleteFileModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const fileId = button.getAttribute('data-file-id');
+            const fileName = button.getAttribute('data-file-name');
+
+            document.getElementById('delete-file-name').textContent = fileName;
+            document.getElementById('delete-file-id').value = fileId;
+        });
+    }
+
+    // Ferma la propagazione del click sul pulsante di eliminazione
+    document.querySelectorAll('.delete-file-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation(); // Impedisce che il click attivi anche il modal del documento
+        });
     });
+
+    // Scroll to last message
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Sources toggle
+    const sourcesButton = document.querySelector('[data-bs-toggle="collapse"]');
+    const sourcesCollapse = document.getElementById('sourcesList');
+
+    if (sourcesButton && sourcesCollapse) {
+        sourcesCollapse.addEventListener('show.bs.collapse', function () {
+            sourcesButton.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Hide Sources <i class="bi bi-chevron-up ms-2"></i>';
+        });
+
+        sourcesCollapse.addEventListener('hide.bs.collapse', function () {
+            const sourcesCount = document.querySelectorAll('.source-card').length;
+            sourcesButton.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Show Sources (${sourcesCount}) <i class="bi bi-chevron-down ms-2"></i>`;
+        });
+    }
+
+    // Helper functions
+    function formatFileSize(bytes) {
+        if (bytes < 1024) {
+            return bytes + ' bytes';
+        } else if (bytes < 1024 * 1024) {
+            return (bytes / 1024).toFixed(1) + ' KB';
+        } else {
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+    }
+
+    function getFileExtension(filename) {
+        return '.' + filename.split('.').pop().toLowerCase();
+    }
+
+    function getFileIconClass(extension) {
+        if (extension === '.pdf') {
+            return 'bi-file-earmark-pdf';
+        } else if (['.doc', '.docx'].includes(extension)) {
+            return 'bi-file-earmark-word';
+        } else if (['.xls', '.xlsx'].includes(extension)) {
+            return 'bi-file-earmark-excel';
+        } else if (['.ppt', '.pptx'].includes(extension)) {
+            return 'bi-file-earmark-slides';
+        } else if (extension === '.txt') {
+            return 'bi-file-earmark-text';
+        } else if (extension === '.csv') {
+            return 'bi-file-earmark-spreadsheet';
+        } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(extension)) {
+            return 'bi-file-earmark-image';
+        } else {
+            return 'bi-file-earmark';
+        }
+    }
+});
 </script>
 {% endblock %}

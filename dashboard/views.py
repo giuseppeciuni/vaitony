@@ -374,6 +374,7 @@ def project(request, project_id=None):
 
                         # Ottieni la risposta dal sistema RAG
                         try:
+                            from dashboard.rag_utils import get_answer_from_project
                             rag_response = get_answer_from_project(project, question)
 
                             # Calcola il tempo di elaborazione

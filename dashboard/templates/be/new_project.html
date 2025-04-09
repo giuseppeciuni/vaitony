@@ -263,15 +263,22 @@
                 return false;
             }
 
-            // Debug data
-            console.log("Invio form con dati:");
-            console.log("Nome progetto:", projectNameInput.value);
-            console.log("Descrizione:", document.getElementById("project-description").value);
-
+            // IMPORTANTE: Prima di inviare il form, rimuovi l'attributo disabled
+            // dagli input che non sono attivi in questo momento
             if (activeTab === "files") {
-                console.log("File selezionati:", fileInput.files.length);
+                // Se stiamo caricando file singoli, assicuriamoci che l'input folder non sia disabilitato
+                if (folderInput.disabled) {
+                    folderInput.disabled = false;
+                    // Ma assicuriamoci che sia vuoto
+                    folderInput.value = "";
+                }
             } else {
-                console.log("File cartella selezionati:", folderInput.files.length);
+                // Se stiamo caricando una cartella, assicuriamoci che l'input file non sia disabilitato
+                if (fileInput.disabled) {
+                    fileInput.disabled = false;
+                    // Ma assicuriamoci che sia vuoto
+                    fileInput.value = "";
+                }
             }
 
             // Continua con l'invio
@@ -287,16 +294,16 @@
         // Tab change listener
         filesTab.addEventListener("click", function() {
             activeTab = "files";
-            // Assicurati che l'input cartella sia disabilitato
-            folderInput.disabled = true;
-            fileInput.disabled = false;
+            // NON disattivare gli input, solo cambiare la tab attiva
+            // folderInput.disabled = true;
+            // fileInput.disabled = false;
         });
 
         folderTab.addEventListener("click", function() {
             activeTab = "folder";
-            // Assicurati che l'input file sia disabilitato
-            fileInput.disabled = true;
-            folderInput.disabled = false;
+            // NON disattivare gli input, solo cambiare la tab attiva
+            // fileInput.disabled = true;
+            // folderInput.disabled = false;
         });
 
         // Setup drop zone
@@ -365,7 +372,7 @@
 
             if (validCount > 0) {
                 // Update drop zone visually
-                const prompt = dropZoneElement.querySelector(".drop-zone__prompt");
+                const prompt = fileDropZone.querySelector(".drop-zone__prompt");
                 if (prompt) {
                     prompt.innerHTML = `
                         <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>

@@ -48,7 +48,7 @@
 
     .document-card {
         position: relative;
-        width: 90px;  /* Ridotto da 120px */
+        width: 90px;
         border-radius: 0.5rem;
         overflow: hidden;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
@@ -62,7 +62,7 @@
     }
 
     .document-thumb {
-        height: 75px;  /* Ridotto da 100px */
+        height: 75px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -74,7 +74,7 @@
     }
 
     .document-icon {
-        font-size: 1.5rem;  /* Ridotto da 2rem */
+        font-size: 1.5rem;
         color: #6c757d;
     }
 
@@ -86,7 +86,7 @@
     .document-icon.img { color: #6f42c1; }
 
     .document-name {
-        font-size: 0.7rem;  /* Ridotto da 0.75rem */
+        font-size: 0.7rem;
         text-align: center;
         white-space: nowrap;
         overflow: hidden;
@@ -109,8 +109,8 @@
     .delete-file-btn {
         background-color: rgba(255, 255, 255, 0.9);
         border-radius: 50%;
-        width: 20px;  /* Ridotto da 24px */
-        height: 20px;  /* Ridotto da 24px */
+        width: 20px;
+        height: 20px;
         padding: 0;
         display: flex;
         align-items: center;
@@ -118,18 +118,18 @@
     }
 
     .delete-file-btn i {
-        font-size: 10px;  /* Ridotto da 12px */
+        font-size: 10px;
     }
 
     /* Stili per le notes */
     .notes-container {
         border: 1px solid #dee2e6;
         border-radius: 0.5rem;
-        margin-bottom: 1.5rem;  /* Ridotto da 2rem */
+        margin-bottom: 1.5rem;
     }
 
     .notes-toolbar {
-        padding: 0.5rem;  /* Ridotto da 0.75rem */
+        padding: 0.5rem;
         border-bottom: 1px solid #dee2e6;
         background-color: #f8f9fa;
         border-top-left-radius: 0.5rem;
@@ -137,16 +137,16 @@
     }
 
     .notes-editor {
-        padding: 0.75rem;  /* Ridotto da 1rem */
-        min-height: 150px;  /* Ridotto da 200px */
+        padding: 0.75rem;
+        min-height: 150px;
     }
 
     /* Stili per Ask Anything */
     .ask-container {
         background-color: #f8f9fa;
         border-radius: 0.5rem;
-        padding: 1rem;  /* Ridotto da 1.5rem */
-        margin-bottom: 1.5rem;  /* Ridotto da 2rem */
+        padding: 1rem;
+        margin-bottom: 1.5rem;
     }
 
     .chat-messages {
@@ -235,30 +235,81 @@
         margin-top: 0.5rem;
     }
 
-    /* Sources styles */
-    .sources-wrapper {
+    /* Stili per fonti */
+    .sources-container {
+        display: block;
+        width: 100%;
         margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid #e9ecef;
+        margin-bottom: 1rem;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background-color: white;
+    }
+
+    .sources-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        border: none;
+        background-color: #0d6efd;
+        color: white;
+        transition: all 0.2s ease;
+        margin-bottom: 0.5rem;
+    }
+
+    .sources-toggle:hover {
+        background-color: #0b5ed7;
+    }
+
+    .sources-toggle i {
+        transition: transform 0.2s;
+    }
+
+    .sources-toggle[aria-expanded="true"] .bi-chevron-down {
+        transform: rotate(180deg);
+    }
+
+    .sources-list {
+        padding: 0.75rem;
+        background-color: #f8f9fa;
+        border-radius: 0 0 0.5rem 0.5rem;
     }
 
     .source-card {
-        border: 1px solid #e9ecef;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 1rem !important;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s ease;
+        margin-bottom: 0.75rem !important;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .source-card:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
 
     .source-header {
-        background-color: #f8f9fa;
+        background-color: white;
+        border-radius: 0.5rem 0.5rem 0 0;
         font-weight: 500;
+        padding: 0.5rem 0.75rem;
+        display: flex;
+        align-items: center;
     }
 
     .source-icon {
         font-size: 1.25rem;
+        margin-right: 0.5rem;
     }
 
     .source-content {
-        padding: 1rem;
+        padding: 0.75rem;
+        border-radius: 0 0 0.5rem 0.5rem;
+        background-color: white;
     }
 
     .source-chunk {
@@ -267,17 +318,20 @@
         line-height: 1.5;
         white-space: pre-wrap;
         word-break: break-word;
-        max-height: 200px;
+        max-height: 180px;
         overflow-y: auto;
         border-left: 3px solid #0d6efd;
+        background-color: white !important;
+        padding: 0.5rem 0.75rem;
     }
 
+    /* Altri stili */
     .empty-project {
         text-align: center;
-        padding: 2rem 1.5rem;  /* Ridotto da 3rem 2rem */
+        padding: 2rem 1.5rem;
         background-color: #f8f9fa;
         border-radius: 0.75rem;
-        margin-bottom: 1.5rem;  /* Ridotto da 2rem */
+        margin-bottom: 1.5rem;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         transition: all 0.2s;
     }
@@ -287,17 +341,17 @@
     }
 
     .empty-project i {
-        font-size: 3rem;  /* Ridotto da 4rem */
+        font-size: 3rem;
         color: #dee2e6;
-        margin-bottom: 0.75rem;  /* Ridotto da 1rem */
+        margin-bottom: 0.75rem;
     }
 
     /* Bottoni in basso */
     .action-buttons {
         display: flex;
         justify-content: space-between;
-        margin-top: 1.5rem;  /* Ridotto da 2rem */
-        padding-top: 0.75rem;  /* Ridotto da 1rem */
+        margin-top: 1.5rem;
+        padding-top: 0.75rem;
         border-top: 1px solid #dee2e6;
     }
 
@@ -307,7 +361,7 @@
     }
 
     .card-body {
-        padding: 0.75rem;  /* Ridotto da 1rem */
+        padding: 0.75rem;
     }
 
     /* Keys hint for chat */
@@ -339,11 +393,11 @@
     }
 
     .app-content-header {
-        margin-bottom: 0.75rem;  /* Ridotto */
+        margin-bottom: 0.75rem;
     }
 
     .app-content-header h3 {
-        font-size: 1.5rem;  /* Ridotto */
+        font-size: 1.5rem;
     }
 </style>
 {% endblock %}
@@ -525,6 +579,7 @@
     <!-- Ask Anything Section - AJAX enabled -->
     <h5 class="section-title">Ask Anything</h5>
 
+
     <div class="ask-container">
         <div class="chat-messages" id="chat-messages">
             {% if conversation_history %}
@@ -561,60 +616,59 @@
                     </div>
                     <div class="message-content">
                         {{ answer|linebreaks }}
-
-                        {% if sources %}
-                            <div class="sources-wrapper mt-3">
-                                <button class="btn btn-sm btn-outline-primary w-100" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#sourcesList"
-                                    aria-expanded="false" aria-controls="sourcesList">
-                                    <i class="bi bi-file-earmark-text me-2"></i>
-                                    Show Sources ({{ sources|length }})
-                                    <i class="bi bi-chevron-down ms-2"></i>
-                                </button>
-
-                                <div class="collapse mt-2" id="sourcesList">
-                                    <div class="sources-list">
-                                        {% for source in sources %}
-                                            <div class="card mb-2 source-card">
-                                                <div class="card-header d-flex align-items-center source-header p-2">
-                                                    {% if source.type == ".pdf" %}
-                                                        <i class="bi bi-file-earmark-pdf source-icon me-2"></i>
-                                                    {% elif source.type == ".docx" or source.type == ".doc" %}
-                                                        <i class="bi bi-file-earmark-word source-icon me-2"></i>
-                                                    {% elif source.type == ".txt" %}
-                                                        <i class="bi bi-file-earmark-text source-icon me-2"></i>
-                                                    {% elif source.type == ".csv" %}
-                                                        <i class="bi bi-file-earmark-spreadsheet source-icon me-2"></i>
-                                                    {% elif source.type == ".jpg" or source.type == ".jpeg" or source.type == ".png" or source.type == ".gif" %}
-                                                        <i class="bi bi-file-earmark-image source-icon me-2"></i>
-                                                    {% else %}
-                                                        <i class="bi bi-file-earmark source-icon me-2"></i>
-                                                    {% endif %}
-                                                    <span class="small">{{ source.filename }}</span>
-                                                </div>
-                                                <div class="card-body source-content p-2">
-                                                    <div class="source-chunk p-2 bg-light rounded">
-                                                        {{ source.content|linebreaks }}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                        {% endif %}
                     </div>
                 </div>
+
+                {% if sources %}
+                    <div class="mt-3">
+                        <button class="btn btn-primary btn-sm w-100" type="button" id="sourcesToggleBtn"
+                                onclick="toggleSources()">
+                            <i class="bi bi-file-earmark-text me-2"></i>
+                            Mostra fonti ({{ sources|length }})
+                            <i class="bi bi-chevron-down ms-2"></i>
+                        </button>
+
+                        <div class="mt-2" id="sourcesList" style="display:none;">
+                            <div class="sources-list bg-light p-3 rounded">
+                                {% for source in sources %}
+                                    <div class="card mb-2 source-card">
+                                        <div class="card-header d-flex align-items-center source-header p-2">
+                                            {% if source.type == ".pdf" %}
+                                                <i class="bi bi-file-earmark-pdf source-icon me-2"></i>
+                                            {% elif source.type == ".docx" or source.type == ".doc" %}
+                                                <i class="bi bi-file-earmark-word source-icon me-2"></i>
+                                            {% elif source.type == ".txt" %}
+                                                <i class="bi bi-file-earmark-text source-icon me-2"></i>
+                                            {% elif source.type == ".csv" %}
+                                                <i class="bi bi-file-earmark-spreadsheet source-icon me-2"></i>
+                                            {% elif source.type == ".jpg" or source.type == ".jpeg" or source.type == ".png" or source.type == ".gif" %}
+                                                <i class="bi bi-file-earmark-image source-icon me-2"></i>
+                                            {% else %}
+                                                <i class="bi bi-file-earmark source-icon me-2"></i>
+                                            {% endif %}
+                                            <span class="small">{{ source.filename }}</span>
+                                        </div>
+                                        <div class="card-body source-content p-2">
+                                            <div class="source-chunk p-2 bg-light rounded">
+                                                {{ source.content|linebreaks }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
             {% endif %}
         </div>
 
         <div id="ajax-ask-form">
             <div class="chat-input-container">
                 <textarea class="form-control chat-input mb-2" id="question-input" rows="2"
-                    placeholder="Type your question here..." required></textarea>
+                    placeholder="Scrivi la tua domanda qui..." required></textarea>
                 <div class="d-grid">
                     <button type="button" id="send-question-btn" class="btn btn-primary btn-sm">
-                        <i class="bi bi-send me-1"></i> Send
+                        <i class="bi bi-send me-1"></i> Invia
                     </button>
                 </div>
             </div>
@@ -622,9 +676,9 @@
 
         <div class="loader mt-2" id="loading-indicator" style="display: none;">
             <div class="spinner-border text-primary spinner-border-sm" role="status">
-                <span class="visually-hidden">Loading...</span>
+                <span class="visually-hidden">Caricamento...</span>
             </div>
-            <p class="small mt-1">Processing your question...</p>
+            <p class="small mt-1">Elaborazione della domanda in corso...</p>
         </div>
     </div>
 
@@ -849,6 +903,20 @@
     const chatMessages = document.getElementById('chat-messages');
     const loadingIndicator = document.getElementById('loading-indicator');
 
+    // Funzione per mostrare/nascondere fonti
+    window.toggleSources = function() {
+        const sourcesList = document.getElementById('sourcesList');
+        const toggleBtn = document.getElementById('sourcesToggleBtn');
+
+        if (sourcesList.style.display === 'none') {
+            sourcesList.style.display = 'block';
+            toggleBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Nascondi fonti <i class="bi bi-chevron-up ms-2"></i>';
+        } else {
+            sourcesList.style.display = 'none';
+            toggleBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Mostra fonti ({{ sources|length }}) <i class="bi bi-chevron-down ms-2"></i>';
+        }
+    };
+
     if (sendButton && questionInput) {
         sendButton.addEventListener('click', function() {
             // Handle form submission
@@ -882,7 +950,7 @@
             const userMessage = document.createElement('div');
             userMessage.className = 'message user-message';
             userMessage.innerHTML = `
-                <div class="message-header">You</div>
+                <div class="message-header">Tu</div>
                 <div class="message-content">${question.replace(/\n/g, '<br>')}</div>
             `;
             chatMessages.appendChild(userMessage);
@@ -937,7 +1005,7 @@
                             else if (typeClass.includes('image')) type = '.jpg';
 
                             sources.push({
-                                filename: filenameElement ? filenameElement.textContent : 'Unknown source',
+                                filename: filenameElement ? filenameElement.textContent : 'Fonte sconosciuta',
                                 content: contentElement ? contentElement.innerHTML : '',
                                 type: type
                             });
@@ -951,26 +1019,36 @@
                 // Create and add AI message
                 const aiMessage = document.createElement('div');
                 aiMessage.className = 'message ai-message';
+                aiMessage.innerHTML = `
+                    <div class="message-header">Assistente AI</div>
+                    <div class="message-content">${data.answer.replace(/\n/g, '<br>')}</div>
+                `;
+                chatMessages.appendChild(aiMessage);
 
-                let messageContent = `
-                    <div class="message-header">AI Assistant</div>
-                    <div class="message-content">${data.answer.replace(/\n/g, '<br>')}`;
-
-                // Add sources if available
+                // Add sources if available in separate container
                 if (data.sources && data.sources.length > 0) {
                     const sourceId = `sourcesList-${Date.now()}`;
-                    messageContent += `
-                        <div class="sources-wrapper mt-3">
-                            <button class="btn btn-sm btn-outline-primary w-100" type="button"
-                                data-bs-toggle="collapse" data-bs-target="#${sourceId}"
-                                aria-expanded="false" aria-controls="${sourceId}">
-                                <i class="bi bi-file-earmark-text me-2"></i>
-                                Show Sources (${data.sources.length})
-                                <i class="bi bi-chevron-down ms-2"></i>
-                            </button>
+                    const sourcesContainer = document.createElement('div');
+                    sourcesContainer.className = 'mt-3';
 
-                            <div class="collapse mt-2" id="${sourceId}">
-                                <div class="sources-list">`;
+                    sourcesContainer.innerHTML = `
+                        <button class="btn btn-primary btn-sm w-100" type="button"
+                                onclick="toggleSourcesContainer('${sourceId}', this)">
+                            <i class="bi bi-file-earmark-text me-2"></i>
+                            Mostra fonti (${data.sources.length})
+                            <i class="bi bi-chevron-down ms-2"></i>
+                        </button>
+
+                        <div class="mt-2" id="${sourceId}" style="display:none;">
+                            <div class="sources-list bg-light p-3 rounded">
+                            </div>
+                        </div>
+                    `;
+
+                    chatMessages.appendChild(sourcesContainer);
+
+                    // Get sources list container
+                    const sourcesList = sourcesContainer.querySelector('.sources-list');
 
                     // Add each source
                     data.sources.forEach(source => {
@@ -981,50 +1059,25 @@
                         else if (source.type === '.csv') iconClass = 'bi-file-earmark-spreadsheet';
                         else if (['.jpg', '.jpeg', '.png', '.gif'].includes(source.type)) iconClass = 'bi-file-earmark-image';
 
-                        messageContent += `
-                            <div class="card mb-2 source-card">
-                                <div class="card-header d-flex align-items-center source-header p-2">
-                                    <i class="bi ${iconClass} source-icon me-2"></i>
-                                    <span class="small">${source.filename}</span>
-                                </div>
-                                <div class="card-body source-content p-2">
-                                    <div class="source-chunk p-2 bg-light rounded">
-                                        ${source.content.replace(/\n/g, '<br>')}
-                                    </div>
-                                </div>
-                            </div>`;
-                    });
-
-                    messageContent += `
+                        const sourceCard = document.createElement('div');
+                        sourceCard.className = 'card mb-2 source-card';
+                        sourceCard.innerHTML = `
+                            <div class="card-header d-flex align-items-center source-header p-2">
+                                <i class="bi ${iconClass} source-icon me-2"></i>
+                                <span class="small">${source.filename}</span>
+                            </div>
+                            <div class="card-body source-content p-2">
+                                <div class="source-chunk p-2 bg-light rounded">
+                                    ${source.content.replace(/\n/g, '<br>')}
                                 </div>
                             </div>
-                        </div>`;
+                        `;
+
+                        sourcesList.appendChild(sourceCard);
+                    });
                 }
 
-                messageContent += `</div>`;
-                aiMessage.innerHTML = messageContent;
-
-                chatMessages.appendChild(aiMessage);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-
-                // Initialize Bootstrap collapse for sources
-                const sourcesButton = aiMessage.querySelector('[data-bs-toggle="collapse"]');
-                const sourcesCollapse = aiMessage.querySelector('.collapse');
-
-                if (sourcesButton && sourcesCollapse) {
-                    const collapse = new bootstrap.Collapse(sourcesCollapse, {
-                        toggle: false
-                    });
-
-                    sourcesCollapse.addEventListener('show.bs.collapse', function () {
-                        sourcesButton.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Hide Sources <i class="bi bi-chevron-up ms-2"></i>';
-                    });
-
-                    sourcesCollapse.addEventListener('hide.bs.collapse', function () {
-                        const sourcesCount = aiMessage.querySelectorAll('.source-card').length;
-                        sourcesButton.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Show Sources (${sourcesCount}) <i class="bi bi-chevron-down ms-2"></i>`;
-                    });
-                }
 
                 // Reset form
                 questionInput.value = '';
@@ -1038,10 +1091,10 @@
                 const errorMessage = document.createElement('div');
                 errorMessage.className = 'message ai-message';
                 errorMessage.innerHTML = `
-                    <div class="message-header">System</div>
+                    <div class="message-header">Sistema</div>
                     <div class="message-content">
                         <div class="alert alert-danger mb-0">
-                            An error occurred while processing your request. Please try again later.
+                            Si è verificato un errore durante l'elaborazione della richiesta. Riprova più tardi.
                         </div>
                     </div>
                 `;
@@ -1055,6 +1108,20 @@
             });
         }
     }
+
+    // Funzione per attivare/disattivare fonti generati dinamicamente
+    window.toggleSourcesContainer = function(sourceId, button) {
+        const sourcesList = document.getElementById(sourceId);
+
+        if (sourcesList.style.display === 'none') {
+            sourcesList.style.display = 'block';
+            button.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Nascondi fonti <i class="bi bi-chevron-up ms-2"></i>';
+        } else {
+            sourcesList.style.display = 'none';
+            const numSources = button.closest('.mt-3').querySelectorAll('.source-card').length;
+            button.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Mostra fonti (${numSources}) <i class="bi bi-chevron-down ms-2"></i>`;
+        }
+    };
 
     // Handle document modal
     const documentModal = document.getElementById('documentModal');
@@ -1258,10 +1325,10 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Notes auto-saved');
+                    console.log('Note salvate automaticamente');
                 })
                 .catch(error => {
-                    console.error('Error auto-saving notes:', error);
+                    console.error('Errore nel salvataggio delle note:', error);
                 });
 
             }, 2000);
@@ -1290,21 +1357,6 @@
     // Scroll to last message
     if (chatMessages) {
         chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // Sources toggle
-    const sourcesButton = document.querySelector('[data-bs-toggle="collapse"]');
-    const sourcesCollapse = document.getElementById('sourcesList');
-
-    if (sourcesButton && sourcesCollapse) {
-        sourcesCollapse.addEventListener('show.bs.collapse', function () {
-            sourcesButton.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Hide Sources <i class="bi bi-chevron-up ms-2"></i>';
-        });
-
-        sourcesCollapse.addEventListener('hide.bs.collapse', function () {
-            const sourcesCount = document.querySelectorAll('.source-card').length;
-            sourcesButton.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Show Sources (${sourcesCount}) <i class="bi bi-chevron-down ms-2"></i>`;
-        });
     }
 
     // Helper functions

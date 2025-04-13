@@ -124,6 +124,26 @@ class ProjectFile(models.Model):
         return ext.lower()
 
 
+
+class ProjectNote(models.Model):
+    """
+    Modello per gestire multiple note associate a un progetto.
+    """
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='project_notes')
+    title = models.CharField(max_length=255, blank=True)
+    content = models.TextField()
+    is_included_in_rag = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title or 'Nota senza titolo'} - {self.project.name}"
+
+
+
 # Nuovo modello per la cronologia delle domande e risposte
 class ProjectConversation(models.Model):
     """

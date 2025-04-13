@@ -2,6 +2,9 @@ import os
 import hashlib
 from django.conf import settings
 from profiles.models import UserDocument, IndexStatus
+import logging
+# Get logger
+logger = logging.getLogger(__name__)
 
 
 def compute_file_hash(file_path):
@@ -214,57 +217,82 @@ def check_project_index_update_needed(project):
 	Returns:
 		Boolean: True se l'indice deve essere aggiornato, False altrimenti
 	"""
-	# Ottieni tutti i documenti del progetto
-	from profiles.models import ProjectFile, ProjectIndexStatus
+	# Ottieni tutti i documenti e le note del progetto
+	from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
 	documents = ProjectFile.objects.filter(project=project)
+	active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
-	if not documents.exists():
-		# Non ci sono documenti, non è necessario un indice
+	if not documents.exists() and not active_notes.exists():
+		# Non ci sono documenti né note, non è necessario un indice
 		return False
 
 	# Verifica se esistono documenti non ancora embedded
 	non_embedded_docs = documents.filter(is_embedded=False)
 	if non_embedded_docs.exists():
+		logger.debug(f"Rilevati {non_embedded_docs.count()} documenti non embedded per il progetto {project.id}")
 		return True
 
 	# Controlla lo stato dell'indice
 	try:
 		index_status = ProjectIndexStatus.objects.get(project=project)
 
-		# Se il numero di documenti è diverso da quello dell'ultimo aggiornamento
+		# Se il numero di documenti + note è diverso da quello dell'ultimo aggiornamento
 		# dell'indice, è necessario aggiornare l'indice
-		if index_status.documents_count != documents.count():
+		total_count = documents.count() + active_notes.count()
+		if index_status.documents_count != total_count:
+			logger.debug(f"Numero di documenti/note cambiato: {index_status.documents_count} → {total_count}")
+			return True
+
+		# Verificare se le note sono state modificate dopo l'ultimo aggiornamento dell'indice
+		latest_note_update = active_notes.order_by('-updated_at').first()
+		if latest_note_update and latest_note_update.updated_at > index_status.last_updated:
+			logger.debug(f"Note modificate dopo l'ultimo aggiornamento dell'indice")
 			return True
 
 		return False  # Nessun aggiornamento necessario
 
 	except ProjectIndexStatus.DoesNotExist:
 		# Se non esiste un record per lo stato dell'indice, è necessario crearlo
+		logger.debug(f"Nessun record di stato dell'indice per il progetto {project.id}")
 		return True
 
 
-def update_project_index_status(project, document_ids=None):
+def update_project_index_status(project, document_ids=None, note_ids=None):
 	"""
 	Aggiorna lo stato dell'indice FAISS per il progetto.
 
 	Args:
 		project: Oggetto Project
-		document_ids: Lista di ID dei documenti inclusi nell'indice (opzionale)
+		document_ids: Lista di ID dei file inclusi nell'indice (opzionale)
+		note_ids: Lista di ID delle note incluse nell'indice (opzionale)
 	"""
 	# Ottieni tutti i documenti del progetto
-	from profiles.models import ProjectFile, ProjectIndexStatus
+	from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
 	documents = ProjectFile.objects.filter(project=project)
+	notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
 	# Crea o aggiorna lo stato dell'indice
 	index_status, created = ProjectIndexStatus.objects.get_or_create(project=project)
 
 	# Aggiorna lo stato dell'indice
 	index_status.index_exists = True
-	index_status.documents_count = documents.count()
+	index_status.documents_count = documents.count() + notes.count()
 
 	# Calcola un hash rappresentativo dello stato dell'indice
 	import hashlib
 	doc_hashes = sorted([doc.file_hash for doc in documents])
+
+	# Per le note, usa l'hash del contenuto e dell'id
+	notes_hash = ""
+	for note in notes:
+		note_hash = hashlib.sha256(
+			f"{note.id}_{note.content}_{note.updated_at}_{note.is_included_in_rag}".encode()).hexdigest()
+		doc_hashes.append(note_hash)
+		notes_hash += note_hash
+
+	# Salva anche un hash separato solo per le note
+	index_status.notes_hash = hashlib.sha256(notes_hash.encode()).hexdigest()
+
 	index_hash_input = ','.join(doc_hashes)
 	index_status.index_hash = hashlib.sha256(index_hash_input.encode()).hexdigest()
 
@@ -275,6 +303,13 @@ def update_project_index_status(project, document_ids=None):
 		ProjectFile.objects.filter(id__in=document_ids).update(is_embedded=True)
 	else:
 		documents.update(is_embedded=True)
+
+	logger.info(
+		f"✅ Stato dell'indice aggiornato per il progetto {project.id}: " +
+		f"{index_status.documents_count} documenti inclusi " +
+		f"({documents.count()} file, {notes.count()} note)")
+
+
 
 
 def scan_project_directory(project):

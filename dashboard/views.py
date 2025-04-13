@@ -1,17 +1,18 @@
 import logging
 import mimetypes
 import os
-import json
 import time
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+
 from dashboard.rag_document_utils import register_document, compute_file_hash
-from dashboard.rag_utils import get_answer_from_rag, get_answer_from_project
-from profiles.models import UserDocument, Project, ProjectFile, ProjectConversation, AnswerSource
+# Modifica questa riga per includere ProjectNote
+from profiles.models import UserDocument, Project, ProjectFile, ProjectConversation, AnswerSource, ProjectNote
 from .utils import process_user_files
 
 # Get logger
@@ -363,6 +364,11 @@ def project(request, project_id=None):
                         return JsonResponse({'status': 'success', 'message': 'Notes saved successfully.'})
 
                     messages.success(request, "Notes saved successfully.")
+                    return redirect('project', project_id=project.id)
+
+
+                # Nella funzione project() nel file views.py, quando gestisci 'ask_question'
+                # In views.py, modify the 'ask_question' action handler to improve error handling:
 
                 elif action == 'ask_question':
                     # Gestisci domanda RAG
@@ -374,43 +380,54 @@ def project(request, project_id=None):
 
                         # Ottieni la risposta dal sistema RAG
                         try:
+                            logger.info(f"Processing RAG question: '{question}'")
                             from dashboard.rag_utils import get_answer_from_project
-                            rag_response = get_answer_from_project(project, question)
 
-                            # Calcola il tempo di elaborazione
-                            processing_time = round(time.time() - start_time, 2)
+                            # Add detailed logging here
+                            logger.debug(f"Starting RAG query for project ID: {project.id}")
 
-                            # Crea un nuovo record di conversazione
-                            conversation = ProjectConversation.objects.create(
-                                project=project,
-                                question=question,
-                                answer=rag_response.get('answer', 'No answer found.'),
-                                processing_time=processing_time
-                            )
+                            # Try/catch with more specific error handling
+                            try:
+                                rag_response = get_answer_from_project(project, question)
 
-                            # Salva le fonti utilizzate
-                            sources = rag_response.get('sources', [])
-                            for source in sources:
-                                file_path = source.get('metadata', {}).get('source', '')
-                                if file_path:
-                                    try:
-                                        project_file = ProjectFile.objects.get(project=project, file_path=file_path)
+                                # Calculate processing time
+                                processing_time = round(time.time() - start_time, 2)
+                                logger.info(f"RAG processing completed in {processing_time} seconds")
 
-                                        AnswerSource.objects.create(
-                                            conversation=conversation,
-                                            project_file=project_file,
-                                            content=source.get('content', ''),
-                                            page_number=source.get('metadata', {}).get('page'),
-                                            relevance_score=source.get('score')
-                                        )
-                                    except ProjectFile.DoesNotExist:
-                                        # File non trovato, probabilmente è stato eliminato
-                                        pass
+                                # Create AJAX response
+                                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                    return JsonResponse({
+                                        "success": True,
+                                        "answer": rag_response.get('answer', 'No answer found.'),
+                                        "sources": rag_response.get('sources', []),
+                                        "processing_time": processing_time
+                                    })
+                            except Exception as specific_error:
+                                logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
+                                error_message = str(specific_error)
 
-                            logger.info(f"RAG query '{question}' processed for project '{project.name}'")
+                                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                    return JsonResponse({
+                                        "success": False,
+                                        "error": error_message,
+                                        "answer": f"Error processing your question: {error_message}",
+                                        "sources": []
+                                    })
+
+                                messages.error(request, f"Error processing your question: {error_message}")
+
                         except Exception as e:
                             logger.exception(f"Error processing RAG query: {str(e)}")
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    "success": False,
+                                    "error": str(e),
+                                    "answer": f"Error processing your question: {str(e)}",
+                                    "sources": []
+                                })
+
                             messages.error(request, f"Error processing your question: {str(e)}")
+
 
                 elif action == 'add_files':
                     # Aggiunta di file al progetto
@@ -426,6 +443,7 @@ def project(request, project_id=None):
                             handle_project_file_upload(project, file, project_dir)
 
                         messages.success(request, f"{len(files)} files uploaded successfully.")
+                        return redirect('project', project_id=project.id)
 
                 elif action == 'add_folder':
                     # Aggiunta di una cartella al progetto
@@ -456,34 +474,303 @@ def project(request, project_id=None):
                             handle_project_file_upload(project, file, project_dir, file_path)
 
                         messages.success(request, f"Folder with {len(folder_files)} files uploaded successfully.")
+                        return redirect('project', project_id=project.id)
+
 
                 elif action == 'delete_file':
                     # Eliminazione di un file dal progetto
                     file_id = request.POST.get('file_id')
-                    project_file = get_object_or_404(ProjectFile, id=file_id, project=project)
 
-                    # Elimina il file fisico
-                    if os.path.exists(project_file.file_path):
-                        os.remove(project_file.file_path)
+                    # Aggiungi log dettagliati
+                    logger.debug(
+                        f"Richiesta di eliminazione file ricevuta. ID file: {file_id}, ID progetto: {project.id}")
 
-                    # Elimina il record dal database
-                    project_file.delete()
+                    # Verifica che file_id non sia vuoto
+                    if not file_id:
+                        logger.warning("Richiesta di eliminazione file senza file_id")
+                        messages.error(request, "ID file non valido.")
+                        return redirect('project', project_id=project.id)
 
-                    messages.success(request, "File deleted successfully.")
+                    try:
+                        # Ottieni il file del progetto
+                        project_file = get_object_or_404(ProjectFile, id=file_id, project=project)
+                        logger.info(f"File trovato per l'eliminazione: {project_file.filename} (ID: {file_id})")
 
-                elif action == 'delete_file':
-                    # Eliminazione di un file dal progetto
-                    file_id = request.POST.get('file_id')
-                    project_file = get_object_or_404(ProjectFile, id=file_id, project=project)
+                        # Elimina il file fisico
+                        if os.path.exists(project_file.file_path):
+                            logger.debug(f"Eliminazione del file fisico in: {project_file.file_path}")
+                            try:
+                                os.remove(project_file.file_path)
+                                logger.info(f"File fisico eliminato: {project_file.file_path}")
+                            except Exception as e:
+                                logger.error(f"Errore nell'eliminazione del file fisico: {str(e)}")
+                                # Continua con l'eliminazione dal database anche se l'eliminazione del file fallisce
+                        else:
+                            logger.warning(f"File fisico non trovato in: {project_file.file_path}")
 
-                    # Elimina il file fisico
-                    if os.path.exists(project_file.file_path):
-                        os.remove(project_file.file_path)
+                        # Elimina il record dal database
+                        project_file.delete()
+                        logger.info(f"Record eliminato dal database per il file ID: {file_id}")
 
-                    # Elimina il record dal database
-                    project_file.delete()
+                        messages.success(request, "File eliminato con successo.")
+                        return redirect('project', project_id=project.id)
 
-                    messages.success(request, "File eliminato con successo.")
+                    except Exception as e:
+                        logger.exception(f"Errore nell'azione delete_file: {str(e)}")
+                        messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
+                        return redirect('project', project_id=project.id)
+
+
+
+
+                # Quando viene aggiunta una nota
+                elif action == 'add_note':
+                    # Aggiungi una nuova nota al progetto
+                    content = request.POST.get('content', '').strip()
+
+                    if content:
+                        # Dato che abbiamo rimosso i titoli, generiamo un titolo basato sul contenuto
+                        title = content.split('\n')[0][:50] if content else "Untitled Note"
+
+                        note = ProjectNote.objects.create(
+                            project=project,
+                            title=title,
+                            content=content,
+                            is_included_in_rag=True  # Default inclusione in RAG
+                        )
+
+                        # Aggiorna l'indice vettoriale in background
+                        try:
+                            from dashboard.rag_utils import create_project_rag_chain
+                            logger.info(
+                                f"🔄 Aggiornamento dell'indice vettoriale per il progetto {project.id} dopo aggiunta nota")
+
+                            # Forza la ricostruzione dell'indice
+                            create_project_rag_chain(project=project, force_rebuild=True)
+
+                            logger.info(f"✅ Indice vettoriale aggiornato con successo per il progetto {project.id}")
+                        except Exception as e:
+                            logger.error(f"❌ Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+
+                        # Risposta per richieste AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'note_id': note.id,
+                                'message': 'Note added successfully.'
+                            })
+
+                        # Se non è una richiesta AJAX, aggiungi un messaggio e reindirizza
+                        messages.success(request, "Note added successfully.")
+                        return redirect('project', project_id=project.id)
+
+
+                elif action == 'toggle_note_inclusion':
+                    # Toggle inclusione nella ricerca RAG
+                    note_id = request.POST.get('note_id')
+                    is_included = request.POST.get('is_included') == 'true'
+
+                    if note_id:
+                        try:
+                            note = ProjectNote.objects.get(id=note_id, project=project)
+
+                            # Verifica se lo stato è cambiato
+                            state_changed = note.is_included_in_rag != is_included
+
+                            note.is_included_in_rag = is_included
+                            note.save()
+
+                            # Se lo stato è cambiato, aggiorna l'indice vettoriale
+                            if state_changed:
+                                try:
+                                    from dashboard.rag_utils import create_project_rag_chain
+                                    logger.info(
+                                        f"🔄 Avvio aggiornamento dell'indice vettoriale per il progetto {project.id} dopo modifica stato nota")
+
+                                    # Forza la ricostruzione dell'indice
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+
+                                    logger.info(
+                                        f"✅ Indice vettoriale ricostruito con successo per il progetto {project.id}")
+                                except Exception as e:
+                                    logger.error(f"❌ Errore nella ricostruzione dell'indice vettoriale: {str(e)}")
+
+                            # Risposta per richieste AJAX
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': True,
+                                    'message': 'Note inclusion updated.'
+                                })
+
+                        except ProjectNote.DoesNotExist:
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': False,
+                                    'error': 'Note not found.'
+                                })
+
+
+
+                # Quando viene modificata una nota
+
+                elif action == 'edit_note':
+
+                    # Modifica una nota esistente
+
+                    note_id = request.POST.get('note_id')
+
+                    content = request.POST.get('content', '').strip()
+
+                    if note_id and content:
+
+                        try:
+
+                            note = ProjectNote.objects.get(id=note_id, project=project)
+
+                            # Controlla se il contenuto è cambiato
+
+                            content_changed = note.content != content
+
+                            # Aggiorna il titolo con la prima riga del contenuto
+
+                            title = content.split('\n')[0][:50] if content else "Untitled Note"
+
+                            note.title = title
+
+                            note.content = content
+
+                            note.save()
+
+                            # Se il contenuto è cambiato e la nota è inclusa nella ricerca RAG,
+
+                            # aggiorna l'indice vettoriale
+
+                            if content_changed and note.is_included_in_rag:
+
+                                try:
+
+                                    from dashboard.rag_utils import create_project_rag_chain
+
+                                    logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo modifica nota")
+
+                                    # Forza la ricostruzione dell'indice
+
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+
+                                    logger.info(f"✅ Indice vettoriale ricostruito con successo")
+
+                                except Exception as e:
+
+                                    logger.error(f"❌ Errore nella ricostruzione: {str(e)}")
+
+                            # Risposta per richieste AJAX
+
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+
+                                    'success': True,
+
+                                    'message': 'Note updated successfully.'
+
+                                })
+
+                            messages.success(request, "Note updated successfully.")
+
+                            return redirect('project', project_id=project.id)
+
+                        except ProjectNote.DoesNotExist:
+
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+
+                                    'success': False,
+
+                                    'error': 'Note not found.'
+
+                                })
+
+                            messages.error(request, "Note not found.")
+
+                # Quando viene eliminata una nota
+                elif action == 'delete_note':
+                    # Elimina una nota
+                    note_id = request.POST.get('note_id')
+
+                    if note_id:
+                        try:
+                            note = ProjectNote.objects.get(id=note_id, project=project)
+                            was_included = note.is_included_in_rag  # Controlla se era inclusa nel RAG
+                            note.delete()
+
+                            # Se la nota era inclusa nel RAG, ricostruisci l'indice
+                            if was_included:
+                                try:
+                                    from dashboard.rag_utils import create_project_rag_chain
+                                    logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo eliminazione nota")
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+                                    logger.info(f"✅ Indice vettoriale ricostruito con successo")
+                                except Exception as e:
+                                    logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+
+                            # Risposta per richieste AJAX
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': True,
+                                    'message': 'Note deleted successfully.'
+                                })
+
+                            messages.success(request, "Note deleted successfully.")
+                            return redirect('project', project_id=project.id)
+                        except ProjectNote.DoesNotExist:
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': False,
+                                    'error': 'Note not found.'
+                                })
+
+                            messages.error(request, "Note not found.")
+
+                elif action == 'toggle_note_inclusion':
+                    # Toggle inclusione nella ricerca RAG
+                    note_id = request.POST.get('note_id')
+                    is_included = request.POST.get('is_included') == 'true'
+
+                    if note_id:
+                        try:
+                            note = ProjectNote.objects.get(id=note_id, project=project)
+
+                            # Verifica se lo stato è cambiato
+                            state_changed = note.is_included_in_rag != is_included
+
+                            note.is_included_in_rag = is_included
+                            note.save()
+
+                            # Se lo stato è cambiato, aggiorna l'indice vettoriale
+                            if state_changed:
+                                try:
+                                    from dashboard.rag_utils import create_project_rag_chain
+                                    logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo cambio stato nota")
+
+                                    # Forza la ricostruzione dell'indice
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+
+                                    logger.info(f"✅ Indice vettoriale ricostruito con successo")
+                                except Exception as e:
+                                    logger.error(f"❌ Errore nella ricostruzione: {str(e)}")
+
+                            # Risposta per richieste AJAX
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': True,
+                                    'message': 'Note inclusion updated.'
+                                })
+
+                        except ProjectNote.DoesNotExist:
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': False,
+                                    'error': 'Note not found.'
+                                })
 
 
             # Prepara la cronologia delle conversazioni per l'interfaccia di chat
@@ -531,13 +818,15 @@ def project(request, project_id=None):
                         'content': conv.answer
                     })
 
+            project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
             context = {
                 'project': project,
                 'project_files': project_files,
                 'conversation_history': conversation_history,
                 'answer': answer,
                 'question': question,
-                'sources': sources
+                'sources': sources,
+                'project_notes': project_notes
             }
 
             return render(request, 'be/project.html', context)
@@ -840,14 +1129,21 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
     """
     # Ottieni il percorso del file se non specificato
     if file_path is None:
-        file_path = os.path.join(project_dir, file.name)
+        # Assicuriamoci che file.name esista e non sia None
+        if hasattr(file, 'name') and file.name:
+            file_path = os.path.join(project_dir, file.name)
+        else:
+            # Nel caso in cui file.name non sia disponibile, generiamo un nome casuale
+            import uuid
+            random_name = f"file_{uuid.uuid4()}"
+            file_path = os.path.join(project_dir, random_name)
+            logger.warning(f"Nome file non disponibile, generato nome casuale: {random_name}")
 
     # Gestisci i file con lo stesso nome
     if os.path.exists(file_path):
         filename = os.path.basename(file_path)
         base_name, extension = os.path.splitext(filename)
         counter = 1
-
 
         while os.path.exists(file_path):
             new_name = f"{base_name}_{counter}{extension}"
@@ -865,7 +1161,13 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
     # Ottieni le informazioni sul file
     file_stats = os.stat(file_path)
     file_size = file_stats.st_size
-    file_type = os.path.splitext(file.name)[1].lower().lstrip('.')
+
+    # Determina il tipo di file in modo sicuro
+    if hasattr(file, 'name') and file.name:
+        file_type = os.path.splitext(file.name)[1].lower().lstrip('.')
+    else:
+        # Se non è disponibile il nome originale, ottieni l'estensione dal percorso del file
+        file_type = os.path.splitext(file_path)[1].lower().lstrip('.')
 
     # Calcola l'hash del file
     file_hash = compute_file_hash(file_path)
@@ -883,74 +1185,91 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
 
     logger.debug(f"Created project file record for {file_path}")
 
-    return project_file
+    # Aggiorna l'indice vettoriale in background
+    try:
+        from dashboard.rag_utils import create_project_rag_chain
+        logger.info(f"🔄 Avvio aggiornamento dell'indice vettoriale per il progetto {project.id} dopo caricamento file")
 
+        # Crea o aggiorna la catena RAG
+        create_project_rag_chain(project=project)
+
+        logger.info(f"✅ Indice vettoriale aggiornato con successo per il progetto {project.id}")
+    except Exception as e:
+        logger.error(f"❌ Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+
+    return project_file
 
 def get_answer_from_project(project, question):
     """
     Ottiene una risposta dal sistema RAG per la domanda su un progetto.
-    Questa funzione dovrebbe essere definita in rag_utils.py, ma viene
-    aggiunta qui per compatibilità con il progetto esistente.
-
-    Args:
-        project: L'oggetto progetto
-        question: La domanda posta dall'utente
-
-    Returns:
-        Un dizionario con la risposta e le fonti
     """
     logger.debug(f"---> get_answer_from_project for project {project.id}")
 
-    # Verifica se il progetto ha documenti
-    project_files = ProjectFile.objects.filter(project=project)
-    if not project_files.exists():
-        return {"answer": "Il progetto non contiene documenti.", "sources": []}
+    try:
+        # Verifica se il progetto ha documenti o note
+        from profiles.models import ProjectFile, ProjectNote
+        project_files = ProjectFile.objects.filter(project=project)
+        project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
-    # Qui normalmente dovremmo importare get_answer_from_rag e adattarlo
-    # Per semplicità, useremo una versione modificata direttamente
+        if not project_files.exists() and not project_notes.exists():
+            return {"answer": "Il progetto non contiene documenti o note attive.", "sources": []}
 
-    from dashboard.rag_utils import get_answer_from_rag, load_document
+        # Verifica se è necessario aggiornare l'indice
+        from dashboard.rag_document_utils import check_project_index_update_needed
+        update_needed = check_project_index_update_needed(project)
 
-    # In una implementazione completa, dovremmo creare un indice FAISS specifico
-    # per i documenti del progetto e usarlo. Per ora, simuliamo una risposta.
+        # Crea o aggiorna la catena RAG se necessario
+        from dashboard.rag_utils import create_project_rag_chain
+        qa_chain = create_project_rag_chain(project=project) if update_needed else create_project_rag_chain(
+            project=project, docs=[])
 
-    # Carica alcuni documenti come esempio
-    documents = []
-    for project_file in project_files[:3]:  # Limite a 3 per non sovraccaricare
-        try:
-            docs = load_document(project_file.file_path)
-            documents.extend(docs)
-        except Exception as e:
-            logger.error(f"Error loading document {project_file.file_path}: {str(e)}")
+        if qa_chain is None:
+            return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.",
+                    "sources": []}
 
-    # Se non ci sono documenti caricati, restituisci un messaggio di errore
-    if not documents:
-        return {"answer": "Non è stato possibile caricare i documenti del progetto.", "sources": []}
+        # Ottieni la risposta
+        logger.info(f"🔎 Eseguendo ricerca su indice vettoriale del progetto {project.id} per: '{question}'")
+        result = qa_chain.invoke(question)
+        logger.info(f"✅ Ricerca completata per il progetto {project.id}")
 
-    # Simula una risposta con un estratto dai documenti
-    sample_content = documents[0].page_content[:500] if documents[0].page_content else "Contenuto non disponibile"
-
-    # Per una implementazione reale, dovremmo usare:
-    # user = project.user
-    # rag_response = get_answer_from_rag(user, question)
-
-    # Risposta simulata
-    answer = f"In risposta alla tua domanda su '{question}', ho trovato le seguenti informazioni nel progetto '{project.name}':\n\n"
-    answer += f"{sample_content}...\n\nQuesta è una risposta di esempio basata sui documenti del progetto."
-
-    # Prepara le fonti
-    sources = []
-    for i, doc in enumerate(documents[:2]):  # Limita a 2 fonti per semplicità
-        source = {
-            "content": doc.page_content[:300] + "..." if doc.page_content else "Contenuto non disponibile",
-            "metadata": doc.metadata,
-            "score": 0.95 - (i * 0.1)  # Simula punteggi di rilevanza
+        # Formato della risposta
+        response = {
+            "answer": result.get('result', 'Nessuna risposta trovata.'),
+            "sources": []
         }
-        sources.append(source)
 
-    logger.info(f"Generated answer for question '{question}' in project {project.id}")
+        # Aggiungi le fonti se disponibili
+        source_documents = result.get('source_documents', [])
+        for doc in source_documents:
+            # Determina il tipo di fonte (file o nota)
+            metadata = doc.metadata
 
-    return {
-        "answer": answer,
-        "sources": sources
-    }
+            if metadata.get("type") == "note":
+                source_type = "note"
+                filename = f"Nota: {metadata.get('title', 'Senza titolo')}"
+            else:
+                source_type = "file"
+                source_path = metadata.get("source", "")
+                filename = os.path.basename(source_path) if source_path else "Documento sconosciuto"
+
+            # Aggiungi eventuali informazioni su pagina o sezione
+            page_info = ""
+            if "page" in metadata:
+                page_info = f" (pag. {metadata['page'] + 1})"
+
+            source = {
+                "content": doc.page_content,
+                "metadata": metadata,
+                "score": getattr(doc, 'score', None),
+                "type": source_type,
+                "filename": f"{filename}{page_info}"
+            }
+            response["sources"].append(source)
+
+        return response
+    except Exception as e:
+        logger.exception(f"Errore in get_answer_from_project: {str(e)}")
+        return {
+            "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
+            "sources": []
+        }

@@ -3,1396 +3,740 @@
 
 {% block extra_css %}
 <style>
-    /* Stili generali - dimensioni ridotte */
+    /* Base Styles */
     .project-header {
         background-color: #f8f9fa;
         border-radius: 0.5rem;
         padding: 1rem;
-        margin-bottom: 1rem;
-        border-left: 4px solid #0d6efd;
+        margin-bottom: 1.5rem;
     }
 
-    .project-title {
-        margin-bottom: 0.25rem;
-        display: flex;
-        align-items: center;
-        font-size: 1.2rem;
+    /* Tab Navigation */
+    .nav-tabs {
+        border-bottom: 2px solid #dee2e6;
+        margin-bottom: 1.5rem;
     }
 
-    .project-title i {
-        margin-right: 0.5rem;
-        color: #0d6efd;
-    }
-
-    .project-description {
+    .nav-tabs .nav-link {
+        border: none;
         color: #6c757d;
-        margin-bottom: 0;
-        font-size: 0.9rem;
-    }
-
-    .section-title {
-        font-size: 1.1rem;
         font-weight: 500;
-        margin-bottom: 0.75rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid #e9ecef;
+        padding: 0.75rem 1.25rem;
     }
 
-    /* Stili per i documenti - thumbnails più piccole */
-    .documents-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 0;
+    .nav-tabs .nav-link.active {
+        color: #0d6efd;
+        border-bottom: 3px solid #0d6efd;
+        background: transparent;
     }
 
+    /* Card Styles */
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        margin-bottom: 1.5rem;
+    }
+
+    .card-header {
+        background-color: white;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    /* Document Cards */
     .document-card {
-        position: relative;
-        width: 90px;
+        transition: transform 0.2s;
+        border: 1px solid rgba(0,0,0,0.1);
         border-radius: 0.5rem;
-        overflow: hidden;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        transition: all 0.2s;
         cursor: pointer;
     }
 
     .document-card:hover {
         transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-
-    .document-thumb {
-        height: 75px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        margin-bottom: 0.25rem;
-        overflow: hidden;
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
     }
 
     .document-icon {
-        font-size: 1.5rem;
-        color: #6c757d;
+        font-size: 2rem;
     }
 
     .document-icon.pdf { color: #dc3545; }
     .document-icon.doc, .document-icon.docx { color: #0d6efd; }
     .document-icon.xls, .document-icon.xlsx { color: #198754; }
-    .document-icon.ppt, .document-icon.pptx { color: #fd7e14; }
-    .document-icon.txt { color: #6c757d; }
-    .document-icon.img { color: #6f42c1; }
+    .document-icon.jpg, .document-icon.jpeg, .document-icon.png, .document-icon.gif { color: #6f42c1; }
 
-    .document-name {
-        font-size: 0.7rem;
-        text-align: center;
-        white-space: nowrap;
+    .card-title {
+        font-size: 0.75rem;
+        margin-top: 0.5rem;
+        max-height: 2.4em;
         overflow: hidden;
-        text-overflow: ellipsis;
-        padding: 0 0.5rem;
     }
 
-    .document-actions {
-        position: absolute;
-        top: 3px;
-        right: 3px;
-        opacity: 0;
-        transition: opacity 0.2s;
-    }
-
-    .document-card:hover .document-actions {
-        opacity: 1;
-    }
-
-    .delete-file-btn {
-        background-color: rgba(255, 255, 255, 0.9);
-        border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .delete-file-btn i {
-        font-size: 10px;
-    }
-
-    /* Stili per le notes */
-    .notes-container {
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .notes-toolbar {
-        padding: 0.5rem;
-        border-bottom: 1px solid #dee2e6;
-        background-color: #f8f9fa;
-        border-top-left-radius: 0.5rem;
-        border-top-right-radius: 0.5rem;
-    }
-
-    .notes-editor {
-        padding: 0.75rem;
-        min-height: 150px;
-    }
-
-    /* Stili per Ask Anything */
-    .ask-container {
-        background-color: #f8f9fa;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-    }
-
+    /* Chat Interface */
     .chat-messages {
-        max-height: 350px;
+        max-height: 400px;
         overflow-y: auto;
-        margin-bottom: 1rem;
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
-        background-color: white;
-        padding: 1rem;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .message {
-        position: relative;
-        margin-bottom: 1rem;
-        padding: 0.75rem 1rem;
-        border-radius: 0.75rem;
-        max-width: 80%;
     }
 
     .user-message {
         background-color: #e9f5ff;
-        border-top-right-radius: 0;
-        margin-left: auto;
-        margin-right: 0;
-        align-self: flex-end;
+        border-radius: 1rem 1rem 0 1rem;
     }
 
     .ai-message {
-        background-color: #f1f3f5;
-        border-top-left-radius: 0;
-        margin-right: auto;
-        margin-left: 0;
-        align-self: flex-start;
-    }
-
-    .message-header {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-bottom: 0.5rem;
-    }
-
-    .message-content {
-        word-wrap: break-word;
-    }
-
-    .chat-input-container {
-        display: flex;
-        flex-direction: column;
-        position: relative;
-    }
-
-    .chat-input {
-        resize: none;
-        border-radius: 0.5rem;
-        padding-right: 60px;
-    }
-
-    .chat-input-send-btn {
-        position: absolute;
-        bottom: 10px;
-        right: 10px;
-        border-radius: 50%;
-        height: 40px;
-        width: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #0d6efd;
-        color: white;
-        border: none;
-    }
-
-    .chat-input-send-btn:hover {
-        background-color: #0b5ed7;
-    }
-
-    .chat-input-send-btn i {
-        font-size: 1.2rem;
-    }
-
-    .loader {
-        text-align: center;
-        margin-top: 0.5rem;
-    }
-
-    /* Stili per fonti */
-    .sources-container {
-        display: block;
-        width: 100%;
-        margin-top: 1rem;
-        margin-bottom: 1rem;
-        border: 1px solid #e9ecef;
-        border-radius: 0.5rem;
-        overflow: hidden;
-        background-color: white;
-    }
-
-    .sources-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border-radius: 0.5rem;
-        border: none;
-        background-color: #0d6efd;
-        color: white;
-        transition: all 0.2s ease;
-        margin-bottom: 0.5rem;
-    }
-
-    .sources-toggle:hover {
-        background-color: #0b5ed7;
-    }
-
-    .sources-toggle i {
-        transition: transform 0.2s;
-    }
-
-    .sources-toggle[aria-expanded="true"] .bi-chevron-down {
-        transform: rotate(180deg);
-    }
-
-    .sources-list {
-        padding: 0.75rem;
         background-color: #f8f9fa;
-        border-radius: 0 0 0.5rem 0.5rem;
+        border-radius: 1rem 1rem 1rem 0;
     }
 
-    .source-card {
-        border: none;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        transition: all 0.2s ease;
-        margin-bottom: 0.75rem !important;
-        border-radius: 0.5rem;
-        overflow: hidden;
+    /* Notes List */
+    .note-item {
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        transition: background-color 0.2s;
     }
 
-    .source-card:hover {
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    .note-item:hover {
+        background-color: #f8f9fa;
     }
 
-    .source-header {
-        background-color: white;
-        border-radius: 0.5rem 0.5rem 0 0;
-        font-weight: 500;
-        padding: 0.5rem 0.75rem;
-        display: flex;
-        align-items: center;
-    }
-
-    .source-icon {
-        font-size: 1.25rem;
-        margin-right: 0.5rem;
-    }
-
-    .source-content {
-        padding: 0.75rem;
-        border-radius: 0 0 0.5rem 0.5rem;
-        background-color: white;
-    }
-
-    .source-chunk {
-        font-family: var(--bs-font-monospace);
-        font-size: 0.875rem;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 180px;
-        overflow-y: auto;
+    /* Sources List */
+    .source-item {
         border-left: 3px solid #0d6efd;
-        background-color: white !important;
-        padding: 0.5rem 0.75rem;
-    }
-
-    /* Altri stili */
-    .empty-project {
-        text-align: center;
-        padding: 2rem 1.5rem;
-        background-color: #f8f9fa;
-        border-radius: 0.75rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        transition: all 0.2s;
-    }
-
-    .empty-project:hover {
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-
-    .empty-project i {
-        font-size: 3rem;
-        color: #dee2e6;
-        margin-bottom: 0.75rem;
-    }
-
-    /* Bottoni in basso */
-    .action-buttons {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 1.5rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid #dee2e6;
-    }
-
-    .card-header .document-count {
-        font-size: 0.8rem;
-        padding: 0.25rem 0.5rem;
-    }
-
-    .card-body {
-        padding: 0.75rem;
-    }
-
-    /* Keys hint for chat */
-    .keys-hint {
-        display: block;
-        text-align: right;
-        color: #6c757d;
-        font-size: 0.75rem;
-        margin-top: 0.25rem;
-    }
-
-    /* Chat history and current conversation separator */
-    .chat-history {
-        border-bottom: 1px dashed #dee2e6;
-        padding-bottom: 1rem;
+        padding-left: 1rem;
         margin-bottom: 1rem;
     }
 
-    .current-conversation {
-        padding-top: 0.5rem;
+    /* Empty States */
+    .empty-state {
+        padding: 3rem 1rem;
+        text-align: center;
     }
 
-    /* Message timestamp */
-    .message-time {
-        font-size: 0.7rem;
-        color: #adb5bd;
-        margin-top: 0.25rem;
-        text-align: right;
+    .empty-state i {
+        font-size: 2.5rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
     }
 
-    .app-content-header {
-        margin-bottom: 0.75rem;
-    }
-
-    .app-content-header h3 {
-        font-size: 1.5rem;
+    /* Responsive Adjustments */
+    @media (max-width: 768px) {
+        .nav-tabs .nav-link {
+            padding: 0.5rem;
+            font-size: 0.9rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-{# INIZIO NAVIGAZIONE SOTTONAVBAR #}
-<div class="app-content-header">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6">
-                <h3 class="mb-0">Project Details</h3>
-            </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-end">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'projects_list' %}">Projects</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">{{ project.name }}</li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-{# FINE NAVIGAZIONE SOTTONAVBAR #}
-
-{% if messages %}
 <div class="container-fluid">
-    <div class="messages mb-3">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-<div class="container-fluid">
-    <!-- Project Header - Ridotto e semplificato -->
+    <!-- Project Header -->
     <div class="project-header">
-        <div class="row">
-            <div class="col-md-9">
-                <h4 class="project-title">
-                    <i class="bi bi-kanban"></i>
-                    {{ project.name }}
-                </h4>
-                <p class="project-description">
-                    {% if project.description %}
-                        {{ project.description }}
-                    {% else %}
-                        <span class="text-muted">No description provided</span>
-                    {% endif %}
-                </p>
-            </div>
-            <div class="col-md-3 text-md-end">
-                <span class="badge bg-success badge-status">Active</span>
-                <p class="small text-muted mt-1">Created: {{ project.created_at|date:"M d, Y" }}</p>
-            </div>
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h4 mb-0">{{ project.name }}</h1>
+            <a href="{% url 'projects_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Indietro
+            </a>
         </div>
+        {% if project.description %}
+        <p class="text-muted mt-2 mb-0">{{ project.description }}</p>
+        {% endif %}
     </div>
 
-    <!-- Documents Section -->
-    <h5 class="section-title">Documents</h5>
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs" id="projectTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button">
+                <i class="bi bi-files me-1"></i> Documenti
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ask-tab" data-bs-toggle="tab" data-bs-target="#ask" type="button">
+                <i class="bi bi-robot me-1"></i> Chiedi all'AI
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button">
+                <i class="bi bi-journal-text me-1"></i> Note
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="sources-tab" data-bs-toggle="tab" data-bs-target="#sources" type="button">
+                <i class="bi bi-file-text me-1"></i> Fonti
+            </button>
+        </li>
+    </ul>
 
-    {% if project_files %}
-        <!-- Upload Actions Card - Semplificata -->
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center py-2">
-                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
-                    <i class="bi bi-file-earmark-plus me-1"></i> Upload Files
+    <!-- Tab Content -->
+    <div class="tab-content py-3" id="projectTabsContent">
+        <!-- Documents Tab -->
+        <div class="tab-pane fade show active" id="documents" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h5 mb-0">Documenti del progetto</h2>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                    <i class="bi bi-plus-lg me-1"></i> Carica
                 </button>
-                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#uploadFolderModal">
-                    <i class="bi bi-folder-plus me-1"></i> Upload Folder
+            </div>
+
+            {% if project_files %}
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+                {% for file in project_files %}
+                <div class="col">
+                    <div class="document-card card h-100" data-file-id="{{ file.id }}">
+                        <div class="card-body text-center p-3 view-document" data-bs-toggle="modal" data-bs-target="#documentModal"
+                             data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}" data-file-size="{{ file.file_size|filesizeformat }}"
+                             data-file-path="{% url 'serve_project_file' file.id %}">
+                            {% if file.extension == '.pdf' %}
+                                <i class="bi bi-file-earmark-pdf document-icon pdf mb-2"></i>
+                            {% elif file.extension == '.doc' or file.extension == '.docx' %}
+                                <i class="bi bi-file-earmark-word document-icon doc mb-2"></i>
+                            {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
+                                <i class="bi bi-file-earmark-excel document-icon xls mb-2"></i>
+                            {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
+                                <i class="bi bi-file-earmark-image document-icon jpg mb-2"></i>
+                            {% else %}
+                                <i class="bi bi-file-earmark document-icon mb-2"></i>
+                            {% endif %}
+                            <div class="card-title text-truncate small">{{ file.filename }}</div>
+                            <small class="text-muted d-block">{{ file.file_size|filesizeformat }}</small>
+                        </div>
+                        <div class="card-footer bg-white border-top-0 py-2 px-3">
+                            <button class="btn btn-sm btn-outline-danger w-100 delete-file-btn"
+                                    data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}"
+                                    data-bs-toggle="modal" data-bs-target="#deleteFileModal">
+                                <i class="bi bi-trash"></i> Elimina
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-folder-x"></i>
+                <h3>Nessun documento</h3>
+                <p class="text-muted">Carica file per iniziare</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                    <i class="bi bi-upload me-1"></i> Carica file
                 </button>
-                <div class="document-count badge bg-secondary">
-                    {{ project_files|length }} Files
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Ask AI Tab -->
+        <div class="tab-pane fade" id="ask" role="tabpanel">
+            <div class="mb-4">
+                <h2 class="h5 mb-3">Chiedi informazioni sul tuo progetto</h2>
+                <div class="chat-messages p-3 bg-light rounded mb-3" id="chat-messages">
+                    {% if conversation_history %}
+                        {% for message in conversation_history %}
+                        <div class="mb-3 p-3 {% if message.is_user %}user-message ml-auto{% else %}ai-message mr-auto{% endif %}"
+                             style="max-width: 80%;">
+                            <div class="small fw-bold mb-1">
+                                {% if message.is_user %}Tu{% else %}Assistente AI{% endif %}
+                            </div>
+                            <div>{{ message.content|linebreaks }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state py-4">
+                            <i class="bi bi-chat-square-text"></i>
+                            <h4>Chiedi qualsiasi cosa</h4>
+                            <p class="text-muted">Posso analizzare i tuoi documenti e le tue note</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="position-relative">
+                    <textarea class="form-control" id="question-input" rows="3"
+                              placeholder="Scrivi la tua domanda qui..."></textarea>
+                    <button id="send-question-btn" class="btn btn-primary position-absolute bottom-0 end-0 m-2">
+                        <i class="bi bi-send"></i>
+                    </button>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="documents-container">
-                {% for file in project_files %}
-                    <div class="document-card">
-                        <div class="document-thumb" data-bs-toggle="modal" data-bs-target="#documentModal"
-                             data-file-id="{{ file.id }}"
-                             data-file-name="{{ file.filename }}"
-                             data-file-url="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}">
-                            {% if file.extension == '.pdf' %}
-                                <i class="bi bi-file-earmark-pdf document-icon pdf"></i>
-                            {% elif file.extension == '.doc' or file.extension == '.docx' %}
-                                <i class="bi bi-file-earmark-word document-icon doc"></i>
-                            {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
-                                <i class="bi bi-file-earmark-excel document-icon xls"></i>
-                            {% elif file.extension == '.ppt' or file.extension == '.pptx' %}
-                                <i class="bi bi-file-earmark-slides document-icon ppt"></i>
-                            {% elif file.extension == '.txt' %}
-                                <i class="bi bi-file-earmark-text document-icon txt"></i>
-                            {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
-                                <img src="/media/projects/{{ project.user.id }}/{{ project.id }}/{{ file.filename }}"
-                                     alt="{{ file.filename }}"
-                                     style="max-height: 100%; max-width: 100%; object-fit: contain;">
-                            {% else %}
-                                <i class="bi bi-file-earmark document-icon"></i>
-                            {% endif %}
-                        </div>
-                        <div class="document-name" title="{{ file.filename }}">
-                            {{ file.filename|truncatechars:15 }}
-                        </div>
-                        <div class="document-actions">
-                            <button type="button" class="btn btn-sm btn-outline-danger delete-file-btn"
-                                    data-file-id="{{ file.id }}"
-                                    data-file-name="{{ file.filename }}"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#deleteFileModal">
+        </div>
+
+        <!-- Notes Tab -->
+        <div class="tab-pane fade" id="notes" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h5 mb-0">Note del progetto</h2>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addNoteModal">
+                    <i class="bi bi-plus-lg me-1"></i> Aggiungi nota
+                </button>
+            </div>
+
+            {% if project_notes %}
+            <div class="list-group">
+                {% for note in project_notes %}
+                <div class="list-group-item note-item p-3" data-note-id="{{ note.id }}">
+                    <div class="d-flex justify-content-between mb-2">
+                        <small class="text-muted">{{ note.updated_at|date:"d M Y H:i" }}</small>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-1 edit-note-btn"
+                                    data-bs-toggle="modal" data-bs-target="#editNoteModal"
+                                    data-note-id="{{ note.id }}" data-note-content="{{ note.content }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger delete-note-btn"
+                                    data-note-id="{{ note.id }}">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
-                {% endfor %}
-                </div>
-            </div>
-        </div>
-    {% else %}
-        <div class="empty-project mb-3">
-            <i class="bi bi-file-earmark-x"></i>
-            <h5>No documents yet</h5>
-            <p class="text-muted">Upload files to start working with this project.</p>
-            <div class="mt-2">
-                <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
-                    <i class="bi bi-file-earmark-plus me-1"></i> Upload Files
-                </button>
-                <button class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadFolderModal">
-                    <i class="bi bi-folder-plus me-1"></i> Upload Folder
-                </button>
-            </div>
-        </div>
-    {% endif %}
-
-
-    <!-- Notes Section - Semplificata -->
-    <h5 class="section-title">Notes</h5>
-    <form method="post" action="{% url 'project' %}" id="notes-form">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="save_notes">
-        <input type="hidden" name="project_id" value="{{ project.id }}">
-
-        <div class="notes-container">
-            <div class="notes-toolbar">
-                <div class="btn-group me-1">
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-type-bold"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-type-italic"></i>
-                    </button>
-                </div>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-list-ul"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-link"></i>
-                    </button>
-                </div>
-            </div>
-
-            <div class="notes-editor">
-                <textarea class="form-control border-0" name="notes" id="project-notes" rows="5" style="resize: none;"
-                    placeholder="Enter your project notes here...">{{ project.notes }}</textarea>
-            </div>
-        </div>
-
-        <div class="mt-2 text-end">
-            <button type="submit" class="btn btn-outline-primary btn-sm">
-                <i class="bi bi-save me-1"></i> Save Notes
-            </button>
-        </div>
-    </form>
-
-    <!-- Ask Anything Section - AJAX enabled -->
-    <h5 class="section-title">Ask Anything</h5>
-
-
-    <div class="ask-container">
-        <div class="chat-messages" id="chat-messages">
-            {% if conversation_history %}
-                {% for message in conversation_history %}
-                    <div class="message {% if message.is_user %}user-message{% else %}ai-message{% endif %}">
-                        <div class="message-header">
-                            {% if message.is_user %}You{% else %}AI Assistant{% endif %}
-                        </div>
-                        <div class="message-content">
-                            {{ message.content|linebreaks }}
-                        </div>
+                    <div class="note-content mb-2">{{ note.content }}</div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input include-note-check" type="checkbox"
+                               id="include-note-{{ note.id }}" data-note-id="{{ note.id }}"
+                               {% if note.is_included_in_rag %}checked{% endif %}>
+                        <label class="form-check-label small" for="include-note-{{ note.id }}">
+                            Includi nella ricerca AI
+                        </label>
                     </div>
+                </div>
                 {% endfor %}
+            </div>
             {% else %}
-                <div class="text-center py-4">
-                    <i class="bi bi-chat-square-text mb-2" style="font-size: 2.5rem; color: #dee2e6;"></i>
-                    <h5>Ask me anything about your documents</h5>
-                    <p class="text-muted small">I can analyze your project files and answer questions about their content.</p>
-                    <div class="mt-2">
-                        <p><strong>Example questions:</strong></p>
-                        <ul class="text-start d-inline-block small">
-                            <li>Summarize the main points from all documents</li>
-                            <li>What does document X say about topic Y?</li>
-                            <li>Compare the information in these documents</li>
-                        </ul>
-                    </div>
-                </div>
-            {% endif %}
-
-            {% if answer %}
-                <div class="message ai-message" id="last-response">
-                    <div class="message-header">
-                        AI Assistant
-                    </div>
-                    <div class="message-content">
-                        {{ answer|linebreaks }}
-                    </div>
-                </div>
-
-                {% if sources %}
-                    <div class="mt-3">
-                        <button class="btn btn-primary btn-sm w-100" type="button" id="sourcesToggleBtn"
-                                onclick="toggleSources()">
-                            <i class="bi bi-file-earmark-text me-2"></i>
-                            Mostra fonti ({{ sources|length }})
-                            <i class="bi bi-chevron-down ms-2"></i>
-                        </button>
-
-                        <div class="mt-2" id="sourcesList" style="display:none;">
-                            <div class="sources-list bg-light p-3 rounded">
-                                {% for source in sources %}
-                                    <div class="card mb-2 source-card">
-                                        <div class="card-header d-flex align-items-center source-header p-2">
-                                            {% if source.type == ".pdf" %}
-                                                <i class="bi bi-file-earmark-pdf source-icon me-2"></i>
-                                            {% elif source.type == ".docx" or source.type == ".doc" %}
-                                                <i class="bi bi-file-earmark-word source-icon me-2"></i>
-                                            {% elif source.type == ".txt" %}
-                                                <i class="bi bi-file-earmark-text source-icon me-2"></i>
-                                            {% elif source.type == ".csv" %}
-                                                <i class="bi bi-file-earmark-spreadsheet source-icon me-2"></i>
-                                            {% elif source.type == ".jpg" or source.type == ".jpeg" or source.type == ".png" or source.type == ".gif" %}
-                                                <i class="bi bi-file-earmark-image source-icon me-2"></i>
-                                            {% else %}
-                                                <i class="bi bi-file-earmark source-icon me-2"></i>
-                                            {% endif %}
-                                            <span class="small">{{ source.filename }}</span>
-                                        </div>
-                                        <div class="card-body source-content p-2">
-                                            <div class="source-chunk p-2 bg-light rounded">
-                                                {{ source.content|linebreaks }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
+            <div class="empty-state">
+                <i class="bi bi-journal"></i>
+                <h3>Nessuna nota</h3>
+                <p class="text-muted">Aggiungi la tua prima nota per iniziare</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addNoteModal">
+                    <i class="bi bi-plus-lg me-1"></i> Aggiungi nota
+                </button>
+            </div>
             {% endif %}
         </div>
 
-        <div id="ajax-ask-form">
-            <div class="chat-input-container">
-                <textarea class="form-control chat-input mb-2" id="question-input" rows="2"
-                    placeholder="Scrivi la tua domanda qui..." required></textarea>
-                <div class="d-grid">
-                    <button type="button" id="send-question-btn" class="btn btn-primary btn-sm">
-                        <i class="bi bi-send me-1"></i> Invia
-                    </button>
-                </div>
-            </div>
-        </div>
+        <!-- Sources Tab -->
+        <div class="tab-pane fade" id="sources" role="tabpanel">
+            <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
 
-        <div class="loader mt-2" id="loading-indicator" style="display: none;">
-            <div class="spinner-border text-primary spinner-border-sm" role="status">
-                <span class="visually-hidden">Caricamento...</span>
-            </div>
-            <p class="small mt-1">Elaborazione della domanda in corso...</p>
-        </div>
-    </div>
-
-    <!-- Hidden form for AJAX fallback -->
-    <form id="hidden-ask-form" method="post" action="{% url 'project' %}" style="display: none;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="ask_question">
-        <input type="hidden" name="project_id" value="{{ project.id }}">
-        <input type="hidden" name="question" id="hidden-question-input">
-    </form>
-
-    <!-- Action Buttons (Bottom) -->
-    <div class="action-buttons">
-        <a href="{% url 'projects_list' %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i> Back to Projects
-        </a>
-        <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
-            <i class="bi bi-trash me-1"></i> Delete Project
-        </button>
-    </div>
-</div>
-
-<!-- Modal: View Document -->
-<div class="modal fade" id="documentModal" tabindex="-1" aria-labelledby="documentModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="documentModalLabel">Document Title</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Contenitore per diverse visualizzazioni -->
-                <div id="document-preview-container">
-                    <!-- Iframe per PDF -->
-                    <div class="ratio ratio-16x9" id="iframe-container">
-                        <iframe id="document-frame" src="" allowfullscreen style="display:none;"></iframe>
+            {% if conversation_history and conversation_history.0.sources %}
+            <div class="list-group">
+                {% for source in conversation_history.0.sources %}
+                <div class="source-item mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="source-title">{{ source.filename|default:"Documento" }}</strong>
+                        <small class="text-muted">{{ source.page|default:"" }}</small>
                     </div>
-
-                    <!-- Contenitore per immagini -->
-                    <div class="text-center d-none" id="image-container">
-                        <img id="image-preview" class="img-fluid" src="" alt="Document Preview">
-                    </div>
-
-                    <!-- Messaggio per tipi di file non supportati -->
-                    <div class="alert alert-info d-none" id="unsupported-file-message">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <span>Questo tipo di file non può essere visualizzato in anteprima. Utilizzare i pulsanti qui sotto per aprirlo o scaricarlo.</span>
+                    <div class="source-content small p-2 bg-light rounded">
+                        {{ source.content }}
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            <div class="modal-footer">
-                <a href="#" class="btn btn-primary btn-sm" id="open-document" target="_blank">
-                    <i class="bi bi-box-arrow-up-right me-1"></i> Apri in nuova scheda
-                </a>
-                <a href="#" class="btn btn-success btn-sm" id="download-document" download>
-                    <i class="bi bi-download me-1"></i> Download
-                </a>
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Chiudi</button>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-file-text"></i>
+                <h3>Nessuna fonte disponibile</h3>
+                <p class="text-muted">Fai una domanda all'AI per vedere le fonti di riferimento</p>
             </div>
+            {% endif %}
         </div>
     </div>
+
+<!--    &lt;!&ndash; Danger Zone &ndash;&gt;-->
+<!--    <div class="mt-4 pt-3 border-top text-end">-->
+<!--        <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">-->
+<!--            <i class="bi bi-trash me-1"></i> Elimina progetto-->
+<!--        </button>-->
+<!--    </div>-->
 </div>
 
-<!-- Modal: Upload Files -->
-<div class="modal fade" id="uploadFilesModal" tabindex="-1" aria-labelledby="uploadFilesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="uploadFilesModalLabel">Upload Files</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form method="post" action="{% url 'project' %}" enctype="multipart/form-data" id="upload-files-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="add_files">
-                    <input type="hidden" name="project_id" value="{{ project.id }}">
-
-                    <div class="mb-3">
-                        <label for="project-files" class="form-label">Select Files</label>
-                        <input type="file" class="form-control" id="project-files" name="files[]" multiple
-                            accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
-                        <div class="form-text">
-                            Supported: PDF, DOCX, TXT, CSV, XLS, XLSX, PPT, PPTX, JPG, PNG, GIF.
-                        </div>
-                    </div>
-
-                    <div id="selected-files-preview" class="d-none mt-3">
-                        <h6>Selected Files</h6>
-                        <div id="files-preview-list" class="list-group">
-                            <!-- Selected files will be shown here -->
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="upload-files-form" class="btn btn-primary btn-sm">
-                    <i class="bi bi-cloud-upload me-1"></i> Upload
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal: Upload Folder -->
-<div class="modal fade" id="uploadFolderModal" tabindex="-1" aria-labelledby="uploadFolderModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="uploadFolderModalLabel">Upload Folder</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info small">
-                    <i class="bi bi-info-circle me-2"></i>
-                    Select an entire folder to upload all its contents at once.
-                </div>
-
-                <form method="post" action="{% url 'project' %}" enctype="multipart/form-data" id="upload-folder-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="add_folder">
-                    <input type="hidden" name="project_id" value="{{ project.id }}">
-
-                    <div class="mb-3">
-                        <label for="project-folder" class="form-label">Select Folder</label>
-                        <input type="file" class="form-control" id="project-folder" name="folder[]" webkitdirectory directory multiple
-                            accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
-                    </div>
-
-                    <div id="selected-folder-info" class="d-none mt-3">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-title">Folder Summary</h6>
-                                <p class="mb-1"><strong>Folder name:</strong> <span id="folder-name"></span></p>
-                                <p class="mb-1"><strong>Total files:</strong> <span id="file-count">0</span></p>
-                                <p class="mb-0"><strong>Valid files:</strong> <span id="valid-files">0</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="upload-folder-form" class="btn btn-primary btn-sm">
-                    <i class="bi bi-cloud-upload me-1"></i> Upload Folder
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal: Delete Project Confirmation -->
-<div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-labelledby="deleteProjectModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteProjectModalLabel">Confirm Delete</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    Warning: This action cannot be undone!
-                </div>
-                <p>Are you sure you want to delete this project and all its associated files?</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <form method="post" action="{% url 'projects_list' %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="delete_project">
-                    <input type="hidden" name="project_id" value="{{ project.id }}">
-                    <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="bi bi-trash me-1"></i> Delete Project
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal: Delete File Confirmation -->
-<div class="modal fade" id="deleteFileModal" tabindex="-1" aria-labelledby="deleteFileModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteFileModalLabel">Conferma eliminazione</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    Attenzione: Questa operazione non può essere annullata!
-                </div>
-                <p>Sei sicuro di voler eliminare il file <strong id="delete-file-name"></strong>?</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
-                <form method="post" action="{% url 'project' %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="delete_file">
-                    <input type="hidden" name="project_id" value="{{ project.id }}">
-                    <input type="hidden" name="file_id" id="delete-file-id">
-                    <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="bi bi-trash me-1"></i> Elimina file
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
+<!-- Include Modals -->
+{% include 'be/project_modals.html' %}
 {% endblock %}
+
 
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-    // AJAX for Ask Anything section
-    const sendButton = document.getElementById('send-question-btn');
-    const questionInput = document.getElementById('question-input');
-    const chatMessages = document.getElementById('chat-messages');
-    const loadingIndicator = document.getElementById('loading-indicator');
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab persistence
+    const triggerTabList = document.querySelectorAll('#projectTabs button');
+    const activeTab = localStorage.getItem('activeProjectTab');
+    if (activeTab) {
+        const tab = document.querySelector(`#projectTabs button[data-bs-target="${activeTab}"]`);
+        if (tab) new bootstrap.Tab(tab).show();
+    }
 
-    // Funzione per mostrare/nascondere fonti
-    window.toggleSources = function() {
-        const sourcesList = document.getElementById('sourcesList');
-        const toggleBtn = document.getElementById('sourcesToggleBtn');
-
-        if (sourcesList.style.display === 'none') {
-            sourcesList.style.display = 'block';
-            toggleBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Nascondi fonti <i class="bi bi-chevron-up ms-2"></i>';
-        } else {
-            sourcesList.style.display = 'none';
-            toggleBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Mostra fonti ({{ sources|length }}) <i class="bi bi-chevron-down ms-2"></i>';
-        }
-    };
-
-    if (sendButton && questionInput) {
-        sendButton.addEventListener('click', function() {
-            // Handle form submission
-            sendQuestion();
+    triggerTabList.forEach(tabEl => {
+        tabEl.addEventListener('shown.bs.tab', function(event) {
+            localStorage.setItem('activeProjectTab', event.target.getAttribute('data-bs-target'));
         });
+    });
 
-        // Handle Enter key in chat input
-        questionInput.addEventListener('keydown', function(e) {
-            // Check if Enter was pressed without Shift key (Shift+Enter for new line)
-            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
-                e.preventDefault(); // Prevent default behavior (new line)
-                if (!sendButton.disabled) {
-                    sendQuestion();
-                }
+    // Gestione delle azioni dei form
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        if (!form.getAttribute('action')) {
+            form.setAttribute('action', '{% url "project" project.id %}');
+        }
+    });
+
+    // Document Modal
+    const documentModal = document.getElementById('documentModal');
+    if (documentModal) {
+        documentModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const fileId = button.getAttribute('data-file-id');
+            const fileName = button.getAttribute('data-file-name');
+            const fileSize = button.getAttribute('data-file-size');
+            const filePath = button.getAttribute('data-file-path');
+
+            // Imposta i dettagli del documento
+            document.getElementById('document-filename').textContent = fileName;
+            document.getElementById('document-filesize').textContent = fileSize || '';
+
+            // Imposta gli URL per le azioni
+            const openDocumentLink = document.getElementById('open-document');
+            const downloadDocumentLink = document.getElementById('download-document');
+
+            if (openDocumentLink) openDocumentLink.href = filePath;
+            if (downloadDocumentLink) downloadDocumentLink.href = filePath + '?download=1';
+
+            // Determina il tipo di file e mostra l'anteprima appropriata
+            const fileExtension = fileName.split('.').pop().toLowerCase();
+
+            // Reset dei container
+            const iframeContainer = document.getElementById('iframe-container');
+            const imageContainer = document.getElementById('image-container');
+            const unsupportedContainer = document.getElementById('unsupported-file-message');
+            const documentFrame = document.getElementById('document-frame');
+            const imagePreview = document.getElementById('image-preview');
+
+            iframeContainer.style.display = 'none';
+            imageContainer.style.display = 'none';
+            unsupportedContainer.style.display = 'none';
+
+            // Mostra il container appropriato in base al tipo di file
+            if (fileExtension === 'pdf') {
+                documentFrame.src = filePath;
+                documentFrame.style.display = 'block';
+                iframeContainer.style.display = 'block';
+            }
+            else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                imagePreview.src = filePath;
+                imageContainer.style.display = 'block';
+            }
+            else {
+                unsupportedContainer.style.display = 'block';
             }
         });
+    }
 
-        // Function to send question via AJAX
-        function sendQuestion() {
-            const question = questionInput.value.trim();
-            if (!question) return;
+    // Delete File Modal
+    const deleteFileModal = document.getElementById('deleteFileModal');
+    if (deleteFileModal) {
+        deleteFileModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const fileId = button.getAttribute('data-file-id');
+            const fileName = button.getAttribute('data-file-name');
 
-            // Disable input and button
-            questionInput.disabled = true;
-            sendButton.disabled = true;
+            // Imposta l'ID del file e il nome nel modal
+            document.getElementById('delete-file-id').value = fileId;
+            document.getElementById('delete-file-name').textContent = fileName;
+        });
 
-            // Show loading
-            loadingIndicator.style.display = 'block';
+        // Gestione del form di eliminazione
+        const deleteFileForm = document.getElementById('delete-file-form');
+        if (deleteFileForm) {
+            deleteFileForm.addEventListener('submit', function(e) {
+                e.preventDefault();
 
-            // Add user message to chat
-            const userMessage = document.createElement('div');
-            userMessage.className = 'message user-message';
-            userMessage.innerHTML = `
-                <div class="message-header">Tu</div>
-                <div class="message-content">${question.replace(/\n/g, '<br>')}</div>
-            `;
-            chatMessages.appendChild(userMessage);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+                const fileId = document.getElementById('delete-file-id').value;
 
-            // Prepare form data
-            const formData = new FormData();
-            formData.append('action', 'ask_question');
-            formData.append('project_id', '{{ project.id }}');
-            formData.append('question', question);
-            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                fetch('{% url "project" project.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'action': 'delete_file',
+                        'project_id': '{{ project.id }}',
+                        'file_id': fileId,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    })
+                })
+                .then(response => {
+                    // A prescindere dal tipo di risposta, chiudi il modal
+                    const modal = bootstrap.Modal.getInstance(deleteFileModal);
+                    modal.hide();
 
-            // Make AJAX request
-            fetch('{% url "project" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                const contentType = response.headers.get("content-type");
-                if (contentType && contentType.indexOf("application/json") !== -1) {
-                    return response.json();
-                } else {
-                    // If response is not JSON, extract data we need
-                    return response.text().then(html => {
-                        // Create a temporary element to parse the HTML
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = html;
+                    // Rimuovi l'elemento dalla pagina
+                    const fileCard = document.querySelector(`.document-card[data-file-id="${fileId}"]`);
+                    if (fileCard) {
+                        fileCard.closest('.col').remove();
+                    }
 
-                        // Find the answer and sources in the HTML
-                        const answerElement = tempDiv.querySelector('#last-response .message-content');
-                        const answer = answerElement ? answerElement.innerHTML : 'No answer found';
-
-                        // Extract sources if available
-                        const sourceElements = tempDiv.querySelectorAll('.source-card');
-                        const sources = [];
-
-                        sourceElements.forEach(element => {
-                            const filenameElement = element.querySelector('.source-header span');
-                            const contentElement = element.querySelector('.source-chunk');
-                            const typeClass = element.querySelector('.source-icon').className;
-
-                            let type = '.txt'; // Default
-                            if (typeClass.includes('pdf')) type = '.pdf';
-                            else if (typeClass.includes('word')) type = '.docx';
-                            else if (typeClass.includes('excel')) type = '.xlsx';
-                            else if (typeClass.includes('image')) type = '.jpg';
-
-                            sources.push({
-                                filename: filenameElement ? filenameElement.textContent : 'Fonte sconosciuta',
-                                content: contentElement ? contentElement.innerHTML : '',
-                                type: type
-                            });
-                        });
-
-                        return { answer, sources };
-                    });
-                }
-            })
-            .then(data => {
-                // Create and add AI message
-                const aiMessage = document.createElement('div');
-                aiMessage.className = 'message ai-message';
-                aiMessage.innerHTML = `
-                    <div class="message-header">Assistente AI</div>
-                    <div class="message-content">${data.answer.replace(/\n/g, '<br>')}</div>
-                `;
-                chatMessages.appendChild(aiMessage);
-
-                // Add sources if available in separate container
-                if (data.sources && data.sources.length > 0) {
-                    const sourceId = `sourcesList-${Date.now()}`;
-                    const sourcesContainer = document.createElement('div');
-                    sourcesContainer.className = 'mt-3';
-
-                    sourcesContainer.innerHTML = `
-                        <button class="btn btn-primary btn-sm w-100" type="button"
-                                onclick="toggleSourcesContainer('${sourceId}', this)">
-                            <i class="bi bi-file-earmark-text me-2"></i>
-                            Mostra fonti (${data.sources.length})
-                            <i class="bi bi-chevron-down ms-2"></i>
-                        </button>
-
-                        <div class="mt-2" id="${sourceId}" style="display:none;">
-                            <div class="sources-list bg-light p-3 rounded">
-                            </div>
-                        </div>
+                    // Mostra un messaggio di successo
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <strong>Successo!</strong> File eliminato correttamente.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     `;
+                    document.querySelector('.project-header').after(alertDiv);
 
-                    chatMessages.appendChild(sourcesContainer);
+                    // Rimuovi l'alert dopo 3 secondi
+                    setTimeout(() => {
+                        alertDiv.remove();
+                    }, 3000);
 
-                    // Get sources list container
-                    const sourcesList = sourcesContainer.querySelector('.sources-list');
-
-                    // Add each source
-                    data.sources.forEach(source => {
-                        let iconClass = 'bi-file-earmark';
-                        if (source.type === '.pdf') iconClass = 'bi-file-earmark-pdf';
-                        else if (['.doc', '.docx'].includes(source.type)) iconClass = 'bi-file-earmark-word';
-                        else if (source.type === '.txt') iconClass = 'bi-file-earmark-text';
-                        else if (source.type === '.csv') iconClass = 'bi-file-earmark-spreadsheet';
-                        else if (['.jpg', '.jpeg', '.png', '.gif'].includes(source.type)) iconClass = 'bi-file-earmark-image';
-
-                        const sourceCard = document.createElement('div');
-                        sourceCard.className = 'card mb-2 source-card';
-                        sourceCard.innerHTML = `
-                            <div class="card-header d-flex align-items-center source-header p-2">
-                                <i class="bi ${iconClass} source-icon me-2"></i>
-                                <span class="small">${source.filename}</span>
-                            </div>
-                            <div class="card-body source-content p-2">
-                                <div class="source-chunk p-2 bg-light rounded">
-                                    ${source.content.replace(/\n/g, '<br>')}
+                    // Se non ci sono più file, mostra il messaggio "vuoto"
+                    const remainingFiles = document.querySelectorAll('.document-card');
+                    if (remainingFiles.length === 0) {
+                        const documentsTab = document.getElementById('documents');
+                        if (documentsTab) {
+                            documentsTab.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h2 class="h5 mb-0">Documenti del progetto</h2>
+                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                                        <i class="bi bi-plus-lg me-1"></i> Carica
+                                    </button>
                                 </div>
-                            </div>
-                        `;
-
-                        sourcesList.appendChild(sourceCard);
-                    });
-                }
-
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-
-                // Reset form
-                questionInput.value = '';
-                questionInput.disabled = false;
-                sendButton.disabled = false;
-                loadingIndicator.style.display = 'none';
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                // Create error message
-                const errorMessage = document.createElement('div');
-                errorMessage.className = 'message ai-message';
-                errorMessage.innerHTML = `
-                    <div class="message-header">Sistema</div>
-                    <div class="message-content">
-                        <div class="alert alert-danger mb-0">
-                            Si è verificato un errore durante l'elaborazione della richiesta. Riprova più tardi.
-                        </div>
-                    </div>
-                `;
-                chatMessages.appendChild(errorMessage);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-
-                // Reset form
-                questionInput.disabled = false;
-                sendButton.disabled = false;
-                loadingIndicator.style.display = 'none';
+                                <div class="empty-state">
+                                    <i class="bi bi-folder-x"></i>
+                                    <h3>Nessun documento</h3>
+                                    <p class="text-muted">Carica file per iniziare</p>
+                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                                        <i class="bi bi-upload me-1"></i> Carica file
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Errore:', error);
+                    alert('Errore durante l\'eliminazione del file. Riprova più tardi.');
+                });
             });
         }
     }
 
-    // Funzione per attivare/disattivare fonti generati dinamicamente
-    window.toggleSourcesContainer = function(sourceId, button) {
-        const sourcesList = document.getElementById(sourceId);
-
-        if (sourcesList.style.display === 'none') {
-            sourcesList.style.display = 'block';
-            button.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i> Nascondi fonti <i class="bi bi-chevron-up ms-2"></i>';
-        } else {
-            sourcesList.style.display = 'none';
-            const numSources = button.closest('.mt-3').querySelectorAll('.source-card').length;
-            button.innerHTML = `<i class="bi bi-file-earmark-text me-2"></i> Mostra fonti (${numSources}) <i class="bi bi-chevron-down ms-2"></i>`;
-        }
-    };
-
-    // Handle document modal
-    const documentModal = document.getElementById('documentModal');
-    if (documentModal) {
-        documentModal.addEventListener('show.bs.modal', function (event) {
+    // Edit Note Modal
+    const editNoteModal = document.getElementById('editNoteModal');
+    if (editNoteModal) {
+        editNoteModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
-            const fileId = button.getAttribute('data-file-id');
-            const fileName = button.getAttribute('data-file-name');
+            const noteId = button.getAttribute('data-note-id');
+            const noteContent = button.getAttribute('data-note-content');
 
-            const modalTitle = documentModal.querySelector('.modal-title');
-            const documentFrame = document.getElementById('document-frame');
-            const imageContainer = document.getElementById('image-container');
-            const unsupportedMessage = document.getElementById('unsupported-file-message');
-            const iframeContainer = document.getElementById('iframe-container');
-            const downloadButton = document.getElementById('download-document');
-            const openButton = document.getElementById('open-document');
-            const imagePreview = document.getElementById('image-preview');
-
-            // Resetta tutti i contenitori
-            documentFrame.style.display = 'none';
-            iframeContainer.style.display = 'none';
-            imageContainer.classList.add('d-none');
-            unsupportedMessage.classList.add('d-none');
-
-            // Imposta titolo
-            modalTitle.textContent = fileName;
-
-            // Configura il pulsante "Apri in nuova scheda"
-            if (openButton) {
-                openButton.href = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
-                openButton.target = '_blank';
-                openButton.onclick = null;
-            }
-
-            // Configura il pulsante "Download"
-            if (downloadButton) {
-                downloadButton.href = `/serve_project_file/${fileId}/?download=1&filename=${encodeURIComponent(fileName)}`;
-                downloadButton.setAttribute('download', fileName);
-                downloadButton.onclick = null;
-            }
-
-            // Determina l'estensione del file
-            const fileExtension = fileName.split('.').pop().toLowerCase();
-
-            // Gestisci l'anteprima in base all'estensione
-            switch (fileExtension) {
-                case 'pdf':
-                    // Mostra PDF nell'iframe
-                    documentFrame.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
-                    documentFrame.style.display = 'block';
-                    iframeContainer.style.display = 'block';
-                    unsupportedMessage.classList.add('d-none');
-                    break;
-
-                case 'jpg':
-                case 'jpeg':
-                case 'png':
-                case 'gif':
-                    // Mostra immagini
-                    imagePreview.src = `/serve_project_file/${fileId}/?filename=${encodeURIComponent(fileName)}`;
-                    imageContainer.classList.remove('d-none');
-                    break;
-
-                case 'docx':
-                case 'doc':
-                case 'txt':
-                case 'csv':
-                case 'xls':
-                    // Mostra un messaggio specifico per i file Excel
-                    unsupportedMessage.innerHTML = `
-                        <i class="bi bi-file-earmark-excel me-2 text-success" style="font-size: 1.5rem;"></i>
-                        <div>
-                            <p>I file Excel non possono essere visualizzati direttamente nel browser.</p>
-                            <p>Usa i pulsanti qui sotto per aprire o scaricare il file.</p>
-                        </div>
-                    `;
-                    unsupportedMessage.classList.remove('d-none');
-                    break;
-                case 'xlsx':
-                case 'ppt':
-                case 'pptx':
-                    // Mostra messaggio per file non visualizzabili in anteprima
-                    unsupportedMessage.classList.remove('d-none');
-                    imageContainer.classList.add('d-none');
-                    iframeContainer.style.display = 'none';
-                    break;
-
-                default:
-                    // File non supportato
-                    unsupportedMessage.classList.remove('d-none');
-                    imageContainer.classList.add('d-none');
-                    iframeContainer.style.display = 'none';
-            }
-        });
-
-        // Quando la modale è chiusa, pulisci l'iframe e l'immagine
-        documentModal.addEventListener('hidden.bs.modal', function () {
-            const documentFrame = document.getElementById('document-frame');
-            const imagePreview = document.getElementById('image-preview');
-            if (documentFrame) documentFrame.src = '';
-            if (imagePreview) imagePreview.src = '';
+            document.getElementById('edit-note-id').value = noteId;
+            document.getElementById('edit-note-content').value = noteContent;
         });
     }
+// Add Note Form
+    const addNoteForm = document.getElementById('add-note-form');
+    if (addNoteForm) {
+        addNoteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-    // File preview in upload modal
-    const fileInput = document.getElementById('project-files');
-    const filePreviewContainer = document.getElementById('selected-files-preview');
-    const filesList = document.getElementById('files-preview-list');
+            const content = document.getElementById('note-content').value.trim();
+            if (!content) return;
 
-    if (fileInput) {
-        fileInput.addEventListener('change', function() {
-            filesList.innerHTML = '';
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'add_note',
+                    'project_id': '{{ project.id }}',
+                    'content': content,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Chiudi il modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addNoteModal'));
+                    modal.hide();
 
-            if (this.files.length > 0) {
-                filePreviewContainer.classList.remove('d-none');
-
-                for (let i = 0; i < this.files.length; i++) {
-                    const file = this.files[i];
-                    const fileSize = formatFileSize(file.size);
-                    const fileExt = getFileExtension(file.name);
-                    let iconClass = getFileIconClass(fileExt);
-
-                    const listItem = document.createElement('div');
-                    listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
-                    listItem.innerHTML = `
-                        <div>
-                            <i class="bi ${iconClass} me-2"></i>
-                            <span>${file.name}</span>
-                        </div>
-                        <span class="badge bg-secondary rounded-pill">${fileSize}</span>
-                    `;
-
-                    filesList.appendChild(listItem);
+                    // Ricarica la pagina per mostrare la nuova nota
+                    window.location.reload();
+                } else {
+                    alert('Errore: ' + (data.error || 'Impossibile aggiungere la nota'));
                 }
-            } else {
-                filePreviewContainer.classList.add('d-none');
-            }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                alert('Errore di rete. Riprova più tardi.');
+            });
         });
     }
 
-    // Folder upload preview
-    const folderInput = document.getElementById('project-folder');
-    const folderInfoContainer = document.getElementById('selected-folder-info');
-    const folderNameElement = document.getElementById('folder-name');
-    const fileCountElement = document.getElementById('file-count');
-    const validFilesElement = document.getElementById('valid-files');
+    // Ask AI functionality
+    const sendButton = document.getElementById('send-question-btn');
+    const questionInput = document.getElementById('question-input');
+    const chatMessages = document.getElementById('chat-messages');
 
-    if (folderInput) {
-        folderInput.addEventListener('change', function() {
-            if (this.files.length > 0) {
-                folderInfoContainer.classList.remove('d-none');
+    if (sendButton && questionInput) {
+        sendButton.addEventListener('click', sendQuestion);
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendQuestion();
+            }
+        });
 
-                // Get folder name from first file's path
-                const firstFilePath = this.files[0].webkitRelativePath;
-                const folderName = firstFilePath.split('/')[0];
-                folderNameElement.textContent = folderName;
+        function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
 
-                // Count valid files
-                const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
-                let validCount = 0;
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'mb-3 p-3 user-message ml-auto';
+            userMsg.style.maxWidth = '80%';
+            userMsg.innerHTML = `
+                <div class="small fw-bold mb-1">Tu</div>
+                <div>${question.replace(/\n/g, '<br>')}</div>
+            `;
+            chatMessages.appendChild(userMsg);
 
-                for (let i = 0; i < this.files.length; i++) {
-                    const fileExt = getFileExtension(this.files[i].name);
-                    if (validExtensions.includes(fileExt)) {
-                        validCount++;
+            // Clear input and disable
+            questionInput.value = '';
+            questionInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Send request
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'ask_question',
+                    'project_id': '{{ project.id }}',
+                    'question': question,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Add AI response
+                    const aiMsg = document.createElement('div');
+                    aiMsg.className = 'mb-3 p-3 ai-message mr-auto';
+                    aiMsg.style.maxWidth = '80%';
+                    aiMsg.innerHTML = `
+                        <div class="small fw-bold mb-1">Assistente AI</div>
+                        <div>${data.answer.replace(/\n/g, '<br>')}</div>
+                    `;
+                    chatMessages.appendChild(aiMsg);
+
+                    // Add sources if available
+                    if (data.sources && data.sources.length > 0) {
+                        const sourcesMsg = document.createElement('div');
+                        sourcesMsg.className = 'mb-3 p-3 bg-light rounded';
+                        sourcesMsg.style.maxWidth = '80%';
+
+                        let sourcesHTML = '<div class="small fw-bold mb-2">Fonti</div>';
+                        data.sources.forEach(source => {
+                            sourcesHTML += `
+                                <div class="mb-2">
+                                    <div class="small text-muted">${source.filename || 'Documento'}</div>
+                                    <div class="small">${source.content}</div>
+                                </div>
+                            `;
+                        });
+
+                        sourcesMsg.innerHTML = sourcesHTML;
+                        chatMessages.appendChild(sourcesMsg);
                     }
+                } else {
+                    showError('Errore: ' + (data.error || 'Errore sconosciuto'));
                 }
+            })
+            .catch(error => {
+                showError('Errore di rete. Riprova più tardi.');
+                console.error('Errore:', error);
+            })
+            .finally(() => {
+                questionInput.disabled = false;
+                sendButton.disabled = false;
+                sendButton.innerHTML = '<i class="bi bi-send"></i>';
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+        }
 
-                fileCountElement.textContent = this.files.length;
-                validFilesElement.textContent = validCount;
-            } else {
-                folderInfoContainer.classList.add('d-none');
-            }
-        });
+        function showError(message) {
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'mb-3 p-3 bg-danger text-white rounded';
+            errorMsg.style.maxWidth = '80%';
+            errorMsg.innerHTML = message;
+            chatMessages.appendChild(errorMsg);
+        }
     }
 
-    // Auto-save notes (optional feature)
-    const notesTextarea = document.getElementById('project-notes');
-    let saveTimeout;
-
-    if (notesTextarea) {
-        notesTextarea.addEventListener('input', function() {
-            // Clear existing timeout
-            if (saveTimeout) {
-                clearTimeout(saveTimeout);
-            }
-
-            // Set new timeout (save after 2 seconds of inactivity)
-            saveTimeout = setTimeout(function() {
-                const notesForm = document.getElementById('notes-form');
-
-                // Use fetch to submit the form without page reload
-                const formData = new FormData(notesForm);
-
-                fetch(notesForm.action, {
+    // Note management
+    document.querySelectorAll('.delete-note-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('Eliminare questa nota?')) {
+                const noteId = this.getAttribute('data-note-id');
+                fetch('{% url "project" project.id %}', {
                     method: 'POST',
-                    body: formData,
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'action': 'delete_note',
+                        'project_id': '{{ project.id }}',
+                        'note_id': noteId,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    })
                 })
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Note salvate automaticamente');
+                    if (data.success) {
+                        document.querySelector(`.note-item[data-note-id="${noteId}"]`).remove();
+                    } else {
+                        alert('Errore: ' + (data.error || 'Impossibile eliminare la nota'));
+                    }
                 })
                 .catch(error => {
-                    console.error('Errore nel salvataggio delle note:', error);
+                    console.error('Errore:', error);
+                    alert('Errore di rete. Riprova più tardi.');
                 });
-
-            }, 2000);
-        });
-    }
-
-    const deleteFileModal = document.getElementById('deleteFileModal');
-    if (deleteFileModal) {
-        deleteFileModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            const fileId = button.getAttribute('data-file-id');
-            const fileName = button.getAttribute('data-file-name');
-
-            document.getElementById('delete-file-name').textContent = fileName;
-            document.getElementById('delete-file-id').value = fileId;
-        });
-    }
-
-    // Ferma la propagazione del click sul pulsante di eliminazione
-    document.querySelectorAll('.delete-file-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation(); // Impedisce che il click attivi anche il modal del documento
+            }
         });
     });
 
-    // Scroll to last message
-    if (chatMessages) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+    // Include note toggle
+    document.querySelectorAll('.include-note-check').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const noteId = this.getAttribute('data-note-id');
+            const isIncluded = this.checked;
 
-    // Helper functions
-    function formatFileSize(bytes) {
-        if (bytes < 1024) {
-            return bytes + ' bytes';
-        } else if (bytes < 1024 * 1024) {
-            return (bytes / 1024).toFixed(1) + ' KB';
-        } else {
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-    }
-
-    function getFileExtension(filename) {
-        return '.' + filename.split('.').pop().toLowerCase();
-    }
-
-    function getFileIconClass(extension) {
-        if (extension === '.pdf') {
-            return 'bi-file-earmark-pdf';
-        } else if (['.doc', '.docx'].includes(extension)) {
-            return 'bi-file-earmark-word';
-        } else if (['.xls', '.xlsx'].includes(extension)) {
-            return 'bi-file-earmark-excel';
-        } else if (['.ppt', '.pptx'].includes(extension)) {
-            return 'bi-file-earmark-slides';
-        } else if (extension === '.txt') {
-            return 'bi-file-earmark-text';
-        } else if (extension === '.csv') {
-            return 'bi-file-earmark-spreadsheet';
-        } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(extension)) {
-            return 'bi-file-earmark-image';
-        } else {
-            return 'bi-file-earmark';
-        }
-    }
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_note_inclusion',
+                    'project_id': '{{ project.id }}',
+                    'note_id': noteId,
+                    'is_included': isIncluded,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isIncluded; // Revoca in caso di errore
+            });
+        });
+    });
 });
 </script>
 {% endblock %}

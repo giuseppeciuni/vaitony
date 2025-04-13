@@ -1,0 +1,193 @@
+<!-- Document Modal -->
+<div class="modal fade" id="documentModal" tabindex="-1" aria-labelledby="documentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="documentModalLabel">Anteprima documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <h6 id="document-filename" class="text-truncate fw-bold"></h6>
+                    <small class="text-muted" id="document-filesize"></small>
+                </div>
+
+                <div id="document-preview-container">
+                    <div class="ratio ratio-16x9" id="iframe-container">
+                        <iframe id="document-frame" src="" allowfullscreen style="display:none;"></iframe>
+                    </div>
+
+                    <div class="text-center" id="image-container" style="display:none;">
+                        <img id="image-preview" class="img-fluid rounded" src="" alt="Anteprima documento">
+                    </div>
+
+                    <div class="alert alert-info" id="unsupported-file-message" style="display:none;">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Questo tipo di file non può essere visualizzato nel browser. Utilizza i pulsanti qui sotto per aprirlo o scaricarlo.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="#" class="btn btn-primary btn-sm" id="open-document" target="_blank">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Apri in nuova scheda
+                </a>
+                <a href="#" class="btn btn-success btn-sm" id="download-document" download>
+                    <i class="bi bi-download me-1"></i> Scarica
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete File Modal -->
+<div class="modal fade" id="deleteFileModal" tabindex="-1" aria-labelledby="deleteFileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteFileModalLabel">Conferma eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Attenzione: Questa azione non può essere annullata!
+                </div>
+                <p>Sei sicuro di voler eliminare il file <strong id="delete-file-name"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                <form method="post" action="" id="delete-file-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_file">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <input type="hidden" name="file_id" id="delete-file-id">
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash me-1"></i> Elimina file
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Files Modal -->
+<div class="modal fade" id="uploadFilesModal" tabindex="-1" aria-labelledby="uploadFilesModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadFilesModalLabel">Carica file</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="" enctype="multipart/form-data" id="upload-files-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_files">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+
+                    <div class="mb-3">
+                        <label for="files" class="form-label">Seleziona i file da caricare</label>
+                        <input type="file" class="form-control" id="files" name="files[]" multiple>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                <button type="submit" form="upload-files-form" class="btn btn-primary btn-sm">
+                    <i class="bi bi-upload me-1"></i> Carica
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Note Modal -->
+<div class="modal fade" id="addNoteModal" tabindex="-1" aria-labelledby="addNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addNoteModalLabel">Aggiungi nota</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="" id="add-note-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_note">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+
+                    <div class="mb-3">
+                        <label for="note-content" class="form-label">Contenuto</label>
+                        <textarea class="form-control" id="note-content" name="content" rows="5" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                <button type="submit" form="add-note-form" class="btn btn-primary btn-sm">
+                    <i class="bi bi-save me-1"></i> Salva
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Note Modal -->
+<div class="modal fade" id="editNoteModal" tabindex="-1" aria-labelledby="editNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editNoteModalLabel">Modifica nota</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="" id="edit-note-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="edit_note">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <input type="hidden" name="note_id" id="edit-note-id">
+
+                    <div class="mb-3">
+                        <label for="edit-note-content" class="form-label">Contenuto</label>
+                        <textarea class="form-control" id="edit-note-content" name="content" rows="5" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                <button type="submit" form="edit-note-form" class="btn btn-primary btn-sm">
+                    <i class="bi bi-save me-1"></i> Aggiorna
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Project Modal -->
+<div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-labelledby="deleteProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteProjectModalLabel">Conferma eliminazione progetto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Attenzione!</strong> Questa azione non può essere annullata!
+                </div>
+                <p>Sei sicuro di voler eliminare definitivamente il progetto <strong>{{ project.name }}</strong> e tutti i suoi file?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                <form method="post" action="{% url 'projects_list' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_project">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash me-1"></i> Elimina progetto
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

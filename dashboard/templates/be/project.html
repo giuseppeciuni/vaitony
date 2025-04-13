@@ -583,6 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        // In project.html, sostituisci la funzione sendQuestion con questa versione
         function sendQuestion() {
             const question = questionInput.value.trim();
             if (!question) return;
@@ -651,6 +652,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         sourcesMsg.innerHTML = sourcesHTML;
                         chatMessages.appendChild(sourcesMsg);
+
+                        // AGGIUNGI QUESTO BLOCCO: Aggiorna anche il tab Fonti
+                        const sourcesTab = document.getElementById('sources');
+                        if (sourcesTab) {
+                            let sourcesContent = `
+                                <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
+                                <div class="list-group">
+                            `;
+
+                            data.sources.forEach(source => {
+                                sourcesContent += `
+                                    <div class="source-item mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <strong class="source-title">${source.filename || 'Documento'}</strong>
+                                            <small class="text-muted">${source.metadata && source.metadata.page ? 'Pag. ' + (source.metadata.page + 1) : ''}</small>
+                                        </div>
+                                        <div class="source-content small p-2 bg-light rounded">
+                                            ${source.content}
+                                        </div>
+                                    </div>
+                                `;
+                            });
+
+                            sourcesContent += `</div>`;
+                            sourcesTab.innerHTML = sourcesContent;
+                        }
+                    } else {
+                        // Se non ci sono fonti, mostra il messaggio empty state
+                        const sourcesTab = document.getElementById('sources');
+                        if (sourcesTab) {
+                            sourcesTab.innerHTML = `
+                                <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
+                                <div class="empty-state">
+                                    <i class="bi bi-file-text"></i>
+                                    <h3>Nessuna fonte disponibile</h3>
+                                    <p class="text-muted">Fai una domanda all'AI per vedere le fonti di riferimento</p>
+                                </div>
+                            `;
+                        }
                     }
                 } else {
                     showError('Errore: ' + (data.error || 'Errore sconosciuto'));

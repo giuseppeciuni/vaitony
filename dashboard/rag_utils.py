@@ -1012,17 +1012,14 @@ def get_answer_from_project(project, question):
         project_files = ProjectFile.objects.filter(project=project)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
-        # Log dettagliato delle note trovate
-        logger.info(f"Project notes: {project_notes.count()}")
-        for note in project_notes:
-            logger.info(f"Note {note.id}: Title={note.title or 'Untitled'}, " +
-                        f"Content preview={note.content[:50] if note.content else 'Empty'}, " +
-                        f"RAG included={note.is_included_in_rag}")
-
         if not project_files.exists() and not project_notes.exists():
             return {"answer": "Il progetto non contiene documenti o note attive da ricercare.", "sources": []}
 
-        # Forza sempre la ricostruzione dell'indice per includere le note
+        # Verifica se è necessario aggiornare l'indice
+        from dashboard.rag_document_utils import check_project_index_update_needed
+        update_needed = check_project_index_update_needed(project)
+
+        # Forza la ricostruzione dell'indice
         logger.info(f"Forzando la ricostruzione dell'indice per il progetto {project.id}")
 
         # Crea o aggiorna la catena RAG
@@ -1042,18 +1039,11 @@ def get_answer_from_project(project, question):
         source_documents = result.get('source_documents', [])
         logger.info(f"Fonti trovate per la query '{question}': {len(source_documents)}")
 
-        for i, doc in enumerate(source_documents):
-            doc_type = doc.metadata.get('type', 'sconosciuto')
-            doc_source = doc.metadata.get('source', 'sconosciuta')
-            doc_title = doc.metadata.get('title', '')
-
-            logger.info(f"Fonte {i + 1}: Tipo={doc_type}, Fonte={doc_source}, " +
-                        f"Titolo={doc_title}, Contenuto={doc.page_content[:50]}...")
-
         # Formato della risposta
         response = {
             "answer": result.get('result', 'Nessuna risposta trovata.'),
-            "sources": []
+            "sources": [],
+            "success": True  # Aggiungi questo campo per il client JS
         }
 
         # Aggiungi le fonti se disponibili
@@ -1088,9 +1078,12 @@ def get_answer_from_project(project, question):
     except Exception as e:
         logger.exception(f"Errore critico in get_answer_from_project: {str(e)}")
         return {
+            "success": False,
             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
+            "error": str(e),
             "sources": []
         }
+
 
 
 def check_project_index_update_needed(project):

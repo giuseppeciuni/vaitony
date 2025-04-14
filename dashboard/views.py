@@ -9,10 +9,14 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 
-from dashboard.rag_document_utils import register_document, compute_file_hash
+from dashboard.rag_document_utils import register_document, compute_file_hash, check_project_index_update_needed
+from dashboard.rag_utils import create_project_rag_chain
+from dashboard.rag_utils import get_answer_from_project
+from dashboard.rag_utils import get_answer_from_rag
 # Modifica questa riga per includere ProjectNote
-from profiles.models import UserDocument, Project, ProjectFile, ProjectConversation, AnswerSource, ProjectNote
+from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource
 from .utils import process_user_files
 
 # Get logger
@@ -119,7 +123,7 @@ def rag(request):
 
                 # Get response from RAG system
                 try:
-                    from dashboard.rag_utils import get_answer_from_rag
+
                     rag_response = get_answer_from_rag(request.user, question)
 
                     # Estrai la risposta
@@ -267,7 +271,6 @@ def new_project(request):
                 logger.info(f"Redirecting to project with ID: {project.id}")
 
                 # Opzione 1: Reindirizza alla vista project con l'ID come parametro
-                from django.urls import reverse
                 return redirect(reverse('project', kwargs={'project_id': project.id}))
 
                 # Opzione 2: Reindirizza con il parametro POST
@@ -288,6 +291,7 @@ def new_project(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+
 
 
 
@@ -381,18 +385,60 @@ def project(request, project_id=None):
                         # Ottieni la risposta dal sistema RAG
                         try:
                             logger.info(f"Processing RAG question: '{question}'")
-                            from dashboard.rag_utils import get_answer_from_project
 
                             # Add detailed logging here
                             logger.debug(f"Starting RAG query for project ID: {project.id}")
 
-                            # Try/catch with more specific error handling
+                            # Verifica che il progetto abbia documenti e note prima di processare la query
+                            project_files = ProjectFile.objects.filter(project=project)
+                            project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+
+                            logger.info(
+                                f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
+
+                            # Try/catch con gestione errori più specifica
                             try:
+                                # Forza la ricostruzione dell'indice con tutti i documenti e note
                                 rag_response = get_answer_from_project(project, question)
 
                                 # Calculate processing time
                                 processing_time = round(time.time() - start_time, 2)
                                 logger.info(f"RAG processing completed in {processing_time} seconds")
+
+                                # Salva la conversazione nel database se richiesto
+                                try:
+                                    conversation = ProjectConversation.objects.create(
+                                        project=project,
+                                        question=question,
+                                        answer=rag_response.get('answer', 'No answer found.'),
+                                        processing_time=processing_time
+                                    )
+
+                                    # Salva le fonti utilizzate
+                                    for source in rag_response.get('sources', []):
+                                        # Cerchiamo di trovare il ProjectFile corrispondente
+                                        project_file = None
+                                        if source.get('type') != 'note':
+                                            source_path = source.get('metadata', {}).get('source', '')
+                                            if source_path:
+                                                # Cerca il file per path
+                                                try:
+                                                    project_file = ProjectFile.objects.get(project=project,
+                                                                                           file_path=source_path)
+                                                except ProjectFile.DoesNotExist:
+                                                    pass
+
+                                        # Salva la fonte
+                                        AnswerSource.objects.create(
+                                            conversation=conversation,
+                                            project_file=project_file,
+                                            content=source.get('content', ''),
+                                            page_number=source.get('metadata', {}).get('page'),
+                                            relevance_score=source.get('score')
+                                        )
+                                except Exception as save_error:
+                                    logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
+                                    # Non interrompiamo il flusso se il salvataggio fallisce
 
                                 # Create AJAX response
                                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -541,11 +587,11 @@ def project(request, project_id=None):
 
                         # Aggiorna l'indice vettoriale in background
                         try:
-                            from dashboard.rag_utils import create_project_rag_chain
+
                             logger.info(
                                 f"🔄 Aggiornamento dell'indice vettoriale per il progetto {project.id} dopo aggiunta nota")
 
-                            # Forza la ricostruzione dell'indice
+                            # Forza la ricostruzione dell'indice con TUTTI i documenti e note
                             create_project_rag_chain(project=project, force_rebuild=True)
 
                             logger.info(f"✅ Indice vettoriale aggiornato con successo per il progetto {project.id}")
@@ -583,7 +629,6 @@ def project(request, project_id=None):
                             # Se lo stato è cambiato, aggiorna l'indice vettoriale
                             if state_changed:
                                 try:
-                                    from dashboard.rag_utils import create_project_rag_chain
                                     logger.info(
                                         f"🔄 Avvio aggiornamento dell'indice vettoriale per il progetto {project.id} dopo modifica stato nota")
 
@@ -614,79 +659,52 @@ def project(request, project_id=None):
                 # Quando viene modificata una nota
 
                 elif action == 'edit_note':
-
                     # Modifica una nota esistente
-
                     note_id = request.POST.get('note_id')
-
                     content = request.POST.get('content', '').strip()
 
                     if note_id and content:
-
                         try:
-
                             note = ProjectNote.objects.get(id=note_id, project=project)
 
                             # Controlla se il contenuto è cambiato
-
                             content_changed = note.content != content
 
                             # Aggiorna il titolo con la prima riga del contenuto
-
                             title = content.split('\n')[0][:50] if content else "Untitled Note"
 
                             note.title = title
-
                             note.content = content
-
                             note.save()
 
                             # Se il contenuto è cambiato e la nota è inclusa nella ricerca RAG,
-
-                            # aggiorna l'indice vettoriale
-
+                            # aggiorna l'indice vettoriale con TUTTI i documenti e note
                             if content_changed and note.is_included_in_rag:
-
                                 try:
-
-                                    from dashboard.rag_utils import create_project_rag_chain
-
                                     logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo modifica nota")
 
-                                    # Forza la ricostruzione dell'indice
-
+                                    # Forza la ricostruzione dell'indice con TUTTI i documenti e note
                                     create_project_rag_chain(project=project, force_rebuild=True)
 
                                     logger.info(f"✅ Indice vettoriale ricostruito con successo")
-
                                 except Exception as e:
-
                                     logger.error(f"❌ Errore nella ricostruzione: {str(e)}")
 
                             # Risposta per richieste AJAX
-
                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                                 return JsonResponse({
-
                                     'success': True,
-
                                     'message': 'Note updated successfully.'
-
                                 })
 
                             messages.success(request, "Note updated successfully.")
-
                             return redirect('project', project_id=project.id)
 
                         except ProjectNote.DoesNotExist:
-
                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                                 return JsonResponse({
-
                                     'success': False,
-
                                     'error': 'Note not found.'
-
                                 })
 
                             messages.error(request, "Note not found.")
@@ -702,10 +720,9 @@ def project(request, project_id=None):
                             was_included = note.is_included_in_rag  # Controlla se era inclusa nel RAG
                             note.delete()
 
-                            # Se la nota era inclusa nel RAG, ricostruisci l'indice
+                            # Se la nota era inclusa nel RAG, ricostruisci l'indice con TUTTI i documenti e note
                             if was_included:
                                 try:
-                                    from dashboard.rag_utils import create_project_rag_chain
                                     logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo eliminazione nota")
                                     create_project_rag_chain(project=project, force_rebuild=True)
                                     logger.info(f"✅ Indice vettoriale ricostruito con successo")
@@ -745,13 +762,13 @@ def project(request, project_id=None):
                             note.is_included_in_rag = is_included
                             note.save()
 
-                            # Se lo stato è cambiato, aggiorna l'indice vettoriale
+                            # Se lo stato è cambiato, aggiorna l'indice vettoriale con TUTTI i documenti e note
                             if state_changed:
                                 try:
-                                    from dashboard.rag_utils import create_project_rag_chain
+
                                     logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo cambio stato nota")
 
-                                    # Forza la ricostruzione dell'indice
+                                    # Forza la ricostruzione dell'indice con TUTTI i documenti e note
                                     create_project_rag_chain(project=project, force_rebuild=True)
 
                                     logger.info(f"✅ Indice vettoriale ricostruito con successo")
@@ -1187,7 +1204,6 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
 
     # Aggiorna l'indice vettoriale in background
     try:
-        from dashboard.rag_utils import create_project_rag_chain
         logger.info(f"🔄 Avvio aggiornamento dell'indice vettoriale per il progetto {project.id} dopo caricamento file")
 
         # Crea o aggiorna la catena RAG
@@ -1207,7 +1223,6 @@ def get_answer_from_project(project, question):
 
     try:
         # Verifica se il progetto ha documenti o note
-        from profiles.models import ProjectFile, ProjectNote
         project_files = ProjectFile.objects.filter(project=project)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
@@ -1215,11 +1230,9 @@ def get_answer_from_project(project, question):
             return {"answer": "Il progetto non contiene documenti o note attive.", "sources": []}
 
         # Verifica se è necessario aggiornare l'indice
-        from dashboard.rag_document_utils import check_project_index_update_needed
         update_needed = check_project_index_update_needed(project)
 
         # Crea o aggiorna la catena RAG se necessario
-        from dashboard.rag_utils import create_project_rag_chain
         qa_chain = create_project_rag_chain(project=project) if update_needed else create_project_rag_chain(
             project=project, docs=[])
 

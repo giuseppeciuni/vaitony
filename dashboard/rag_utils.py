@@ -16,6 +16,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # questo sostituisce 
 import openai
 from dashboard.rag_document_utils import check_index_update_needed, compute_file_hash, scan_user_directory
 from profiles.models import UserDocument, Project, ProjectFile
+import time, datetime
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -69,9 +70,60 @@ def process_image(image_path):
 
 
 
+# def load_document(file_path):
+#     """
+#     Carica un singolo documento in base al suo tipo.
+#
+#     Args:
+#         file_path: Percorso completo del file
+#
+#     Returns:
+#         List: Lista di documenti LangChain estratti dal file
+#     """
+#     filename = os.path.basename(file_path)
+#
+#     try:
+#         if filename.lower().endswith(".pdf"):
+#             loader = PyMuPDFLoader(file_path)
+#             return loader.load()
+#
+#         elif filename.lower().endswith((".docx", ".doc")):
+#             loader = UnstructuredWordDocumentLoader(file_path)
+#             return loader.load()
+#
+#         elif filename.lower().endswith((".pptx", ".ppt")):
+#             loader = UnstructuredPowerPointLoader(file_path)
+#             return loader.load()
+#
+#         # Supporto per immagini
+#         elif filename.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp")):
+#             image_doc = process_image(file_path)
+#             return [image_doc]
+#
+#         # Supporto per file txt
+#         elif filename.lower().endswith((".txt")):
+#             from langchain.document_loaders import TextLoader
+#             loader = TextLoader(file_path)
+#             return loader.load()
+#
+#         # Altri tipi di file potrebbero essere aggiunti qui
+#         else:
+#             logger.warning(f"Tipo di file non supportato: {filename}")
+#             return []
+#
+#     except Exception as e:
+#         logger.error(f"Errore nel caricare il file {file_path}: {str(e)}")
+#         # Crea un documento che indica l'errore
+#         error_doc = Document(
+#             page_content=f"Errore nel caricare il file: {str(e)}",
+#             metadata={"source": file_path, "error": str(e)}
+#         )
+#         return [error_doc]
+
+
 def load_document(file_path):
     """
-    Carica un singolo documento in base al suo tipo.
+    Carica un singolo documento in base al suo tipo con miglior gestione degli errori e logging.
 
     Args:
         file_path: Percorso completo del file
@@ -80,42 +132,93 @@ def load_document(file_path):
         List: Lista di documenti LangChain estratti dal file
     """
     filename = os.path.basename(file_path)
+    logger.info(f"⏳ Inizio caricamento file: {filename}")
 
     try:
-        if filename.lower().endswith(".pdf"):
-            loader = PyMuPDFLoader(file_path)
-            return loader.load()
+        # Controllo preliminare
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Il file {filename} non esiste nel percorso specificato")
 
-        elif filename.lower().endswith((".docx", ".doc")):
-            loader = UnstructuredWordDocumentLoader(file_path)
-            return loader.load()
+        if os.path.getsize(file_path) == 0:
+            raise ValueError(f"Il file {filename} è vuoto")
 
-        elif filename.lower().endswith((".pptx", ".ppt")):
-            loader = UnstructuredPowerPointLoader(file_path)
-            return loader.load()
+        # Estensione del file in lowercase per confronto
+        file_ext = os.path.splitext(filename)[1].lower()
 
-        # Supporto per immagini
-        elif filename.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp")):
-            image_doc = process_image(file_path)
-            return [image_doc]
+        # PDF
+        if file_ext == '.pdf':
+            logger.debug(f"Processing PDF file: {filename}")
+            try:
+                loader = PyMuPDFLoader(file_path)
+                docs = loader.load()
+                logger.info(f"✅ Caricati {len(docs)} pagine dal PDF {filename}")
+                return docs
+            except Exception as pdf_error:
+                logger.error(f"❌ Errore nel parsing PDF {filename}: {str(pdf_error)}")
+                raise
 
-        # Supporto per file txt
-        elif filename.lower().endswith((".txt")):
-            from langchain.document_loaders import TextLoader
-            loader = TextLoader(file_path)
-            return loader.load()
+        # Word Documents
+        elif file_ext in ('.docx', '.doc'):
+            logger.debug(f"Processing Word file: {filename}")
+            try:
+                loader = UnstructuredWordDocumentLoader(file_path)
+                docs = loader.load()
+                logger.info(f"✅ Caricati {len(docs)} sezioni dal documento Word {filename}")
+                return docs
+            except Exception as word_error:
+                logger.error(f"❌ Errore nel parsing Word {filename}: {str(word_error)}")
+                raise
 
-        # Altri tipi di file potrebbero essere aggiunti qui
+        # PowerPoint
+        elif file_ext in ('.pptx', '.ppt'):
+            logger.debug(f"Processing PowerPoint file: {filename}")
+            try:
+                loader = UnstructuredPowerPointLoader(file_path)
+                docs = loader.load()
+                logger.info(f"✅ Caricati {len(docs)} slide dal PowerPoint {filename}")
+                return docs
+            except Exception as ppt_error:
+                logger.error(f"❌ Errore nel parsing PowerPoint {filename}: {str(ppt_error)}")
+                raise
+
+        # Images
+        elif file_ext in ('.jpg', '.jpeg', '.png', '.gif', '.bmp'):
+            logger.debug(f"Processing image file: {filename}")
+            try:
+                image_doc = process_image(file_path)
+                logger.info(f"✅ Elaborata immagine {filename}")
+                return [image_doc]
+            except Exception as img_error:
+                logger.error(f"❌ Errore nell'elaborazione immagine {filename}: {str(img_error)}")
+                raise
+
+        # Text files
+        elif file_ext == '.txt':
+            logger.debug(f"Processing text file: {filename}")
+            try:
+                loader = TextLoader(file_path)
+                docs = loader.load()
+                logger.info(f"✅ Caricato file di testo {filename}")
+                return docs
+            except Exception as txt_error:
+                logger.error(f"❌ Errore nel parsing file di testo {filename}: {str(txt_error)}")
+                raise
+
+        # Altri tipi non supportati
         else:
-            logger.warning(f"Tipo di file non supportato: {filename}")
+            logger.warning(f"⚠️ Tipo di file non supportato: {filename}")
             return []
 
     except Exception as e:
-        logger.error(f"Errore nel caricare il file {file_path}: {str(e)}")
-        # Crea un documento che indica l'errore
+        logger.exception(f"🔥 Errore critico nel processare il file {filename}")
         error_doc = Document(
-            page_content=f"Errore nel caricare il file: {str(e)}",
-            metadata={"source": file_path, "error": str(e)}
+            page_content=f"ERRORE: Impossibile processare il file {filename}. Dettagli: {str(e)}",
+            metadata={
+                "source": file_path,
+                "error": str(e),
+                "type": "error",
+                "timestamp": datetime.now().isoformat()
+            }
         )
         return [error_doc]
 
@@ -338,8 +441,6 @@ def create_rag_chain(user=None, docs=None):
     return qa
 
 
-
-
 def get_answer_from_rag(user, question):
     logger.debug("-->get_answer_from_rag")
     """
@@ -352,23 +453,35 @@ def get_answer_from_rag(user, question):
     Returns:
         Un dizionario contenente la risposta e le fonti con i chunk di testo
     """
+    # PRIMA MODIFICA: Scansione sempre attiva della directory
+    from dashboard.rag_document_utils import scan_user_directory
+    added_docs, modified_docs, deleted_paths = scan_user_directory(user)
 
-    # Verifica se è necessario aggiornare l'indice
-    update_needed = check_index_update_needed(user)
+    # SECONDA MODIFICA: Log dettagliato dei cambiamenti rilevati
+    logger.info(
+        f"Scan directory risultati - Aggiunti: {len(added_docs)}, Modificati: {len(modified_docs)}, Eliminati: {len(deleted_paths)}")
 
     # Controlla se l'utente ha documenti
     user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(user.id))
     if not os.path.exists(user_upload_dir) or not os.listdir(user_upload_dir):
         return {"answer": "Non hai ancora caricato documenti.", "sources": []}
 
-    # Crea o aggiorna la catena RAG se necessario
-    qa_chain = create_rag_chain(user=user) if update_needed else create_rag_chain(user=user, docs=[])
+    # TERZA MODIFICA: Forza ricostruzione indice se ci sono nuovi/modificati
+    if added_docs or modified_docs:
+        logger.info("Documenti nuovi/modificati rilevati, forzo ricostruzione indice")
+        qa_chain = create_rag_chain(user=user)
+    else:
+        # Usa controllo normale se nessun cambiamento
+        update_needed = check_index_update_needed(user)
+        qa_chain = create_rag_chain(user=user) if update_needed else create_rag_chain(user=user, docs=[])
 
     if qa_chain is None:
         return {"answer": "Non è stato possibile creare un indice per i tuoi documenti.", "sources": []}
 
-    # Ottieni la risposta
+    # QUARTA MODIFICA: Aggiungi tempo di elaborazione al log
+    start_time = time.time()
     result = qa_chain.invoke(question)
+    logger.info(f"Elaborazione RAG completata in {time.time() - start_time:.2f} secondi")
 
     # Formato della risposta
     response = {
@@ -376,18 +489,21 @@ def get_answer_from_rag(user, question):
         "sources": []
     }
 
-    # Aggiungi le fonti se disponibili
+    # QUINTA MODIFICA: Log delle fonti trovate
     source_documents = result.get('source_documents', [])
-    for doc in source_documents:
+    logger.info(f"Trovate {len(source_documents)} fonti per la domanda")
+
+    for i, doc in enumerate(source_documents, 1):
         source = {
-            "content": doc.page_content,  # Questo è il chunk effettivo di testo
-            "metadata": doc.metadata,  # Metadata include il percorso del file e altre info
-            "score": getattr(doc, 'score', None)  # Se disponibile, include il punteggio di rilevanza
+            "content": doc.page_content,
+            "metadata": doc.metadata,
+            "score": getattr(doc, 'score', None),
+            "source_num": i  # Aggiunto numero progressivo
         }
+        logger.debug(f"Fonte {i}: {doc.metadata.get('source', 'sconosciuto')}")
         response["sources"].append(source)
 
     return response
-
 
 
 def get_answer_from_project(project, question):
@@ -722,101 +838,14 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # Assicurati che la directory esista
         os.makedirs(project_dir, exist_ok=True)
 
-        # Se non sono forniti documenti, carica quelli del progetto che necessitano di embedding
-        if docs is None:
+        # MODIFICA: Se force_rebuild è True o docs è None, carica TUTTI i documenti e note
+        if force_rebuild or docs is None:
             from profiles.models import ProjectFile, ProjectNote
 
-            # Ottieni tutti i file del progetto che non sono ancora stati embedded
-            files_to_embed = ProjectFile.objects.filter(project=project, is_embedded=False)
-
-            # Ottieni le note attive che devono essere incluse nell'indice
-            notes_to_embed = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-
-            # Aggiungi logging per verificare le note
-            logger.info(f"Note attive trovate per il progetto {project.id}: {notes_to_embed.count()}")
-            for note in notes_to_embed:
-                logger.info(f"Nota attiva: ID={note.id}, Titolo={note.title or 'Senza titolo'}, " +
-                            f"Lunghezza contenuto={len(note.content)}")
-
-            docs = []
-            document_ids = []
-            note_ids = []
-
-            # Elabora i file
-            for doc_model in files_to_embed:
-                logger.debug(f"Loading document for embedding: {doc_model.filename}")
-                langchain_docs = load_document(doc_model.file_path)
-                if langchain_docs:
-                    docs.extend(langchain_docs)
-                    document_ids.append(doc_model.id)
-
-            # Elabora le note - assicurati che questo codice venga eseguito
-            for note in notes_to_embed:
-                logger.debug(f"Adding note to embedding: {note.title or 'Senza titolo'}")
-                # Crea un documento LangChain dalla nota
-                note_doc = Document(
-                    page_content=note.content,
-                    metadata={
-                        "source": f"note_{note.id}",
-                        "type": "note",
-                        "title": note.title or "Nota senza titolo"
-                    }
-                )
-                docs.append(note_doc)
-                note_ids.append(note.id)
-
-            logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note)")
-
-            if force_rebuild and docs:
-                logger.info(f"🔄 Forzando la ricostruzione dell'indice per il progetto {project.id}")
-            elif not files_to_embed.exists() and not notes_to_embed.exists() and not force_rebuild:
-                logger.debug("Nessun nuovo documento o nota da elaborare")
-    else:
-        # Caso di fallback, non dovrebbe essere usato normalmente
-        index_name = "default_index"
-        index_path = os.path.join(settings.MEDIA_ROOT, index_name)
-        document_ids = None
-        note_ids = None
-
-    embeddings = OpenAIEmbeddings()
-    vectordb = None
-
-    # Se ci sono documenti da processare o l'indice deve essere rigenerato
-    if (docs and len(docs) > 0) or force_rebuild:
-        logger.info(
-            f"⚙️ Creazione o aggiornamento dell'indice FAISS per il progetto {project.id} con {len(docs) if docs else 0} documenti")
-
-        if docs and len(docs) > 0:
-            # Dividi i documenti in chunk più piccoli
-            splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-            split_docs = splitter.split_documents(docs)
-            split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
-
-            logger.info(f"Documenti divisi in {len(split_docs)} chunk dopo splitting")
-
-            if os.path.exists(index_path) and not force_rebuild:
-                # Se l'indice esiste, caricalo e aggiungi i nuovi documenti
-                try:
-                    logger.info(f"🔁 Aggiornamento dell'indice FAISS esistente: {index_path}")
-                    existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-                    vectordb = existing_vectordb.from_documents(split_docs, embeddings)
-                except Exception as e:
-                    logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
-                    # Se c'è un errore, crea un nuovo indice
-                    logger.info(f"🔄 Creazione di un nuovo indice FAISS per il progetto {project.id}")
-                    vectordb = FAISS.from_documents(split_docs, embeddings)
-            else:
-                # Crea un nuovo indice
-                logger.info(f"🔄 Creazione di un nuovo indice FAISS per il progetto {project.id}")
-                vectordb = FAISS.from_documents(split_docs, embeddings)
-        elif force_rebuild:
-            # Se forziamo la ricostruzione ma non ci sono nuovi documenti,
-            # dobbiamo caricare tutti i documenti esistenti e ricreare l'indice
-            logger.info(f"🔄 Ricostruzione forzata dell'indice per il progetto {project.id}")
-
-            # Carica tutti i file del progetto
-            from profiles.models import ProjectFile, ProjectNote
+            # Ottieni TUTTI i file del progetto (non solo quelli non embedded)
             all_files = ProjectFile.objects.filter(project=project)
+
+            # Ottieni tutte le note attive
             all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
             logger.info(f"Ricostruendo indice con {all_files.count()} file e {all_active_notes.count()} note")
@@ -827,6 +856,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
             # Carica tutti i file
             for doc_model in all_files:
+                logger.debug(f"Caricando file: {doc_model.filename}")
                 langchain_docs = load_document(doc_model.file_path)
                 if langchain_docs:
                     all_docs.extend(langchain_docs)
@@ -846,21 +876,47 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 all_docs.append(note_doc)
                 all_note_ids.append(note.id)
 
-            if all_docs:
-                # Dividi i documenti in chunk più piccoli
-                splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-                split_docs = splitter.split_documents(all_docs)
-                split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
+            # Aggiorna docs con tutti i documenti
+            docs = all_docs
+            document_ids = all_document_ids
+            note_ids = all_note_ids
+    else:
+        # Caso di fallback, non dovrebbe essere usato normalmente
+        index_name = "default_index"
+        index_path = os.path.join(settings.MEDIA_ROOT, index_name)
+        document_ids = None
+        note_ids = None
 
-                logger.info(f"Documento divisi in {len(split_docs)} chunk dopo splitting")
+    embeddings = OpenAIEmbeddings()
+    vectordb = None
 
-                # Crea un nuovo indice
+    # Se ci sono documenti da processare
+    if docs and len(docs) > 0:
+        logger.info(
+            f"⚙️ Creazione o aggiornamento dell'indice FAISS per il progetto {project.id} con {len(docs)} documenti")
+
+        # Dividi i documenti in chunk più piccoli
+        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        split_docs = splitter.split_documents(docs)
+        split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
+
+        logger.info(f"Documenti divisi in {len(split_docs)} chunk dopo splitting")
+
+        if os.path.exists(index_path) and not force_rebuild:
+            # Se l'indice esiste e non è forzata la ricostruzione, aggiorna l'indice esistente
+            try:
+                logger.info(f"🔁 Aggiornamento dell'indice FAISS esistente: {index_path}")
+                existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+                vectordb = existing_vectordb.from_documents(split_docs, embeddings)
+            except Exception as e:
+                logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
+                # Se c'è un errore, crea un nuovo indice
+                logger.info(f"🔄 Creazione di un nuovo indice FAISS per il progetto {project.id}")
                 vectordb = FAISS.from_documents(split_docs, embeddings)
-
-                # Aggiorna le variabili per la registrazione dello stato
-                docs = all_docs
-                document_ids = all_document_ids
-                note_ids = all_note_ids
+        else:
+            # MODIFICA: Se l'indice non esiste o force_rebuild=True, crea un nuovo indice con TUTTI i documenti
+            logger.info(f"🔄 Creazione di un nuovo indice FAISS per il progetto {project.id}")
+            vectordb = FAISS.from_documents(split_docs, embeddings)
 
         # Salva l'indice
         if vectordb:
@@ -873,31 +929,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 from dashboard.rag_document_utils import update_project_index_status
                 update_project_index_status(project, document_ids, note_ids)
 
-            # Debug - verifica cosa c'è nell'indice
-            sample_docs = vectordb.similarity_search("test", k=5)
-            logger.info(f"Esempi di documenti nell'indice ({len(sample_docs)} trovati):")
-            for i, doc in enumerate(sample_docs):
-                doc_type = doc.metadata.get('type', 'sconosciuto')
-                doc_source = doc.metadata.get('source', 'sconosciuta')
-                logger.info(f"Doc {i + 1}: Tipo={doc_type}, Fonte={doc_source}, " +
-                            f"Contenuto={doc.page_content[:50]}...")
-
     # Se l'indice non è stato creato o aggiornato, carica quello esistente
     if vectordb is None:
         if os.path.exists(index_path):
             logger.info(f"🔁 Caricamento dell'indice FAISS esistente: {index_path}")
             try:
                 vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-
-                # Debug - verifica cosa c'è nell'indice esistente
-                sample_docs = vectordb.similarity_search("test", k=5)
-                logger.info(f"Esempi di documenti nell'indice esistente ({len(sample_docs)} trovati):")
-                for i, doc in enumerate(sample_docs):
-                    doc_type = doc.metadata.get('type', 'sconosciuto')
-                    doc_source = doc.metadata.get('source', 'sconosciuta')
-                    logger.info(f"Doc {i + 1}: Tipo={doc_type}, Fonte={doc_source}, " +
-                                f"Contenuto={doc.page_content[:50]}...")
-
             except Exception as e:
                 logger.error(f"Errore nel caricare l'indice FAISS: {str(e)}")
                 return None
@@ -907,17 +944,20 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
     # Crea un template personalizzato per migliorare la qualità delle risposte
     template = """
-    Sei un assistente esperto che analizza documenti e fornisce risposte dettagliate e complete.
+    Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
 
     Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
     Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
 
+    Il contesto contiene sia documenti che note. Considera TUTTI i contenuti senza dare preferenza a uno rispetto all'altro.
+
     Quando rispondi:
-    1. Fornisci una risposta dettagliata e approfondita di almeno 5-10 frasi
+    1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
     2. Organizza le informazioni in modo logico e strutturato
-    3. Cita fatti specifici e dettagli presenti nei documenti
-    4. Se pertinente, suddividi la risposta in sezioni per facilitare la lettura
-    5. Se ci sono più aspetti nella domanda, assicurati di affrontarli tutti
+    3. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+    4. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+    5. Se la domanda riguarda relazioni o connessioni tra argomenti, analizza i collegamenti tra le diverse fonti
+    6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne
 
     Contesto:
     {context}
@@ -932,12 +972,17 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         input_variables=["context", "question"]
     )
 
+    PROMPT = PromptTemplate(
+        template=template,
+        input_variables=["context", "question"]
+    )
+
     # Configura il retriever per dare uguale importanza a tutti i tipi di documento
     retriever = vectordb.as_retriever(
         search_type="mmr",  # Maximum Marginal Relevance per diversificare i risultati
         search_kwargs={
-            "k": 6,  # Numero di documenti da recuperare
-            "fetch_k": 10,  # Recupera più documenti prima di filtrare
+            "k": 8,  # Aumentato il numero di documenti da recuperare
+            "fetch_k": 15,  # Recupera più documenti prima di filtrare
             "lambda_mult": 0.7  # Bilanciamento tra rilevanza e diversità
         }
     )
@@ -1015,20 +1060,26 @@ def get_answer_from_project(project, question):
         if not project_files.exists() and not project_notes.exists():
             return {"answer": "Il progetto non contiene documenti o note attive da ricercare.", "sources": []}
 
-        # Verifica se è necessario aggiornare l'indice
-        from dashboard.rag_document_utils import check_project_index_update_needed
-        update_needed = check_project_index_update_needed(project)
-
-        # Forza la ricostruzione dell'indice
-        logger.info(f"Forzando la ricostruzione dell'indice per il progetto {project.id}")
+        # Aggiungi logging per verificare i documenti disponibili
+        logger.info(f"Documenti disponibili per la ricerca: {project_files.count()} file, {project_notes.count()} note")
 
         # Crea o aggiorna la catena RAG
         from dashboard.rag_utils import create_project_rag_chain
+
+        # MIGLIORAMENTO: Forza sempre la ricostruzione dell'indice con tutti i documenti quando si fa una domanda
+        # per assicurarsi che ci siano tutti i documenti e le note nell'indice
         qa_chain = create_project_rag_chain(project=project, force_rebuild=True)
 
         if qa_chain is None:
             return {"answer": "Non è stato possibile creare un indice per i documenti e le note di questo progetto.",
                     "sources": []}
+
+        # MIGLIORAMENTO: prompt migliorato per la query
+        if "relazioni" in question.lower() or "connessioni" in question.lower() or "collegamento" in question.lower():
+            # Modifica leggermente la domanda per migliorare l'analisi delle relazioni
+            original_question = question
+            question = f"Analizza e descrivi le relazioni, connessioni e collegamenti tra questi argomenti: {question}"
+            logger.info(f"Domanda modificata per l'analisi delle relazioni: {question}")
 
         # Ottieni la risposta
         logger.info(f"🔎 Eseguendo ricerca su indice vettoriale del progetto {project.id} per: '{question}'")
@@ -1039,11 +1090,16 @@ def get_answer_from_project(project, question):
         source_documents = result.get('source_documents', [])
         logger.info(f"Fonti trovate per la query '{question}': {len(source_documents)}")
 
+        # Log dei tipi di fonti
+        file_sources = [doc for doc in source_documents if doc.metadata.get('type') != 'note']
+        note_sources = [doc for doc in source_documents if doc.metadata.get('type') == 'note']
+        logger.info(f"Sorgenti trovate: {len(file_sources)} da file, {len(note_sources)} da note")
+
         # Formato della risposta
         response = {
             "answer": result.get('result', 'Nessuna risposta trovata.'),
             "sources": [],
-            "success": True  # Aggiungi questo campo per il client JS
+            "success": True
         }
 
         # Aggiungi le fonti se disponibili

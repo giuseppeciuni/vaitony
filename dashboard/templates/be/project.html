@@ -73,8 +73,9 @@
 
     /* Chat Interface */
     .chat-messages {
-        max-height: 400px;
+        height: calc(100vh - 170px);
         overflow-y: auto;
+        padding-bottom: 20px;
     }
 
     .user-message {
@@ -116,11 +117,73 @@
         margin-bottom: 1rem;
     }
 
+    /* Tab Content Adjustments */
+    .tab-content {
+        min-height: calc(100vh - 170px);
+        padding-bottom: 60px;
+    }
+
+    /* Chat Input Fixed */
+    .chat-input-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 12px 15px;
+        z-index: 1000;
+        border-top: 1px solid #dee2e6;
+    }
+
+    /* Adjust for sidebar on desktop */
+    @media (min-width: 992px) {
+        .chat-input-container {
+            left: 250px;
+        }
+    }
+
+    .chat-input-wrapper {
+        display: flex;
+        align-items: center;
+        position: relative;
+        flex: 1;
+    }
+
+    .chat-input-container .form-control {
+        border-radius: 20px;
+        padding-right: 50px;
+        resize: none;
+        height: 45px;
+        padding-top: 10px;
+    }
+
+    .chat-input-container .btn {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+
     /* Responsive Adjustments */
     @media (max-width: 768px) {
         .nav-tabs .nav-link {
             padding: 0.5rem;
             font-size: 0.9rem;
+        }
+
+        .chat-input-container {
+            padding: 8px 10px;
+        }
+
+        .chat-messages {
+            height: calc(100vh - 200px);
         }
     }
 </style>
@@ -225,7 +288,9 @@
         <div class="tab-pane fade" id="ask" role="tabpanel">
             <div class="mb-4">
                 <h2 class="h5 mb-3">Chiedi informazioni sul tuo progetto</h2>
-                <div class="chat-messages p-3 bg-light rounded mb-3" id="chat-messages">
+
+                <!-- Solo l'area messaggi qui - l'input è fuori e fisso in basso -->
+                <div class="chat-messages p-3 bg-light rounded" id="chat-messages">
                     {% if conversation_history %}
                         {% for message in conversation_history %}
                         <div class="mb-3 p-3 {% if message.is_user %}user-message ml-auto{% else %}ai-message mr-auto{% endif %}"
@@ -244,14 +309,17 @@
                         </div>
                     {% endif %}
                 </div>
+            </div>
+        </div>
 
-                <div class="position-relative">
-                    <textarea class="form-control" id="question-input" rows="3"
-                              placeholder="Scrivi la tua domanda qui..."></textarea>
-                    <button id="send-question-btn" class="btn btn-primary position-absolute bottom-0 end-0 m-2">
-                        <i class="bi bi-send"></i>
-                    </button>
-                </div>
+        <!-- Input fisso posizionato fuori dai tab, visibile solo quando si è nel tab "Chiedi all'AI" -->
+        <div class="chat-input-container" id="fixed-chat-input" style="display: none;">
+            <div class="chat-input-wrapper">
+                <textarea class="form-control" id="question-input" rows="1"
+                          placeholder="Scrivi la tua domanda qui..."></textarea>
+                <button id="send-question-btn" class="btn btn-primary">
+                    <i class="bi bi-send"></i>
+                </button>
             </div>
         </div>
 
@@ -353,17 +421,26 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Tab persistence
     const triggerTabList = document.querySelectorAll('#projectTabs button');
-    const activeTab = localStorage.getItem('activeProjectTab');
-    if (activeTab) {
-        const tab = document.querySelector(`#projectTabs button[data-bs-target="${activeTab}"]`);
-        if (tab) new bootstrap.Tab(tab).show();
+    const activeTab = document.querySelector('#projectTabs button.active');
+    if (activeTab && activeTab.getAttribute('data-bs-target') === '#ask') {
+        document.getElementById('fixed-chat-input').style.display = 'block';
     }
+
+    // Gestisce la visibilità dell'input fisso in base al tab attivo
+    document.querySelectorAll('#projectTabs button').forEach(tabButton => {
+        tabButton.addEventListener('shown.bs.tab', function(event) {
+            const targetTab = event.target.getAttribute('data-bs-target');
+            const fixedInput = document.getElementById('fixed-chat-input');
+            fixedInput.style.display = targetTab === '#ask' ? 'block' : 'none';
+        });
+    });
 
     triggerTabList.forEach(tabEl => {
         tabEl.addEventListener('shown.bs.tab', function(event) {
             localStorage.setItem('activeProjectTab', event.target.getAttribute('data-bs-target'));
         });
     });
+
 
     // Gestione delle azioni dei form
     const forms = document.querySelectorAll('form');
@@ -527,186 +604,134 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit-note-content').value = noteContent;
         });
     }
-// Add Note Form
-    const addNoteForm = document.getElementById('add-note-form');
-    if (addNoteForm) {
-        addNoteForm.addEventListener('submit', function(e) {
-            e.preventDefault();
 
-            const content = document.getElementById('note-content').value.trim();
-            if (!content) return;
 
-            fetch('{% url "project" project.id %}', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'action': 'add_note',
-                    'project_id': '{{ project.id }}',
-                    'content': content,
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Chiudi il modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('addNoteModal'));
-                    modal.hide();
-
-                    // Ricarica la pagina per mostrare la nuova nota
-                    window.location.reload();
-                } else {
-                    alert('Errore: ' + (data.error || 'Impossibile aggiungere la nota'));
-                }
-            })
-            .catch(error => {
-                console.error('Errore:', error);
-                alert('Errore di rete. Riprova più tardi.');
-            });
-        });
-    }
-
-    // Ask AI functionality
-    const sendButton = document.getElementById('send-question-btn');
-    const questionInput = document.getElementById('question-input');
-    const chatMessages = document.getElementById('chat-messages');
-
-    if (sendButton && questionInput) {
-        sendButton.addEventListener('click', sendQuestion);
-        questionInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
+    // Add Note Form
+        const addNoteForm = document.getElementById('add-note-form');
+        if (addNoteForm) {
+            addNoteForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-                sendQuestion();
-            }
-        });
 
-        // In project.html, sostituisci la funzione sendQuestion con questa versione
-        function sendQuestion() {
-            const question = questionInput.value.trim();
-            if (!question) return;
+                const content = document.getElementById('note-content').value.trim();
+                if (!content) return;
 
-            // Add user message
-            const userMsg = document.createElement('div');
-            userMsg.className = 'mb-3 p-3 user-message ml-auto';
-            userMsg.style.maxWidth = '80%';
-            userMsg.innerHTML = `
-                <div class="small fw-bold mb-1">Tu</div>
-                <div>${question.replace(/\n/g, '<br>')}</div>
-            `;
-            chatMessages.appendChild(userMsg);
-
-            // Clear input and disable
-            questionInput.value = '';
-            questionInput.disabled = true;
-            sendButton.disabled = true;
-            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-            // Scroll to bottom
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            // Send request
-            fetch('{% url "project" project.id %}', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'action': 'ask_question',
-                    'project_id': '{{ project.id }}',
-                    'question': question,
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                fetch('{% url "project" project.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'action': 'add_note',
+                        'project_id': '{{ project.id }}',
+                        'content': content,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    })
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Add AI response
-                    const aiMsg = document.createElement('div');
-                    aiMsg.className = 'mb-3 p-3 ai-message mr-auto';
-                    aiMsg.style.maxWidth = '80%';
-                    aiMsg.innerHTML = `
-                        <div class="small fw-bold mb-1">Assistente AI</div>
-                        <div>${data.answer.replace(/\n/g, '<br>')}</div>
-                    `;
-                    chatMessages.appendChild(aiMsg);
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Chiudi il modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('addNoteModal'));
+                        modal.hide();
 
-                    // Add sources if available
-                    if (data.sources && data.sources.length > 0) {
-                        const sourcesMsg = document.createElement('div');
-                        sourcesMsg.className = 'mb-3 p-3 bg-light rounded';
-                        sourcesMsg.style.maxWidth = '80%';
-
-                        let sourcesHTML = '<div class="small fw-bold mb-2">Fonti</div>';
-                        data.sources.forEach(source => {
-                            sourcesHTML += `
-                                <div class="mb-2">
-                                    <div class="small text-muted">${source.filename || 'Documento'}</div>
-                                    <div class="small">${source.content}</div>
-                                </div>
-                            `;
-                        });
-
-                        sourcesMsg.innerHTML = sourcesHTML;
-                        chatMessages.appendChild(sourcesMsg);
-
-                        // AGGIUNGI QUESTO BLOCCO: Aggiorna anche il tab Fonti
-                        const sourcesTab = document.getElementById('sources');
-                        if (sourcesTab) {
-                            let sourcesContent = `
-                                <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
-                                <div class="list-group">
-                            `;
-
-                            data.sources.forEach(source => {
-                                sourcesContent += `
-                                    <div class="source-item mb-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <strong class="source-title">${source.filename || 'Documento'}</strong>
-                                            <small class="text-muted">${source.metadata && source.metadata.page ? 'Pag. ' + (source.metadata.page + 1) : ''}</small>
-                                        </div>
-                                        <div class="source-content small p-2 bg-light rounded">
-                                            ${source.content}
-                                        </div>
-                                    </div>
-                                `;
-                            });
-
-                            sourcesContent += `</div>`;
-                            sourcesTab.innerHTML = sourcesContent;
-                        }
+                        // Ricarica la pagina per mostrare la nuova nota
+                        window.location.reload();
                     } else {
-                        // Se non ci sono fonti, mostra il messaggio empty state
-                        const sourcesTab = document.getElementById('sources');
-                        if (sourcesTab) {
-                            sourcesTab.innerHTML = `
-                                <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
-                                <div class="empty-state">
-                                    <i class="bi bi-file-text"></i>
-                                    <h3>Nessuna fonte disponibile</h3>
-                                    <p class="text-muted">Fai una domanda all'AI per vedere le fonti di riferimento</p>
-                                </div>
-                            `;
-                        }
+                        alert('Errore: ' + (data.error || 'Impossibile aggiungere la nota'));
                     }
-                } else {
-                    showError('Errore: ' + (data.error || 'Errore sconosciuto'));
-                }
-            })
-            .catch(error => {
-                showError('Errore di rete. Riprova più tardi.');
-                console.error('Errore:', error);
-            })
-            .finally(() => {
-                questionInput.disabled = false;
-                sendButton.disabled = false;
-                sendButton.innerHTML = '<i class="bi bi-send"></i>';
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                })
+                .catch(error => {
+                    console.error('Errore:', error);
+                    alert('Errore di rete. Riprova più tardi.');
+                });
             });
         }
+
+        // Ask AI functionality
+        const sendButton = document.getElementById('send-question-btn');
+        const questionInput = document.getElementById('question-input');
+        const chatMessages = document.getElementById('chat-messages');
+
+        if (sendButton && questionInput) {
+            sendButton.addEventListener('click', sendQuestion);
+            questionInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendQuestion();
+                }
+            });
+
+            // In project.html, sostituisci la funzione sendQuestion con questa versione
+            function sendQuestion() {
+        const question = questionInput.value.trim();
+        if (!question) return;
+
+        // Add user message
+        const userMsg = document.createElement('div');
+        userMsg.className = 'mb-3 p-3 user-message ml-auto';
+        userMsg.style.maxWidth = '80%';
+        userMsg.innerHTML = `
+            <div class="small fw-bold mb-1">Tu</div>
+            <div>${question.replace(/\n/g, '<br>')}</div>
+        `;
+        chatMessages.appendChild(userMsg);
+
+        // Clear input and disable
+        questionInput.value = '';
+        questionInput.disabled = true;
+        sendButton.disabled = true;
+        sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Send request
+        fetch('{% url "project" project.id %}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'ask_question',
+                'project_id': '{{ project.id }}',
+                'question': question,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Add AI response (only the answer, no sources)
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'mb-3 p-3 ai-message mr-auto';
+                aiMsg.style.maxWidth = '80%';
+                aiMsg.innerHTML = `
+                    <div class="small fw-bold mb-1">Assistente AI</div>
+                    <div>${data.answer.replace(/\n/g, '<br>')}</div>
+                `;
+                chatMessages.appendChild(aiMsg);
+
+                // Update the sources tab if there are sources
+                if (data.sources && data.sources.length > 0) {
+                    updateSourcesTab(data.sources);
+                }
+            } else {
+                showError('Errore: ' + (data.error || 'Errore sconosciuto'));
+            }
+        })
+        .catch(error => {
+            showError('Errore di rete. Riprova più tardi.');
+            console.error('Errore:', error);
+        })
+        .finally(() => {
+            questionInput.disabled = false;
+            sendButton.disabled = false;
+            sendButton.innerHTML = '<i class="bi bi-send"></i>';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+    }
 
         function showError(message) {
             const errorMsg = document.createElement('div');
@@ -714,6 +739,52 @@ document.addEventListener('DOMContentLoaded', function() {
             errorMsg.style.maxWidth = '80%';
             errorMsg.innerHTML = message;
             chatMessages.appendChild(errorMsg);
+        }
+    }
+
+
+    function updateSourcesTab(sources) {
+        // Get the sources tab content area
+        const sourcesTab = document.getElementById('sources');
+        if (!sourcesTab) return;
+
+        // Create the HTML for the sources
+        let sourcesHTML = `
+            <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
+            <div class="list-group">
+        `;
+
+        sources.forEach(source => {
+            sourcesHTML += `
+                <div class="source-item mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="source-title">${source.filename || 'Documento'}</strong>
+                        <small class="text-muted">${source.metadata && source.metadata.page ? 'Pag. ' + (source.metadata.page + 1) : ''}</small>
+                    </div>
+                    <div class="source-content small p-2 bg-light rounded">
+                        ${source.content}
+                    </div>
+                </div>
+            `;
+        });
+
+        sourcesHTML += `</div>`;
+
+        // Update the tab content
+        sourcesTab.innerHTML = sourcesHTML;
+
+        // Opzionale: aggiorna il badge sul tab per indicare nuove fonti
+        const sourcesTabButton = document.getElementById('sources-tab');
+        if (sourcesTabButton) {
+            // Aggiungi un piccolo badge per indicare nuove fonti
+            if (!sourcesTabButton.querySelector('.badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary ms-1';
+                badge.textContent = sources.length;
+                sourcesTabButton.appendChild(badge);
+            } else {
+                sourcesTabButton.querySelector('.badge').textContent = sources.length;
+            }
         }
     }
 
@@ -776,6 +847,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.checked = !isIncluded; // Revoca in caso di errore
             });
         });
+    });
+
+    // Gestisce la visibilità dell'input fisso in base al tab attivo
+    document.querySelectorAll('#projectTabs button').forEach(tabButton => {
+        tabButton.addEventListener('shown.bs.tab', function(event) {
+            const targetTab = event.target.getAttribute('data-bs-target');
+            const fixedInput = document.getElementById('fixed-chat-input');
+
+            if (targetTab === '#ask') {
+                fixedInput.style.display = 'block';
+            } else {
+                fixedInput.style.display = 'none';
+            }
+        });
+    });
+
+    // Mostra l'input fisso se il tab attivo è "Chiedi all'AI" all'avvio
+    document.addEventListener('DOMContentLoaded', function() {
+        const activeTab = document.querySelector('#projectTabs button.active');
+        if (activeTab && activeTab.getAttribute('data-bs-target') === '#ask') {
+            document.getElementById('fixed-chat-input').style.display = 'block';
+        }
     });
 });
 </script>

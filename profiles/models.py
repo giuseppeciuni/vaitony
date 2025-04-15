@@ -110,6 +110,7 @@ class ProjectFile(models.Model):
     is_embedded = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
+    last_indexed_at = models.DateTimeField(null=True, blank=True)  # Nuovo campo per tracciare l'ultima indicizzazione
 
     class Meta:
         unique_together = ('project', 'file_path')
@@ -135,6 +136,8 @@ class ProjectNote(models.Model):
     is_included_in_rag = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Nuovo campo per tracciare quando la nota è stata indicizzata l'ultima volta
+    last_indexed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -187,6 +190,7 @@ class ProjectIndexStatus(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
     documents_count = models.IntegerField(default=0)
     index_hash = models.CharField(max_length=64, null=True, blank=True)  # Hash rappresentativo dello stato dell'indice
+    notes_hash = models.CharField(max_length=64, null=True, blank=True)  # Nuovo campo per lo hash delle note
 
     def __str__(self):
         return f"Index status for project {self.project.name}"

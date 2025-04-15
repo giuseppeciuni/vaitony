@@ -116,8 +116,9 @@
                     <input type="hidden" name="project_id" value="{{ project.id }}">
 
                     <div class="mb-3">
-                        <label for="note-content" class="form-label">Contenuto</label>
-                        <textarea class="form-control" id="note-content" name="content" rows="5" required></textarea>
+                        <label for="note-content" class="form-label">Contenuto della nota</label>
+                        <textarea class="form-control" id="note-content" name="content" rows="6" placeholder="Inserisci il contenuto della nota qui..." required></textarea>
+                        <small class="text-muted">La nota verrà salvata senza titolo separato.</small>
                     </div>
                 </form>
             </div>
@@ -147,8 +148,9 @@
                     <input type="hidden" name="note_id" id="edit-note-id">
 
                     <div class="mb-3">
-                        <label for="edit-note-content" class="form-label">Contenuto</label>
-                        <textarea class="form-control" id="edit-note-content" name="content" rows="5" required></textarea>
+                        <label for="edit-note-content" class="form-label">Contenuto della nota</label>
+                        <textarea class="form-control" id="edit-note-content" name="content" rows="6" required></textarea>
+                        <small class="text-muted">La nota verrà salvata senza titolo separato.</small>
                     </div>
                 </form>
             </div>

@@ -468,7 +468,6 @@ def check_project_index_update_needed(project):
         return True
 
 
-
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
     Crea o aggiorna la catena RAG per un progetto, includendo sia i file che le note.
@@ -492,30 +491,31 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # Assicurati che la directory esista
         os.makedirs(project_dir, exist_ok=True)
 
+        # Ottieni tutti i file e le note del progetto
+        all_files = ProjectFile.objects.filter(project=project)
+        all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+
         # Se force_rebuild è True, elimina l'indice esistente
         if force_rebuild and os.path.exists(index_path):
             import shutil
             logger.info(f"Eliminazione forzata dell'indice precedente in {index_path}")
             shutil.rmtree(index_path)
 
-
-        # Se non sono forniti documenti, carica quelli del progetto che necessitano di embedding
+        # Se docs è None, carica tutti i documenti necessari
         if docs is None:
-            # Ottieni tutti i file del progetto che non sono ancora stati embedded
-            files_to_embed = ProjectFile.objects.filter(project=project, is_embedded=False)
-
-            # Debug: stampa i file da incorporare
-            if files_to_embed.exists():
+            # Determina quali file devono essere incorporati
+            if force_rebuild:
+                # Se stiamo forzando la ricostruzione, carica TUTTI i file
+                files_to_embed = all_files
+                logger.info(f"Ricostruendo indice con {files_to_embed.count()} file e {all_active_notes.count()} note")
+            else:
+                # Se non forziamo la ricostruzione, carica solo i file non ancora incorporati
+                files_to_embed = all_files.filter(is_embedded=False)
                 logger.info(f"File da incorporare: {[f.filename for f in files_to_embed]}")
-
-            # Ottieni le note attive che devono essere incluse nell'indice
-            notes_to_embed = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-
-            # Aggiungi logging per verificare le note
-            logger.info(f"Note attive trovate per il progetto {project.id}: {notes_to_embed.count()}")
-            for note in notes_to_embed:
-                logger.info(f"Nota attiva: ID={note.id}, Titolo={note.title or 'Senza titolo'}, " +
-                            f"Lunghezza contenuto={len(note.content)}")
+                logger.info(f"Note attive trovate per il progetto {project.id}: {all_active_notes.count()}")
+                for note in all_active_notes:
+                    logger.info(f"Nota attiva: ID={note.id}, Titolo={note.title or 'Senza titolo'}, " +
+                                f"Lunghezza contenuto={len(note.content)}")
 
             docs = []
             document_ids = []
@@ -535,7 +535,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     document_ids.append(doc_model.id)
 
             # Elabora le note
-            for note in notes_to_embed:
+            for note in all_active_notes:
                 logger.debug(f"Adding note to embedding: {note.title or 'Senza titolo'}")
                 # Crea un documento LangChain dalla nota
                 note_doc = Document(
@@ -544,18 +544,14 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         "source": f"note_{note.id}",
                         "type": "note",
                         "title": note.title or "Nota senza titolo",
-                        "note_id": note.id
+                        "note_id": note.id,
+                        "filename": f"Nota: {note.title or 'Senza titolo'}"
                     }
                 )
                 docs.append(note_doc)
                 note_ids.append(note.id)
 
             logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note)")
-
-            if force_rebuild and docs:
-                logger.info(f"🔄 Forzando la ricostruzione dell'indice per il progetto {project.id}")
-            elif not files_to_embed.exists() and not notes_to_embed.exists() and not force_rebuild:
-                logger.debug("Nessun nuovo documento o nota da elaborare")
     else:
         # Caso di fallback, non dovrebbe essere usato normalmente
         index_name = "default_index"
@@ -598,80 +594,19 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
                     # Se c'è un errore, crea un nuovo indice
                     logger.info(f"🔄 Creazione di un nuovo indice FAISS per il progetto {project.id}")
-                    vectordb = FAISS.from_documents(split_docs, embeddings)
+                    try:
+                        vectordb = create_embeddings_with_retry(split_docs)
+                    except Exception as ee:
+                        logger.error(f"Errore anche nella creazione dell'indice con retry: {str(ee)}")
+                        vectordb = FAISS.from_documents(split_docs, embeddings)
             else:
                 # Crea un nuovo indice
                 logger.info(f"🔄 Creazione di un nuovo indice FAISS per il progetto {project.id}")
-                vectordb = FAISS.from_documents(split_docs, embeddings)
-        elif force_rebuild:
-            # Se forziamo la ricostruzione ma non ci sono nuovi documenti,
-            # dobbiamo caricare tutti i documenti esistenti e ricreare l'indice
-            logger.info(f"🔄 Ricostruzione forzata dell'indice per il progetto {project.id}")
-
-            # Carica tutti i file del progetto
-            all_files = ProjectFile.objects.filter(project=project)
-            all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-
-            logger.info(f"Ricostruendo indice con {all_files.count()} file e {all_active_notes.count()} note")
-
-            all_docs = []
-            all_document_ids = []
-            all_note_ids = []
-
-            # Carica tutti i file
-            for doc_model in all_files:
-                langchain_docs = load_document(doc_model.file_path)
-                if langchain_docs:
-                    # Aggiungi il titolo del file ai metadati di ogni documento
-                    for doc in langchain_docs:
-                        doc.metadata['filename'] = doc_model.filename
-                        doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
-
-                    all_docs.extend(langchain_docs)
-                    all_document_ids.append(doc_model.id)
-
-            # Carica tutte le note attive
-            for note in all_active_notes:
-                # Crea un documento LangChain dalla nota
-                note_doc = Document(
-                    page_content=note.content,
-                    metadata={
-                        "source": f"note_{note.id}",
-                        "type": "note",
-                        "title": note.title or "Nota senza titolo",
-                        "note_id": note.id,
-                        "filename": f"Nota: {note.title or 'Senza titolo'}"
-                    }
-                )
-                all_docs.append(note_doc)
-                all_note_ids.append(note.id)
-
-            # Se abbiamo documenti, creiamo l'indice
-            if all_docs:
-                # Dividi i documenti in chunk
-                splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-                all_split_docs = splitter.split_documents(all_docs)
-                all_split_docs = [doc for doc in all_split_docs if doc.page_content.strip() != ""]
-
-                # Assicurati che tutti i chunk mantengano il nome del file nei metadati
-                for chunk in all_split_docs:
-                    if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
-                        filename = os.path.basename(chunk.metadata['source'])
-                        chunk.metadata['filename'] = filename
-                        chunk.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
-
-                # Crea il nuovo indice
-                logger.info(f"Creando nuovo indice con {len(all_split_docs)} chunk totali")
-                vectordb = FAISS.from_documents(all_split_docs, embeddings)
-
-                # Aggiorna i flag di embedding
-                for doc_id in all_document_ids:
-                    doc = ProjectFile.objects.get(id=doc_id)
-                    doc.is_embedded = True
-                    doc.save(update_fields=['is_embedded'])
-
-                # Aggiorna lo stato dell'indice
-                update_project_index_status(project, all_document_ids, all_note_ids)
+                try:
+                    vectordb = create_embeddings_with_retry(split_docs)
+                except Exception as e:
+                    logger.error(f"Errore nella creazione dell'indice con retry: {str(e)}")
+                    vectordb = FAISS.from_documents(split_docs, embeddings)
 
         # Salva l'indice
         if vectordb:
@@ -682,6 +617,28 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             # Aggiorna lo stato dell'indice nel database
             if project:
                 update_project_index_status(project, document_ids, note_ids)
+
+                # Aggiorna i flag di embedding per tutti i file processati
+                if document_ids:
+                    for doc_id in document_ids:
+                        try:
+                            doc = ProjectFile.objects.get(id=doc_id)
+                            doc.is_embedded = True
+                            doc.last_indexed_at = timezone.now()
+                            doc.save(update_fields=['is_embedded', 'last_indexed_at'])
+                        except ProjectFile.DoesNotExist:
+                            logger.warning(
+                                f"File con ID {doc_id} non trovato durante l'aggiornamento del flag embedded")
+
+                # Aggiorna i timestamp di indicizzazione per le note
+                if note_ids:
+                    for note_id in note_ids:
+                        try:
+                            note = ProjectNote.objects.get(id=note_id)
+                            note.last_indexed_at = timezone.now()
+                            note.save(update_fields=['last_indexed_at'])
+                        except ProjectNote.DoesNotExist:
+                            logger.warning(f"Nota con ID {note_id} non trovata durante l'aggiornamento del timestamp")
 
             # Debug - verifica cosa c'è nell'indice
             sample_docs = vectordb.similarity_search("test", k=5)
@@ -1345,9 +1302,9 @@ def create_retrieval_qa_chain(vectordb):
     retriever = vectordb.as_retriever(
         search_type="mmr",  # (Maximum Marginal Relevance) per diversificare i risultati
         search_kwargs={
-            "k": 12,  # Numero di documenti da restituire nel risultato finale
-            "fetch_k": 20,  # # Numero di documenti candidati da recuperare prima di applicare MMR (ossia filtrare)
-            "lambda_mult": 0.6  # Valore tra 0 e 1: più vicino a 0 favorisce la diversità, più vicino a 1 favorisce la rilevanza
+            "k": 20,  # Numero di documenti da restituire nel risultato finale
+            "fetch_k": 50,  # # Numero di documenti candidati da recuperare prima di applicare MMR (ossia filtrare)
+            "lambda_mult": 0.65  # Valore tra 0 e 1: più vicino a 0 favorisce la diversità, più vicino a 1 favorisce la rilevanza, vicino a 0 si va di fantasia
         }
     )
 
@@ -1367,234 +1324,10 @@ def create_retrieval_qa_chain(vectordb):
         return_source_documents=True # Fa sì che la catena restituisca anche i documenti utilizzati
     )
 
+
     # Ritorna l'oggetto catena RAG completo e pronto per l'uso
     return qa
 
-
-
-
-# def update_project_rag_chain(project):
-#     """
-#     Aggiorna la catena RAG per un progetto in modo incrementale, gestendo solo i documenti modificati.
-#
-#     Args:
-#         project: Oggetto Project
-#
-#     Returns:
-#         RetrievalQA: Oggetto catena RAG aggiornato
-#     """
-#     logger.debug(f"-->update_project_rag_chain: {project.id}")
-#
-#     # Percorsi per l'indice
-#     project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-#     index_name = "vector_index"
-#     index_path = os.path.join(project_dir, index_name)
-#
-#     # Assicurati che la directory esista
-#     os.makedirs(project_dir, exist_ok=True)
-#
-#     # Ottieni i documenti non ancora indicizzati
-#     new_files = ProjectFile.objects.filter(project=project, is_embedded=False)
-#
-#     # Ottieni le note modificate dopo l'ultima indicizzazione
-#     from django.db.models import F, Q
-#     from django.utils import timezone
-#
-#     # Trova note che sono incluse nel RAG e:
-#     # 1. Non sono mai state indicizzate (last_indexed_at è NULL)
-#     # 2. Sono state modificate dopo l'ultima indicizzazione
-#     changed_notes = ProjectNote.objects.filter(
-#         Q(project=project) &
-#         Q(is_included_in_rag=True) &
-#         (Q(last_indexed_at__isnull=True) | Q(updated_at__gt=F('last_indexed_at')))
-#     )
-#
-#     # Trova note che erano incluse nel RAG ma ora sono escluse
-#     removed_notes = ProjectNote.objects.filter(
-#         project=project,
-#         is_included_in_rag=False,
-#         last_indexed_at__isnull=False
-#     )
-#
-#     # Log sulle entità trovate
-#     logger.info(f"Trovati {new_files.count()} nuovi file, {changed_notes.count()} note modificate, " +
-#                 f"{removed_notes.count()} note rimosse dall'indice")
-#
-#     # Verifica se è necessario un aggiornamento
-#     if not new_files.exists() and not changed_notes.exists() and not removed_notes.exists():
-#         # Nessuna modifica, carica l'indice esistente se presente
-#         if os.path.exists(index_path):
-#             logger.info(f"Nessun aggiornamento necessario, caricamento dell'indice esistente: {index_path}")
-#             try:
-#                 embeddings = OpenAIEmbeddings()
-#                 vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-#
-#                 # SERVE PER LOGGING DEL VECTORDB
-#                 sample_docs = vectordb.similarity_search("", k=10)  # Prendi 10 documenti casuali
-#                 logger.info("Contenuto dell'indice:")
-#                 for i, doc in enumerate(sample_docs):
-#                     doc_type = doc.metadata.get('type', 'sconosciuto')
-#                     logger.info(f"Doc {i + 1}: Tipo={doc_type}, Contenuto={doc.page_content[:100]}...")
-#                     if doc_type == 'note':
-#                         logger.info(f"Nota trovata nell'indice: ID={doc.metadata.get('note_id')}")
-#
-#                 # Crea e restituisci la catena RAG
-#                 return create_retrieval_qa_chain(vectordb)
-#             except Exception as e:
-#                 logger.error(f"Errore nel caricare l'indice FAISS esistente: {str(e)}")
-#                 # In caso di errore, forza la ricostruzione completa
-#                 return create_project_rag_chain(project, force_rebuild=True)
-#         else:
-#             # Indice non trovato, creane uno nuovo con tutti i documenti
-#             logger.info(f"Indice non trovato, creazione di un nuovo indice per il progetto {project.id}")
-#             return create_project_rag_chain(project, force_rebuild=True)
-#
-#     # Sono necessari aggiornamenti all'indice
-#     # Prepara i nuovi documenti da aggiungere
-#     new_docs = []
-#
-#     # Carica i nuovi file
-#     for file in new_files:
-#         logger.debug(f"Caricando nuovo file: {file.filename}")
-#         try:
-#             langchain_docs = load_document(file.file_path)
-#             if langchain_docs:
-#                 # Aggiungi i metadati del filename a ogni documento
-#                 for doc in langchain_docs:
-#                     doc.metadata['filename'] = file.filename
-#                     doc.metadata['filename_no_ext'] = os.path.splitext(file.filename)[0]
-#
-#                 new_docs.extend(langchain_docs)
-#                 # Aggiorna lo stato di indicizzazione
-#                 file.is_embedded = True
-#                 file.last_indexed_at = timezone.now()
-#                 file.save(update_fields=['is_embedded', 'last_indexed_at'])
-#                 logger.info(f"File {file.filename} elaborato con successo")
-#         except Exception as e:
-#             logger.error(f"Errore nell'elaborare il file {file.filename}: {str(e)}")
-#
-#     # Aggiungi le note modificate
-#     for note in changed_notes:
-#         logger.debug(f"Aggiungendo nota modificata: {note.title or 'Senza titolo'}")
-#         note_doc = Document(
-#             page_content=note.content,
-#             metadata={
-#                 "source": f"note_{note.id}",
-#                 "type": "note",
-#                 "title": note.title or "Nota senza titolo",
-#                 "note_id": note.id  # Importante per future rimozioni
-#             }
-#         )
-#         new_docs.append(note_doc)
-#
-#         # Aggiorna lo stato di indicizzazione
-#         note.last_indexed_at = timezone.now()
-#         note.save(update_fields=['last_indexed_at'])
-#
-#     # Dividi i nuovi documenti in chunk. Assicurati che i metadati vengano preservati durante la suddivisione dei documenti
-#     if new_docs:
-#         logger.info(f"Dividendo {len(new_docs)} nuovi documenti in chunk")
-#         splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-#         new_chunks = splitter.split_documents(new_docs)
-#         new_chunks = [doc for doc in new_chunks if doc.page_content.strip() != ""]
-#
-#         # Assicurati che tutti i chunk mantengano il nome del file nei metadati
-#         for chunk in new_chunks:
-#             if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
-#                 filename = os.path.basename(chunk.metadata['source'])
-#                 chunk.metadata['filename'] = filename
-#                 chunk.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
-#
-#         logger.info(f"Creati {len(new_chunks)} nuovi chunk")
-#     else:
-#         new_chunks = []
-#
-#     # Gestisci l'indice
-#     embeddings = OpenAIEmbeddings()
-#
-#     # Se ci sono note rimosse, dobbiamo ricostruire l'indice senza di esse
-#     if removed_notes.exists() and os.path.exists(index_path):
-#         logger.info(f"Ricostruzione dell'indice per rimuovere {removed_notes.count()} note")
-#         try:
-#             # Carica l'indice esistente
-#             existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-#
-#             # Esegui una ricerca generica per ottenere tutti i documenti nell'indice
-#             all_docs = existing_vectordb.similarity_search("",
-#                                                            k=10000)  # Numero alto per ottenere la maggior parte dei documenti
-#
-#             # Filtra i documenti per rimuovere le note non più incluse
-#             removed_note_ids = [note.id for note in removed_notes]
-#             filtered_docs = []
-#
-#             for doc in all_docs:
-#                 # Mantieni solo i documenti che non sono note rimosse
-#                 if doc.metadata.get('type') != 'note' or doc.metadata.get('note_id') not in removed_note_ids:
-#                     filtered_docs.append(doc)
-#
-#             # Ricrea l'indice con i documenti filtrati + nuovi documenti
-#             if filtered_docs or new_chunks:
-#                 all_chunks = filtered_docs + new_chunks
-#                 vectordb = FAISS.from_documents(all_chunks, embeddings)
-#
-#                 # Salva il nuovo indice
-#                 vectordb.save_local(index_path)
-#                 logger.info(f"Indice ricostruito e salvato con {len(all_chunks)} documenti")
-#
-#                 # Aggiorna lo stato nel database per le note rimosse
-#                 removed_notes.update(last_indexed_at=None)
-#
-#                 # Crea e restituisci la catena RAG
-#                 return create_retrieval_qa_chain(vectordb)
-#             else:
-#                 logger.warning("Nessun documento disponibile dopo il filtraggio e l'aggiunta")
-#                 return None
-#
-#         except Exception as e:
-#             logger.error(f"Errore nella ricostruzione dell'indice: {str(e)}")
-#             # In caso di errore, forza una ricostruzione completa
-#             return create_project_rag_chain(project, force_rebuild=True)
-#
-#     # Se non ci sono note rimosse ma ci sono nuovi documenti, aggiorna l'indice esistente
-#     elif new_chunks and os.path.exists(index_path):
-#         logger.info(f"Aggiornamento dell'indice esistente con {len(new_chunks)} nuovi chunk")
-#         try:
-#             # Carica l'indice esistente
-#             existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-#
-#             # Aggiungi i nuovi documenti
-#             existing_vectordb.add_documents(new_chunks)
-#
-#             # Salva l'indice aggiornato
-#             existing_vectordb.save_local(index_path)
-#             logger.info(f"Indice aggiornato e salvato con nuovi documenti")
-#
-#             # Crea e restituisci la catena RAG
-#             return create_retrieval_qa_chain(existing_vectordb)
-#
-#         except Exception as e:
-#             logger.error(f"Errore nell'aggiornamento dell'indice esistente: {str(e)}")
-#             # In caso di errore, forza una ricostruzione completa
-#             return create_project_rag_chain(project, force_rebuild=True)
-#
-#     # Se non esiste un indice o non ci sono documenti da aggiungere ma ci sono note rimosse
-#     elif removed_notes.exists() or not os.path.exists(index_path):
-#         # Forza la creazione di un nuovo indice
-#         logger.info(f"Creazione di un nuovo indice per il progetto {project.id}")
-#         return create_project_rag_chain(project, force_rebuild=True)
-#
-#     # Nessuna modifica necessaria ma l'indice esiste
-#     else:
-#         logger.info(f"Nessuna modifica all'indice necessaria")
-#         # Carica l'indice esistente
-#         try:
-#             vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-#
-#             # Crea e restituisci la catena RAG
-#             return create_retrieval_qa_chain(vectordb)
-#         except Exception as e:
-#             logger.error(f"Errore nel caricare l'indice esistente: {str(e)}")
-#             return None
 
 
 def update_project_rag_chain(project):
@@ -1718,7 +1451,7 @@ def update_project_rag_chain(project):
     # Dividi i nuovi documenti in chunk. Assicurati che i metadati vengano preservati durante la suddivisione dei documenti
     if new_docs:
         logger.info(f"Dividendo {len(new_docs)} nuovi documenti in chunk")
-        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
         new_chunks = splitter.split_documents(new_docs)
         new_chunks = [doc for doc in new_chunks if doc.page_content.strip() != ""]
 
@@ -1850,6 +1583,8 @@ def create_retrieval_qa_chain(vectordb):
     3. Fornisci una risposta dettagliata analizzando tutte le informazioni disponibili
     4. Cita fatti specifici e dettagli presenti nei documenti e nelle note, menzionando la fonte
     5. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne
+    6. Usa transizioni logiche tra concetti diversi
+    7. Integra tutti i documenti e note, anche se apparentemente non correlati
 
     Contesto:
     {context}

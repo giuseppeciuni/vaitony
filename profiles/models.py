@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 import os
+from django.dispatch import receiver
+from django.db.models.signals import post_save, post_delete
+
 
 
 # Profile type: Single User Profile or Company Profile
@@ -194,3 +197,102 @@ class ProjectIndexStatus(models.Model):
 
     def __str__(self):
         return f"Index status for project {self.project.name}"
+
+
+
+
+
+
+
+
+
+
+# ----- SEGNALI PER L'AGGIORNAMENTO AUTOMATICO DEGLI INDICI -----
+
+# ----- SEGNALI PER L'AGGIORNAMENTO AUTOMATICO DEGLI INDICI -----
+
+@receiver(post_save, sender=ProjectFile)
+def update_index_on_file_change(sender, instance, created, **kwargs):
+    """
+    Segnale che aggiorna l'indice vettoriale quando un file di progetto viene aggiunto o modificato.
+    """
+    # Verifica se stiamo aggiornando campi interni per evitare ricorsione
+    if kwargs.get('update_fields') is not None and 'is_embedded' in kwargs.get('update_fields'):
+        # Se stiamo solo aggiornando is_embedded, non fare nulla per evitare ricorsione
+        return
+
+    from dashboard.rag_utils import \
+        create_project_rag_chain  # Usa create_project_rag_chain invece di update_project_rag_chain
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"📣 Segnale attivato: File {'creato' if created else 'modificato'} - {instance.filename}")
+
+    try:
+        # Forza l'aggiornamento dell'indice vettoriale se il file è un PDF o un documento supportato
+        supported_extensions = ['.pdf', '.docx', '.doc', '.txt']
+        if instance.extension.lower() in supported_extensions:
+            logger.info(f"🔄 Avvio aggiornamento automatico dell'indice per il file {instance.filename}")
+
+            # Disattiva temporaneamente il segnale per evitare ricorsione
+            post_save.disconnect(update_index_on_file_change, sender=ProjectFile)
+
+            # Imposta is_embedded a False per forzare la reindicizzazione
+            if not created:  # Se il file è stato modificato, non creato
+                instance.is_embedded = False
+                instance.save(update_fields=['is_embedded'])
+
+            # Riconnetti il segnale
+            post_save.connect(update_index_on_file_change, sender=ProjectFile)
+
+            # Forza la ricostruzione dell'indice invece di aggiornarlo
+            try:
+                create_project_rag_chain(project=instance.project, force_rebuild=True)
+                logger.info(f"✅ Indice vettoriale ricostruito con successo per il file {instance.filename}")
+            except Exception as e:
+                logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+    except Exception as e:
+        logger.error(f"❌ Errore nell'aggiornamento automatico dell'indice: {str(e)}")
+        # Assicurati che il segnale sia riconnesso anche in caso di errore
+        post_save.connect(update_index_on_file_change, sender=ProjectFile)
+
+
+@receiver(post_save, sender=ProjectNote)
+def update_index_on_note_change(sender, instance, created, **kwargs):
+    """
+    Segnale che aggiorna l'indice vettoriale quando una nota viene aggiunta o modificata.
+    """
+    # Verifica se stiamo aggiornando last_indexed_at per evitare ricorsione
+    if kwargs.get('update_fields') is not None and 'last_indexed_at' in kwargs.get('update_fields'):
+        # Se stiamo solo aggiornando last_indexed_at, non fare nulla
+        return
+
+    from dashboard.rag_utils import \
+        create_project_rag_chain  # Usa create_project_rag_chain invece di update_project_rag_chain
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"📣 Segnale attivato: Nota {'creata' if created else 'modificata'} - {instance.title or 'Senza titolo'}")
+
+    try:
+        # Aggiorna l'indice solo se la nota è inclusa nel RAG
+        if instance.is_included_in_rag:
+            logger.info(f"🔄 Avvio aggiornamento automatico dell'indice per nota {instance.id}")
+
+            # Disattiva temporaneamente il segnale
+            post_save.disconnect(update_index_on_note_change, sender=ProjectNote)
+
+            # Forza la ricostruzione dell'indice invece di aggiornarlo
+            try:
+                create_project_rag_chain(project=instance.project, force_rebuild=True)
+                logger.info(f"✅ Indice vettoriale ricostruito con successo per la nota {instance.id}")
+            except Exception as e:
+                logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+
+            # Riconnetti il segnale
+            post_save.connect(update_index_on_note_change, sender=ProjectNote)
+    except Exception as e:
+        logger.error(f"❌ Errore nell'aggiornamento automatico dell'indice: {str(e)}")
+        # Assicurati che il segnale sia riconnesso anche in caso di errore
+        post_save.connect(update_index_on_note_change, sender=ProjectNote)

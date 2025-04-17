@@ -882,6 +882,22 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('fixed-chat-input').style.display = 'block';
         }
     });
+
+    if (window.location.hash) {
+    const hash = window.location.hash;
+    const tabId = hash.substring(1); // Rimuovi il # dall'inizio
+
+    // Trova il pulsante del tab corrispondente
+    const tabEl = document.querySelector(`button[data-bs-target="#${tabId}"]`);
+    if (tabEl) {
+        // Attendi un breve momento per assicurarsi che la pagina sia completamente caricata
+        setTimeout(() => {
+            // Attiva il tab
+            const tab = new bootstrap.Tab(tabEl);
+            tab.show();
+        }, 100);
+    }
+}
 });
 </script>
 {% endblock %}

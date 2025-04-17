@@ -266,7 +266,7 @@
                                 </div>
                                 <div>
                                     <div class="stat-label">Costo Attuale</div>
-                                    <div class="stat-value">€42,75</div>
+                                    <div class="stat-value">€{{ total_cost|floatformat:2 }}</div>
                                 </div>
                             </div>
 
@@ -930,13 +930,13 @@
                 {
                     name: 'Interazioni',
                     type: 'column',
-                    data: [14, 8, 15, 22, 9, 12, 18],
+                    data: {{ interactions_by_day|safe }},
                     color: '#0d6efd'
                 },
                 {
                     name: 'Costo (€)',
                     type: 'line',
-                    data: [3.5, 2.1, 4.2, 6.2, 2.5, 3.1, 4.8],
+                    data: {{ costs_by_day|safe }},
                     color: '#fd7e14'
                 }
             ],
@@ -1283,7 +1283,6 @@
                 document.querySelector('.edit-note-btn').setAttribute('data-note-id', noteId);
             });
         });
-
     });
 </script>
 {% endblock %}

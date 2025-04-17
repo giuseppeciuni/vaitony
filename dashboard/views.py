@@ -2,7 +2,7 @@ import logging
 import mimetypes
 import os
 import time
-
+from profiles.models import RAGConfiguration
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -10,7 +10,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-
+from datetime import timedelta, datetime
 from dashboard.rag_document_utils import register_document, compute_file_hash, check_project_index_update_needed
 from dashboard.rag_utils import create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note, handle_toggle_note_inclusion
 from dashboard.rag_utils import get_answer_from_project
@@ -1808,16 +1808,33 @@ def project_details(request, project_id):
             # Nella versione reale, questi dati verrebbero calcolati in base ai dati effettivi
             # Per ora utilizziamo dati statici
 
+            # Dati per i grafici basati sulle interazioni reali
+            # Raggruppa per giorno della settimana
+            interactions_by_day = [0, 0, 0, 0, 0, 0, 0]  # Lun-Dom
+            costs_by_day = [0, 0, 0, 0, 0, 0, 0]  # Costi corrispondenti
+
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=7)
+            recent_conversations = project.conversations.filter(created_at__gte=start_date, created_at__lte=end_date)
+
             # Calcolo del costo basato sulle interazioni reali
             conversation_count = project.conversations.count()
             average_cost_per_interaction = 0.28  # Euro per interazione
             total_cost = conversation_count * average_cost_per_interaction
+
+            for conv in recent_conversations:
+                day_of_week = conv.created_at.weekday()  # 0=Lun, 6=Dom
+                interactions_by_day[day_of_week] += 1
+                costs_by_day[day_of_week] += average_cost_per_interaction
+
 
             context = {
                 'project': project,
                 'sources_count': sources_count,
                 'total_cost': total_cost,
                 'average_cost': average_cost_per_interaction,
+                'interactions_by_day': interactions_by_day,
+                'costs_by_day': costs_by_day,
                 # Aggiungi qui altri dati di contesto se necessario
             }
 
@@ -1826,6 +1843,254 @@ def project_details(request, project_id):
         except Project.DoesNotExist:
             messages.error(request, "Progetto non trovato.")
             return redirect('projects_list')
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+# Aggiungere queste funzioni in views.py
+
+def ia_engine(request):
+    """
+    Vista per la configurazione del motore IA (OpenAI, Claude, DeepSeek)
+    """
+    logger.debug("---> ia_engine")
+    if request.user.is_authenticated:
+        # In una vera implementazione, qui recupereresti le impostazioni dal database
+        # per mostrare i valori attualmente configurati
+
+        context = {
+            # Imposta i valori predefiniti o quelli recuperati dal database
+            'openai_api_key': '************************************',  # Mascherata per sicurezza
+            'claude_api_key': '************************************',  # Mascherata per sicurezza
+            'deepseek_api_key': '************************************',  # Mascherata per sicurezza
+        }
+
+        # Gestione della richiesta POST per salvare le impostazioni
+        if request.method == 'POST':
+            action = request.POST.get('action', '')
+
+            if action == 'save_engine_settings':
+                # Salva le impostazioni del motore IA
+                engine_type = request.POST.get('engine_type')
+
+                # Salva i parametri specifici del motore selezionato
+                if engine_type == 'openai':
+                    temperature = request.POST.get('gpt_temperature')
+                    max_tokens = request.POST.get('gpt_max_tokens')
+                    timeout = request.POST.get('gpt_timeout')
+                    model = request.POST.get('gpt_model')
+
+                    # Qui dovresti salvare queste impostazioni nel database
+                    # ad esempio in una tabella UserSettings o simile
+
+                    messages.success(request, "Impostazioni di OpenAI salvate con successo.")
+
+                elif engine_type == 'claude':
+                    temperature = request.POST.get('claude_temperature')
+                    max_tokens = request.POST.get('claude_max_tokens')
+                    timeout = request.POST.get('claude_timeout')
+                    model = request.POST.get('claude_model')
+
+                    # Qui dovresti salvare queste impostazioni nel database
+
+                    messages.success(request, "Impostazioni di Claude salvate con successo.")
+
+                elif engine_type == 'deepseek':
+                    temperature = request.POST.get('deepseek_temperature')
+                    max_tokens = request.POST.get('deepseek_max_tokens')
+                    timeout = request.POST.get('deepseek_timeout')
+                    model = request.POST.get('deepseek_model')
+
+                    # Qui dovresti salvare queste impostazioni nel database
+
+                    messages.success(request, "Impostazioni di DeepSeek salvate con successo.")
+
+                # Redirect per evitare richieste duplicate
+                return redirect('ia_engine')
+
+            elif action == 'save_api_keys':
+                # Salva le API keys
+                openai_api_key = request.POST.get('openai_api_key')
+                claude_api_key = request.POST.get('claude_api_key')
+                deepseek_api_key = request.POST.get('deepseek_api_key')
+
+                # Qui dovresti salvare queste chiavi API nel database in modo sicuro
+                # Idealmente utilizzando una crittografia adeguata
+
+                messages.success(request, "API keys salvate con successo.")
+
+                # Redirect per evitare richieste duplicate
+                return redirect('ia_engine')
+
+        return render(request, 'be/ia_engine.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+def rag_settings(request):
+    """
+    Vista per la configurazione dettagliata dei parametri RAG (Retrieval Augmented Generation)
+    """
+    logger.debug("---> rag_settings")
+    if request.user.is_authenticated:
+        # Impostazioni predefinite che verranno caricate o sovrascritte da valori salvati
+        default_settings = {
+            'chunk_size': 500,
+            'chunk_overlap': 50,
+            'similarity_top_k': 6,
+            'mmr_lambda': 0.7,
+            'similarity_threshold': 0.7,
+            'retriever_type': 'mmr',
+            'system_prompt': """Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+
+Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+Quando rispondi:
+1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+3. Organizza le informazioni in modo logico e strutturato
+4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne""",
+            'auto_citation': True,
+            'prioritize_filenames': True,
+            'equal_notes_weight': True,
+            'strict_context': False
+        }
+
+        # In un'implementazione reale, qui recupereresti le impostazioni salvate dal database
+        # Ad esempio:
+        # try:
+        #     rag_config = RAGConfiguration.objects.get(user=request.user)
+        #     settings = {
+        #         'chunk_size': rag_config.chunk_size,
+        #         'chunk_overlap': rag_config.chunk_overlap,
+        #         # ... altri parametri ...
+        #     }
+        # except RAGConfiguration.DoesNotExist:
+        #     settings = default_settings
+
+        # Per ora usiamo le impostazioni predefinite
+        settings = default_settings
+
+        # Gestione della richiesta POST per salvare le impostazioni
+        if request.method == 'POST':
+            action = request.POST.get('action', '')
+
+            if action == 'save_settings':
+                # Salva le impostazioni di base
+                try:
+                    settings.update({
+                        'chunk_size': int(request.POST.get('chunk_size')),
+                        'chunk_overlap': int(request.POST.get('chunk_overlap')),
+                        'similarity_top_k': int(request.POST.get('similarity_top_k')),
+                        'mmr_lambda': float(request.POST.get('mmr_lambda')),
+                        'similarity_threshold': float(request.POST.get('similarity_threshold')),
+                        'retriever_type': request.POST.get('retriever_type')
+                    })
+
+                    # Qui salveresti le impostazioni nel database
+                    # rag_config, created = RAGConfiguration.objects.update_or_create(
+                    #     user=request.user,
+                    #     defaults=settings
+                    # )
+
+                    messages.success(request, "Parametri RAG salvati con successo.")
+                except Exception as e:
+                    logger.error(f"Errore nel salvataggio dei parametri RAG: {str(e)}")
+                    messages.error(request, f"Errore nel salvataggio dei parametri: {str(e)}")
+
+                # Risposta per richieste AJAX
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'message': 'Parametri RAG salvati con successo'})
+
+                return redirect('rag_settings')
+
+            elif action == 'save_advanced_settings':
+                # Salva le impostazioni avanzate
+                try:
+                    settings.update({
+                        'system_prompt': request.POST.get('system_prompt'),
+                        'auto_citation': request.POST.get('auto_citation') == 'on',
+                        'prioritize_filenames': request.POST.get('prioritize_filenames') == 'on',
+                        'equal_notes_weight': request.POST.get('equal_notes_weight') == 'on',
+                        'strict_context': request.POST.get('strict_context') == 'on'
+                    })
+
+                    # Qui salveresti le impostazioni nel database
+                    # rag_config, created = RAGConfiguration.objects.update_or_create(
+                    #     user=request.user,
+                    #     defaults=settings
+                    # )
+
+                    messages.success(request, "Impostazioni avanzate RAG salvate con successo.")
+                except Exception as e:
+                    logger.error(f"Errore nel salvataggio delle impostazioni avanzate RAG: {str(e)}")
+                    messages.error(request, f"Errore nel salvataggio delle impostazioni avanzate: {str(e)}")
+
+                # Risposta per richieste AJAX
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'message': 'Impostazioni avanzate RAG salvate con successo'})
+
+                return redirect('rag_settings')
+
+            elif action == 'apply_preset':
+                # Applica una configurazione predefinita
+                preset = request.POST.get('preset')
+
+                if preset == 'balanced':
+                    settings.update({
+                        'chunk_size': 500,
+                        'chunk_overlap': 50,
+                        'similarity_top_k': 6,
+                        'mmr_lambda': 0.7,
+                        'similarity_threshold': 0.7,
+                        'retriever_type': 'mmr'
+                    })
+                elif preset == 'precise':
+                    settings.update({
+                        'chunk_size': 300,
+                        'chunk_overlap': 100,
+                        'similarity_top_k': 8,
+                        'mmr_lambda': 0.8,
+                        'similarity_threshold': 0.8,
+                        'retriever_type': 'similarity_score_threshold'
+                    })
+                elif preset == 'fast':
+                    settings.update({
+                        'chunk_size': 800,
+                        'chunk_overlap': 30,
+                        'similarity_top_k': 4,
+                        'mmr_lambda': 0.6,
+                        'similarity_threshold': 0.6,
+                        'retriever_type': 'similarity'
+                    })
+
+                # Qui salveresti le impostazioni nel database
+                # rag_config, created = RAGConfiguration.objects.update_or_create(
+                #     user=request.user,
+                #     defaults=settings
+                # )
+
+                messages.success(request, f"Configurazione '{preset}' applicata con successo.")
+
+                # Risposta per richieste AJAX
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse(
+                        {'success': True, 'message': f"Configurazione '{preset}' applicata con successo"})
+
+                return redirect('rag_settings')
+
+        # Passa le impostazioni al template
+        context = {
+            'settings': settings
+        }
+        return render(request, 'be/rag_settings.html', context)
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')

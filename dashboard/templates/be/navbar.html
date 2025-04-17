@@ -8,16 +8,140 @@
                     <i class="bi bi-list"></i>
                 </a>
             </li>
+
+            <!-- Dynamic Breadcrumb Navigation -->
             <li class="nav-item d-none d-md-block">
                 <a href="{% url 'dashboard' %}" class="nav-link py-1">
                     <i class="bi bi-house-fill me-1"></i>Dashboard
                 </a>
             </li>
-            <li class="nav-item d-none d-md-block">
-                <a href="{% url 'documents_uploaded' %}" class="nav-link py-1">
-                    <i class="bi bi-file-earmark me-1"></i>Documenti
-                </a>
-            </li>
+
+            {% if 'documents_uploaded' in request.resolver_match.url_name or 'upload_document' in request.resolver_match.url_name or 'upload_folder' in request.resolver_match.url_name %}
+                <li class="nav-item d-none d-md-block">
+                    <span class="nav-link py-1 text-muted">
+                        <i class="bi bi-chevron-right fs-6"></i>
+                    </span>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <a href="{% url 'documents_uploaded' %}" class="nav-link py-1">
+                        <i class="bi bi-files me-1"></i>Documenti
+                    </a>
+                </li>
+
+                {% if 'upload_document' in request.resolver_match.url_name %}
+                    <li class="nav-item d-none d-md-block">
+                        <span class="nav-link py-1 text-muted">
+                            <i class="bi bi-chevron-right fs-6"></i>
+                        </span>
+                    </li>
+                    <li class="nav-item d-none d-md-block">
+                        <a href="{% url 'upload_document' %}" class="nav-link py-1">
+                            <i class="bi bi-file-earmark-plus me-1"></i>Carica documento
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% if 'upload_folder' in request.resolver_match.url_name %}
+                    <li class="nav-item d-none d-md-block">
+                        <span class="nav-link py-1 text-muted">
+                            <i class="bi bi-chevron-right fs-6"></i>
+                        </span>
+                    </li>
+                    <li class="nav-item d-none d-md-block">
+                        <a href="{% url 'upload_folder' %}" class="nav-link py-1">
+                            <i class="bi bi-folder-plus me-1"></i>Carica cartella
+                        </a>
+                    </li>
+                {% endif %}
+            {% endif %}
+
+            {% if 'projects_list' in request.resolver_match.url_name or 'new_project' in request.resolver_match.url_name %}
+                <li class="nav-item d-none d-md-block">
+                    <span class="nav-link py-1 text-muted">
+                        <i class="bi bi-chevron-right fs-6"></i>
+                    </span>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <a href="{% url 'projects_list' %}" class="nav-link py-1">
+                        <i class="bi bi-kanban me-1"></i>Progetti
+                    </a>
+                </li>
+
+                {% if 'new_project' in request.resolver_match.url_name %}
+                    <li class="nav-item d-none d-md-block">
+                        <span class="nav-link py-1 text-muted">
+                            <i class="bi bi-chevron-right fs-6"></i>
+                        </span>
+                    </li>
+                    <li class="nav-item d-none d-md-block">
+                        <a href="{% url 'new_project' %}" class="nav-link py-1">
+                            <i class="bi bi-plus-square me-1"></i>Nuovo progetto
+                        </a>
+                    </li>
+                {% endif %}
+            {% endif %}
+
+            {% if 'project' in request.resolver_match.url_name and 'projects_list' not in request.resolver_match.url_name and 'new_project' not in request.resolver_match.url_name %}
+                <li class="nav-item d-none d-md-block">
+                    <span class="nav-link py-1 text-muted">
+                        <i class="bi bi-chevron-right fs-6"></i>
+                    </span>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <a href="{% url 'projects_list' %}" class="nav-link py-1">
+                        <i class="bi bi-kanban me-1"></i>Progetti
+                    </a>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <span class="nav-link py-1 text-muted">
+                        <i class="bi bi-chevron-right fs-6"></i>
+                    </span>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <span class="nav-link py-1">
+                        <i class="bi bi-folder2-open me-1"></i>{{ project.name|truncatechars:25 }}
+                    </span>
+                </li>
+            {% endif %}
+
+            {% if 'ia_engine' in request.resolver_match.url_name or 'rag_params' in request.resolver_match.url_name %}
+                <li class="nav-item d-none d-md-block">
+                    <span class="nav-link py-1 text-muted">
+                        <i class="bi bi-chevron-right fs-6"></i>
+                    </span>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <a href="#" class="nav-link py-1">
+                        <i class="bi bi-gear me-1"></i>Impostazioni
+                    </a>
+                </li>
+
+                {% if 'ia_engine' in request.resolver_match.url_name %}
+                    <li class="nav-item d-none d-md-block">
+                        <span class="nav-link py-1 text-muted">
+                            <i class="bi bi-chevron-right fs-6"></i>
+                        </span>
+                    </li>
+                    <li class="nav-item d-none d-md-block">
+                        <a href="{% url 'ia_engine' %}" class="nav-link py-1">
+                            <i class="bi bi-cpu me-1"></i>Motore IA
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% if 'rag_params' in request.resolver_match.url_name %}
+                    <li class="nav-item d-none d-md-block">
+                        <span class="nav-link py-1 text-muted">
+                            <i class="bi bi-chevron-right fs-6"></i>
+                        </span>
+                    </li>
+                    <li class="nav-item d-none d-md-block">
+                        <a href="{% url 'rag_params' %}" class="nav-link py-1">
+                            <i class="bi bi-sliders me-1"></i>Parametri RAG
+                        </a>
+                    </li>
+                {% endif %}
+            {% endif %}
         </ul>
 
         <!-- End Navbar Links -->

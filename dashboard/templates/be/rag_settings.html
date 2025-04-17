@@ -1,0 +1,795 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .config-card {
+        border-radius: 0.75rem;
+        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        transition: all 0.2s;
+        overflow: hidden;
+    }
+
+    .config-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .config-header {
+        background-color: rgba(13, 110, 253, 0.05);
+        padding: 1.25rem;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .param-row {
+        margin-bottom: 1.25rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px dashed rgba(0,0,0,0.1);
+    }
+
+    .param-row:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .param-label {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .param-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .preset-badge {
+        position: absolute;
+        right: -10px;
+        top: -10px;
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: scale(0);
+        transition: transform 0.3s ease;
+    }
+
+    .preset-card.selected .preset-badge {
+        transform: scale(1);
+    }
+
+    .preset-card {
+        transition: all 0.2s;
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 0.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .preset-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .preset-card.selected {
+        border: 2px solid #0d6efd;
+        box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.15);
+    }
+
+    .preset-header {
+        padding: 1rem;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .preset-body {
+        padding: 1.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h1 class="mb-0 h4">Configurazione Parametri RAG</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item">Impostazioni</li>
+                    <li class="breadcrumb-item active">Parametri RAG</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <!-- General Information Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Parametri di Retrieval Augmented Generation</h5>
+            <p>Configura i parametri del sistema RAG che influenzano come l'intelligenza artificiale cerca e utilizza informazioni dai tuoi documenti per rispondere alle domande.</p>
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                <div>
+                    La configurazione RAG influisce sulla qualità e precisione delle risposte, sulla quantità di contesto utilizzato e sulla velocità di elaborazione. Ottimizza questi parametri in base al tipo di documenti e domande del tuo progetto.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preset Configurations -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Configurazioni Preimpostate</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-4">Scegli una configurazione preimpostata o personalizza i parametri singolarmente nella sezione sottostante.</p>
+
+            <div class="row row-cols-1 row-cols-md-3 g-4">
+                <!-- Preset 1: Bilanciato -->
+                <div class="col">
+                    <div class="card h-100 preset-card selected" id="balanced-preset">
+                        <div class="preset-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="preset-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Bilanciato</h5>
+                                <span class="badge bg-primary">Consigliato</span>
+                            </div>
+                        </div>
+                        <div class="preset-body">
+                            <p class="card-text">Configurazione bilanciata che offre un buon compromesso tra precisione delle risposte e velocità di elaborazione.</p>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Dimensione chunk:</span>
+                                    <span>500 caratteri</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Sovrapposizione:</span>
+                                    <span>50 caratteri</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Top K risultati:</span>
+                                    <span>6</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-medium">Similarità minima:</span>
+                                    <span>0.7</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent text-center">
+                            <button class="btn btn-primary select-preset" data-preset="balanced">Seleziona</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preset 2: Alta Precisione -->
+                <div class="col">
+                    <div class="card h-100 preset-card" id="precise-preset">
+                        <div class="preset-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="preset-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Alta Precisione</h5>
+                                <span class="badge bg-info">Dettagliato</span>
+                            </div>
+                        </div>
+                        <div class="preset-body">
+                            <p class="card-text">Configurazione ottimizzata per risposte più precise e dettagliate, ideale per documenti tecnici o complessi.</p>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Dimensione chunk:</span>
+                                    <span>300 caratteri</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Sovrapposizione:</span>
+                                    <span>100 caratteri</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Top K risultati:</span>
+                                    <span>8</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-medium">Similarità minima:</span>
+                                    <span>0.8</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent text-center">
+                            <button class="btn btn-outline-primary select-preset" data-preset="precise">Seleziona</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preset 3: Velocità -->
+                <div class="col">
+                    <div class="card h-100 preset-card" id="fast-preset">
+                        <div class="preset-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="preset-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Velocità</h5>
+                                <span class="badge bg-warning">Rapido</span>
+                            </div>
+                        </div>
+                        <div class="preset-body">
+                            <p class="card-text">Configurazione ottimizzata per la velocità di risposta, ideale per domande semplici o progetti con molti documenti.</p>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Dimensione chunk:</span>
+                                    <span>800 caratteri</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Sovrapposizione:</span>
+                                    <span>30 caratteri</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-medium">Top K risultati:</span>
+                                    <span>4</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-medium">Similarità minima:</span>
+                                    <span>0.6</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent text-center">
+                            <button class="btn btn-outline-primary select-preset" data-preset="fast">Seleziona</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parameters Configuration -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Configurazione Dettagliata</h5>
+        </div>
+        <div class="card-body">
+            <form id="rag-params-form">
+                <!-- Chunk Size -->
+                <div class="row param-row align-items-center">
+                    <div class="col-md-3">
+                        <label for="chunk-size" class="param-label">Dimensione Chunk</label>
+                        <input type="range" class="form-range" id="chunk-size" min="100" max="1000" step="50" value="500">
+                        <div class="d-flex justify-content-between">
+                            <span class="small">100</span>
+                            <span class="small fw-bold" id="chunk-size-value">500</span>
+                            <span class="small">1000</span>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <p class="param-help mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Determina la lunghezza di ciascun frammento di testo in caratteri. Valori più piccoli creano più frammenti dettagliati ma aumentano il tempo di elaborazione.
+                        </p>
+                        <div class="mt-2">
+                            <span class="badge bg-info me-2">Documenti brevi: 300-400</span>
+                            <span class="badge bg-success me-2">Bilanciato: 500</span>
+                            <span class="badge bg-warning">Documenti lunghi: 800-1000</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chunk Overlap -->
+                <div class="row param-row align-items-center">
+                    <div class="col-md-3">
+                        <label for="chunk-overlap" class="param-label">Sovrapposizione Chunk</label>
+                        <input type="range" class="form-range" id="chunk-overlap" min="0" max="200" step="10" value="50">
+                        <div class="d-flex justify-content-between">
+                            <span class="small">0</span>
+                            <span class="small fw-bold" id="chunk-overlap-value">50</span>
+                            <span class="small">200</span>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <p class="param-help mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Controlla quanti caratteri si sovrappongono tra chunk adiacenti. Una maggiore sovrapposizione aiuta a mantenere il contesto ma aumenta il numero di chunk.
+                        </p>
+                        <div class="mt-2">
+                            <span class="badge bg-warning me-2">Minima: 0-20</span>
+                            <span class="badge bg-success me-2">Standard: 50</span>
+                            <span class="badge bg-info">Alta: 100-200</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top K Results -->
+                <div class="row param-row align-items-center">
+                    <div class="col-md-3">
+                        <label for="similarity-top-k" class="param-label">Top K Risultati</label>
+                        <input type="range" class="form-range" id="similarity-top-k" min="2" max="15" step="1" value="6">
+                        <div class="d-flex justify-content-between">
+                            <span class="small">2</span>
+                            <span class="small fw-bold" id="similarity-top-k-value">6</span>
+                            <span class="small">15</span>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <p class="param-help mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Numero di frammenti di testo più rilevanti da utilizzare per generare la risposta. Valori più alti includono più contesto ma possono diluire la rilevanza.
+                        </p>
+                        <div class="mt-2">
+                            <span class="badge bg-warning me-2">Minimo: 2-3</span>
+                            <span class="badge bg-success me-2">Standard: 4-6</span>
+                            <span class="badge bg-info">Massimo: 8-15</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MMR Lambda -->
+                <div class="row param-row align-items-center">
+                    <div class="col-md-3">
+                        <label for="mmr-lambda" class="param-label">Valore Lambda MMR</label>
+                        <input type="range" class="form-range" id="mmr-lambda" min="0" max="1" step="0.05" value="0.7">
+                        <div class="d-flex justify-content-between">
+                            <span class="small">0</span>
+                            <span class="small fw-bold" id="mmr-lambda-value">0.7</span>
+                            <span class="small">1</span>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <p class="param-help mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Controlla il bilanciamento tra rilevanza e diversità dei risultati. Valori più alti (verso 1) favoriscono la rilevanza, valori più bassi (verso 0) favoriscono la diversità.
+                        </p>
+                        <div class="mt-2">
+                            <span class="badge bg-info me-2">Diversità: 0.3-0.5</span>
+                            <span class="badge bg-success me-2">Bilanciato: 0.7</span>
+                            <span class="badge bg-warning">Rilevanza: 0.8-1.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Similarity Threshold -->
+                <div class="row param-row align-items-center">
+                    <div class="col-md-3">
+                        <label for="similarity-threshold" class="param-label">Soglia di Similarità</label>
+                        <input type="range" class="form-range" id="similarity-threshold" min="0" max="1" step="0.05" value="0.7">
+                        <div class="d-flex justify-content-between">
+                            <span class="small">0</span>
+                            <span class="small fw-bold" id="similarity-threshold-value">0.7</span>
+                            <span class="small">1</span>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <p class="param-help mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Imposta la soglia minima di rilevanza per includere un frammento nelle risposte. Valori più alti sono più selettivi, solo i frammenti più rilevanti vengono inclusi.
+                        </p>
+                        <div class="mt-2">
+                            <span class="badge bg-warning me-2">Bassa: 0.4-0.5</span>
+                            <span class="badge bg-success me-2">Media: 0.7</span>
+                            <span class="badge bg-info">Alta: 0.8-0.9</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Retriever Type -->
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label for="retriever-type" class="param-label">Tipo di Retriever</label>
+                        <select class="form-select" id="retriever-type">
+                            <option value="mmr">MMR (Maximum Marginal Relevance)</option>
+                            <option value="similarity">Similarity Search</option>
+                            <option value="similarity_score_threshold">Similarity with Threshold</option>
+                        </select>
+                    </div>
+                    <div class="col-md-9">
+                        <p class="param-help mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Definisce la strategia di ricerca utilizzata per trovare i frammenti di testo più rilevanti.
+                        </p>
+                        <div class="mt-2">
+                            <span class="badge bg-success me-2">MMR: Bilancia rilevanza e diversità</span>
+                            <span class="badge bg-primary me-2">Similarity: Solo i più rilevanti</span>
+                            <span class="badge bg-info">Threshold: Filtra per rilevanza minima</span>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <button class="btn btn-outline-secondary" id="reset-defaults-btn">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Ripristina predefiniti
+            </button>
+            <button class="btn btn-primary" id="save-settings-btn">
+                <i class="bi bi-save me-1"></i> Salva configurazione
+            </button>
+        </div>
+    </div>
+
+    <!-- Advanced Prompt Settings -->
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="card-title mb-0">Impostazioni Avanzate dei Prompt</h5>
+            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#advancedPromptSettings">
+                <i class="bi bi-sliders me-1"></i> Mostra/Nascondi
+            </button>
+        </div>
+        <div class="collapse" id="advancedPromptSettings">
+            <div class="card-body">
+                <div class="alert alert-warning d-flex align-items-center" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                    <div>
+                        Queste impostazioni avanzate influenzano il modo in cui l'IA interpreta e utilizza i documenti. Modifiche imprudenti possono ridurre la qualità delle risposte.
+                    </div>
+                </div>
+
+                <form id="advanced-prompt-form">
+                    <div class="mb-4">
+                        <label for="system-prompt" class="form-label fw-medium">Prompt di Sistema</label>
+                        <textarea class="form-control" id="system-prompt" rows="6">Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+
+Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+Quando rispondi:
+1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+3. Organizza le informazioni in modo logico e strutturato
+4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne</textarea>
+                        <div class="form-text">
+                            Istruzioni di base che guidano l'IA nell'elaborazione dei documenti e nella generazione di risposte.
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="auto-citation" checked>
+                                <label class="form-check-label" for="auto-citation">
+                                    <strong>Citazione automatica</strong>
+                                </label>
+                            </div>
+                            <p class="form-text">Includi riferimenti alle fonti nelle risposte (es. documenti o note specifiche)</p>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="prioritize-filenames" checked>
+                                <label class="form-check-label" for="prioritize-filenames">
+                                    <strong>Priorità nomi file</strong>
+                                </label>
+                            </div>
+                            <p class="form-text">Dai priorità ai documenti con nomi menzionati nella domanda</p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="equal-notes-weight" checked>
+                                <label class="form-check-label" for="equal-notes-weight">
+                                    <strong>Stesso peso note/documenti</strong>
+                                </label>
+                            </div>
+                            <p class="form-text">Tratta note e documenti con uguale importanza nelle risposte</p>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="strict-context">
+                                <label class="form-check-label" for="strict-context">
+                                    <strong>Modo rigoroso</strong>
+                                </label>
+                            </div>
+                            <p class="form-text">Risposte basate SOLO sui documenti (rifiuta di rispondere se mancano informazioni)</p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-primary" id="save-advanced-btn">
+                    <i class="bi bi-save me-1"></i> Salva impostazioni avanzate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Information -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Guida ai Parametri RAG</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h6 class="alert-heading"><i class="bi bi-info-circle-fill me-2"></i>Ottimizzazione dei parametri</h6>
+                <hr>
+
+                <p class="mb-2"><strong>Per documenti tecnici o molto specifici:</strong></p>
+                <ul class="mb-3">
+                    <li>Riduci la dimensione dei chunk (300-400 caratteri)</li>
+                    <li>Aumenta la sovrapposizione dei chunk (80-100 caratteri)</li>
+                    <li>Imposta una soglia di similarità più alta (0.7-0.8)</li>
+                    <li>Usa un valore lambda MMR più alto (0.8-0.9) per favorire la rilevanza</li>
+                </ul>
+
+                <p class="mb-2"><strong>Per documenti narrativi o meno strutturati:</strong></p>
+                <ul class="mb-3">
+                    <li>Aumenta la dimensione dei chunk (700-900 caratteri)</li>
+                    <li>Mantieni una sovrapposizione media (50-70 caratteri)</li>
+                    <li>Abbassa leggermente la soglia di similarità (0.5-0.6)</li>
+                    <li>Usa un valore lambda MMR più basso (0.5-0.7) per favorire la diversità</li>
+                </ul>
+
+                <p class="mb-2"><strong>Per progetti con molti documenti:</strong></p>
+                <ul class="mb-0">
+                    <li>Aumenta il numero di risultati Top K (8-12)</li>
+                    <li>Usa MMR con un valore lambda medio (0.5-0.7)</li>
+                    <li>Imposta una soglia di similarità più alta (0.6-0.7) per filtrare risultati meno rilevanti</li>
+                    <li>Considera chunk più grandi (600-800 caratteri) per ridurre il numero totale di frammenti</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestisci i valori visualizzati per i range slider
+        function updateRangeValue(inputId, valueId) {
+            const input = document.getElementById(inputId);
+            const valueDisplay = document.getElementById(valueId);
+
+            input.addEventListener('input', function() {
+                valueDisplay.textContent = this.value;
+            });
+        }
+
+        // Inizializza gli slider con i valori corretti
+        updateRangeValue('chunk-size', 'chunk-size-value');
+        updateRangeValue('chunk-overlap', 'chunk-overlap-value');
+        updateRangeValue('similarity-top-k', 'similarity-top-k-value');
+        updateRangeValue('mmr-lambda', 'mmr-lambda-value');
+        updateRangeValue('similarity-threshold', 'similarity-threshold-value');
+
+        // Gestisci la selezione dei preset
+        const presetCards = document.querySelectorAll('.preset-card');
+        const selectButtons = document.querySelectorAll('.select-preset');
+
+        selectButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const preset = this.getAttribute('data-preset');
+
+                // Rimuovi la selezione da tutte le card
+                presetCards.forEach(card => {
+                    card.classList.remove('selected');
+                    const btn = card.querySelector('.select-preset');
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline-primary');
+                    btn.textContent = 'Seleziona';
+                });
+
+                // Seleziona la card del preset scelto
+                const selectedCard = document.getElementById(`${preset}-preset`);
+                selectedCard.classList.add('selected');
+                const selectedBtn = selectedCard.querySelector('.select-preset');
+                selectedBtn.classList.remove('btn-outline-primary');
+                selectedBtn.classList.add('btn-primary');
+                selectedBtn.textContent = 'Selezionato';
+
+                // Imposta i valori in base al preset
+                if (preset === 'balanced') {
+                    document.getElementById('chunk-size').value = '500';
+                    document.getElementById('chunk-size-value').textContent = '500';
+                    document.getElementById('chunk-overlap').value = '50';
+                    document.getElementById('chunk-overlap-value').textContent = '50';
+                    document.getElementById('similarity-top-k').value = '6';
+                    document.getElementById('similarity-top-k-value').textContent = '6';
+                    document.getElementById('mmr-lambda').value = '0.7';
+                    document.getElementById('mmr-lambda-value').textContent = '0.7';
+                    document.getElementById('similarity-threshold').value = '0.7';
+                    document.getElementById('similarity-threshold-value').textContent = '0.7';
+                    document.getElementById('retriever-type').value = 'mmr';
+                } else if (preset === 'precise') {
+                    document.getElementById('chunk-size').value = '300';
+                    document.getElementById('chunk-size-value').textContent = '300';
+                    document.getElementById('chunk-overlap').value = '100';
+                    document.getElementById('chunk-overlap-value').textContent = '100';
+                    document.getElementById('similarity-top-k').value = '8';
+                    document.getElementById('similarity-top-k-value').textContent = '8';
+                    document.getElementById('mmr-lambda').value = '0.8';
+                    document.getElementById('mmr-lambda-value').textContent = '0.8';
+                    document.getElementById('similarity-threshold').value = '0.8';
+                    document.getElementById('similarity-threshold-value').textContent = '0.8';
+                    document.getElementById('retriever-type').value = 'similarity_score_threshold';
+                } else if (preset === 'fast') {
+                    document.getElementById('chunk-size').value = '800';
+                    document.getElementById('chunk-size-value').textContent = '800';
+                    document.getElementById('chunk-overlap').value = '30';
+                    document.getElementById('chunk-overlap-value').textContent = '30';
+                    document.getElementById('similarity-top-k').value = '4';
+                    document.getElementById('similarity-top-k-value').textContent = '4';
+                    document.getElementById('mmr-lambda').value = '0.6';
+                    document.getElementById('mmr-lambda-value').textContent = '0.6';
+                    document.getElementById('similarity-threshold').value = '0.6';
+                    document.getElementById('similarity-threshold-value').textContent = '0.6';
+                    document.getElementById('retriever-type').value = 'similarity';
+                }
+
+                // Mostra toast di conferma
+                showToast(`Configurazione "${preset}" applicata con successo`, 'success');
+            });
+        });
+
+        // Reset ai valori predefiniti
+        document.getElementById('reset-defaults-btn').addEventListener('click', function() {
+            // Applica i valori predefiniti
+            document.getElementById('chunk-size').value = '500';
+            document.getElementById('chunk-size-value').textContent = '500';
+            document.getElementById('chunk-overlap').value = '50';
+            document.getElementById('chunk-overlap-value').textContent = '50';
+            document.getElementById('similarity-top-k').value = '6';
+            document.getElementById('similarity-top-k-value').textContent = '6';
+            document.getElementById('mmr-lambda').value = '0.7';
+            document.getElementById('mmr-lambda-value').textContent = '0.7';
+            document.getElementById('similarity-threshold').value = '0.7';
+            document.getElementById('similarity-threshold-value').textContent = '0.7';
+            document.getElementById('retriever-type').value = 'mmr';
+
+            // Seleziona la configurazione bilanciata
+            presetCards.forEach(card => {
+                card.classList.remove('selected');
+                const btn = card.querySelector('.select-preset');
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-primary');
+                btn.textContent = 'Seleziona';
+            });
+
+            const balancedCard = document.getElementById('balanced-preset');
+            balancedCard.classList.add('selected');
+            const balancedBtn = balancedCard.querySelector('.select-preset');
+            balancedBtn.classList.remove('btn-outline-primary');
+            balancedBtn.classList.add('btn-primary');
+            balancedBtn.textContent = 'Selezionato';
+
+            // Reimposta anche i valori avanzati
+            document.getElementById('system-prompt').value = `Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+
+Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+Quando rispondi:
+1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+3. Organizza le informazioni in modo logico e strutturato
+4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne`;
+
+            document.getElementById('auto-citation').checked = true;
+            document.getElementById('prioritize-filenames').checked = true;
+            document.getElementById('equal-notes-weight').checked = true;
+            document.getElementById('strict-context').checked = false;
+
+            // Mostra toast di conferma
+            showToast('Valori predefiniti ripristinati con successo', 'success');
+        });
+
+        // Salva le impostazioni
+        document.getElementById('save-settings-btn').addEventListener('click', function() {
+            // Mostra indicatore di caricamento
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+
+            // Raccogli tutti i valori da salvare
+            const settings = {
+                chunk_size: parseInt(document.getElementById('chunk-size').value),
+                chunk_overlap: parseInt(document.getElementById('chunk-overlap').value),
+                similarity_top_k: parseInt(document.getElementById('similarity-top-k').value),
+                mmr_lambda: parseFloat(document.getElementById('mmr-lambda').value),
+                similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
+                retriever_type: document.getElementById('retriever-type').value
+            };
+
+            // Simula una richiesta AJAX (in produzione, userai fetch o axios)
+            setTimeout(() => {
+                console.log('Saving settings:', settings);
+
+                // Ripristina il pulsante
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-save me-1"></i> Salva configurazione';
+
+                // Mostra toast di conferma
+                showToast('Configurazione salvata con successo', 'success');
+            }, 1000);
+        });
+
+        // Salva le impostazioni avanzate
+        document.getElementById('save-advanced-btn').addEventListener('click', function() {
+            // Mostra indicatore di caricamento
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+
+            // Raccogli tutti i valori avanzati
+            const advancedSettings = {
+                system_prompt: document.getElementById('system-prompt').value,
+                auto_citation: document.getElementById('auto-citation').checked,
+                prioritize_filenames: document.getElementById('prioritize-filenames').checked,
+                equal_notes_weight: document.getElementById('equal-notes-weight').checked,
+                strict_context: document.getElementById('strict-context').checked
+            };
+
+            // Simula una richiesta AJAX (in produzione, userai fetch o axios)
+            setTimeout(() => {
+                console.log('Saving advanced settings:', advancedSettings);
+
+                // Ripristina il pulsante
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-save me-1"></i> Salva impostazioni avanzate';
+
+                // Mostra toast di conferma
+                showToast('Impostazioni avanzate salvate con successo', 'success');
+            }, 1000);
+        });
+
+        // Funzione per mostrare toast di notifica
+        function showToast(message, type = 'info') {
+            // Crea container per i toast se non esiste
+            let toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                document.body.appendChild(toastContainer);
+            }
+
+            // Crea elemento toast
+            const toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Chiudi"></button>
+                </div>
+            `;
+
+            // Aggiungi al container
+            toastContainer.appendChild(toastEl);
+
+            // Inizializza e mostra toast con Bootstrap
+            const toast = new bootstrap.Toast(toastEl, {
+                autohide: true,
+                delay: 3000
+            });
+            toast.show();
+
+            // Rimuovi dal DOM dopo la chiusura
+            toastEl.addEventListener('hidden.bs.toast', function() {
+                toastEl.remove();
+            });
+        }
+    });
+</script>
+{% endblock %}

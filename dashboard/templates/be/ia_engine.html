@@ -1,0 +1,929 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .engine-card {
+        border-radius: 0.75rem;
+        transition: all 0.2s;
+        border: 1px solid rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .engine-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .engine-card.selected {
+        border: 2px solid #0d6efd;
+        box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.15);
+    }
+
+    .engine-header {
+        padding: 1rem;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .engine-body {
+        padding: 1.25rem;
+    }
+
+    .engine-footer {
+        padding: 1rem;
+        background-color: rgba(0,0,0,0.03);
+        border-top: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .param-label {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .param-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .engine-logo {
+        width: 40px;
+        height: 40px;
+        object-fit: contain;
+    }
+
+    .selected-badge {
+        position: absolute;
+        right: -10px;
+        top: -10px;
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: scale(0);
+        transition: transform 0.3s ease;
+    }
+
+    .engine-card.selected .selected-badge {
+        transform: scale(1);
+    }
+
+    .param-row {
+        margin-bottom: 1.25rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px dashed rgba(0,0,0,0.1);
+    }
+
+    .param-row:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .tooltip-inner {
+        max-width: 300px;
+    }
+
+    .config-panel {
+        display: none;
+    }
+
+    .config-panel.active {
+        display: block;
+    }
+
+    /* Slider customization */
+    .form-range::-webkit-slider-thumb {
+        background: #0d6efd;
+    }
+
+    .form-range::-moz-range-thumb {
+        background: #0d6efd;
+    }
+
+    .form-range::-ms-thumb {
+        background: #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h1 class="mb-0 h4">Configurazione Motore IA</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item">Impostazioni</li>
+                    <li class="breadcrumb-item active">Motore IA</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <!-- General Information Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Selezione Motore IA</h5>
+            <p>Seleziona il modello di intelligenza artificiale da utilizzare per interagire con i tuoi documenti. Ogni modello ha caratteristiche e costi diversi.</p>
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                <div>
+                    La scelta del motore IA influisce sulla qualità delle risposte, sui tempi di elaborazione e sui costi associati. Le modifiche verranno applicate a tutte le nuove interazioni.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Engine Selection Cards -->
+    <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+        <!-- OpenAI Card -->
+        <div class="col">
+            <div class="card h-100 engine-card selected" id="openai-card">
+                <div class="selected-badge">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <div class="engine-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <img src="{% static 'dist/assets/img/openai-logo.png' %}" alt="OpenAI Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg'" class="engine-logo me-2">
+                            <h5 class="mb-0">ChatGPT 4o</h5>
+                        </div>
+                        <span class="badge bg-success">Consigliato</span>
+                    </div>
+                </div>
+                <div class="engine-body">
+                    <p class="card-text">Il modello OpenAI GPT-4o è uno dei più potenti e versatili, con una vasta conoscenza e ottime capacità di comprensione del contesto.</p>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-lightning me-2 text-warning"></i>
+                            <span class="fw-medium">Velocità:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-brightness-high me-2 text-primary"></i>
+                            <span class="fw-medium">Precisione:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-half text-primary"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-currency-euro me-2 text-success"></i>
+                            <span class="fw-medium">Costo:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="engine-footer">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-medium">Stato: <span class="text-success">Attivo</span></span>
+                        <button class="btn btn-sm btn-primary select-engine" data-engine="openai">Seleziona</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Claude Card -->
+        <div class="col">
+            <div class="card h-100 engine-card" id="claude-card">
+                <div class="selected-badge">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <div class="engine-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <img src="{% static 'dist/assets/img/anthropic-logo.png' %}" alt="Anthropic Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/7/7e/Claude_Wordmark_Black_%28Light_Theme%29.svg'" class="engine-logo me-2">
+                            <h5 class="mb-0">Claude 3.7 Sonnet</h5>
+                        </div>
+                        <span class="badge bg-info">Alta precisione</span>
+                    </div>
+                </div>
+                <div class="engine-body">
+                    <p class="card-text">Claude 3.7 Sonnet di Anthropic è noto per la sua precisione e ragionamento strutturato, con un'ottima capacità di seguire istruzioni.</p>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-lightning me-2 text-warning"></i>
+                            <span class="fw-medium">Velocità:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-brightness-high me-2 text-primary"></i>
+                            <span class="fw-medium">Precisione:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-currency-euro me-2 text-success"></i>
+                            <span class="fw-medium">Costo:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="engine-footer">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-medium">Stato: <span class="text-secondary">Inattivo</span></span>
+                        <button class="btn btn-sm btn-outline-primary select-engine" data-engine="claude">Seleziona</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DeepSeek Card -->
+        <div class="col">
+            <div class="card h-100 engine-card" id="deepseek-card">
+                <div class="selected-badge">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <div class="engine-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <img src="{% static 'dist/assets/img/deepseek-logo.png' %}" alt="DeepSeek Logo" onerror="this.src='https://assets-global.website-files.com/64f8c16944e1274f4965537c/65047172825c4cca1d45ce24_deepseekAi-social-logo.jpg'" class="engine-logo me-2">
+                            <h5 class="mb-0">DeepSeek Coder</h5>
+                        </div>
+                        <span class="badge bg-warning">Economico</span>
+                    </div>
+                </div>
+                <div class="engine-body">
+                    <p class="card-text">DeepSeek Coder è specializzato nell'analisi e comprensione del codice, ma funziona bene anche per l'analisi di documenti tecnici.</p>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-lightning me-2 text-warning"></i>
+                            <span class="fw-medium">Velocità:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-brightness-high me-2 text-primary"></i>
+                            <span class="fw-medium">Precisione:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-currency-euro me-2 text-success"></i>
+                            <span class="fw-medium">Costo:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="engine-footer">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-medium">Stato: <span class="text-secondary">Inattivo</span></span>
+                        <button class="btn btn-sm btn-outline-primary select-engine" data-engine="deepseek">Seleziona</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parameters Configuration Panel -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Configurazione Parametri</h5>
+        </div>
+        <div class="card-body">
+            <!-- OpenAI Config Panel -->
+            <div id="openai-config" class="config-panel active">
+                <form id="openai-form">
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="gpt-temperature" class="param-label">Temperatura</label>
+                            <div class="d-flex align-items-center mt-2">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="gpt-temperature" min="0" max="2" step="0.1" value="0.7">
+                                <span id="gpt-temperature-value" class="badge bg-primary">0.7</span>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Controlla la casualità delle risposte. Valori bassi (0-0.3) creano risposte più precise e deterministiche, valori alti (0.7-2.0) producono output più creativi e variabili.
+                            </p>
+                            <div class="mt-2 d-flex">
+                                <span class="badge bg-secondary me-2">0 = Preciso</span>
+                                <span class="badge bg-secondary me-2">0.7 = Bilanciato</span>
+                                <span class="badge bg-secondary">2.0 = Creativo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="gpt-max-tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="gpt-max-tokens" value="4096" min="100" max="8192" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Limita la lunghezza massima della risposta in token (circa 4 caratteri per token). Un valore più alto permette risposte più dettagliate ma aumenta i costi.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 100</span>
+                                <span class="badge bg-secondary me-2">Standard: 4096</span>
+                                <span class="badge bg-secondary">Max: 8192</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="gpt-timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="gpt-timeout" value="60" min="10" max="300" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Tempo massimo atteso per una risposta. Un valore più alto dà al modello più tempo per rispondere a domande complesse, ma potrebbe rallentare l'esperienza utente.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 10s</span>
+                                <span class="badge bg-secondary me-2">Standard: 60s</span>
+                                <span class="badge bg-secondary">Max: 300s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="gpt-model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="gpt-model">
+                                <option value="gpt-4o" selected>GPT-4o (ultima versione)</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (economico)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Seleziona la versione del modello da utilizzare. Le versioni più recenti offrono migliori prestazioni ma possono avere costi più elevati.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-success me-2">GPT-4o: Prestazioni migliori</span>
+                                <span class="badge bg-info me-2">GPT-4 Turbo: Bilanciato</span>
+                                <span class="badge bg-warning">GPT-3.5: Economico</span>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Claude Config Panel -->
+            <div id="claude-config" class="config-panel">
+                <form id="claude-form">
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="claude-temperature" class="param-label">Temperatura</label>
+                            <div class="d-flex align-items-center mt-2">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="claude-temperature" min="0" max="1" step="0.01" value="0.5">
+                                <span id="claude-temperature-value" class="badge bg-primary">0.5</span>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Controlla la casualità delle risposte. Claude è generalmente più conservativo, quindi la scala è da 0 a 1. Valori più bassi producono risposte più deterministiche.
+                            </p>
+                            <div class="mt-2 d-flex">
+                                <span class="badge bg-secondary me-2">0 = Deterministico</span>
+                                <span class="badge bg-secondary me-2">0.5 = Bilanciato</span>
+                                <span class="badge bg-secondary">1.0 = Creativo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="claude-max-tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="claude-max-tokens" value="4096" min="100" max="10000" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Limita la lunghezza massima della risposta. Claude supporta risposte più lunghe, fino a 10.000 token.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 100</span>
+                                <span class="badge bg-secondary me-2">Standard: 4096</span>
+                                <span class="badge bg-secondary">Max: 10000</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="claude-timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="claude-timeout" value="90" min="10" max="300" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Tempo massimo di attesa per una risposta. Claude richiede spesso più tempo per le risposte ma produce risultati più ponderati.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 10s</span>
+                                <span class="badge bg-secondary me-2">Standard: 90s</span>
+                                <span class="badge bg-secondary">Max: 300s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="claude-model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="claude-model">
+                                <option value="claude-3-7-sonnet" selected>Claude 3.7 Sonnet</option>
+                                <option value="claude-3-opus">Claude 3 Opus (più potente)</option>
+                                <option value="claude-3-haiku">Claude 3 Haiku (più veloce)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Seleziona la versione del modello Claude da utilizzare. Opus offre la massima qualità ma a costi più elevati, Haiku è più veloce ed economico.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-success me-2">Opus: Massima qualità</span>
+                                <span class="badge bg-info me-2">Sonnet: Bilanciato</span>
+                                <span class="badge bg-warning">Haiku: Veloce ed economico</span>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- DeepSeek Config Panel -->
+            <div id="deepseek-config" class="config-panel">
+                <form id="deepseek-form">
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="deepseek-temperature" class="param-label">Temperatura</label>
+                            <div class="d-flex align-items-center mt-2">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="deepseek-temperature" min="0" max="1.5" step="0.1" value="0.4">
+                                <span id="deepseek-temperature-value" class="badge bg-primary">0.4</span>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Controlla la casualità delle risposte. DeepSeek lavora meglio con temperature più basse, soprattutto per analisi di codice e documentazione tecnica.
+                            </p>
+                            <div class="mt-2 d-flex">
+                                <span class="badge bg-secondary me-2">0 = Preciso</span>
+                                <span class="badge bg-secondary me-2">0.4 = Bilanciato</span>
+                                <span class="badge bg-secondary">1.5 = Creativo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="deepseek-max-tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="deepseek-max-tokens" value="2048" min="100" max="4096" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Limita la lunghezza massima della risposta. DeepSeek ha un limite massimo inferiore rispetto ad altri modelli ma è molto efficiente per risposte concise.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 100</span>
+                                <span class="badge bg-secondary me-2">Standard: 2048</span>
+                                <span class="badge bg-secondary">Max: 4096</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="deepseek-timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="deepseek-timeout" value="30" min="5" max="180" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Tempo massimo di attesa per una risposta. DeepSeek è generalmente più veloce degli altri modelli, quindi richiede timeout più brevi.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 5s</span>
+                                <span class="badge bg-secondary me-2">Standard: 30s</span>
+                                <span class="badge bg-secondary">Max: 180s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="deepseek-model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="deepseek-model">
+                                <option value="deepseek-coder" selected>DeepSeek Coder</option>
+                                <option value="deepseek-chat">DeepSeek Chat</option>
+                                <option value="deepseek-lite">DeepSeek Lite (veloce)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Seleziona la variante del modello DeepSeek. Coder è specializzato nell'analisi di codice e documentazione tecnica, Chat è più versatile e Lite è ottimizzato per la velocità.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-success me-2">Coder: Ottimo per documenti tecnici</span>
+                                <span class="badge bg-info me-2">Chat: Versatile</span>
+                                <span class="badge bg-warning">Lite: Veloce ed economico</span>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <button class="btn btn-outline-secondary" id="reset-defaults-btn">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Ripristina valori predefiniti
+            </button>
+            <button class="btn btn-primary" id="save-settings-btn">
+                <i class="bi bi-save me-1"></i> Salva configurazione
+            </button>
+        </div>
+    </div>
+
+    <!-- API Keys Configuration -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Configurazione API Keys</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-4">Configura le chiavi API per i diversi servizi di IA. Queste chiavi sono necessarie per utilizzare i rispettivi motori.</p>
+
+            <form id="api-keys-form">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="openai-api-key" class="form-label">OpenAI API Key</label>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="openai-api-key" placeholder="sk-..." value="{{ openai_api_key|default:'' }}">
+                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="openai-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <a href="https://platform.openai.com/account/api-keys" target="_blank" class="btn btn-outline-info">
+                                <i class="bi bi-question-circle me-1"></i> Ottieni
+                            </a>
+                        </div>
+                        <div class="form-text">Chiave API per accedere ai modelli di OpenAI come GPT-4o.</div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="claude-api-key" class="form-label">Anthropic API Key</label>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="claude-api-key" placeholder="sk-ant-..." value="{{ claude_api_key|default:'' }}">
+                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="claude-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <a href="https://console.anthropic.com/account/keys" target="_blank" class="btn btn-outline-info">
+                                <i class="bi bi-question-circle me-1"></i> Ottieni
+                            </a>
+                        </div>
+                        <div class="form-text">Chiave API per accedere ai modelli Claude di Anthropic.</div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="deepseek-api-key" class="form-label">DeepSeek API Key</label>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="deepseek-api-key" placeholder="sk-..." value="{{ deepseek_api_key|default:'' }}">
+                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="deepseek-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <a href="https://platform.deepseek.com/" target="_blank" class="btn btn-outline-info">
+                                <i class="bi bi-question-circle me-1"></i> Ottieni
+                            </a>
+                        </div>
+                        <div class="form-text">Chiave API per accedere ai modelli DeepSeek.</div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="card-footer">
+            <button class="btn btn-primary" id="save-api-keys-btn">
+                <i class="bi bi-key me-1"></i> Salva API Keys
+            </button>
+        </div>
+    </div>
+
+    <!-- Usage Information -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Informazioni sull'Utilizzo</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h6 class="alert-heading"><i class="bi bi-info-circle-fill me-2"></i>Guida ai parametri</h6>
+                <hr>
+                <p class="mb-2"><strong>Temperatura:</strong> Controlla la casualità e creatività delle risposte.</p>
+                <ul class="mb-3">
+                    <li><strong>Valori bassi (0-0.3):</strong> Risposte più precise, coerenti e deterministiche. Ideale per domande fattuali, analisi di documenti, riassunti e compiti che richiedono accuratezza.</li>
+                    <li><strong>Valori medi (0.4-0.7):</strong> Bilanciamento tra precisione e creatività. Adatto per la maggior parte delle interazioni.</li>
+                    <li><strong>Valori alti (0.8-2.0):</strong> Risposte più creative, varie ed imprevedibili. Ideale per brainstorming, generazione di idee e contenuti creativi.</li>
+                </ul>
+
+                <p class="mb-2"><strong>Limite Tokens:</strong> Imposta la lunghezza massima della risposta.</p>
+                <ul class="mb-3">
+                    <li>Un token equivale a circa 4 caratteri o 3/4 di una parola in italiano.</li>
+                    <li>Aumentare questo valore permette risposte più lunghe e dettagliate, ma aumenta anche i costi di elaborazione.</li>
+                    <li>Limiti troppo bassi potrebbero portare a risposte incomplete.</li>
+                </ul>
+
+                <p class="mb-2"><strong>Timeout:</strong> Tempo massimo di attesa per una risposta dall'API.</p>
+                <ul class="mb-0">
+                    <li>Un valore più alto è utile per domande complesse che richiedono più tempo di elaborazione.</li>
+                    <li>Tuttavia, timeout troppo lunghi potrebbero peggiorare l'esperienza utente in caso di problemi di connessione.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Engine selection
+        const engineCards = document.querySelectorAll('.engine-card');
+        const configPanels = document.querySelectorAll('.config-panel');
+
+        // Add event listeners to engine selection buttons
+        document.querySelectorAll('.select-engine').forEach(button => {
+            button.addEventListener('click', function() {
+                const engine = this.getAttribute('data-engine');
+
+                // Update UI for selected engine
+                engineCards.forEach(card => {
+                    card.classList.remove('selected');
+                });
+                document.getElementById(`${engine}-card`).classList.add('selected');
+
+                // Update button styles
+                document.querySelectorAll('.select-engine').forEach(btn => {
+                    if (btn.getAttribute('data-engine') === engine) {
+                        btn.classList.remove('btn-outline-primary');
+                        btn.classList.add('btn-primary');
+                        btn.textContent = 'Selezionato';
+                    } else {
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-outline-primary');
+                        btn.textContent = 'Seleziona';
+                    }
+                });
+
+                // Show corresponding config panel
+                configPanels.forEach(panel => {
+                    panel.classList.remove('active');
+                });
+                document.getElementById(`${engine}-config`).classList.add('active');
+
+                // Update status indicators
+                engineCards.forEach(card => {
+                    const statusSpan = card.querySelector('.fw-medium span');
+                    if (card.classList.contains('selected')) {
+                        statusSpan.textContent = 'Attivo';
+                        statusSpan.className = 'text-success';
+                    } else {
+                        statusSpan.textContent = 'Inattivo';
+                        statusSpan.className = 'text-secondary';
+                    }
+                });
+            });
+        });
+
+        // Range sliders value display
+        const updateRangeValue = (inputId, valueId) => {
+            const input = document.getElementById(inputId);
+            const valueDisplay = document.getElementById(valueId);
+
+            input.addEventListener('input', function() {
+                valueDisplay.textContent = this.value;
+            });
+        };
+
+        updateRangeValue('gpt-temperature', 'gpt-temperature-value');
+        updateRangeValue('claude-temperature', 'claude-temperature-value');
+        updateRangeValue('deepseek-temperature', 'deepseek-temperature-value');
+
+        // Toggle password visibility
+        document.querySelectorAll('.toggle-password').forEach(button => {
+            button.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                const icon = this.querySelector('i');
+
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.remove('bi-eye');
+                    icon.classList.add('bi-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.remove('bi-eye-slash');
+                    icon.classList.add('bi-eye');
+                }
+            });
+        });
+
+        // Reset to defaults
+        document.getElementById('reset-defaults-btn').addEventListener('click', function() {
+            const activeEngine = document.querySelector('.config-panel.active').id.split('-')[0];
+
+            switch(activeEngine) {
+                case 'openai':
+                    document.getElementById('gpt-temperature').value = '0.7';
+                    document.getElementById('gpt-temperature-value').textContent = '0.7';
+                    document.getElementById('gpt-max-tokens').value = '4096';
+                    document.getElementById('gpt-timeout').value = '60';
+                    document.getElementById('gpt-model').value = 'gpt-4o';
+                    break;
+                case 'claude':
+                    document.getElementById('claude-temperature').value = '0.5';
+                    document.getElementById('claude-temperature-value').textContent = '0.5';
+                    document.getElementById('claude-max-tokens').value = '4096';
+                    document.getElementById('claude-timeout').value = '90';
+                    document.getElementById('claude-model').value = 'claude-3-7-sonnet';
+                    break;
+                case 'deepseek':
+                    document.getElementById('deepseek-temperature').value = '0.4';
+                    document.getElementById('deepseek-temperature-value').textContent = '0.4';
+                    document.getElementById('deepseek-max-tokens').value = '2048';
+                    document.getElementById('deepseek-timeout').value = '30';
+                    document.getElementById('deepseek-model').value = 'deepseek-coder';
+                    break;
+            }
+
+            // Show success toast
+            showToast('Valori ripristinati con successo', 'success');
+        });
+
+        // Save settings
+        document.getElementById('save-settings-btn').addEventListener('click', function() {
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+
+            // Simulate saving (in a real app, this would be an AJAX request)
+            setTimeout(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-save me-1"></i> Salva configurazione';
+
+                // Show success toast
+                showToast('Configurazione salvata con successo', 'success');
+            }, 1500);
+        });
+
+        // Save API keys
+        document.getElementById('save-api-keys-btn').addEventListener('click', function() {
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+
+            // Simulate saving (in a real app, this would be an AJAX request)
+            setTimeout(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-key me-1"></i> Salva API Keys';
+
+                // Show success toast
+                showToast('API Keys salvate con successo', 'success');
+            }, 1500);
+        });
+
+        // Toast function
+        function showToast(message, type = 'info') {
+            // Create toast container if it doesn't exist
+            let toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                document.body.appendChild(toastContainer);
+            }
+
+            // Create toast element
+            const toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Chiudi"></button>
+                </div>
+            `;
+
+            // Add to container
+            toastContainer.appendChild(toastEl);
+
+            // Initialize and show toast
+            const toast = new bootstrap.Toast(toastEl, {
+                autohide: true,
+                delay: 3000
+            });
+            toast.show();
+
+            // Remove from DOM after hidden
+            toastEl.addEventListener('hidden.bs.toast', function() {
+                toastEl.remove();
+            });
+        }
+
+        // Fix per il problema dello spinner del browser
+        document.addEventListener('DOMContentLoaded', function() {
+            // Assicurati che tutti i caricamenti siano considerati completati
+            setTimeout(function() {
+                if (document.readyState !== 'complete') {
+                    document.readyState = 'complete';
+                    window.dispatchEvent(new Event('load'));
+                }
+            }, 3000); // Timeout di sicurezza dopo 3 secondi
+
+            // Verifica lo stato della pagina quando il browser cambia URL
+            window.addEventListener('hashchange', function() {
+                setTimeout(function() {
+                    if (document.readyState !== 'complete') {
+                        document.readyState = 'complete';
+                        window.dispatchEvent(new Event('load'));
+                    }
+                }, 500);
+            });
+        });
+    });
+</script>
+{% endblock %}

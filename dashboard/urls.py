@@ -31,6 +31,11 @@ urlpatterns = [
     path('projects', views.project, name='project'),  # Supporto per POST senza ID
     path('project/<int:project_id>/details/', views.project_details, name='project_details'),
     path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
+
+    # Nuove URL per le impostazioni
+    path('settings/ia-engine/', views.ia_engine, name='ia_engine'),
+    path('settings/rag/', views.rag_settings, name='rag_settings'),
+
 ]
 
 if settings.DEBUG:

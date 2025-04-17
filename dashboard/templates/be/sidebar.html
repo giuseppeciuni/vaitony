@@ -1,4 +1,4 @@
- {% load static %}
+{% load static %}
 <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
     <div class="sidebar-brand">
         <a href="{% url 'dashboard' %}" class="brand-link">
@@ -11,89 +11,87 @@
             <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
                 <!-- Dashboard -->
                 <li class="nav-item">
-                    <a href="{% url 'dashboard' %}" class="nav-link">
+                    <a href="{% url 'dashboard' %}" class="nav-link {% if 'dashboard' in request.resolver_match.url_name %}active{% endif %}">
                         <i class="nav-icon bi bi-speedometer"></i>
                         <p>Dashboard</p>
                     </a>
                 </li>
 
-<!--                &lt;!&ndash; Documents &ndash;&gt;-->
-<!--                <li class="nav-item">-->
-<!--                    <a href="{% url 'documents_uploaded' %}" class="nav-link">-->
-<!--                        <i class="nav-icon bi bi-file-earmark"></i>-->
-<!--                        <p>Documents</p>-->
+                <!-- Menu Uploads -->
+<!--                <li class="nav-item {% if 'upload_document' in request.resolver_match.url_name or 'upload_folder' in request.resolver_match.url_name or 'documents_uploaded' in request.resolver_match.url_name %}menu-is-opening menu-open{% endif %}">-->
+<!--                    <a href="#" class="nav-link {% if 'upload_document' in request.resolver_match.url_name or 'upload_folder' in request.resolver_match.url_name or 'documents_uploaded' in request.resolver_match.url_name %}active{% endif %}">-->
+<!--                        <i class="nav-icon bi bi-cloud-upload"></i>-->
+<!--                        <p>-->
+<!--                            Documenti-->
+<!--                            <i class="nav-arrow bi bi-chevron-right"></i>-->
+<!--                        </p>-->
 <!--                    </a>-->
+<!--                    <ul class="nav nav-treeview">-->
+<!--                        <li class="nav-item">-->
+<!--                            <a href="{% url 'documents_uploaded' %}" class="nav-link {% if 'documents_uploaded' in request.resolver_match.url_name %}active{% endif %}">-->
+<!--                                <i class="nav-icon bi bi-files"></i>-->
+<!--                                <p>I miei documenti</p>-->
+<!--                            </a>-->
+<!--                        </li>-->
+<!--                        <li class="nav-item">-->
+<!--                            <a href="{% url 'upload_document' %}" class="nav-link {% if 'upload_document' in request.resolver_match.url_name %}active{% endif %}">-->
+<!--                                <i class="nav-icon bi bi-file-earmark-plus"></i>-->
+<!--                                <p>Carica documento</p>-->
+<!--                            </a>-->
+<!--                        </li>-->
+<!--                        <li class="nav-item">-->
+<!--                            <a href="{% url 'upload_folder' %}" class="nav-link {% if 'upload_folder' in request.resolver_match.url_name %}active{% endif %}">-->
+<!--                                <i class="nav-icon bi bi-folder-plus"></i>-->
+<!--                                <p>Carica cartella</p>-->
+<!--                            </a>-->
+<!--                        </li>-->
+<!--                    </ul>-->
 <!--                </li>-->
 
-                <!-- Menu Uploads -->
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="nav-icon bi bi-cloud-upload"></i>
-                        <p>
-                            Uploads
-                            <i class="nav-arrow bi bi-chevron-right"></i>
-                        </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                        <li class="nav-item">
-                            <a href="{% url 'upload_document' %}" class="nav-link">
-                                <i class="nav-icon bi bi-file-earmark"></i>
-                                <p>Upload Single Document</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'upload_folder' %}" class="nav-link">
-                                <i class="nav-icon bi bi-folder"></i>
-                                <p>Upload Folder</p>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-
-                <li class="nav-item {% if '/projects/' in request.path %}menu-is-opening menu-open{% endif %}">
-                    <a href="#" class="nav-link {% if '/projects/' in request.path %}active{% endif %}">
+                <li class="nav-item {% if 'project' in request.resolver_match.url_name %}menu-is-opening menu-open{% endif %}">
+                    <a href="#" class="nav-link {% if 'project' in request.resolver_match.url_name %}active{% endif %}">
                         <i class="nav-icon bi bi-kanban"></i>
                         <p>
-                            Projects
+                            Progetti
                             <i class="nav-arrow bi bi-chevron-right"></i>
                         </p>
                     </a>
                     <ul class="nav nav-treeview">
-                        <li class="nav-item">
-                            <a href="{% url 'projects_list' %}" class="nav-link {% if 'projects_list' in request.resolver_match.url_name %}active{% endif %}">
-                                <i class="nav-icon bi bi-list-check"></i>
-                                <p>Projects List</p>
-                            </a>
-                        </li>
                         <li class="nav-item">
                             <a href="{% url 'new_project' %}" class="nav-link {% if 'new_project' in request.resolver_match.url_name %}active{% endif %}">
                                 <i class="nav-icon bi bi-plus-square"></i>
-                                <p>New Project</p>
+                                <p>Nuovo progetto</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'projects_list' %}" class="nav-link {% if 'projects_list' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-list-check"></i>
+                                <p>Lista progetti</p>
                             </a>
                         </li>
                     </ul>
                 </li>
 
 
-                <li class="nav-item {% if '/projects/' in request.path %}menu-is-opening menu-open{% endif %}">
-                    <a href="#" class="nav-link {% if '/projects/' in request.path %}active{% endif %}">
-                        <i class="nav-icon bi bi-kanban"></i>
+                <li class="nav-item {% if 'ia_engine' in request.resolver_match.url_name or 'rag_settings' in request.resolver_match.url_name %}menu-is-opening menu-open{% endif %}">
+                    <a href="#" class="nav-link {% if 'ia_engine' in request.resolver_match.url_name or 'rag_settings' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="nav-icon bi bi-gear"></i>
                         <p>
-                            Settings
+                            Impostazioni
                             <i class="nav-arrow bi bi-chevron-right"></i>
                         </p>
                     </a>
                     <ul class="nav nav-treeview">
                         <li class="nav-item">
-                            <a href="{% url 'projects_list' %}" class="nav-link {% if 'projects_list' in request.resolver_match.url_name %}active{% endif %}">
-                                <i class="nav-icon bi bi-list-check"></i>
-                                <p>IA to use</p>
+                            <a href="{% url 'ia_engine' %}" class="nav-link {% if 'ia_engine' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-cpu"></i>
+                                <p>Motore IA</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="{% url 'new_project' %}" class="nav-link {% if 'new_project' in request.resolver_match.url_name %}active{% endif %}">
-                                <i class="nav-icon bi bi-plus-square"></i>
-                                <p>RAG params</p>
+                            <a href="{% url 'rag_settings' %}" class="nav-link {% if 'rag_settings' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-sliders"></i>
+                                <p>Parametri RAG</p>
                             </a>
                         </li>
                     </ul>

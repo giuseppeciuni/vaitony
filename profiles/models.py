@@ -201,6 +201,53 @@ class ProjectIndexStatus(models.Model):
         return f"Index status for project {self.project.name}"
 
 
+# Aggiungi questo modello nel file models.py
+class RAGConfiguration(models.Model):
+    """
+    Modello per archiviare le configurazioni RAG per utente.
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='rag_config')
+    # Parametri di base
+    chunk_size = models.IntegerField(default=500)
+    chunk_overlap = models.IntegerField(default=50)
+    similarity_top_k = models.IntegerField(default=6)
+    mmr_lambda = models.FloatField(default=0.7)
+    similarity_threshold = models.FloatField(default=0.7)
+    retriever_type = models.CharField(max_length=100, default='mmr')
+
+    # Parametri avanzati
+    system_prompt = models.TextField(default='''Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+
+Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+Quando rispondi:
+1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+3. Organizza le informazioni in modo logico e strutturato
+4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne''')
+
+    auto_citation = models.BooleanField(default=True)
+    prioritize_filenames = models.BooleanField(default=True)
+    equal_notes_weight = models.BooleanField(default=True)
+    strict_context = models.BooleanField(default=False)
+
+    # Per tracciare quando è stata aggiornata l'ultima volta
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"RAG Config for {self.user.username}"
+
+    class Meta:
+        verbose_name = "RAG Configuration"
+        verbose_name_plural = "RAG Configurations"
+
+
+
 
 
 

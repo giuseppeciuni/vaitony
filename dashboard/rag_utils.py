@@ -22,6 +22,7 @@ from dashboard.rag_document_utils import update_project_index_status
 from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
 from profiles.models import UserDocument, Project
 from langchain_community.document_loaders import PDFMinerLoader
+from django.utils import timezone
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -1733,3 +1734,44 @@ def handle_toggle_note_inclusion(project, note_id, is_included):
         return True, "Note inclusion updated."
     except ProjectNote.DoesNotExist:
         return False, "Note not found."
+
+
+def create_embeddings_with_retry(documents, max_retries=3, retry_delay=2):
+    """
+    Crea embedding con gestione dei tentativi in caso di errori di connessione.
+
+    Args:
+        documents: Lista di documenti da incorporare
+        max_retries: Numero massimo di tentativi
+        retry_delay: Ritardo tra i tentativi in secondi
+
+    Returns:
+        FAISS vectorstore
+    """
+    import time
+    import logging
+
+    logger = logging.getLogger(__name__)
+    embeddings = OpenAIEmbeddings()
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Tentativo {attempt + 1}/{max_retries} di creazione embedding")
+            vectordb = FAISS.from_documents(documents, embeddings)
+            logger.info("Embedding creati con successo")
+            return vectordb
+        except Exception as e:
+            error_message = str(e)
+            logger.error(f"Errore durante la creazione degli embedding: {error_message}")
+
+            if "Connection" in error_message and attempt < max_retries - 1:
+                wait_time = retry_delay * (2 ** attempt)  # Backoff esponenziale
+                logger.info(f"Attendo {wait_time} secondi prima di riprovare...")
+                time.sleep(wait_time)
+            else:
+                # Se non è un errore di connessione o abbiamo esaurito i tentativi, rilancia l'eccezione
+                logger.error("Impossibile creare gli embedding dopo ripetuti tentativi")
+                raise
+
+    # Non dovremmo mai arrivare qui, ma per sicurezza
+    raise Exception("Impossibile creare gli embedding dopo ripetuti tentativi")

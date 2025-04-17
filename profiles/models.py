@@ -1,9 +1,11 @@
-from django.db import models
-from django.contrib.auth.models import User
 import os
+import shutil
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
+from django.db import models
+from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.db.models.signals import post_save, post_delete
-
 
 
 # Profile type: Single User Profile or Company Profile
@@ -209,8 +211,6 @@ class ProjectIndexStatus(models.Model):
 
 # ----- SEGNALI PER L'AGGIORNAMENTO AUTOMATICO DEGLI INDICI -----
 
-# ----- SEGNALI PER L'AGGIORNAMENTO AUTOMATICO DEGLI INDICI -----
-
 @receiver(post_save, sender=ProjectFile)
 def update_index_on_file_change(sender, instance, created, **kwargs):
     """
@@ -296,3 +296,63 @@ def update_index_on_note_change(sender, instance, created, **kwargs):
         logger.error(f"❌ Errore nell'aggiornamento automatico dell'indice: {str(e)}")
         # Assicurati che il segnale sia riconnesso anche in caso di errore
         post_save.connect(update_index_on_note_change, sender=ProjectNote)
+
+
+
+# ----- SEGNALI PER L'AGGIORNAMENTO AUTOMATICO DEL PROFILO QUANDO INSERISCE UN'IMMAGINE-----
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """
+    Crea un profilo utente quando viene creato un nuovo utente.
+    Se il profilo non esiste, lo crea e imposta un'immagine predefinita.
+    """
+    from profiles.models import Profile, Profile_type
+
+    # Se l'utente è appena stato creato o non ha ancora un profilo
+    if created:
+        # Ottieni il tipo di profilo predefinito (assume che esista almeno un tipo)
+        default_type = Profile_type.objects.first()
+        if not default_type:
+            default_type = Profile_type.objects.create(type="NORMAL_USER")
+
+        # Crea il profilo
+        profile = Profile.objects.create(
+            user=instance,
+            profile_type=default_type
+        )
+
+        # Imposta l'immagine predefinita
+        try:
+            # Percorso all'immagine predefinita
+            default_image_path = os.path.join(settings.STATIC_ROOT, 'dist/assets/img/default-150x150.png')
+
+            # Se l'immagine predefinita esiste
+            if os.path.exists(default_image_path):
+                # Crea la directory media se non esiste
+                media_dir = os.path.join(settings.MEDIA_ROOT, 'profile_images')
+                os.makedirs(media_dir, exist_ok=True)
+
+                # Copia l'immagine predefinita nella directory media
+                new_image_path = os.path.join(media_dir, f'default_{instance.id}.png')
+                shutil.copy2(default_image_path, new_image_path)
+
+                # Aggiorna il profilo con l'immagine predefinita
+                with open(new_image_path, 'rb') as f:
+                    image_content = ContentFile(f.read())
+                    profile.picture.save(f'default_{instance.id}.png', image_content, save=True)
+        except Exception as e:
+            # Se c'è un errore, continua senza impostare l'immagine predefinita
+            print(f"Errore nell'impostare l'immagine predefinita: {str(e)}")
+
+
+
+
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    """
+    Salva il profilo utente quando l'utente viene aggiornato
+    """
+    if hasattr(instance, 'profile'):
+        instance.profile.save()

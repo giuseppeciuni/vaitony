@@ -1,0 +1,1289 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.css">
+<style>
+    /* Card Styles */
+    .detail-card {
+        border-radius: 0.75rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        transition: all 0.2s;
+        border: none;
+        margin-bottom: 1.5rem;
+    }
+
+    .detail-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    /* Usage Statistics Cards */
+    .stats-card {
+        border-left: 4px solid #0d6efd;
+        border-radius: 0.5rem;
+    }
+
+    .stats-card.usage {
+        border-left-color: #0d6efd;
+    }
+
+    .stats-card.cost {
+        border-left-color: #fd7e14;
+    }
+
+    .stats-card.limit {
+        border-left-color: #dc3545;
+    }
+
+    /* Stats Components */
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 600;
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    /* Progress Threshold */
+    .threshold-container {
+        position: relative;
+    }
+
+    .threshold-marker {
+        position: absolute;
+        top: -8px;
+        width: 2px;
+        height: 28px;
+        background-color: #dc3545;
+        z-index: 2;
+    }
+
+    .threshold-label {
+        position: absolute;
+        top: -28px;
+        transform: translateX(-50%);
+        background-color: #dc3545;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+
+    /* Project Actions */
+    .action-card {
+        border-radius: 0.75rem;
+        transition: all 0.2s;
+    }
+
+    .action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .action-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        margin-right: 1rem;
+    }
+
+    /* Activity Timeline */
+    .activity-item {
+        position: relative;
+        padding-left: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .activity-item::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 7px;
+        height: 100%;
+        border-left: 2px dashed #dee2e6;
+    }
+
+    .activity-item:last-child::before {
+        height: 0;
+    }
+
+    .activity-badge {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        z-index: 1;
+    }
+
+    .activity-badge.file {
+        background-color: #0d6efd;
+    }
+
+    .activity-badge.note {
+        background-color: #20c997;
+    }
+
+    .activity-badge.question {
+        background-color: #fd7e14;
+    }
+
+    .tab-content {
+        min-height: 400px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h1 class="mb-0 h4 d-flex align-items-center">
+                    <i class="bi bi-folder2-open me-2 text-primary"></i>
+                    {{ project.name }}
+                    <span class="badge bg-success ms-2 small">Attivo</span>
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'projects_list' %}">Progetti</a></li>
+                    <li class="breadcrumb-item active">{{ project.name }}</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <!-- Project Info Card -->
+    <div class="card detail-card mb-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <p class="mb-1 text-muted small">
+                        <i class="bi bi-calendar2 me-1"></i> Creato: {{ project.created_at|date:"d M Y" }} |
+                        <i class="bi bi-calendar-check me-1"></i> Ultimo aggiornamento: {{ project.updated_at|date:"d M Y" }}
+                    </p>
+                    <p class="mb-0">{{ project.description|default:"Nessuna descrizione disponibile per questo progetto." }}</p>
+                </div>
+                <div class="col-md-4 d-flex justify-content-md-end mt-3 mt-md-0">
+                    <div class="btn-group">
+                        <a href="{% url 'project' project.id %}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-folder2-open me-1"></i> Apri progetto
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#shareProjectModal">
+                            <i class="bi bi-share me-1"></i> Condividi
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
+                            <i class="bi bi-trash me-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Tabs -->
+    <ul class="nav nav-tabs mb-3" id="projectDetailsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+                <i class="bi bi-grid-1x2 me-1"></i> Panoramica
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button" role="tab">
+                <i class="bi bi-bar-chart me-1"></i> Analisi
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="activities-tab" data-bs-toggle="tab" data-bs-target="#activities" type="button" role="tab">
+                <i class="bi bi-clock-history me-1"></i> Attività
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
+                <i class="bi bi-gear me-1"></i> Impostazioni
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="projectDetailsTabsContent">
+        <!-- Overview Tab -->
+        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <!-- Statistics Row -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card stats-card usage h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="stat-icon bg-primary bg-opacity-10 text-primary me-3">
+                                    <i class="bi bi-lightning-charge"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Utilizzo Crediti</div>
+                                    <div class="stat-value">65%</div>
+                                </div>
+                            </div>
+
+                            <div class="threshold-container mb-1">
+                                <div class="progress" style="height: 10px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="threshold-marker" style="left: 90%;"></div>
+                                <div class="threshold-label" style="left: 90%;">Limite: 90%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card stats-card cost h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="stat-icon bg-warning bg-opacity-10 text-warning me-3">
+                                    <i class="bi bi-currency-euro"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Costo Attuale</div>
+                                    <div class="stat-value">€42,75</div>
+                                </div>
+                            </div>
+
+                            <div class="threshold-container mb-1">
+                                <div class="progress" style="height: 10px;">
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: 57%;" aria-valuenow="57" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="threshold-marker" style="left: 80%;"></div>
+                                <div class="threshold-label" style="left: 80%;">Budget: €75</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card stats-card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="stat-icon bg-success bg-opacity-10 text-success me-3">
+                                    <i class="bi bi-files"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Documenti</div>
+                                    <div class="stat-value">{{ project.files.count }}</div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <div class="progress" style="height: 5px;">
+                                        <div class="progress-bar bg-success" role="progressbar" style="width: {% widthratio project.files.count 50 100 %}%;" aria-valuenow="{{ project.files.count }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <small class="text-muted">0</small>
+                                        <small class="text-muted">50</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card stats-card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="stat-icon bg-info bg-opacity-10 text-info me-3">
+                                    <i class="bi bi-chat-dots"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Interazioni AI</div>
+                                    <div class="stat-value">{{ project.conversations.count }}</div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <div class="progress" style="height: 5px;">
+                                        <div class="progress-bar bg-info" role="progressbar" style="width: {% widthratio project.conversations.count 200 100 %}%;" aria-valuenow="{{ project.conversations.count }}" aria-valuemin="0" aria-valuemax="200"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <small class="text-muted">0</small>
+                                        <small class="text-muted">200</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Row -->
+            <div class="row">
+                <div class="col-lg-8">
+                    <!-- Usage Chart -->
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title h5 mb-0">Interazioni e Costi</h3>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary chart-period active" data-period="week">7 giorni</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary chart-period" data-period="month">1 mese</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary chart-period" data-period="year">1 anno</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="usage-chart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Content Summary -->
+                    <div class="card detail-card">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Contenuti del progetto</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Quantità</th>
+                                            <th>Ultimo aggiornamento</th>
+                                            <th>Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>
+                                                <i class="bi bi-files text-primary me-2"></i>
+                                                Documenti
+                                            </td>
+                                            <td><span class="badge bg-primary">{{ project.files.count }}</span></td>
+                                            <td>
+                                                {% if project.files.exists %}
+                                                    {{ project.files.first.uploaded_at|date:"d M Y" }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'project' project.id %}#documents" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye me-1"></i>Visualizza
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                <i class="bi bi-journal-text text-success me-2"></i>
+                                                Note
+                                            </td>
+                                            <td><span class="badge bg-success">{{ project.project_notes.count }}</span></td>
+                                            <td>
+                                                {% if project.project_notes.exists %}
+                                                    {{ project.project_notes.first.updated_at|date:"d M Y" }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'project' project.id %}#notes" class="btn btn-sm btn-outline-success">
+                                                    <i class="bi bi-eye me-1"></i>Visualizza
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                <i class="bi bi-chat-dots text-warning me-2"></i>
+                                                Interazioni AI
+                                            </td>
+                                            <td><span class="badge bg-warning">{{ project.conversations.count }}</span></td>
+                                            <td>
+                                                {% if project.conversations.exists %}
+                                                    {{ project.conversations.first.created_at|date:"d M Y" }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'project' project.id %}#ask" class="btn btn-sm btn-outline-warning">
+                                                    <i class="bi bi-eye me-1"></i>Visualizza
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <!-- Quick Actions -->
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Azioni rapide</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'project' project.id %}#documents" class="btn btn-outline-primary text-start d-flex align-items-center p-3 action-card">
+                                    <div class="action-icon bg-primary bg-opacity-10 text-primary">
+                                        <i class="bi bi-file-earmark-plus"></i>
+                                    </div>
+                                    <div>
+                                        <strong>Aggiungi documenti</strong><br>
+                                        <small class="text-muted">Carica nuovi file al progetto</small>
+                                    </div>
+                                </a>
+
+                                <a href="{% url 'project' project.id %}#ask" class="btn btn-outline-warning text-start d-flex align-items-center p-3 action-card">
+                                    <div class="action-icon bg-warning bg-opacity-10 text-warning">
+                                        <i class="bi bi-chat-dots"></i>
+                                    </div>
+                                    <div>
+                                        <strong>Chiedi all'AI</strong><br>
+                                        <small class="text-muted">Interagisci con l'assistente AI</small>
+                                    </div>
+                                </a>
+
+                                <a href="{% url 'project' project.id %}#notes" class="btn btn-outline-success text-start d-flex align-items-center p-3 action-card">
+                                    <div class="action-icon bg-success bg-opacity-10 text-success">
+                                        <i class="bi bi-journal-plus"></i>
+                                    </div>
+                                    <div>
+                                        <strong>Aggiungi note</strong><br>
+                                        <small class="text-muted">Prendi appunti sul progetto</small>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cost Management -->
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title h5 mb-0">Gestione costi</h3>
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changeLimitModal">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <div class="stat-label">Limite mensile</div>
+                                    <div class="stat-value text-danger">€75,00</div>
+                                </div>
+                                <div class="bg-danger bg-opacity-10 text-danger p-2 rounded">
+                                    <i class="bi bi-shield-lock"></i>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info d-flex align-items-center p-2 mb-0" role="alert">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <small>Il sistema bloccherà automaticamente ulteriori interazioni al raggiungimento del limite</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activities -->
+                    <div class="card detail-card">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Attività recenti</h3>
+                        </div>
+                        <div class="card-body">
+                            {% if project.conversations.exists or project.project_notes.exists or project.files.exists %}
+                                <div class="activity-timeline">
+                                    {% for conversation in project.conversations.all|slice:":3" %}
+                                    <div class="activity-item">
+                                        <div class="activity-badge question"></div>
+                                        <div class="d-flex justify-content-between">
+                                            <h6 class="mb-1 fw-bold small">Nuova interazione AI</h6>
+                                            <small class="text-muted">{{ conversation.created_at|time:"H:i" }}</small>
+                                        </div>
+                                        <p class="mb-1 small">{{ conversation.question|truncatechars:40 }}</p>
+                                        <small class="text-muted">{{ conversation.created_at|date:"d M Y" }}</small>
+                                    </div>
+                                    {% endfor %}
+
+                                    {% for note in project.project_notes.all|slice:":2" %}
+                                    <div class="activity-item">
+                                        <div class="activity-badge note"></div>
+                                        <div class="d-flex justify-content-between">
+                                            <h6 class="mb-1 fw-bold small">Nota aggiunta</h6>
+                                            <small class="text-muted">{{ note.created_at|time:"H:i" }}</small>
+                                        </div>
+                                        <p class="mb-1 small">{{ note.content|truncatechars:40 }}</p>
+                                        <small class="text-muted">{{ note.created_at|date:"d M Y" }}</small>
+                                    </div>
+                                    {% endfor %}
+
+                                    {% for file in project.files.all|slice:":2" %}
+                                    <div class="activity-item">
+                                        <div class="activity-badge file"></div>
+                                        <div class="d-flex justify-content-between">
+                                            <h6 class="mb-1 fw-bold small">File caricato</h6>
+                                            <small class="text-muted">{{ file.uploaded_at|time:"H:i" }}</small>
+                                        </div>
+                                        <p class="mb-1 small">{{ file.filename|truncatechars:40 }}</p>
+                                        <small class="text-muted">{{ file.uploaded_at|date:"d M Y" }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="bi bi-activity fs-1 text-muted mb-3"></i>
+                                    <p>Nessuna attività recente</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div class="tab-pane fade" id="analytics" role="tabpanel">
+            <div class="row">
+                <div class="col-12">
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title h5 mb-0">Andamento costi</h3>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary cost-period active" data-period="week">7 giorni</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary cost-period" data-period="month">1 mese</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary cost-period" data-period="year">1 anno</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="cost-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Distribuzione tipologie file</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="file-types-chart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Metriche di utilizzo</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row row-cols-1 row-cols-md-2 g-3">
+                                <div class="col">
+                                    <div class="p-3 rounded bg-light">
+                                        <div class="text-muted small mb-1">Costo medio per interazione</div>
+                                        <div class="h4 mb-0">€0,28</div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="p-3 rounded bg-light">
+                                        <div class="text-muted small mb-1">Token totali utilizzati</div>
+                                        <div class="h4 mb-0">47.829</div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="p-3 rounded bg-light">
+                                        <div class="text-muted small mb-1">Tempo medio di risposta</div>
+                                        <div class="h4 mb-0">2,4s</div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="p-3 rounded bg-light">
+                                        <div class="text-muted small mb-1">Documenti analizzati</div>
+                                        <div class="h4 mb-0">{{ project.files.count }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activities Tab -->
+        <div class="tab-pane fade" id="activities" role="tabpanel">
+            <div class="card detail-card">
+                <div class="card-header bg-light border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="card-title h5 mb-0">Registro attività</h3>
+                        <div class="input-group input-group-sm" style="width: 250px;">
+                            <input type="text" class="form-control" placeholder="Cerca nelle attività...">
+                            <button class="btn btn-outline-secondary" type="button">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data/Ora</th>
+                                    <th>Tipo</th>
+                                    <th>Dettagli</th>
+                                    <th>Utente</th>
+                                    <th>Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if project.conversations.exists or project.project_notes.exists or project.files.exists %}
+                                    <!-- Interazioni AI -->
+                                    {% for conversation in project.conversations.all|slice:":10" %}
+                                    <tr>
+                                        <td class="text-nowrap">{{ conversation.created_at|date:"d M Y" }} {{ conversation.created_at|time:"H:i" }}</td>
+                                        <td><span class="badge bg-warning">Interazione AI</span></td>
+                                        <td>{{ conversation.question|truncatechars:50 }}</td>
+                                        <td>{{ project.user.username }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary view-conversation" data-conversation-id="{{ conversation.id }}">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+
+                                    <!-- Note -->
+                                    {% for note in project.project_notes.all|slice:":10" %}
+                                    <tr>
+                                        <td class="text-nowrap">{{ note.created_at|date:"d M Y" }} {{ note.created_at|time:"H:i" }}</td>
+                                        <td><span class="badge bg-success">Nota</span></td>
+                                        <td>{{ note.content|truncatechars:50 }}</td>
+                                        <td>{{ project.user.username }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary view-note" data-note-id="{{ note.id }}" data-bs-toggle="modal" data-bs-target="#viewNoteModal">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+
+                                    <!-- File Caricati -->
+                                    {% for file in project.files.all|slice:":10" %}
+                                    <tr>
+                                        <td class="text-nowrap">{{ file.uploaded_at|date:"d M Y" }} {{ file.uploaded_at|time:"H:i" }}</td>
+                                        <td><span class="badge bg-primary">File</span></td>
+                                        <td>{{ file.filename }}</td>
+                                        <td>{{ project.user.username }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary view-document" data-bs-toggle="modal" data-bs-target="#documentModal"
+                                                 data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}" data-file-size="{{ file.file_size|filesizeformat }}"
+                                                 data-file-path="{% url 'serve_project_file' file.id %}">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4">
+                                            <i class="bi bi-activity fs-1 text-muted mb-3 d-block"></i>
+                                            <p>Nessuna attività registrata per questo progetto</p>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination if needed -->
+                    {% if project.conversations.count > 10 or project.project_notes.count > 10 or project.files.count > 10 %}
+                    <div class="d-flex justify-content-center border-top pt-3">
+                        <nav aria-label="Paginazione attività">
+                            <ul class="pagination pagination-sm">
+                                <li class="page-item disabled">
+                                    <a class="page-link" href="#" tabindex="-1" aria-disabled="true">Precedente</a>
+                                </li>
+                                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                                <li class="page-item"><a class="page-link" href="#">2</a></li>
+                                <li class="page-item"><a class="page-link" href="#">3</a></li>
+                                <li class="page-item">
+                                    <a class="page-link" href="#">Successiva</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-pane fade" id="settings" role="tabpanel">
+            <div class="row">
+                <div class="col-lg-6">
+                    <!-- Project Settings -->
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Impostazioni progetto</h3>
+                        </div>
+                        <div class="card-body">
+                            <form>
+                                <div class="mb-3">
+                                    <label for="project-name" class="form-label">Nome del progetto</label>
+                                    <input type="text" class="form-control" id="project-name" value="{{ project.name }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="project-description" class="form-label">Descrizione</label>
+                                    <textarea class="form-control" id="project-description" rows="3">{{ project.description }}</textarea>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="project-active" {% if project.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="project-active">Progetto attivo</label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Salva modifiche</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <!-- Cost Settings -->
+                    <div class="card detail-card mb-4">
+                        <div class="card-header bg-light border-0">
+                            <h3 class="card-title h5 mb-0">Impostazioni costi</h3>
+                        </div>
+                        <div class="card-body">
+                            <form>
+                                <div class="mb-3">
+                                    <label for="monthly-limit" class="form-label">Limite mensile (€)</label>
+                                    <input type="number" class="form-control" id="monthly-limit" value="75" min="10" max="500" step="5">
+                                    <div class="form-text">Il limite mensile minimo è €10 e massimo €500.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="alert-threshold" class="form-label">Soglia di avviso (%)</label>
+                                    <select class="form-select" id="alert-threshold">
+                                        <option value="50">50% del limite</option>
+                                        <option value="75">75% del limite</option>
+                                        <option value="90" selected>90% del limite</option>
+                                        <option value="95">95% del limite</option>
+                                    </select>
+                                    <div class="form-text">Riceverai un avviso quando il costo raggiunge questa percentuale del limite.</div>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="email-alerts" checked>
+                                    <label class="form-check-label" for="email-alerts">
+                                        Ricevi avvisi via email
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Salva impostazioni</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Danger Zone -->
+                    <div class="card detail-card border-danger">
+                        <div class="card-header bg-danger bg-opacity-10 text-danger border-0">
+                            <h3 class="card-title h5 mb-0">Zona pericolo</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">Le azioni in questa sezione sono irreversibili. Procedere con cautela.</p>
+
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#resetProjectModal">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Resetta indice vettoriale
+                                </button>
+
+                                <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">
+                                    <i class="bi bi-trash me-1"></i> Elimina progetto definitivamente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Change Limit Modal -->
+<div class="modal fade" id="changeLimitModal" tabindex="-1" aria-labelledby="changeLimitModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changeLimitModalLabel">Modifica limite mensile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="mb-3">
+                        <label for="newLimit" class="form-label">Nuovo limite mensile (€)</label>
+                        <input type="number" class="form-control" id="newLimit" min="10" max="500" value="75" step="5">
+                        <div class="form-text">Il limite mensile minimo è €10 e massimo €500.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-sm btn-primary">Salva modifiche</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Note Modal -->
+<div class="modal fade" id="viewNoteModal" tabindex="-1" aria-labelledby="viewNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewNoteModalLabel">Visualizza nota</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <small class="text-muted" id="note-created-at"></small>
+                </div>
+                <div id="note-content" class="p-3 bg-light rounded"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-sm btn-primary edit-note-btn" data-bs-toggle="modal" data-bs-target="#editNoteModal">
+                    <i class="bi bi-pencil me-1"></i> Modifica
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Project Modal -->
+<div class="modal fade" id="resetProjectModal" tabindex="-1" aria-labelledby="resetProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resetProjectModalLabel">Conferma reset indice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Questa azione ricostruirà completamente l'indice vettoriale del progetto.
+                </div>
+                <p>Potrebbe essere utile quando:</p>
+                <ul>
+                    <li>Si verificano problemi nelle risposte dell'AI</li>
+                    <li>Hai eliminato molti documenti o note</li>
+                    <li>L'indice mostra comportamenti anomali</li>
+                </ul>
+                <p>Vuoi procedere con la ricostruzione dell'indice?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <form method="post" action="">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reset_index">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <button type="submit" class="btn btn-sm btn-warning">
+                        <i class="bi bi-arrow-repeat me-1"></i> Ricostruisci indice
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include other shared modals -->
+{% include 'be/project_modals.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Usage Chart
+        const usageOptions = {
+            series: [
+                {
+                    name: 'Interazioni',
+                    type: 'column',
+                    data: [14, 8, 15, 22, 9, 12, 18],
+                    color: '#0d6efd'
+                },
+                {
+                    name: 'Costo (€)',
+                    type: 'line',
+                    data: [3.5, 2.1, 4.2, 6.2, 2.5, 3.1, 4.8],
+                    color: '#fd7e14'
+                }
+            ],
+            chart: {
+                height: 300,
+                type: 'line',
+                toolbar: {
+                    show: false
+                }
+            },
+            stroke: {
+                curve: 'smooth',
+                width: [0, 3]
+            },
+            plotOptions: {
+                bar: {
+                    columnWidth: '60%',
+                    borderRadius: 3
+                }
+            },
+            fill: {
+                opacity: [0.85, 1],
+                gradient: {
+                    inverseColors: false,
+                    shade: 'light',
+                    type: "vertical",
+                    opacityFrom: 0.85,
+                    opacityTo: 0.55,
+                    stops: [0, 100, 100, 100]
+                }
+            },
+            markers: {
+                size: 4,
+                colors: '#fd7e14',
+                strokeColors: '#fff',
+                strokeWidth: 2,
+                hover: {
+                    size: 7,
+                }
+            },
+            labels: ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
+            xaxis: {
+                axisBorder: {
+                    show: false
+                },
+                axisTicks: {
+                    show: false
+                }
+            },
+            yaxis: [
+                {
+                    title: {
+                        text: 'Interazioni',
+                        style: {
+                            color: '#0d6efd'
+                        }
+                    }
+                },
+                {
+                    opposite: true,
+                    title: {
+                        text: 'Costo (€)',
+                        style: {
+                            color: '#fd7e14'
+                        }
+                    },
+                    labels: {
+                        formatter: function(val) {
+                            return '€' + val.toFixed(2);
+                        }
+                    }
+                }
+            ],
+            dataLabels: {
+                enabled: false
+            },
+            tooltip: {
+                shared: true,
+                intersect: false,
+                y: {
+                    formatter: function(y, { seriesIndex }) {
+                        if (seriesIndex === 0) {
+                            return y + " interazioni";
+                        } else if (seriesIndex === 1) {
+                            return "€" + y.toFixed(2);
+                        }
+                        return y;
+                    }
+                }
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'left',
+                offsetX: 40
+            }
+        };
+
+        const usageChart = new ApexCharts(document.querySelector('#usage-chart'), usageOptions);
+        usageChart.render();
+
+        // Cost Chart
+        const costOptions = {
+            series: [
+                {
+                    name: 'Costo Giornaliero',
+                    data: [2.5, 3.7, 4.2, 6.8, 8.1, 9.5, 7.9],
+                    color: '#fd7e14'
+                }
+            ],
+            chart: {
+                height: 350,
+                type: 'area',
+                toolbar: {
+                    show: false
+                }
+            },
+            dataLabels: {
+                enabled: false
+            },
+            stroke: {
+                curve: 'smooth',
+                width: 2
+            },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shade: 'light',
+                    type: "vertical",
+                    shadeIntensity: 0.25,
+                    gradientToColors: undefined,
+                    inverseColors: false,
+                    opacityFrom: 0.65,
+                    opacityTo: 0.15,
+                    stops: [0, 100]
+                }
+            },
+            annotations: {
+                yaxis: [
+                    {
+                        y: 10.7,
+                        borderColor: '#dc3545',
+                        label: {
+                            borderColor: '#dc3545',
+                            style: {
+                                color: '#fff',
+                                background: '#dc3545'
+                            },
+                            text: 'Limite Giornaliero: €10.7'
+                        }
+                    }
+                ]
+            },
+            labels: ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
+            xaxis: {
+                axisBorder: {
+                    show: false
+                },
+                axisTicks: {
+                    show: false
+                }
+            },
+            yaxis: {
+                title: {
+                    text: 'Costo (€)',
+                    style: {
+                        color: '#fd7e14'
+                    }
+                },
+                labels: {
+                    formatter: function(val) {
+                        return '€' + val.toFixed(2);
+                    }
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function(val) {
+                        return '€' + val.toFixed(2);
+                    }
+                }
+            }
+        };
+
+        const costChart = new ApexCharts(document.querySelector('#cost-chart'), costOptions);
+        costChart.render();
+
+        // File Types Chart
+        const fileTypesOptions = {
+            series: [42, 28, 15, 10, 5],
+            chart: {
+                height: 300,
+                type: 'donut'
+            },
+            labels: ['PDF', 'DOCX', 'TXT', 'XLSX', 'Altri'],
+            colors: ['#0d6efd', '#20c997', '#fd7e14', '#6f42c1', '#6c757d'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '55%',
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Totale',
+                                formatter: function(w) {
+                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            legend: {
+                position: 'bottom'
+            },
+            responsive: [{
+                breakpoint: 480,
+                options: {
+                    chart: {
+                        height: 250
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }]
+        };
+
+        const fileTypesChart = new ApexCharts(document.querySelector('#file-types-chart'), fileTypesOptions);
+        fileTypesChart.render();
+
+        // Period selector for charts
+        document.querySelectorAll('.chart-period').forEach(button => {
+            button.addEventListener('click', function() {
+                document.querySelectorAll('.chart-period').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateUsageChart(this.getAttribute('data-period'));
+            });
+        });
+
+        document.querySelectorAll('.cost-period').forEach(button => {
+            button.addEventListener('click', function() {
+                document.querySelectorAll('.cost-period').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateCostChart(this.getAttribute('data-period'));
+            });
+        });
+
+        // Chart update functions
+        function updateUsageChart(period) {
+            let newData, newLabels, newCosts;
+
+            if (period === 'week') {
+                newLabels = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+                newData = [14, 8, 15, 22, 9, 12, 18];
+                newCosts = [3.5, 2.1, 4.2, 6.2, 2.5, 3.1, 4.8];
+            } else if (period === 'month') {
+                newLabels = ['Sett 1', 'Sett 2', 'Sett 3', 'Sett 4'];
+                newData = [42, 58, 36, 51];
+                newCosts = [11.6, 15.3, 9.8, 13.2];
+            } else if (period === 'year') {
+                newLabels = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+                newData = [65, 75, 102, 89, 120, 85, 94, 70, 88, 110, 95, 130];
+                newCosts = [16.8, 18.9, 26.5, 23.2, 31.2, 22.1, 24.5, 18.3, 23.1, 28.5, 24.8, 33.9];
+            }
+
+            usageChart.updateOptions({
+                labels: newLabels,
+                series: [
+                    {
+                        name: 'Interazioni',
+                        data: newData
+                    },
+                    {
+                        name: 'Costo (€)',
+                        data: newCosts
+                    }
+                ]
+            });
+        }
+
+        function updateCostChart(period) {
+            let newData, newLabels, limitValue, limitText;
+
+            if (period === 'week') {
+                newLabels = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+                newData = [2.5, 3.7, 4.2, 6.8, 8.1, 9.5, 7.9];
+                limitValue = 10.7;
+                limitText = 'Limite Giornaliero: €10.7';
+            } else if (period === 'month') {
+                newLabels = ['Sett 1', 'Sett 2', 'Sett 3', 'Sett 4'];
+                newData = [11.6, 15.3, 9.8, 13.2];
+                limitValue = 25;
+                limitText = 'Limite Settimanale: €25.0';
+            } else if (period === 'year') {
+                newLabels = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+                newData = [16.8, 18.9, 26.5, 23.2, 31.2, 22.1, 24.5, 18.3, 23.1, 28.5, 24.8, 33.9];
+                limitValue = 75;
+                limitText = 'Limite Mensile: €75.0';
+            }
+
+            costChart.updateOptions({
+                labels: newLabels,
+                annotations: {
+                    yaxis: [
+                        {
+                            y: limitValue,
+                            borderColor: '#dc3545',
+                            label: {
+                                borderColor: '#dc3545',
+                                style: {
+                                    color: '#fff',
+                                    background: '#dc3545'
+                                },
+                                text: limitText
+                            }
+                        }
+                    ]
+                },
+                series: [
+                    {
+                        name: 'Costo',
+                        data: newData
+                    }
+                ]
+            });
+        }
+
+        // View Note functionality
+        document.querySelectorAll('.view-note').forEach(button => {
+            button.addEventListener('click', function() {
+                const noteId = this.getAttribute('data-note-id');
+
+                // In a real implementation, you'd fetch the note details from the server
+                // For now, we'll use placeholder values
+                document.getElementById('note-created-at').textContent = 'Creata il 16 Apr 2025';
+                document.getElementById('note-content').textContent = 'Contenuto della nota...';
+
+                // Set the note ID for the edit button
+                document.querySelector('.edit-note-btn').setAttribute('data-note-id', noteId);
+            });
+        });
+
+    });
+</script>
+{% endblock %}

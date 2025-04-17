@@ -8,6 +8,9 @@ urlpatterns = [
     path('', user_login, name='login'),
     path('dashboard', views.dashboard, name='dashboard'),
 
+    # Gestione Profilo
+    path('profile/', views.user_profile, name='user_profile'),
+
     # percorsi per upload
     path('upload/document', views.upload_document, name='upload_document'),
     path('upload/folder', views.upload_folder, name='upload_folder'),
@@ -18,15 +21,15 @@ urlpatterns = [
     path('documents/delete/<str:document_id>', views.delete_document, name='delete_document'),
 
     # percorsi per tools
-    path('tools/rag', views.rag, name='rag'),
-    path('tools/chiedi', views.chiedi, name='chiedi'),
+    # path('tools/rag', views.rag, name='rag'),
+    # path('tools/chiedi', views.chiedi, name='chiedi'),
 
     # percorsi per projects - aggiornati
     path('projects/new', views.new_project, name='new_project'),
     path('projects/list', views.projects_list, name='projects_list'),
     path('projects/<int:project_id>', views.project, name='project'),
     path('projects', views.project, name='project'),  # Supporto per POST senza ID
-
+    path('project/<int:project_id>/details/', views.project_details, name='project_details'),
     path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
 ]
 

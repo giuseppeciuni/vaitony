@@ -1,0 +1,368 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block title %}Profilo Utente{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-header {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .profile-image-container {
+        position: relative;
+        width: 150px;
+        height: 150px;
+        margin: 0 auto;
+    }
+
+    .profile-image {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 4px solid #fff;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .image-actions {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        display: flex;
+    }
+
+    .image-action-button {
+        background-color: #007bff;
+        color: white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        margin-left: 5px;
+    }
+
+    .delete-image-button {
+        background-color: #dc3545;
+    }
+
+    .profile-card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        border-radius: 0.5rem;
+    }
+
+    .profile-card .card-header {
+        background-color: #ffffff;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        padding: 1rem;
+    }
+
+    .form-label {
+        font-weight: 500;
+    }
+
+    .btn-save {
+        min-width: 120px;
+    }
+
+    .image-preview {
+        margin-top: 15px;
+        display: none;
+        padding: 10px;
+        border: 1px dashed #ccc;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+    }
+
+    .image-preview img {
+        max-width: 100%;
+        max-height: 150px;
+        border-radius: 5px;
+    }
+
+    .alert-success {
+        border-left: 4px solid #28a745;
+    }
+
+    .alert-danger {
+        border-left: 4px solid #dc3545;
+    }
+
+    .alert-info {
+        border-left: 4px solid #17a2b8;
+    }
+
+    .alert {
+        animation: fadeAlert 5s forwards;
+    }
+
+    @keyframes fadeAlert {
+        0% { opacity: 1; }
+        80% { opacity: 1; }
+        100% { opacity: 0; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="profile-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h4 mb-0">Profilo Utente</h1>
+            <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Indietro
+            </a>
+        </div>
+    </div>
+
+    <!-- Area messaggi -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                <i class="bi {% if message.tags == 'success' %}bi-check-circle{% elif message.tags == 'error' %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Colonna sinistra - Immagine profilo -->
+        <div class="col-md-3">
+            <div class="card profile-card mb-4">
+                <div class="card-body text-center">
+                    <div class="profile-image-container">
+                        {% if profile.picture %}
+                            <img src="{{ profile.picture.url }}" class="profile-image" alt="Immagine profilo" id="profile-image">
+                        {% else %}
+                            <img src="{% static 'dist/assets/img/default-150x150.png' %}" class="profile-image" alt="Immagine profilo" id="profile-image">
+                        {% endif %}
+                        <div class="image-actions">
+                            <label for="profile-image-upload" class="image-action-button" title="Cambia immagine">
+                                <i class="bi bi-camera"></i>
+                            </label>
+                            {% if profile.picture %}
+                            <button type="button" class="image-action-button delete-image-button" title="Elimina immagine" data-bs-toggle="modal" data-bs-target="#deleteImageModal">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <h5 class="mt-3">{{ user.username }}</h5>
+                    <p class="text-muted">
+                        {% if profile.profile_type %}
+                            {{ profile.profile_type }}
+                        {% else %}
+                            Utente
+                        {% endif %}
+                    </p>
+                    <div class="mt-3">
+                        <p class="mb-1">
+                            <i class="bi bi-envelope me-2"></i>{{ user.email|default:"Email non impostata" }}
+                        </p>
+                        {% if profile.city or profile.country %}
+                        <p class="mb-1">
+                            <i class="bi bi-geo-alt me-2"></i>
+                            {% if profile.city %}{{ profile.city }}{% endif %}
+                            {% if profile.city and profile.country %}, {% endif %}
+                            {% if profile.country %}{{ profile.country }}{% endif %}
+                        </p>
+                        {% endif %}
+                        <p class="mb-1">
+                            <i class="bi bi-calendar me-2"></i>Iscritto dal {{ user.date_joined|date:"d M Y" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Colonna destra - Form di modifica -->
+        <div class="col-md-9">
+            <div class="card profile-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Modifica Profilo</h5>
+                    <span class="text-muted small">I campi contrassegnati con * sono obbligatori</span>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="profile-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="update_profile" value="1">
+                        <input type="file" id="profile-image-upload" name="picture" style="display: none;" accept="image/*">
+
+                        <!-- Anteprima immagine -->
+                        <div class="image-preview" id="image-preview">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">Anteprima immagine:</h6>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="cancel-image">Annulla</button>
+                            </div>
+                            <img src="" id="preview-img" alt="Anteprima">
+                            <div class="mt-2 text-muted small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                L'immagine sarà salvata solo dopo aver cliccato su "Salva Modifiche".
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="first_name" class="form-label">Nome</label>
+                                <input type="text" class="form-control" id="first_name" name="first_name" value="{{ profile.first_name }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="last_name" class="form-label">Cognome</label>
+                                <input type="text" class="form-control" id="last_name" name="last_name" value="{{ profile.last_name }}">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="company_name" class="form-label">Nome Azienda</label>
+                            <input type="text" class="form-control" id="company_name" name="company_name" value="{{ profile.company_name }}">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="address" class="form-label">Indirizzo</label>
+                            <input type="text" class="form-control" id="address" name="address" value="{{ profile.address }}">
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="city" class="form-label">Città</label>
+                                <input type="text" class="form-control" id="city" name="city" value="{{ profile.city }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="postal_code" class="form-label">CAP</label>
+                                <input type="text" class="form-control" id="postal_code" name="postal_code" value="{{ profile.postal_code }}">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="province" class="form-label">Provincia</label>
+                                <input type="text" class="form-control" id="province" name="province" value="{{ profile.province }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="country" class="form-label">Paese</label>
+                                <input type="text" class="form-control" id="country" name="country" value="{{ profile.country }}">
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="reset" class="btn btn-outline-secondary me-2">
+                                <i class="bi bi-x-circle me-1"></i> Annulla
+                            </button>
+                            <button type="submit" class="btn btn-primary btn-save" id="save-button">
+                                <i class="bi bi-save me-1"></i> Salva Modifiche
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal conferma eliminazione immagine -->
+<div class="modal fade" id="deleteImageModal" tabindex="-1" aria-labelledby="deleteImageModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteImageModalLabel">Conferma eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler eliminare l'immagine del profilo?</p>
+                <p class="text-muted small">Verrà ripristinata l'immagine predefinita del sistema.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <form method="post" action="{% url 'user_profile' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_image" value="1">
+                    <button type="submit" class="btn btn-danger">Elimina</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestione del caricamento delle immagini
+        const profileImageUpload = document.getElementById('profile-image-upload');
+        const imagePreview = document.getElementById('image-preview');
+        const previewImg = document.getElementById('preview-img');
+        const cancelButton = document.getElementById('cancel-image');
+        const saveButton = document.getElementById('save-button');
+
+        // Dopo 5 secondi, nascondi automaticamente i messaggi di alert
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bootstrapAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                bootstrapAlert.close();
+            });
+        }, 5000);
+
+        if (profileImageUpload) {
+            profileImageUpload.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const reader = new FileReader();
+
+                    reader.onload = function(e) {
+                        // Mostra l'anteprima
+                        previewImg.src = e.target.result;
+                        imagePreview.style.display = 'block';
+
+                        // Evidenzia il pulsante di salvataggio
+                        saveButton.classList.add('btn-danger');
+                        saveButton.innerHTML = '<i class="bi bi-save me-1"></i> Salva e applica immagine';
+                    };
+
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+        }
+
+        // Gestione del pulsante di annullamento
+        if (cancelButton) {
+            cancelButton.addEventListener('click', function() {
+                // Nascondi l'anteprima e resetta il valore dell'input file
+                imagePreview.style.display = 'none';
+                profileImageUpload.value = '';
+
+                // Ripristina il pulsante di salvataggio
+                saveButton.classList.remove('btn-danger');
+                saveButton.innerHTML = '<i class="bi bi-save me-1"></i> Salva Modifiche';
+            });
+        }
+
+        // Resetta lo stile del pulsante quando si fa reset al form
+        const form = document.getElementById('profile-form');
+        if (form) {
+            form.addEventListener('reset', function() {
+                // Nascondi l'anteprima e resetta l'input file
+                imagePreview.style.display = 'none';
+                profileImageUpload.value = '';
+
+                // Ripristina il pulsante di salvataggio
+                saveButton.classList.remove('btn-danger');
+                saveButton.innerHTML = '<i class="bi bi-save me-1"></i> Salva Modifiche';
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -89,7 +89,7 @@
 
                     <!-- Menu Footer -->
                     <li class="user-footer d-flex justify-content-between p-2">
-                        <a href="#" class="btn btn-sm btn-outline-secondary">Profilo</a>
+                        <a href="{% url 'user_profile' %}" class="btn btn-sm btn-outline-secondary">Profilo</a>
                         <form method="post" action="{% url 'logout' %}">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm btn-outline-danger">Esci</button>

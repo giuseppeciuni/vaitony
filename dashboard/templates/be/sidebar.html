@@ -17,13 +17,13 @@
                     </a>
                 </li>
 
-                <!-- Documents -->
-                <li class="nav-item">
-                    <a href="{% url 'documents_uploaded' %}" class="nav-link">
-                        <i class="nav-icon bi bi-file-earmark"></i>
-                        <p>Documents</p>
-                    </a>
-                </li>
+<!--                &lt;!&ndash; Documents &ndash;&gt;-->
+<!--                <li class="nav-item">-->
+<!--                    <a href="{% url 'documents_uploaded' %}" class="nav-link">-->
+<!--                        <i class="nav-icon bi bi-file-earmark"></i>-->
+<!--                        <p>Documents</p>-->
+<!--                    </a>-->
+<!--                </li>-->
 
                 <!-- Menu Uploads -->
                 <li class="nav-item">
@@ -45,31 +45,6 @@
                             <a href="{% url 'upload_folder' %}" class="nav-link">
                                 <i class="nav-icon bi bi-folder"></i>
                                 <p>Upload Folder</p>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-
-                <!-- Menu Tools -->
-                <li class="nav-item">
-                    <a href="#" class="nav-link">
-                        <i class="nav-icon bi bi-tools"></i>
-                        <p>
-                            Tools
-                            <i class="nav-arrow bi bi-chevron-right"></i>
-                        </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                        <li class="nav-item">
-                            <a href="{% url 'rag' %}" class="nav-link">
-                                <i class="nav-icon bi bi-search"></i>
-                                <p>RAG</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'chiedi' %}" class="nav-link">
-                                <i class="nav-icon bi bi-chat-dots"></i>
-                                <p>Chiedi</p>
                             </a>
                         </li>
                     </ul>
@@ -99,6 +74,30 @@
                     </ul>
                 </li>
 
+
+                <li class="nav-item {% if '/projects/' in request.path %}menu-is-opening menu-open{% endif %}">
+                    <a href="#" class="nav-link {% if '/projects/' in request.path %}active{% endif %}">
+                        <i class="nav-icon bi bi-kanban"></i>
+                        <p>
+                            Settings
+                            <i class="nav-arrow bi bi-chevron-right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a href="{% url 'projects_list' %}" class="nav-link {% if 'projects_list' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-list-check"></i>
+                                <p>IA to use</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'new_project' %}" class="nav-link {% if 'new_project' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-plus-square"></i>
+                                <p>RAG params</p>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
 
             </ul>
         </nav>

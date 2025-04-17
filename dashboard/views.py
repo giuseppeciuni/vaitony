@@ -26,7 +26,65 @@ logger = logging.getLogger(__name__)
 def dashboard(request):
     logger.debug("---> dashboard")
     if request.user.is_authenticated:
-        context = {}
+        # Recupera i progetti dell'utente
+        projects = Project.objects.filter(user=request.user).order_by('-created_at')
+
+        # Conta i documenti totali in tutti i progetti
+        documents_count = ProjectFile.objects.filter(project__user=request.user).count()
+
+        # Conta le note totali
+        notes_count = ProjectNote.objects.filter(project__user=request.user).count()
+
+        # Conta le conversazioni totali
+        conversations_count = ProjectConversation.objects.filter(project__user=request.user).count()
+
+        # Calcola il numero di progetti attivi (con almeno un file o una nota)
+        active_projects = Project.objects.filter(
+            user=request.user
+        ).filter(
+            files__isnull=False
+        ).distinct().count()
+
+        # Calcola il numero totale di attività (documenti + note + conversazioni)
+        total_activities = documents_count + notes_count + conversations_count
+
+        # Ottieni le conversazioni recenti
+        recent_conversations = ProjectConversation.objects.filter(
+            project__user=request.user
+        ).order_by('-created_at')[:5]
+
+        # Ottieni le note recenti
+        recent_notes = ProjectNote.objects.filter(
+            project__user=request.user
+        ).order_by('-created_at')[:5]
+
+        # Ottieni i file recenti
+        recent_files = ProjectFile.objects.filter(
+            project__user=request.user
+        ).order_by('-uploaded_at')[:5]
+
+        # Raccoglie i tipi di documento per il grafico a ciambella
+        document_types = {}
+        for doc in ProjectFile.objects.filter(project__user=request.user):
+            doc_type = doc.file_type.upper() if doc.file_type else 'ALTRO'
+            document_types[doc_type] = document_types.get(doc_type, 0) + 1
+
+        document_types_values = list(document_types.values())
+        document_types_labels = list(document_types.keys())
+
+        context = {
+            'projects': projects,
+            'documents_count': documents_count,
+            'notes_count': notes_count,
+            'conversations_count': conversations_count,
+            'active_projects': active_projects,
+            'total_activities': total_activities,
+            'recent_conversations': recent_conversations,
+            'recent_notes': recent_notes,
+            'recent_files': recent_files,
+            'document_types_values': document_types_values,
+            'document_types_labels': document_types_labels,
+        }
         return render(request, 'be/dashboard.html', context)
     else:
         logger.warning("User not Authenticated!")
@@ -92,101 +150,101 @@ def upload_document(request):
         return redirect('login')
 
 
-def rag(request):
-    """View for RAG interface - allows users to ask questions about their documents"""
-    logger.debug("---> rag")
-    if request.user.is_authenticated:
-        context = {
-            'answer': None,
-            'sources': None,
-            'question': None,
-            'processing_time': None,
-            'has_documents': True  # Will be updated below
-        }
-
-        # Check if user has any documents
-        user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
-        if not os.path.exists(user_upload_dir) or not os.listdir(user_upload_dir):
-            context['has_documents'] = False
-            return render(request, 'be/rag.html', context)
-
-        # Process RAG query if submitted
-        if request.method == 'POST' and 'question' in request.POST:
-            question = request.POST.get('question').strip()
-            context['question'] = question
-
-            if question:
-                import time
-
-                # Time the processing
-                start_time = time.time()
-
-                # Get response from RAG system
-                try:
-
-                    rag_response = get_answer_from_rag(request.user, question)
-
-                    # Estrai la risposta
-                    context['answer'] = rag_response.get('answer')
-
-                    # Prepara le fonti per la visualizzazione
-                    raw_sources = rag_response.get('sources', [])
-                    formatted_sources = []
-
-                    for source in raw_sources:
-                        # Estrai il nome del file dal percorso completo nei metadati
-                        file_path = source.get('metadata', {}).get('source', '')
-                        filename = os.path.basename(file_path) if file_path else 'Unknown'
-
-                        # Estrai la pagina se disponibile (per PDF)
-                        page = source.get('metadata', {}).get('page', None)
-                        page_info = f" (pag. {page + 1})" if page is not None else ""
-
-                        # Ottieni il punteggio di rilevanza se disponibile
-                        score = source.get('score')
-                        score_display = f" - Rilevanza: {score:.2f}" if score is not None else ""
-
-                        # Aggiungi alla lista delle fonti
-                        formatted_source = {
-                            'filename': f"{filename}{page_info}{score_display}",
-                            'content': source.get('content', ''),
-                            'type': os.path.splitext(filename)[1].lower() if filename != 'Unknown' else '',
-                            'has_image': source.get('has_image', False),
-                            'image_data': source.get('image_data', ''),
-                        }
-
-                        formatted_sources.append(formatted_source)
-
-                    context['sources'] = formatted_sources
-                    context['processing_time'] = round(time.time() - start_time, 2)
-
-                    # Log di successo
-                    logger.info(f"RAG query processed successfully for user {request.user.username}")
-                except Exception as e:
-                    logger.exception(f"Error in RAG processing: {str(e)}")
-                    context['answer'] = f"An error occurred while processing your question: {str(e)}"
-            else:
-                messages.warning(request, "Please enter a question.")
-
-        return render(request, 'be/rag.html', context)
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
-
-
-def chiedi(request):
-    logger.debug("---> chiedi")
-    if request.user.is_authenticated:
-        context = {}
-        if request.method == 'POST':
-            # Logica per elaborare una richiesta generica
-            logger.info("Processing 'Chiedi' request")
-            # Elaborazione della query
-            # context['results'] = results
-        return render(request, 'be/chiedi.html', context)
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
+# def rag(request):
+#     """View for RAG interface - allows users to ask questions about their documents"""
+#     logger.debug("---> rag")
+#     if request.user.is_authenticated:
+#         context = {
+#             'answer': None,
+#             'sources': None,
+#             'question': None,
+#             'processing_time': None,
+#             'has_documents': True  # Will be updated below
+#         }
+#
+#         # Check if user has any documents
+#         user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
+#         if not os.path.exists(user_upload_dir) or not os.listdir(user_upload_dir):
+#             context['has_documents'] = False
+#             return render(request, 'be/rag.html', context)
+#
+#         # Process RAG query if submitted
+#         if request.method == 'POST' and 'question' in request.POST:
+#             question = request.POST.get('question').strip()
+#             context['question'] = question
+#
+#             if question:
+#                 import time
+#
+#                 # Time the processing
+#                 start_time = time.time()
+#
+#                 # Get response from RAG system
+#                 try:
+#
+#                     rag_response = get_answer_from_rag(request.user, question)
+#
+#                     # Estrai la risposta
+#                     context['answer'] = rag_response.get('answer')
+#
+#                     # Prepara le fonti per la visualizzazione
+#                     raw_sources = rag_response.get('sources', [])
+#                     formatted_sources = []
+#
+#                     for source in raw_sources:
+#                         # Estrai il nome del file dal percorso completo nei metadati
+#                         file_path = source.get('metadata', {}).get('source', '')
+#                         filename = os.path.basename(file_path) if file_path else 'Unknown'
+#
+#                         # Estrai la pagina se disponibile (per PDF)
+#                         page = source.get('metadata', {}).get('page', None)
+#                         page_info = f" (pag. {page + 1})" if page is not None else ""
+#
+#                         # Ottieni il punteggio di rilevanza se disponibile
+#                         score = source.get('score')
+#                         score_display = f" - Rilevanza: {score:.2f}" if score is not None else ""
+#
+#                         # Aggiungi alla lista delle fonti
+#                         formatted_source = {
+#                             'filename': f"{filename}{page_info}{score_display}",
+#                             'content': source.get('content', ''),
+#                             'type': os.path.splitext(filename)[1].lower() if filename != 'Unknown' else '',
+#                             'has_image': source.get('has_image', False),
+#                             'image_data': source.get('image_data', ''),
+#                         }
+#
+#                         formatted_sources.append(formatted_source)
+#
+#                     context['sources'] = formatted_sources
+#                     context['processing_time'] = round(time.time() - start_time, 2)
+#
+#                     # Log di successo
+#                     logger.info(f"RAG query processed successfully for user {request.user.username}")
+#                 except Exception as e:
+#                     logger.exception(f"Error in RAG processing: {str(e)}")
+#                     context['answer'] = f"An error occurred while processing your question: {str(e)}"
+#             else:
+#                 messages.warning(request, "Please enter a question.")
+#
+#         return render(request, 'be/rag.html', context)
+#     else:
+#         logger.warning("User not Authenticated!")
+#         return redirect('login')
+#
+#
+# def chiedi(request):
+#     logger.debug("---> chiedi")
+#     if request.user.is_authenticated:
+#         context = {}
+#         if request.method == 'POST':
+#             # Logica per elaborare una richiesta generica
+#             logger.info("Processing 'Chiedi' request")
+#             # Elaborazione della query
+#             # context['results'] = results
+#         return render(request, 'be/chiedi.html', context)
+#     else:
+#         logger.warning("User not Authenticated!")
+#         return redirect('login')
 
 
 def new_project(request):
@@ -1669,3 +1727,105 @@ def get_answer_from_project(project, question):
             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
             "sources": []
         }
+
+
+def user_profile(request):
+    """
+    Vista per visualizzare e modificare il profilo utente con gestione completa delle immagini.
+    """
+    logger.debug("---> user_profile")
+    if request.user.is_authenticated:
+        profile = request.user.profile
+
+        if request.method == 'POST':
+            # Aggiornamento del profilo
+            if 'update_profile' in request.POST:
+                profile.first_name = request.POST.get('first_name', '')
+                profile.last_name = request.POST.get('last_name', '')
+                profile.company_name = request.POST.get('company_name', '')
+                profile.email = request.POST.get('email', '')
+                profile.city = request.POST.get('city', '')
+                profile.address = request.POST.get('address', '')
+                profile.postal_code = request.POST.get('postal_code', '')
+                profile.province = request.POST.get('province', '')
+                profile.country = request.POST.get('country', '')
+
+                # Gestione dell'immagine del profilo
+                if 'picture' in request.FILES:
+                    # Se c'è già un'immagine, la eliminiamo
+                    if profile.picture:
+                        import os
+                        if os.path.exists(profile.picture.path):
+                            os.remove(profile.picture.path)
+
+                    profile.picture = request.FILES['picture']
+
+                profile.save()
+
+                # Aggiorna anche l'email dell'utente principale
+                if request.POST.get('email'):
+                    request.user.email = request.POST.get('email')
+                    request.user.save()
+
+                messages.success(request, "Profilo aggiornato con successo.")
+                return redirect('user_profile')
+
+            # Eliminazione dell'immagine
+            elif 'delete_image' in request.POST:
+                if profile.picture:
+                    import os
+                    if os.path.exists(profile.picture.path):
+                        os.remove(profile.picture.path)
+                    profile.picture = None
+                    profile.save()
+                    messages.success(request, "Immagine del profilo eliminata.")
+                return redirect('user_profile')
+
+        context = {
+            'profile': profile,
+            'user': request.user
+        }
+        return render(request, 'be/user_profile.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+def project_details(request, project_id):
+    """
+    Visualizza i dettagli analitici di un progetto, inclusi grafici di interazione e informazioni sui costi.
+    """
+    logger.debug(f"---> project_details: {project_id}")
+    if request.user.is_authenticated:
+        try:
+            # Ottiene il progetto
+            project = get_object_or_404(Project, id=project_id, user=request.user)
+
+            # Conta le fonti utilizzate in tutte le conversazioni di questo progetto
+            sources_count = AnswerSource.objects.filter(conversation__project=project).count()
+
+            # Prepara i dati per i grafici
+            # Nella versione reale, questi dati verrebbero calcolati in base ai dati effettivi
+            # Per ora utilizziamo dati statici
+
+            # Calcolo del costo basato sulle interazioni reali
+            conversation_count = project.conversations.count()
+            average_cost_per_interaction = 0.28  # Euro per interazione
+            total_cost = conversation_count * average_cost_per_interaction
+
+            context = {
+                'project': project,
+                'sources_count': sources_count,
+                'total_cost': total_cost,
+                'average_cost': average_cost_per_interaction,
+                # Aggiungi qui altri dati di contesto se necessario
+            }
+
+            return render(request, 'be/project_details.html', context)
+
+        except Project.DoesNotExist:
+            messages.error(request, "Progetto non trovato.")
+            return redirect('projects_list')
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')

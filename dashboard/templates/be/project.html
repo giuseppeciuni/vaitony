@@ -204,6 +204,18 @@
         {% endif %}
     </div>
 
+    <!-- Aggiungiamo qui il blocco dei messaggi -->
+    {% if messages %}
+    <div class="messages mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Navigation Tabs -->
     <ul class="nav nav-tabs" id="projectTabs" role="tablist">
         <li class="nav-item" role="presentation">

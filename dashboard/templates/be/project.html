@@ -238,6 +238,11 @@
                 <i class="bi bi-file-text me-1"></i> Fonti
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="rag-config-tab" data-bs-toggle="tab" data-bs-target="#rag-config" type="button">
+                <i class="bi bi-gear me-1"></i> Profilo IA
+            </button>
+        </li>
     </ul>
 
     <!-- Tab Content -->
@@ -412,6 +417,184 @@
             </div>
             {% endif %}
         </div>
+
+        <!-- Contenuto del tab RAG Config -->
+        <div class="tab-pane fade" id="rag-config" role="tabpanel" aria-labelledby="rag-config-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Configurazione del Profilo IA Corrente</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Profilo Corrente -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">Profilo Attivo</h6>
+                        {% if current_preset %}
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="badge bg-primary me-2">{{ current_preset.template_type.name }}</div>
+                            <h5 class="mb-0">{{ current_preset.name }}</h5>
+                        </div>
+                        <p class="text-muted">{{ current_preset.description }}</p>
+                        {% else %}
+                        <p class="text-muted">Nessun profilo selezionato. Vengono usati i valori predefiniti di sistema.</p>
+                        {% endif %}
+
+                        <div class="d-flex mt-2">
+                            <a href="{% url 'rag_settings' %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-sliders me-1"></i> Modifica Configurazione
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Parametri in uso -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">Parametri di Indicizzazione</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-muted">Dimensione chunk:</td>
+                                            <td class="fw-medium">
+                                                {{ rag_values.chunk_size }}
+                                                {% if 'chunk_size' in customized_values %}
+                                                <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Sovrapposizione chunk:</td>
+                                            <td class="fw-medium">
+                                                {{ rag_values.chunk_overlap }}
+                                                {% if 'chunk_overlap' in customized_values %}
+                                                <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">Parametri di Ricerca</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-muted">Top K risultati:</td>
+                                            <td class="fw-medium">
+                                                {{ rag_values.similarity_top_k }}
+                                                {% if 'similarity_top_k' in customized_values %}
+                                                <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Lambda MMR:</td>
+                                            <td class="fw-medium">
+                                                {{ rag_values.mmr_lambda }}
+                                                {% if 'mmr_lambda' in customized_values %}
+                                                <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Soglia similarità:</td>
+                                            <td class="fw-medium">
+                                                {{ rag_values.similarity_threshold }}
+                                                {% if 'similarity_threshold' in customized_values %}
+                                                <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Tipo retriever:</td>
+                                            <td class="fw-medium">
+                                                {{ rag_values.retriever_type }}
+                                                {% if 'retriever_type' in customized_values %}
+                                                <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">Comportamento IA</h6>
+                        <div class="row">
+                            <div class="col-12">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 ps-0">
+                                        <span>Citazioni automatiche</span>
+                                        <span>
+                                            {% if rag_values.auto_citation %}
+                                            <span class="badge bg-success">Attivo</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Disattivo</span>
+                                            {% endif %}
+                                            {% if 'auto_citation' in customized_values %}
+                                            <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 ps-0">
+                                        <span>Priorità ai nomi file</span>
+                                        <span>
+                                            {% if rag_values.prioritize_filenames %}
+                                            <span class="badge bg-success">Attivo</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Disattivo</span>
+                                            {% endif %}
+                                            {% if 'prioritize_filenames' in customized_values %}
+                                            <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 ps-0">
+                                        <span>Uguale peso note/documenti</span>
+                                        <span>
+                                            {% if rag_values.equal_notes_weight %}
+                                            <span class="badge bg-success">Attivo</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Disattivo</span>
+                                            {% endif %}
+                                            {% if 'equal_notes_weight' in customized_values %}
+                                            <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 ps-0">
+                                        <span>Modo rigoroso (solo contesto)</span>
+                                        <span>
+                                            {% if rag_values.strict_context %}
+                                            <span class="badge bg-success">Attivo</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Disattivo</span>
+                                            {% endif %}
+                                            {% if 'strict_context' in customized_values %}
+                                            <span class="badge bg-info ms-1" title="Personalizzato">P</span>
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        I parametri contrassegnati con <span class="badge bg-info">P</span> sono personalizzati dall'utente
+                        e sovrascrivono quelli del profilo selezionato.
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
 <!--    &lt;!&ndash; Danger Zone &ndash;&gt;-->

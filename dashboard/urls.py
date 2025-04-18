@@ -35,7 +35,8 @@ urlpatterns = [
     # Nuove URL per le impostazioni
     path('settings/ia-engine/', views.ia_engine, name='ia_engine'),
     path('settings/rag/', views.rag_settings, name='rag_settings'),
-
+    path('settings/billing/', views.billing_settings, name='billing_settings'),
+    #path('settings/templates/', views.rag_templates, name='rag_templates'),
 ]
 
 if settings.DEBUG:

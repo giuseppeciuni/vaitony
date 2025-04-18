@@ -348,6 +348,95 @@ LOGGING = {
 }
 
 
+
+
+
+
+
+
+
+
+# === RAG Default Settings ===
+# Parametri di chunking
+DEFAULT_CHUNK_SIZE = 500
+DEFAULT_CHUNK_OVERLAP = 50
+
+# Parametri di ricerca
+DEFAULT_SIMILARITY_TOP_K = 6
+DEFAULT_MMR_LAMBDA = 0.7
+DEFAULT_SIMILARITY_THRESHOLD = 0.7
+DEFAULT_RETRIEVER_TYPE = 'mmr'
+
+# Parametri avanzati
+DEFAULT_AUTO_CITATION = True
+DEFAULT_PRIORITIZE_FILENAMES = True
+DEFAULT_EQUAL_NOTES_WEIGHT = True
+DEFAULT_STRICT_CONTEXT = False
+
+# Prompt predefinito di base
+DEFAULT_RAG_PROMPT = """
+Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+
+Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+Quando rispondi:
+1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+3. Organizza le informazioni in modo logico e strutturato
+4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne
+"""
+
+# Frammenti di prompt per opzioni specifiche
+PRIORITIZE_FILENAMES_PROMPT = """
+
+ISTRUZIONI PER LA RICERCA:
+- Se la domanda contiene un riferimento a un nome di file o a parte di esso (es. "documento X", "allegato Y", "file Z"), 
+  considera con maggiore rilevanza i documenti che hanno quel nome o parte di nome nel loro titolo.
+- Esempi di riferimento a file: "di cosa parla il file relazione", "cosa c'è nell'allegato budget", 
+  "riassumi il documento presentazione", "che informazioni contiene il file report"
+- In questi casi, cerca attivamente nei metadati 'filename' o 'filename_no_ext' dei documenti.
+"""
+
+AUTO_CITATION_PROMPT = """
+
+ISTRUZIONI PER LE CITAZIONI:
+- Cita sempre la fonte delle informazioni che utilizzi nella risposta.
+- Quando citi un documento, menziona il nome del file.
+- Quando citi una nota, menziona che si tratta di una nota.
+"""
+
+STRICT_CONTEXT_PROMPT = """
+
+IMPORTANTE:
+- Rispondi SOLO in base alle informazioni presenti nei documenti e nelle note.
+- Se non trovi informazioni sufficienti, dillo chiaramente e specifica quali aspetti della domanda non possono essere risposti.
+- NON utilizzare conoscenze esterne o generali per completare la risposta.
+"""
+
+# Template finale per contesto e domanda
+CONTEXT_QUESTION_PROMPT = """
+
+Contesto:
+{context}
+
+Domanda: {question}
+
+Risposta dettagliata:
+"""
+
+
+
+
+
+
+
+
+
 ############################################################
 ###### This part below MUST be at the end of the file ######
 ############################################################

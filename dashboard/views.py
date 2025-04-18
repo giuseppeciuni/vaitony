@@ -19,6 +19,7 @@ from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversati
 from profiles.models import RagTemplateType, RagDefaultSettings, RAGConfiguration
 from .utils import process_user_files
 
+
 # Get logger
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,7 @@ def project(request, project_id=None):
                     messages.success(request, "Notes saved successfully.")
                     return redirect('project', project_id=project.id)
 
+
                 elif action == 'ask_question':
                     # Gestisci domanda RAG
                     question = request.POST.get('question', '').strip()
@@ -332,10 +334,20 @@ def project(request, project_id=None):
 
                         # Ottieni la risposta dal sistema RAG
                         try:
-                            logger.info(f"Processing RAG question: '{question}'")
+                            logger.info(f"Elaborazione domanda RAG: '{question[:50]}...' per progetto {project.id}")
 
-                            # Detailed logging
-                            logger.debug(f"Starting RAG query for project ID: {project.id}")
+                            # Verifica configurazione RAG attuale
+                            try:
+                                rag_config = RAGConfiguration.objects.get(user=request.user)
+                                current_preset = rag_config.current_settings
+                                if current_preset:
+                                    logger.info(
+                                        f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+                                else:
+                                    logger.info(
+                                        "Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+                            except Exception as config_error:
+                                logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
 
                             # Verifica che il progetto abbia documenti e note prima di processare la query
                             project_files = ProjectFile.objects.filter(project=project)
@@ -351,6 +363,12 @@ def project(request, project_id=None):
                                 # Calculate processing time
                                 processing_time = round(time.time() - start_time, 2)
                                 logger.info(f"RAG processing completed in {processing_time} seconds")
+
+                                # Log delle fonti trovate
+                                if 'sources' in rag_response and rag_response['sources']:
+                                    logger.info(f"Trovate {len(rag_response['sources'])} fonti rilevanti")
+                                else:
+                                    logger.warning("Nessuna fonte trovata per la risposta")
 
                                 # Salva la conversazione nel database
                                 try:
@@ -659,6 +677,7 @@ def project(request, project_id=None):
                     })
 
             project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
+
             context = {
                 'project': project,
                 'project_files': project_files,
@@ -668,6 +687,49 @@ def project(request, project_id=None):
                 'sources': sources,
                 'project_notes': project_notes
             }
+
+            # Al context aggiungo i dati che descrivono il tipo di RAG usato (uso context.update per aggiungere dati
+            try:
+                rag_config, _ = RAGConfiguration.objects.get_or_create(user=request.user)
+                current_preset = rag_config.current_settings
+
+                # Determina i valori effettivi (personalizzati o ereditati dal preset)
+                rag_values = {
+                    'chunk_size': rag_config.get_chunk_size(),
+                    'chunk_overlap': rag_config.get_chunk_overlap(),
+                    'similarity_top_k': rag_config.get_similarity_top_k(),
+                    'mmr_lambda': rag_config.get_mmr_lambda(),
+                    'similarity_threshold': rag_config.get_similarity_threshold(),
+                    'retriever_type': rag_config.get_retriever_type(),
+                    'auto_citation': rag_config.get_auto_citation(),
+                    'prioritize_filenames': rag_config.get_prioritize_filenames(),
+                    'equal_notes_weight': rag_config.get_equal_notes_weight(),
+                    'strict_context': rag_config.get_strict_context(),
+                }
+
+                # Identifica quali valori sono personalizzati e quali provengono dal preset
+                customized_values = {}
+                for key in rag_values:
+                    if getattr(rag_config, key) is not None:
+                        customized_values[key] = True
+
+                # Ottieni tutti i preset disponibili per mostrare come opzioni
+                all_presets = RagDefaultSettings.objects.all().order_by('template_type__name', 'name')
+            except Exception as e:
+                logger.error(f"Errore nel recuperare la configurazione RAG: {str(e)}")
+                rag_values = {}
+                current_preset = None
+                customized_values = {}
+                all_presets = []
+
+            # Aggiorna il context con i valori RAG
+            context.update({
+                'rag_values': rag_values,
+                'current_preset': current_preset,
+                'customized_values': customized_values,
+                'all_presets': all_presets,
+            })
+
 
             return render(request, 'be/project.html', context)
 
@@ -1309,7 +1371,6 @@ def ia_engine(request):
         logger.warning("User not Authenticated!")
         return redirect('login')
 
-
 # Aggiungere alle viste esistenti in views.py
 
 def rag_settings(request):
@@ -1455,6 +1516,19 @@ def rag_settings(request):
             'current_preset_id': user_config.current_settings.id if user_config.current_settings else None,
         }
         return render(request, 'be/rag_settings.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+def billing_settings(request):
+    """
+    Billing
+    """
+    logger.debug("---> billing_settings")
+    if request.user.is_authenticated:
+        context = {}
+        return render(request, 'be/billing_settings.html', context)
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')

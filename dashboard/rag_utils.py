@@ -713,111 +713,6 @@ def projects_list(request):
         return redirect('login')
 
 
-# # Con DEEPSEEK
-# def get_answer_from_project(project, question):
-#     """
-#     Ottiene una risposta dal sistema RAG per la domanda su un progetto,
-#     con supporto per generazione di storie e risposte creative.
-#     """
-#     logger.debug(f"---> get_answer_from_project for project {project.id}")
-#
-#     try:
-#         # Verifica se il progetto ha documenti o note attive
-#         project_files = ProjectFile.objects.filter(project=project)
-#         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-#
-#         if not project_files.exists() and not project_notes.exists():
-#             return {"answer": "Il progetto non contiene documenti o note attive da ricercare.", "sources": []}
-#
-#         # Controlla se la domanda richiede una generazione creativa
-#         is_story_request = any(keyword in question.lower() for keyword in
-#                                ["crea una storia", "genera una storia", "raccontami una storia", "inventa una storia"])
-#
-#         # Ottieni la catena RAG con parametri modificati per risposte creative
-#         qa_chain = update_project_rag_chain(project)
-#
-#         if qa_chain is None:
-#             return {"answer": "Non è stato possibile creare un indice per i documenti e le note di questo progetto.",
-#                     "sources": []}
-#
-#         # Configurazione speciale per richieste di storie
-#         if is_story_request:
-#             # Template personalizzato per generazione storie
-#             story_template = """Sei uno scrittore creativo che combina informazioni da documenti e note.
-#
-#             ISTRUZIONI:
-#             1. Analizza tutti i documenti e le note forniti
-#             2. Crea una storia coerente che incorpori i fatti trovati
-#             3. Mantieni lo stile narrativo ma rispetta i dati originali
-#             4. Arricchisci con transizioni logiche tra i concetti
-#
-#             CONTENUTI DISPONIBILI:
-#             {context}
-#
-#             Crea una storia che includa queste informazioni:"""
-#
-#             PROMPT = PromptTemplate(
-#                 template=story_template,
-#                 input_variables=["context"]
-#             )
-#
-#             # Modifica la catena temporaneamente per la generazione di storie
-#             qa_chain.combine_documents_chain.llm_chain.prompt = PROMPT
-#             qa_chain.combine_documents_chain.verbose = True
-#
-#         logger.info(f"🔎 Eseguendo ricerca su indice vettoriale del progetto {project.id} per: '{question}'")
-#
-#         # Configura il modello per risposte più creative quando necessario
-#         if is_story_request:
-#             qa_chain.combine_documents_chain.llm_chain.llm.temperature = 0.7
-#             qa_chain.combine_documents_chain.llm_chain.llm.max_tokens = 1500
-#
-#         result = qa_chain.invoke(question)
-#         logger.info(f"✅ Ricerca completata per il progetto {project.id}")
-#
-#         # Formato della risposta
-#         response = {
-#             "answer": result.get('result', 'Nessuna risposta trovata.'),
-#             "sources": [],
-#             "success": True
-#         }
-#
-#         # Aggiungi le fonti se disponibili
-#         source_documents = result.get('source_documents', [])
-#
-#         for doc in source_documents:
-#             metadata = doc.metadata
-#             source_type = metadata.get("type", "file")
-#
-#             if source_type == "note":
-#                 note_title = metadata.get('title', 'Nota senza titolo')
-#                 filename = f"Nota: {note_title}"
-#             else:
-#                 source_path = metadata.get("source", "")
-#                 filename = metadata.get('filename',
-#                                         os.path.basename(source_path) if source_path else "Documento sconosciuto")
-#                 if "page" in metadata:
-#                     filename += f" (pag. {metadata['page'] + 1})"
-#
-#             source = {
-#                 "content": doc.page_content,
-#                 "metadata": metadata,
-#                 "score": getattr(doc, 'score', None),
-#                 "type": source_type,
-#                 "filename": filename
-#             }
-#             response["sources"].append(source)
-#
-#         return response
-#
-#     except Exception as e:
-#         logger.exception(f"Errore in get_answer_from_project: {str(e)}")
-#         return {
-#             "success": False,
-#             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
-#             "error": str(e),
-#             "sources": []
-#         }
 def get_answer_from_project(project, question):
     """
     Ottiene una risposta dal sistema RAG per la domanda su un progetto con migliore debug.
@@ -906,8 +801,6 @@ def get_answer_from_project(project, question):
         }
 
 
-
-
 def check_project_index_update_needed(project):
     """
     Verifica se l'indice FAISS del progetto deve essere aggiornato.
@@ -974,7 +867,6 @@ def check_project_index_update_needed(project):
         # Se non esiste un record per lo stato dell'indice, è necessario crearlo
         logger.debug(f"Nessun record di stato dell'indice per il progetto {project.id}")
         return True
-
 
 
 def handle_project_file_upload(project, file, project_dir, file_path=None):
@@ -1061,7 +953,6 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
     return project_file
 
 
-
 def handle_add_note(project, content):
     """
     Gestore centralizzato per l'aggiunta di note.
@@ -1117,7 +1008,6 @@ def handle_update_note(project, note_id, content):
         return False, "Note not found."
 
 
-
 def handle_toggle_note_inclusion(project, note_id, is_included):
     """
     Gestore centralizzato per attivare/disattivare l'inclusione di una nota nel RAG.
@@ -1142,7 +1032,6 @@ def handle_toggle_note_inclusion(project, note_id, is_included):
         return True, "Note inclusion updated."
     except ProjectNote.DoesNotExist:
         return False, "Note not found."
-
 
 
 def get_answer_from_project(project, question):
@@ -1233,65 +1122,109 @@ def get_answer_from_project(project, question):
         }
 
 
+# Esempio di integrazione con rag_utils.py
+# Da aggiungere alla funzione create_retrieval_qa_chain per utilizzare le impostazioni configurabili
 
-def create_retrieval_qa_chain(vectordb):
+def create_retrieval_qa_chain(vectordb, user=None):
     """
     Crea una catena RetrievalQA a partire da un vectorstore.
+
+    Args:
+        vectordb: Il database vettoriale da cui recuperare i documenti
+        user: L'utente di cui utilizzare le impostazioni RAG (opzionale)
+
+    Returns:
+        RetrievalQA: Oggetto catena RAG
     """
-    # template = """
-    # Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
-    #
-    # Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
-    # Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
-    #
-    # FONDAMENTALE PER LA RICERCA PER NOME FILE:
-    # - Se la domanda contiene un riferimento a un nome di file (es. "documento X", "allegato Y", "file Z"),
-    #   devi dare PRIORITÀ ASSOLUTA ai documenti che hanno quel nome o parte di quel nome nel loro titolo.
-    # - Esempi di riferimento a file: "di cosa parla il file schifezza", "cosa c'è nell'allegato relazione",
-    #   "riassumi il documento presentazione", "che informazioni contiene il file budget"
-    # - In questi casi, cerca attivamente nei metadati 'filename' o 'filename_no_ext' dei documenti e focalizza la
-    #   tua risposta principalmente sul contenuto di quei documenti specifici.
-    # - Inizia sempre la risposta con "Il documento [nome file] tratta di..." o forma simile.
-    #
-    # Il contesto contiene documenti e note. I documenti hanno un campo 'filename' nei metadati che indica il loro nome.
-    # Presta molta attenzione ai nomi dei file e alla loro connessione con la domanda dell'utente.
-    #
-    # Quando rispondi:
-    # 1. Se la domanda si riferisce a un file specifico, anche solo parzialmente o per parte del nome:
-    #    - Identifica tutti i documenti con quel nome o parte di nome nei metadati
-    #    - Rispondi SOLO con informazioni da quei documenti specifici
-    #    - Inizia la risposta con "Il documento [nome esatto del file] tratta di..."
-    # 2. Se la domanda è generica, considera tutti i documenti disponibili
-    # 3. Fornisci una risposta dettagliata analizzando le informazioni disponibili
-    # 4. Cita fatti specifici e dettagli presenti nei documenti, menzionando da quale file provengono
-    # 5. Rispondi solo in base alle informazioni nei documenti, senza aggiungere conoscenze esterne
-    #
-    # Contesto:
-    # {context}
-    #
-    # Domanda: {question}
-    #
-    # Risposta dettagliata:
-    # """
+    # Se l'utente è specificato, ottieni le sue impostazioni RAG personalizzate
+    rag_settings = None
+    if user:
+        from profiles.models import RAGConfiguration
+        try:
+            rag_settings, _ = RAGConfiguration.objects.get_or_create(user=user)
+        except Exception as e:
+            logger.error(f"Errore nel recuperare le impostazioni RAG per l'utente {user.username}: {str(e)}")
 
-    template = """
-    Sei un assistente di ricerca efficiente che analizza documenti e note per fornire risposte complete.
+    # Utilizza le impostazioni dell'utente se disponibili, altrimenti usa i valori predefiniti
+    if rag_settings:
+        # Parametri di ricerca
+        similarity_top_k = rag_settings.get_similarity_top_k()
+        mmr_lambda = rag_settings.get_mmr_lambda()
+        similarity_threshold = rag_settings.get_similarity_threshold()
+        retriever_type = rag_settings.get_retriever_type()
 
-    ISTRUZIONI PRINCIPALI:
-    1. Rispondi ESCLUSIVAMENTE con informazioni presenti nei documenti e nelle note forniti nel contesto.
-    2. Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere.
-    3. Combina in modo coerente le informazioni da tutti gli allegati e le note attive quando necessario.
-    4. Dai UGUALE IMPORTANZA alle note e ai documenti PDF - entrambi contengono informazioni preziose.
-    5. Se la domanda riguarda elementi specifici presenti all'interno dei documenti o delle note (ad esempio, nomi, oggetti, dati, ecc.), cerca attentamente questi termini in tutto il contesto.
-    6. Sintetizza le informazioni da più fonti quando è utile per rispondere in modo completo.
-    7. Indica da quale fonte (documento o nota) provengono le informazioni che stai citando.
+        # Impostazioni avanzate
+        system_prompt = rag_settings.get_system_prompt()
+        auto_citation = rag_settings.get_auto_citation()
+        prioritize_filenames = rag_settings.get_prioritize_filenames()
+        equal_notes_weight = rag_settings.get_equal_notes_weight()
+        strict_context = rag_settings.get_strict_context()
+    else:
+        # Valori predefiniti se l'utente non ha impostazioni
+        similarity_top_k = 6
+        mmr_lambda = 0.7
+        similarity_threshold = 0.7
+        retriever_type = 'mmr'
+        system_prompt = """
+        Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
 
-    Contesto (documenti e note):
+        Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+        Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+        Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+        Quando rispondi:
+        1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+        2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+        3. Organizza le informazioni in modo logico e strutturato
+        4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+        5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+        6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne
+        """
+        auto_citation = True
+        prioritize_filenames = True
+        equal_notes_weight = True
+        strict_context = False
+
+    # Configura il template per il prompt in base alle impostazioni
+    template = system_prompt
+
+    # Aggiungi istruzioni specifiche in base alle impostazioni dell'utente
+    if prioritize_filenames:
+        template += """
+
+        ISTRUZIONI PER LA RICERCA:
+        - Se la domanda contiene un riferimento a un nome di file o a parte di esso (es. "documento X", "allegato Y", "file Z"), 
+          considera con maggiore rilevanza i documenti che hanno quel nome o parte di nome nel loro titolo.
+        """
+
+    if auto_citation:
+        template += """
+
+        ISTRUZIONI PER LE CITAZIONI:
+        - Cita sempre la fonte delle informazioni che utilizzi nella risposta.
+        - Quando citi un documento, menziona il nome del file.
+        - Quando citi una nota, menziona che si tratta di una nota.
+        """
+
+    if strict_context:
+        template += """
+
+        IMPORTANTE:
+        - Rispondi SOLO in base alle informazioni presenti nei documenti e nelle note.
+        - Se non trovi informazioni sufficienti, dillo chiaramente e specifica quali aspetti della domanda non possono essere risposti.
+        - NON utilizzare conoscenze esterne o generali per completare la risposta.
+        """
+
+    # Aggiungi il contesto e la domanda al template
+    template += """
+
+    Contesto:
     {context}
 
     Domanda: {question}
 
-    Risposta basata esclusivamente sulle informazioni del contesto:
+    Risposta dettagliata:
     """
 
     PROMPT = PromptTemplate(
@@ -1299,17 +1232,30 @@ def create_retrieval_qa_chain(vectordb):
         input_variables=["context", "question"]
     )
 
-    # Configura il retriever per dare uguale importanza a tutti i tipi di documento
-    retriever = vectordb.as_retriever(
-        search_type="mmr",  # (Maximum Marginal Relevance) per diversificare i risultati
-        search_kwargs={
-            "k": 20,  # Numero di documenti da restituire nel risultato finale
-            "fetch_k": 50,  # # Numero di documenti candidati da recuperare prima di applicare MMR (ossia filtrare)
-            "lambda_mult": 0.65  # Valore tra 0 e 1: più vicino a 0 favorisce la diversità, più vicino a 1 favorisce la rilevanza, vicino a 0 si va di fantasia
-        }
-    )
+    # Configura il retriever in base al tipo specificato
+    if retriever_type == 'mmr':
+        retriever = vectordb.as_retriever(
+            search_type="mmr",
+            search_kwargs={
+                "k": similarity_top_k,
+                "fetch_k": similarity_top_k * 2,  # Recupera più documenti prima di filtrare
+                "lambda_mult": mmr_lambda
+            }
+        )
+    elif retriever_type == 'similarity_score_threshold':
+        retriever = vectordb.as_retriever(
+            search_type="similarity_score_threshold",
+            search_kwargs={
+                "k": similarity_top_k,
+                "score_threshold": similarity_threshold
+            }
+        )
+    else:  # default: similarity
+        retriever = vectordb.as_retriever(
+            search_kwargs={"k": similarity_top_k}
+        )
 
-    # Crea la catena RAG
+    # Crea il modello con timeout più alto per risposte complesse
     llm = ChatOpenAI(
         model=GPT_MODEL,
         temperature=GPT_MODEL_TEMPERATURE,
@@ -1317,18 +1263,23 @@ def create_retrieval_qa_chain(vectordb):
         request_timeout=GPT_MODEL_TIMEOUT
     )
 
+    # Crea la catena RAG con il prompt configurato
     qa = RetrievalQA.from_chain_type(
         llm=llm,
-        chain_type="stuff",  # Strategia "stuff": inserisce tutti i documenti in un unico prompt. (Altri tipi possibili includono "map_reduce", "refine", "map_rerank", che gestiscono in modo diverso documenti numerosi o di grandi dimensioni)
-        retriever=retriever, # Il componente che recupera i documenti
-        chain_type_kwargs={"prompt": PROMPT}, # Passa il prompt personalizzato alla catena
-        return_source_documents=True # Fa sì che la catena restituisca anche i documenti utilizzati
+        chain_type="stuff",
+        retriever=retriever,
+        chain_type_kwargs={"prompt": PROMPT},
+        return_source_documents=True
     )
 
+    # Da Sapere
+    #chain_type="stuff",  # Strategia "stuff": inserisce tutti i documenti in un unico prompt. (Altri tipi possibili includono "map_reduce", "refine", "map_rerank", che gestiscono in modo diverso documenti numerosi o di grandi dimensioni)
+    #retriever=retriever, # Il componente che recupera i documenti
+    #chain_type_kwargs={"prompt": PROMPT}, # Passa il prompt personalizzato alla catena
+    #return_source_documents=True # Fa sì che la catena restituisca anche i documenti utilizzati
 
     # Ritorna l'oggetto catena RAG completo e pronto per l'uso
     return qa
-
 
 
 def update_project_rag_chain(project):
@@ -1555,7 +1506,6 @@ def update_project_rag_chain(project):
             return None
 
 
-
 def create_retrieval_qa_chain(vectordb):
     """
     Crea una catena RetrievalQA a partire da un vectorstore.
@@ -1628,7 +1578,6 @@ def create_retrieval_qa_chain(vectordb):
     )
 
     return qa
-
 
 
 def handle_add_note(project, content):

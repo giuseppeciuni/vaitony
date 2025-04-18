@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-
+from django.utils.translation import gettext_lazy as _
 
 # Profile type: Single User Profile or Company Profile
 class Profile_type(models.Model):
@@ -170,6 +170,7 @@ class ProjectConversation(models.Model):
         return f"{self.project.name} - Q: {self.question[:50]}..."
 
 
+
 # Modello per le fonti utilizzate nelle risposte
 class AnswerSource(models.Model):
     """
@@ -183,6 +184,7 @@ class AnswerSource(models.Model):
 
     def __str__(self):
         return f"Source for {self.conversation.id} from {self.project_file.filename if self.project_file else 'unknown'}"
+
 
 
 # Nuovo modello per lo stato dell'indice FAISS specifico per progetto
@@ -201,50 +203,186 @@ class ProjectIndexStatus(models.Model):
         return f"Index status for project {self.project.name}"
 
 
-# Aggiungi questo modello nel file models.py
-class RAGConfiguration(models.Model):
-    """
-    Modello per archiviare le configurazioni RAG per utente.
-    """
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='rag_config')
-    # Parametri di base
-    chunk_size = models.IntegerField(default=500)
-    chunk_overlap = models.IntegerField(default=50)
-    similarity_top_k = models.IntegerField(default=6)
-    mmr_lambda = models.FloatField(default=0.7)
-    similarity_threshold = models.FloatField(default=0.7)
-    retriever_type = models.CharField(max_length=100, default='mmr')
 
-    # Parametri avanzati
-    system_prompt = models.TextField(default='''Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
-
-Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
-Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
-
-Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
-
-Quando rispondi:
-1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
-2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
-3. Organizza le informazioni in modo logico e strutturato
-4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
-5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
-6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne''')
-
-    auto_citation = models.BooleanField(default=True)
-    prioritize_filenames = models.BooleanField(default=True)
-    equal_notes_weight = models.BooleanField(default=True)
-    strict_context = models.BooleanField(default=False)
-
-    # Per tracciare quando è stata aggiornata l'ultima volta
-    last_updated = models.DateTimeField(auto_now=True)
+class RagTemplateType(models.Model):
+    """Tipo di template RAG (es. Bilanciato, Alta Precisione, Velocità)"""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
 
     def __str__(self):
-        return f"RAG Config for {self.user.username}"
+        return self.name
+
+
+
+
+class RagDefaultSettings(models.Model):
+    """Impostazioni predefinite per RAG che possono essere selezionate dall'utente"""
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    template_type = models.ForeignKey(RagTemplateType, on_delete=models.CASCADE, related_name='default_settings')
+
+    # Parametri di base
+    chunk_size = models.IntegerField(default=500, help_text=_("Lunghezza di ciascun frammento in caratteri"))
+    chunk_overlap = models.IntegerField(default=50, help_text=_("Sovrapposizione fra chunk adiacenti"))
+    similarity_top_k = models.IntegerField(default=6, help_text=_("Numero di frammenti più rilevanti da utilizzare"))
+    mmr_lambda = models.FloatField(default=0.7, help_text=_("Bilanciamento tra rilevanza e diversità (0-1)"))
+    similarity_threshold = models.FloatField(default=0.7,
+                                             help_text=_("Soglia minima di similarità per includere risultati"))
+
+    # Opzioni avanzate
+    retriever_type = models.CharField(
+        max_length=50,
+        default='mmr',
+        choices=[
+            ('mmr', 'Maximum Marginal Relevance'),
+            ('similarity', 'Similarity Search'),
+            ('similarity_score_threshold', 'Similarity with Threshold'),
+        ],
+        help_text=_("Strategia di ricerca per trovare frammenti rilevanti")
+    )
+
+    # Impostazioni del prompt
+    system_prompt = models.TextField(blank=True)
+    auto_citation = models.BooleanField(default=True, help_text=_("Includi riferimenti alle fonti nelle risposte"))
+    prioritize_filenames = models.BooleanField(default=True, help_text=_(
+        "Dai priorità ai documenti con nomi menzionati nella domanda"))
+    equal_notes_weight = models.BooleanField(default=True, help_text=_("Tratta note e documenti con uguale importanza"))
+    strict_context = models.BooleanField(default=False, help_text=_(
+        "Risposte basate SOLO sui documenti, rifiuta di rispondere se mancano informazioni"))
+
+    is_default = models.BooleanField(default=False, help_text=_("Indica se questa configurazione è quella predefinita"))
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "RAG Configuration"
-        verbose_name_plural = "RAG Configurations"
+        verbose_name = _("Impostazione predefinita RAG")
+        verbose_name_plural = _("Impostazioni predefinite RAG")
+
+    def __str__(self):
+        return f"{self.name} ({self.template_type})"
+
+    def save(self, *args, **kwargs):
+        # Se questa configurazione viene impostata come predefinita,
+        # assicuriamoci che nessun'altra lo sia per lo stesso tipo di template
+        if self.is_default:
+            RagDefaultSettings.objects.filter(
+                template_type=self.template_type,
+                is_default=True
+            ).exclude(id=self.id).update(is_default=False)
+        super().save(*args, **kwargs)
+
+
+
+
+class RAGConfiguration(models.Model):
+    """Configurazione RAG specifica per utente"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='rag_config')
+    current_settings = models.ForeignKey(
+        RagDefaultSettings,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='user_configs'
+    )
+
+    # Campi per sovrascrivere le impostazioni predefinite (opzionali)
+    chunk_size = models.IntegerField(null=True, blank=True)
+    chunk_overlap = models.IntegerField(null=True, blank=True)
+    similarity_top_k = models.IntegerField(null=True, blank=True)
+    mmr_lambda = models.FloatField(null=True, blank=True)
+    similarity_threshold = models.FloatField(null=True, blank=True)
+    retriever_type = models.CharField(max_length=50, null=True, blank=True)
+    system_prompt = models.TextField(null=True, blank=True)
+    auto_citation = models.BooleanField(null=True, blank=True)
+    prioritize_filenames = models.BooleanField(null=True, blank=True)
+    equal_notes_weight = models.BooleanField(null=True, blank=True)
+    strict_context = models.BooleanField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Configurazione RAG per {self.user.username}"
+
+    # Metodi per recuperare i valori effettivi (dall'utente o dalle impostazioni predefinite)
+    def get_chunk_size(self):
+        if self.chunk_size is not None:
+            return self.chunk_size
+        elif self.current_settings:
+            return self.current_settings.chunk_size
+        return 500  # Valore di fallback
+
+    def get_chunk_overlap(self):
+        if self.chunk_overlap is not None:
+            return self.chunk_overlap
+        elif self.current_settings:
+            return self.current_settings.chunk_overlap
+        return 50
+
+    def get_similarity_top_k(self):
+        if self.similarity_top_k is not None:
+            return self.similarity_top_k
+        elif self.current_settings:
+            return self.current_settings.similarity_top_k
+        return 6
+
+    def get_mmr_lambda(self):
+        if self.mmr_lambda is not None:
+            return self.mmr_lambda
+        elif self.current_settings:
+            return self.current_settings.mmr_lambda
+        return 0.7
+
+    def get_similarity_threshold(self):
+        if self.similarity_threshold is not None:
+            return self.similarity_threshold
+        elif self.current_settings:
+            return self.current_settings.similarity_threshold
+        return 0.7
+
+    def get_retriever_type(self):
+        if self.retriever_type:
+            return self.retriever_type
+        elif self.current_settings:
+            return self.current_settings.retriever_type
+        return 'mmr'
+
+    def get_system_prompt(self):
+        if self.system_prompt:
+            return self.system_prompt
+        elif self.current_settings:
+            return self.current_settings.system_prompt
+        return ""
+
+    def get_auto_citation(self):
+        if self.auto_citation is not None:
+            return self.auto_citation
+        elif self.current_settings:
+            return self.current_settings.auto_citation
+        return True
+
+    def get_prioritize_filenames(self):
+        if self.prioritize_filenames is not None:
+            return self.prioritize_filenames
+        elif self.current_settings:
+            return self.current_settings.prioritize_filenames
+        return True
+
+    def get_equal_notes_weight(self):
+        if self.equal_notes_weight is not None:
+            return self.equal_notes_weight
+        elif self.current_settings:
+            return self.current_settings.equal_notes_weight
+        return True
+
+    def get_strict_context(self):
+        if self.strict_context is not None:
+            return self.strict_context
+        elif self.current_settings:
+            return self.current_settings.strict_context
+        return False
+
 
 
 

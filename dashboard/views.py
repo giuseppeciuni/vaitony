@@ -2,7 +2,7 @@ import logging
 import mimetypes
 import os
 import time
-from profiles.models import RAGConfiguration
+from datetime import timedelta, datetime
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -10,13 +10,13 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from datetime import timedelta, datetime
 from dashboard.rag_document_utils import register_document, compute_file_hash, check_project_index_update_needed
-from dashboard.rag_utils import create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note, handle_toggle_note_inclusion
+from dashboard.rag_utils import create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note, \
+    handle_toggle_note_inclusion
 from dashboard.rag_utils import get_answer_from_project
-from dashboard.rag_utils import get_answer_from_rag
 # Modifica questa riga per includere ProjectNote
 from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource
+from profiles.models import RagTemplateType, RagDefaultSettings, RAGConfiguration
 from .utils import process_user_files
 
 # Get logger
@@ -148,103 +148,6 @@ def upload_document(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
-
-
-# def rag(request):
-#     """View for RAG interface - allows users to ask questions about their documents"""
-#     logger.debug("---> rag")
-#     if request.user.is_authenticated:
-#         context = {
-#             'answer': None,
-#             'sources': None,
-#             'question': None,
-#             'processing_time': None,
-#             'has_documents': True  # Will be updated below
-#         }
-#
-#         # Check if user has any documents
-#         user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
-#         if not os.path.exists(user_upload_dir) or not os.listdir(user_upload_dir):
-#             context['has_documents'] = False
-#             return render(request, 'be/rag.html', context)
-#
-#         # Process RAG query if submitted
-#         if request.method == 'POST' and 'question' in request.POST:
-#             question = request.POST.get('question').strip()
-#             context['question'] = question
-#
-#             if question:
-#                 import time
-#
-#                 # Time the processing
-#                 start_time = time.time()
-#
-#                 # Get response from RAG system
-#                 try:
-#
-#                     rag_response = get_answer_from_rag(request.user, question)
-#
-#                     # Estrai la risposta
-#                     context['answer'] = rag_response.get('answer')
-#
-#                     # Prepara le fonti per la visualizzazione
-#                     raw_sources = rag_response.get('sources', [])
-#                     formatted_sources = []
-#
-#                     for source in raw_sources:
-#                         # Estrai il nome del file dal percorso completo nei metadati
-#                         file_path = source.get('metadata', {}).get('source', '')
-#                         filename = os.path.basename(file_path) if file_path else 'Unknown'
-#
-#                         # Estrai la pagina se disponibile (per PDF)
-#                         page = source.get('metadata', {}).get('page', None)
-#                         page_info = f" (pag. {page + 1})" if page is not None else ""
-#
-#                         # Ottieni il punteggio di rilevanza se disponibile
-#                         score = source.get('score')
-#                         score_display = f" - Rilevanza: {score:.2f}" if score is not None else ""
-#
-#                         # Aggiungi alla lista delle fonti
-#                         formatted_source = {
-#                             'filename': f"{filename}{page_info}{score_display}",
-#                             'content': source.get('content', ''),
-#                             'type': os.path.splitext(filename)[1].lower() if filename != 'Unknown' else '',
-#                             'has_image': source.get('has_image', False),
-#                             'image_data': source.get('image_data', ''),
-#                         }
-#
-#                         formatted_sources.append(formatted_source)
-#
-#                     context['sources'] = formatted_sources
-#                     context['processing_time'] = round(time.time() - start_time, 2)
-#
-#                     # Log di successo
-#                     logger.info(f"RAG query processed successfully for user {request.user.username}")
-#                 except Exception as e:
-#                     logger.exception(f"Error in RAG processing: {str(e)}")
-#                     context['answer'] = f"An error occurred while processing your question: {str(e)}"
-#             else:
-#                 messages.warning(request, "Please enter a question.")
-#
-#         return render(request, 'be/rag.html', context)
-#     else:
-#         logger.warning("User not Authenticated!")
-#         return redirect('login')
-#
-#
-# def chiedi(request):
-#     logger.debug("---> chiedi")
-#     if request.user.is_authenticated:
-#         context = {}
-#         if request.method == 'POST':
-#             # Logica per elaborare una richiesta generica
-#             logger.info("Processing 'Chiedi' request")
-#             # Elaborazione della query
-#             # context['results'] = results
-#         return render(request, 'be/chiedi.html', context)
-#     else:
-#         logger.warning("User not Authenticated!")
-#         return redirect('login')
 
 
 def new_project(request):
@@ -381,527 +284,7 @@ def projects_list(request):
         logger.warning("User not Authenticated!")
         return redirect('login')
 
-# def project(request, project_id=None):
-#     logger.debug(f"---> project: {project_id}")
-#     if request.user.is_authenticated:
-#         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
-#         if project_id is None and request.method == 'POST':
-#             project_id = request.POST.get('project_id')
-#
-#         # Se ancora non abbiamo un project_id, ridireziona alla lista progetti
-#         if project_id is None:
-#             messages.error(request, "Project not found.")
-#             return redirect('projects_list')
-#
-#         # Ottieni il progetto esistente
-#         try:
-#             project = Project.objects.get(id=project_id, user=request.user)
-#
-#             # Carica i file del progetto
-#             project_files = ProjectFile.objects.filter(project=project).order_by('-uploaded_at')
-#
-#             # Carica le conversazioni precedenti
-#             conversations = ProjectConversation.objects.filter(project=project).order_by('-created_at')
-#
-#             # Gestisci diverse azioni
-#             if request.method == 'POST':
-#                 action = request.POST.get('action')
-#                 if action == 'save_notes':
-#                     # Salva le note
-#                     project.notes = request.POST.get('notes', '')
-#                     project.save()
-#
-#                     # Se è una richiesta AJAX, restituisci una risposta JSON
-#                     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                         return JsonResponse({'status': 'success', 'message': 'Notes saved successfully.'})
-#
-#                     messages.success(request, "Notes saved successfully.")
-#                     return redirect('project', project_id=project.id)
-#
-#
-#                 # Nella funzione project() nel file views.py, quando gestisci 'ask_question'
-#                 # In views.py, modify the 'ask_question' action handler to improve error handling:
-#
-#                 elif action == 'ask_question':
-#                     # Gestisci domanda RAG
-#                     question = request.POST.get('question', '').strip()
-#
-#                     if question:
-#                         # Misura il tempo di elaborazione
-#                         start_time = time.time()
-#
-#                         # Ottieni la risposta dal sistema RAG
-#                         try:
-#                             logger.info(f"Processing RAG question: '{question}'")
-#
-#                             # Add detailed logging here
-#                             logger.debug(f"Starting RAG query for project ID: {project.id}")
-#
-#                             # Verifica che il progetto abbia documenti e note prima di processare la query
-#                             project_files = ProjectFile.objects.filter(project=project)
-#                             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-#
-#                             logger.info(
-#                                 f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
-#
-#                             # Try/catch con gestione errori più specifica
-#                             try:
-#                                 # Forza la ricostruzione dell'indice con tutti i documenti e note
-#                                 rag_response = get_answer_from_project(project, question)
-#
-#                                 # Calculate processing time
-#                                 processing_time = round(time.time() - start_time, 2)
-#                                 logger.info(f"RAG processing completed in {processing_time} seconds")
-#
-#                                 # Salva la conversazione nel database se richiesto
-#                                 try:
-#                                     conversation = ProjectConversation.objects.create(
-#                                         project=project,
-#                                         question=question,
-#                                         answer=rag_response.get('answer', 'No answer found.'),
-#                                         processing_time=processing_time
-#                                     )
-#
-#                                     # Salva le fonti utilizzate
-#                                     for source in rag_response.get('sources', []):
-#                                         # Cerchiamo di trovare il ProjectFile corrispondente
-#                                         project_file = None
-#                                         if source.get('type') != 'note':
-#                                             source_path = source.get('metadata', {}).get('source', '')
-#                                             if source_path:
-#                                                 # Cerca il file per path
-#                                                 try:
-#                                                     project_file = ProjectFile.objects.get(project=project,
-#                                                                                            file_path=source_path)
-#                                                 except ProjectFile.DoesNotExist:
-#                                                     pass
-#
-#                                         # Salva la fonte
-#                                         AnswerSource.objects.create(
-#                                             conversation=conversation,
-#                                             project_file=project_file,
-#                                             content=source.get('content', ''),
-#                                             page_number=source.get('metadata', {}).get('page'),
-#                                             relevance_score=source.get('score')
-#                                         )
-#                                 except Exception as save_error:
-#                                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
-#                                     # Non interrompiamo il flusso se il salvataggio fallisce
-#
-#                                 # Create AJAX response
-#                                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                     return JsonResponse({
-#                                         "success": True,
-#                                         "answer": rag_response.get('answer', 'No answer found.'),
-#                                         "sources": rag_response.get('sources', []),
-#                                         "processing_time": processing_time
-#                                     })
-#                             except Exception as specific_error:
-#                                 logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
-#                                 error_message = str(specific_error)
-#
-#                                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                     return JsonResponse({
-#                                         "success": False,
-#                                         "error": error_message,
-#                                         "answer": f"Error processing your question: {error_message}",
-#                                         "sources": []
-#                                     })
-#
-#                                 messages.error(request, f"Error processing your question: {error_message}")
-#
-#                         except Exception as e:
-#                             logger.exception(f"Error processing RAG query: {str(e)}")
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     "success": False,
-#                                     "error": str(e),
-#                                     "answer": f"Error processing your question: {str(e)}",
-#                                     "sources": []
-#                                 })
-#
-#                             messages.error(request, f"Error processing your question: {str(e)}")
-#
-#
-#                 elif action == 'add_files':
-#                     # Aggiunta di file al progetto
-#                     files = request.FILES.getlist('files[]')
-#
-#                     if files:
-#                         # Directory del progetto
-#                         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id),
-#                                                    str(project.id))
-#                         os.makedirs(project_dir, exist_ok=True)
-#
-#                         for file in files:
-#                             handle_project_file_upload(project, file, project_dir)
-#
-#                         messages.success(request, f"{len(files)} files uploaded successfully.")
-#                         return redirect('project', project_id=project.id)
-#
-#                 elif action == 'add_folder':
-#                     # Aggiunta di una cartella al progetto
-#                     folder_files = request.FILES.getlist('folder[]')
-#
-#                     if folder_files:
-#                         # Directory del progetto
-#                         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id),
-#                                                    str(project.id))
-#                         os.makedirs(project_dir, exist_ok=True)
-#
-#                         for file in folder_files:
-#                             # Gestisci il percorso relativo per la cartella
-#                             relative_path = file.name
-#                             if hasattr(file, 'webkitRelativePath') and file.webkitRelativePath:
-#                                 relative_path = file.webkitRelativePath
-#
-#                             path_parts = relative_path.split('/')
-#                             if len(path_parts) > 1:
-#                                 # Crea sottocartelle se necessario
-#                                 subfolder_path = '/'.join(path_parts[1:-1])
-#                                 subfolder_dir = os.path.join(project_dir, subfolder_path)
-#                                 os.makedirs(subfolder_dir, exist_ok=True)
-#                                 file_path = os.path.join(subfolder_dir, path_parts[-1])
-#                             else:
-#                                 file_path = os.path.join(project_dir, path_parts[-1])
-#
-#                             handle_project_file_upload(project, file, project_dir, file_path)
-#
-#                         messages.success(request, f"Folder with {len(folder_files)} files uploaded successfully.")
-#                         return redirect('project', project_id=project.id)
-#
-#
-#                 elif action == 'delete_file':
-#                     # Eliminazione di un file dal progetto
-#                     file_id = request.POST.get('file_id')
-#
-#                     # Aggiungi log dettagliati
-#                     logger.debug(
-#                         f"Richiesta di eliminazione file ricevuta. ID file: {file_id}, ID progetto: {project.id}")
-#
-#                     # Verifica che file_id non sia vuoto
-#                     if not file_id:
-#                         logger.warning("Richiesta di eliminazione file senza file_id")
-#                         messages.error(request, "ID file non valido.")
-#                         return redirect('project', project_id=project.id)
-#
-#                     try:
-#                         # Ottieni il file del progetto
-#                         project_file = get_object_or_404(ProjectFile, id=file_id, project=project)
-#                         logger.info(f"File trovato per l'eliminazione: {project_file.filename} (ID: {file_id})")
-#
-#                         # Elimina il file fisico
-#                         if os.path.exists(project_file.file_path):
-#                             logger.debug(f"Eliminazione del file fisico in: {project_file.file_path}")
-#                             try:
-#                                 os.remove(project_file.file_path)
-#                                 logger.info(f"File fisico eliminato: {project_file.file_path}")
-#                             except Exception as e:
-#                                 logger.error(f"Errore nell'eliminazione del file fisico: {str(e)}")
-#                                 # Continua con l'eliminazione dal database anche se l'eliminazione del file fallisce
-#                         else:
-#                             logger.warning(f"File fisico non trovato in: {project_file.file_path}")
-#
-#                         # Elimina il record dal database
-#                         project_file.delete()
-#                         logger.info(f"Record eliminato dal database per il file ID: {file_id}")
-#
-#                         messages.success(request, "File eliminato con successo.")
-#                         return redirect('project', project_id=project.id)
-#
-#                     except Exception as e:
-#                         logger.exception(f"Errore nell'azione delete_file: {str(e)}")
-#                         messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
-#                         return redirect('project', project_id=project.id)
-#
-#
-#
-#
-#                 # Quando viene aggiunta una nota
-#                 elif action == 'add_note':
-#                     # Aggiungi una nuova nota al progetto
-#                     content = request.POST.get('content', '').strip()
-#
-#                     if content:
-#                         # Dato che abbiamo rimosso i titoli, generiamo un titolo basato sul contenuto
-#                         title = content.split('\n')[0][:50] if content else "Untitled Note"
-#
-#                         note = ProjectNote.objects.create(
-#                             project=project,
-#                             title=title,
-#                             content=content,
-#                             is_included_in_rag=True  # Default inclusione in RAG
-#                         )
-#
-#                         # Aggiorna l'indice vettoriale in background
-#                         try:
-#
-#                             logger.info(
-#                                 f"🔄 Aggiornamento dell'indice vettoriale per il progetto {project.id} dopo aggiunta nota")
-#
-#                             # Forza la ricostruzione dell'indice con TUTTI i documenti e note
-#                             create_project_rag_chain(project=project, force_rebuild=True)
-#
-#                             logger.info(f"✅ Indice vettoriale aggiornato con successo per il progetto {project.id}")
-#                         except Exception as e:
-#                             logger.error(f"❌ Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
-#
-#                         # Risposta per richieste AJAX
-#                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                             return JsonResponse({
-#                                 'success': True,
-#                                 'note_id': note.id,
-#                                 'message': 'Note added successfully.'
-#                             })
-#
-#                         # Se non è una richiesta AJAX, aggiungi un messaggio e reindirizza
-#                         messages.success(request, "Note added successfully.")
-#                         return redirect('project', project_id=project.id)
-#
-#
-#                 elif action == 'toggle_note_inclusion':
-#                     # Toggle inclusione nella ricerca RAG
-#                     note_id = request.POST.get('note_id')
-#                     is_included = request.POST.get('is_included') == 'true'
-#
-#                     if note_id:
-#                         try:
-#                             note = ProjectNote.objects.get(id=note_id, project=project)
-#
-#                             # Verifica se lo stato è cambiato
-#                             state_changed = note.is_included_in_rag != is_included
-#
-#                             note.is_included_in_rag = is_included
-#                             note.save()
-#
-#                             # Se lo stato è cambiato, aggiorna l'indice vettoriale
-#                             if state_changed:
-#                                 try:
-#                                     logger.info(
-#                                         f"🔄 Avvio aggiornamento dell'indice vettoriale per il progetto {project.id} dopo modifica stato nota")
-#
-#                                     # Forza la ricostruzione dell'indice
-#                                     create_project_rag_chain(project=project, force_rebuild=True)
-#
-#                                     logger.info(
-#                                         f"✅ Indice vettoriale ricostruito con successo per il progetto {project.id}")
-#                                 except Exception as e:
-#                                     logger.error(f"❌ Errore nella ricostruzione dell'indice vettoriale: {str(e)}")
-#
-#                             # Risposta per richieste AJAX
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': True,
-#                                     'message': 'Note inclusion updated.'
-#                                 })
-#
-#                         except ProjectNote.DoesNotExist:
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': False,
-#                                     'error': 'Note not found.'
-#                                 })
-#
-#
-#
-#                 # Quando viene modificata una nota
-#
-#                 elif action == 'edit_note':
-#                     # Modifica una nota esistente
-#                     note_id = request.POST.get('note_id')
-#                     content = request.POST.get('content', '').strip()
-#
-#                     if note_id and content:
-#                         try:
-#                             note = ProjectNote.objects.get(id=note_id, project=project)
-#
-#                             # Controlla se il contenuto è cambiato
-#                             content_changed = note.content != content
-#
-#                             # Aggiorna il titolo con la prima riga del contenuto
-#                             title = content.split('\n')[0][:50] if content else "Untitled Note"
-#
-#                             note.title = title
-#                             note.content = content
-#                             note.save()
-#
-#                             # Se il contenuto è cambiato e la nota è inclusa nella ricerca RAG,
-#                             # aggiorna l'indice vettoriale con TUTTI i documenti e note
-#                             if content_changed and note.is_included_in_rag:
-#                                 try:
-#                                     logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo modifica nota")
-#
-#                                     # Forza la ricostruzione dell'indice con TUTTI i documenti e note
-#                                     create_project_rag_chain(project=project, force_rebuild=True)
-#
-#                                     logger.info(f"✅ Indice vettoriale ricostruito con successo")
-#                                 except Exception as e:
-#                                     logger.error(f"❌ Errore nella ricostruzione: {str(e)}")
-#
-#                             # Risposta per richieste AJAX
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': True,
-#                                     'message': 'Note updated successfully.'
-#                                 })
-#
-#                             messages.success(request, "Note updated successfully.")
-#                             return redirect('project', project_id=project.id)
-#
-#                         except ProjectNote.DoesNotExist:
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': False,
-#                                     'error': 'Note not found.'
-#                                 })
-#
-#                             messages.error(request, "Note not found.")
-#
-#                 # Quando viene eliminata una nota
-#                 elif action == 'delete_note':
-#                     # Elimina una nota
-#                     note_id = request.POST.get('note_id')
-#
-#                     if note_id:
-#                         try:
-#                             note = ProjectNote.objects.get(id=note_id, project=project)
-#                             was_included = note.is_included_in_rag  # Controlla se era inclusa nel RAG
-#                             note.delete()
-#
-#                             # Se la nota era inclusa nel RAG, ricostruisci l'indice con TUTTI i documenti e note
-#                             if was_included:
-#                                 try:
-#                                     logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo eliminazione nota")
-#                                     create_project_rag_chain(project=project, force_rebuild=True)
-#                                     logger.info(f"✅ Indice vettoriale ricostruito con successo")
-#                                 except Exception as e:
-#                                     logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
-#
-#                             # Risposta per richieste AJAX
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': True,
-#                                     'message': 'Note deleted successfully.'
-#                                 })
-#
-#                             messages.success(request, "Note deleted successfully.")
-#                             return redirect('project', project_id=project.id)
-#                         except ProjectNote.DoesNotExist:
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': False,
-#                                     'error': 'Note not found.'
-#                                 })
-#
-#                             messages.error(request, "Note not found.")
-#
-#                 elif action == 'toggle_note_inclusion':
-#                     # Toggle inclusione nella ricerca RAG
-#                     note_id = request.POST.get('note_id')
-#                     is_included = request.POST.get('is_included') == 'true'
-#
-#                     if note_id:
-#                         try:
-#                             note = ProjectNote.objects.get(id=note_id, project=project)
-#
-#                             # Verifica se lo stato è cambiato
-#                             state_changed = note.is_included_in_rag != is_included
-#
-#                             note.is_included_in_rag = is_included
-#                             note.save()
-#
-#                             # Se lo stato è cambiato, aggiorna l'indice vettoriale con TUTTI i documenti e note
-#                             if state_changed:
-#                                 try:
-#
-#                                     logger.info(f"🔄 Ricostruzione dell'indice vettoriale dopo cambio stato nota")
-#
-#                                     # Forza la ricostruzione dell'indice con TUTTI i documenti e note
-#                                     create_project_rag_chain(project=project, force_rebuild=True)
-#
-#                                     logger.info(f"✅ Indice vettoriale ricostruito con successo")
-#                                 except Exception as e:
-#                                     logger.error(f"❌ Errore nella ricostruzione: {str(e)}")
-#
-#                             # Risposta per richieste AJAX
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': True,
-#                                     'message': 'Note inclusion updated.'
-#                                 })
-#
-#                         except ProjectNote.DoesNotExist:
-#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-#                                 return JsonResponse({
-#                                     'success': False,
-#                                     'error': 'Note not found.'
-#                                 })
-#
-#
-#             # Prepara la cronologia delle conversazioni per l'interfaccia di chat
-#             conversation_history = []
-#             answer = None
-#             question = None
-#             sources = None
-#
-#             if conversations.exists():
-#                 # Ottieni l'ultima conversazione per l'interfaccia di chat
-#                 latest_conversation = conversations.first()
-#
-#                 # Prepara la risposta e la domanda per l'ultima conversazione
-#                 answer = latest_conversation.answer
-#                 question = latest_conversation.question
-#
-#                 # Ottieni le fonti utilizzate
-#                 raw_sources = AnswerSource.objects.filter(conversation=latest_conversation)
-#                 sources = []
-#
-#                 for source in raw_sources:
-#                     if source.project_file:
-#                         source_data = {
-#                             'filename': source.project_file.filename,
-#                             'type': source.project_file.extension,
-#                             'content': source.content
-#                         }
-#
-#                         if source.page_number is not None:
-#                             source_data['filename'] += f" (pag. {source.page_number + 1})"
-#
-#                         if source.relevance_score is not None:
-#                             source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
-#
-#                         sources.append(source_data)
-#
-#                 # Prepara la cronologia delle conversazioni per l'interfaccia di chat
-#                 for conv in conversations:
-#                     conversation_history.append({
-#                         'is_user': True,
-#                         'content': conv.question
-#                     })
-#                     conversation_history.append({
-#                         'is_user': False,
-#                         'content': conv.answer
-#                     })
-#
-#             project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
-#             context = {
-#                 'project': project,
-#                 'project_files': project_files,
-#                 'conversation_history': conversation_history,
-#                 'answer': answer,
-#                 'question': question,
-#                 'sources': sources,
-#                 'project_notes': project_notes
-#             }
-#
-#             return render(request, 'be/project.html', context)
-#
-#         except Project.DoesNotExist:
-#             messages.error(request, "Project not found.")
-#             return redirect('projects_list')
-#     else:
-#         logger.warning("User not Authenticated!")
-#         return redirect('login')
+
 def project(request, project_id=None):
     logger.debug(f"---> project: {project_id}")
     if request.user.is_authenticated:
@@ -1294,8 +677,6 @@ def project(request, project_id=None):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
-
-
 
 """Mostra i file allegati nella finestra modale di project o per scaricarli in locale"""
 
@@ -1929,54 +1310,57 @@ def ia_engine(request):
         return redirect('login')
 
 
+# Aggiungere alle viste esistenti in views.py
+
 def rag_settings(request):
     """
     Vista per la configurazione dettagliata dei parametri RAG (Retrieval Augmented Generation)
     """
     logger.debug("---> rag_settings")
     if request.user.is_authenticated:
-        # Impostazioni predefinite che verranno caricate o sovrascritte da valori salvati
-        default_settings = {
-            'chunk_size': 500,
-            'chunk_overlap': 50,
-            'similarity_top_k': 6,
-            'mmr_lambda': 0.7,
-            'similarity_threshold': 0.7,
-            'retriever_type': 'mmr',
-            'system_prompt': """Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+        # Ottieni tutte le impostazioni predefinite dal database
 
-Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
-Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+        # Ottieni i template types
+        template_types = RagTemplateType.objects.all()
 
-Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+        # Ottieni le impostazioni predefinite raggruppate per tipo di template
+        template_settings = {}
+        for template_type in template_types:
+            template_settings[template_type.name] = RagDefaultSettings.objects.filter(
+                template_type=template_type
+            ).order_by('-is_default')
 
-Quando rispondi:
-1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
-2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
-3. Organizza le informazioni in modo logico e strutturato
-4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
-5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
-6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne""",
-            'auto_citation': True,
-            'prioritize_filenames': True,
-            'equal_notes_weight': True,
-            'strict_context': False
+        # Ottieni o crea la configurazione dell'utente
+        user_config, created = RAGConfiguration.objects.get_or_create(user=request.user)
+
+        # Se è una nuova configurazione o non ha impostazioni correnti,
+        # imposta come predefinito il template bilanciato standard
+        if created or not user_config.current_settings:
+            try:
+                default_setting = RagDefaultSettings.objects.filter(
+                    template_type__name="Bilanciato",
+                    is_default=True
+                ).first()
+                if default_setting:
+                    user_config.current_settings = default_setting
+                    user_config.save()
+            except Exception as e:
+                logger.error(f"Errore nell'impostare la configurazione predefinita: {str(e)}")
+
+        # Ottieni i valori correnti (personalizzati o ereditati)
+        current_values = {
+            'chunk_size': user_config.get_chunk_size(),
+            'chunk_overlap': user_config.get_chunk_overlap(),
+            'similarity_top_k': user_config.get_similarity_top_k(),
+            'mmr_lambda': user_config.get_mmr_lambda(),
+            'similarity_threshold': user_config.get_similarity_threshold(),
+            'retriever_type': user_config.get_retriever_type(),
+            'system_prompt': user_config.get_system_prompt(),
+            'auto_citation': user_config.get_auto_citation(),
+            'prioritize_filenames': user_config.get_prioritize_filenames(),
+            'equal_notes_weight': user_config.get_equal_notes_weight(),
+            'strict_context': user_config.get_strict_context(),
         }
-
-        # In un'implementazione reale, qui recupereresti le impostazioni salvate dal database
-        # Ad esempio:
-        # try:
-        #     rag_config = RAGConfiguration.objects.get(user=request.user)
-        #     settings = {
-        #         'chunk_size': rag_config.chunk_size,
-        #         'chunk_overlap': rag_config.chunk_overlap,
-        #         # ... altri parametri ...
-        #     }
-        # except RAGConfiguration.DoesNotExist:
-        #     settings = default_settings
-
-        # Per ora usiamo le impostazioni predefinite
-        settings = default_settings
 
         # Gestione della richiesta POST per salvare le impostazioni
         if request.method == 'POST':
@@ -1985,20 +1369,14 @@ Quando rispondi:
             if action == 'save_settings':
                 # Salva le impostazioni di base
                 try:
-                    settings.update({
-                        'chunk_size': int(request.POST.get('chunk_size')),
-                        'chunk_overlap': int(request.POST.get('chunk_overlap')),
-                        'similarity_top_k': int(request.POST.get('similarity_top_k')),
-                        'mmr_lambda': float(request.POST.get('mmr_lambda')),
-                        'similarity_threshold': float(request.POST.get('similarity_threshold')),
-                        'retriever_type': request.POST.get('retriever_type')
-                    })
-
-                    # Qui salveresti le impostazioni nel database
-                    # rag_config, created = RAGConfiguration.objects.update_or_create(
-                    #     user=request.user,
-                    #     defaults=settings
-                    # )
+                    # Aggiorna i parametri dell'utente
+                    user_config.chunk_size = int(request.POST.get('chunk_size'))
+                    user_config.chunk_overlap = int(request.POST.get('chunk_overlap'))
+                    user_config.similarity_top_k = int(request.POST.get('similarity_top_k'))
+                    user_config.mmr_lambda = float(request.POST.get('mmr_lambda'))
+                    user_config.similarity_threshold = float(request.POST.get('similarity_threshold'))
+                    user_config.retriever_type = request.POST.get('retriever_type')
+                    user_config.save()
 
                     messages.success(request, "Parametri RAG salvati con successo.")
                 except Exception as e:
@@ -2014,19 +1392,12 @@ Quando rispondi:
             elif action == 'save_advanced_settings':
                 # Salva le impostazioni avanzate
                 try:
-                    settings.update({
-                        'system_prompt': request.POST.get('system_prompt'),
-                        'auto_citation': request.POST.get('auto_citation') == 'on',
-                        'prioritize_filenames': request.POST.get('prioritize_filenames') == 'on',
-                        'equal_notes_weight': request.POST.get('equal_notes_weight') == 'on',
-                        'strict_context': request.POST.get('strict_context') == 'on'
-                    })
-
-                    # Qui salveresti le impostazioni nel database
-                    # rag_config, created = RAGConfiguration.objects.update_or_create(
-                    #     user=request.user,
-                    #     defaults=settings
-                    # )
+                    user_config.system_prompt = request.POST.get('system_prompt')
+                    user_config.auto_citation = request.POST.get('auto_citation') == 'on'
+                    user_config.prioritize_filenames = request.POST.get('prioritize_filenames') == 'on'
+                    user_config.equal_notes_weight = request.POST.get('equal_notes_weight') == 'on'
+                    user_config.strict_context = request.POST.get('strict_context') == 'on'
+                    user_config.save()
 
                     messages.success(request, "Impostazioni avanzate RAG salvate con successo.")
                 except Exception as e:
@@ -2039,56 +1410,49 @@ Quando rispondi:
 
                 return redirect('rag_settings')
 
-            elif action == 'apply_preset':
-                # Applica una configurazione predefinita
-                preset = request.POST.get('preset')
+            elif action == 'select_preset':
+                # Seleziona una configurazione predefinita
+                preset_id = request.POST.get('preset_id')
+                if preset_id:
+                    try:
+                        preset = RagDefaultSettings.objects.get(id=preset_id)
+                        user_config.current_settings = preset
 
-                if preset == 'balanced':
-                    settings.update({
-                        'chunk_size': 500,
-                        'chunk_overlap': 50,
-                        'similarity_top_k': 6,
-                        'mmr_lambda': 0.7,
-                        'similarity_threshold': 0.7,
-                        'retriever_type': 'mmr'
-                    })
-                elif preset == 'precise':
-                    settings.update({
-                        'chunk_size': 300,
-                        'chunk_overlap': 100,
-                        'similarity_top_k': 8,
-                        'mmr_lambda': 0.8,
-                        'similarity_threshold': 0.8,
-                        'retriever_type': 'similarity_score_threshold'
-                    })
-                elif preset == 'fast':
-                    settings.update({
-                        'chunk_size': 800,
-                        'chunk_overlap': 30,
-                        'similarity_top_k': 4,
-                        'mmr_lambda': 0.6,
-                        'similarity_threshold': 0.6,
-                        'retriever_type': 'similarity'
-                    })
+                        # Reset dei valori personalizzati
+                        user_config.chunk_size = None
+                        user_config.chunk_overlap = None
+                        user_config.similarity_top_k = None
+                        user_config.mmr_lambda = None
+                        user_config.similarity_threshold = None
+                        user_config.retriever_type = None
+                        user_config.system_prompt = None
+                        user_config.auto_citation = None
+                        user_config.prioritize_filenames = None
+                        user_config.equal_notes_weight = None
+                        user_config.strict_context = None
 
-                # Qui salveresti le impostazioni nel database
-                # rag_config, created = RAGConfiguration.objects.update_or_create(
-                #     user=request.user,
-                #     defaults=settings
-                # )
-
-                messages.success(request, f"Configurazione '{preset}' applicata con successo.")
+                        user_config.save()
+                        messages.success(request, f"Configurazione '{preset.name}' selezionata con successo.")
+                    except RagDefaultSettings.DoesNotExist:
+                        messages.error(request, "Configurazione non trovata.")
+                    except Exception as e:
+                        logger.error(f"Errore nella selezione della configurazione: {str(e)}")
+                        messages.error(request, f"Errore nella selezione della configurazione: {str(e)}")
 
                 # Risposta per richieste AJAX
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse(
-                        {'success': True, 'message': f"Configurazione '{preset}' applicata con successo"})
+                    return JsonResponse({'success': True, 'message': f"Configurazione selezionata con successo."})
 
                 return redirect('rag_settings')
 
         # Passa le impostazioni al template
         context = {
-            'settings': settings
+            'template_types': template_types,
+            'template_settings': template_settings,
+            'user_config': user_config,
+            'current_values': current_values,
+            'current_template': user_config.current_settings.template_type.name if user_config.current_settings else None,
+            'current_preset_id': user_config.current_settings.id if user_config.current_settings else None,
         }
         return render(request, 'be/rag_settings.html', context)
     else:

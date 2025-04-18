@@ -29,8 +29,6 @@ def compute_file_hash(file_path):
 	return sha256.hexdigest()
 
 
-
-
 def register_document(user, file_path, filename=None):
 	"""
 	Registra un documento nel database o ne aggiorna lo stato se già esiste.
@@ -86,8 +84,6 @@ def register_document(user, file_path, filename=None):
 		return doc, True  # Nuovo documento
 
 
-
-
 def check_index_update_needed(user):
 	"""
 	Verifica se l'indice FAISS dell'utente deve essere aggiornato.
@@ -126,8 +122,6 @@ def check_index_update_needed(user):
 		return True
 
 
-
-
 def update_index_status(user, document_ids=None):
 	"""
 	Aggiorna lo stato dell'indice FAISS per l'utente.
@@ -158,8 +152,6 @@ def update_index_status(user, document_ids=None):
 		UserDocument.objects.filter(id__in=document_ids).update(is_embedded=True)
 	else:
 		documents.update(is_embedded=True)
-
-
 
 
 def scan_user_directory(user):
@@ -259,59 +251,6 @@ def check_project_index_update_needed(project):
 		return True
 
 
-# def update_project_index_status(project, document_ids=None, note_ids=None):
-# 	"""
-# 	Aggiorna lo stato dell'indice FAISS per il progetto.
-#
-# 	Args:
-# 		project: Oggetto Project
-# 		document_ids: Lista di ID dei file inclusi nell'indice (opzionale)
-# 		note_ids: Lista di ID delle note incluse nell'indice (opzionale)
-# 	"""
-# 	# Ottieni tutti i documenti del progetto
-# 	from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
-# 	documents = ProjectFile.objects.filter(project=project)
-# 	notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-#
-# 	# Crea o aggiorna lo stato dell'indice
-# 	index_status, created = ProjectIndexStatus.objects.get_or_create(project=project)
-#
-# 	# Aggiorna lo stato dell'indice
-# 	index_status.index_exists = True
-# 	index_status.documents_count = documents.count() + notes.count()
-#
-# 	# Calcola un hash rappresentativo dello stato dell'indice
-# 	import hashlib
-# 	doc_hashes = sorted([doc.file_hash for doc in documents])
-#
-# 	# Per le note, usa l'hash del contenuto e dell'id
-# 	notes_hash = ""
-# 	for note in notes:
-# 		note_hash = hashlib.sha256(
-# 			f"{note.id}_{note.content}_{note.updated_at}_{note.is_included_in_rag}".encode()).hexdigest()
-# 		doc_hashes.append(note_hash)
-# 		notes_hash += note_hash
-#
-# 	# Salva anche un hash separato solo per le note
-# 	index_status.notes_hash = hashlib.sha256(notes_hash.encode()).hexdigest()
-#
-# 	index_hash_input = ','.join(doc_hashes)
-# 	index_status.index_hash = hashlib.sha256(index_hash_input.encode()).hexdigest()
-#
-# 	index_status.save()
-#
-# 	# Imposta tutti i documenti come embedded
-# 	if document_ids:
-# 		ProjectFile.objects.filter(id__in=document_ids).update(is_embedded=True)
-# 	else:
-# 		documents.update(is_embedded=True)
-#
-# 	logger.info(
-# 		f"✅ Stato dell'indice aggiornato per il progetto {project.id}: " +
-# 		f"{index_status.documents_count} documenti inclusi " +
-# 		f"({documents.count()} file, {notes.count()} note)")
-
-
 def update_project_index_status(project, document_ids=None, note_ids=None):
 	"""
 	Aggiorna lo stato dell'indice per un progetto.
@@ -377,8 +316,6 @@ def update_project_index_status(project, document_ids=None, note_ids=None):
 				logger.warning(f"Nota {note_id} non trovata durante l'aggiornamento dello stato di indicizzazione")
 
 
-
-
 def scan_project_directory(project):
 	"""
 	Analizza la directory del progetto per trovare nuovi documenti o modifiche.
@@ -426,9 +363,6 @@ def scan_project_directory(project):
 		ProjectFile.objects.filter(file_path__in=deleted_paths).delete()
 
 	return added_docs, modified_docs, deleted_paths
-
-
-
 
 
 def register_project_document(project, file_path, filename=None):

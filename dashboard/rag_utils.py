@@ -210,18 +210,17 @@ def create_embeddings_with_retry(documents, max_retries=3, retry_delay=2):
 
 def create_rag_chain(user=None, docs=None):
     """
-    Crea o aggiorna la catena RAG per l'utente.
-    Se specificato l'utente, usa il suo indice specifico.
-    Se specificati docs, li usa per creare o aggiornare l'indice.
+    Crea/aggiorna catena RAG per un progetto con file e note
+    Se un utente ha appena caricato un documento es "rapporto_2023.pdf", questa funzione caricherà il documento,
+    lo dividerà in chunk e creerà/aggiornerà l'indice vettoriale.
     """
     logger.debug(f"Creazione catena RAG per utente: {user.username if user else 'Nessuno'}")
 
-    # Configura il percorso dell'indice
+    # Se l'utente è specificato, usa il suo indice specifico
     if user:
         index_name = f"vector_index_{user.id}"
         index_path = os.path.join(settings.MEDIA_ROOT, index_name)
 
-        # Se non sono forniti documenti, carica quelli dell'utente che necessitano di embedding
         if docs is None:
             docs, document_ids = load_user_documents(user)
     else:
@@ -232,7 +231,7 @@ def create_rag_chain(user=None, docs=None):
     embeddings = OpenAIEmbeddings()
     vectordb = None
 
-    # Gestione indice esistente
+    # Se non ci sono documenti da processare e l'indice esiste, carica l'indice esistente
     if (docs is None or len(docs) == 0) and os.path.exists(index_path):
         logger.info(f"Caricamento dell'indice FAISS esistente: {index_path}")
         try:
@@ -247,16 +246,15 @@ def create_rag_chain(user=None, docs=None):
                 else:
                     docs = load_all_documents(os.path.join(settings.MEDIA_ROOT, "docs"))
 
-    # Creazione o aggiornamento indice
+    # Se abbiamo documenti da processare o l'indice non esiste o è corrotto (vectordb è ancora None)
     if docs and len(docs) > 0 and vectordb is None:
         logger.info(f"Creazione o aggiornamento dell'indice FAISS con {len(docs)} documenti")
 
-        # Dividi documenti in chunk
+        # Dividi i documenti in chunk più piccoli
         splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
         split_docs = splitter.split_documents(docs)
         split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
 
-        # Aggiornamento indice esistente o creazione nuovo
         if os.path.exists(index_path):
             logger.info(f"Caricamento dell'indice FAISS esistente per aggiornamento: {index_path}")
             try:
@@ -279,7 +277,7 @@ def create_rag_chain(user=None, docs=None):
             if user and document_ids:
                 update_index_status(user, document_ids)
 
-    # Carica indice esistente se necessario
+    # Se l'indice non è stato creato o aggiornato, carica quello esistente
     if vectordb is None:
         if os.path.exists(index_path):
             logger.info(f"Caricamento dell'indice FAISS esistente: {index_path}")
@@ -292,40 +290,63 @@ def create_rag_chain(user=None, docs=None):
             logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
             return None
 
-    # Template prompt
-    template = """
-    Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+    # Carica il prompt dalle impostazioni RAG dell'utente o dalle impostazioni predefinite
+    try:
+        if user:
+            from profiles.models import RAGConfiguration
+            rag_settings, _ = RAGConfiguration.objects.get_or_create(user=user)
+            system_prompt = rag_settings.get_system_prompt()
+        else:
+            system_prompt = settings.DEFAULT_RAG_PROMPT
+    except Exception as e:
+        logger.error(f"Errore nel caricare il prompt di sistema: {str(e)}")
+        system_prompt = settings.DEFAULT_RAG_PROMPT
 
-    Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
-    Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+    # Usa lo stesso approccio di create_retrieval_qa_chain per le opzioni aggiuntive
+    try:
+        if user:
+            from profiles.models import RAGConfiguration
+            rag_settings, _ = RAGConfiguration.objects.get_or_create(user=user)
+            auto_citation = rag_settings.get_auto_citation()
+            prioritize_filenames = rag_settings.get_prioritize_filenames()
+            strict_context = rag_settings.get_strict_context()
+        else:
+            auto_citation = settings.DEFAULT_AUTO_CITATION
+            prioritize_filenames = settings.DEFAULT_PRIORITIZE_FILENAMES
+            strict_context = settings.DEFAULT_STRICT_CONTEXT
+    except Exception as e:
+        logger.error(f"Errore nel caricare opzioni prompt: {str(e)}")
+        auto_citation = settings.DEFAULT_AUTO_CITATION
+        prioritize_filenames = settings.DEFAULT_PRIORITIZE_FILENAMES
+        strict_context = settings.DEFAULT_STRICT_CONTEXT
 
-    Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+    # Costruisci il prompt completo
+    template = system_prompt
+    logger.debug(f"Prompt template: {template}")
 
-    Quando rispondi:
-    1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
-    2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
-    3. Organizza le informazioni in modo logico e strutturato
-    4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
-    5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
-    6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne
+    if prioritize_filenames:
+        template += settings.PRIORITIZE_FILENAMES_PROMPT
 
-    Contesto:
-    {context}
+    if auto_citation:
+        template += settings.AUTO_CITATION_PROMPT
 
-    Domanda: {question}
+    if strict_context:
+        template += settings.STRICT_CONTEXT_PROMPT
 
-    Risposta dettagliata:
-    """
+    template += settings.CONTEXT_QUESTION_PROMPT
+
+    logger.debug(f"Prompt template finale: {template}")
 
     PROMPT = PromptTemplate(
         template=template,
         input_variables=["context", "question"]
     )
 
-    # Configura il retriever
+
+    # Configura il retriever con un numero più alto di documenti da recuperare
     retriever = vectordb.as_retriever(search_kwargs={"k": 6})
 
-    # Modello LLM
+    # Crea il modello con timeout più alto per risposte complesse
     llm = ChatOpenAI(
         model=GPT_MODEL,
         temperature=GPT_MODEL_TEMPERATURE,
@@ -333,7 +354,7 @@ def create_rag_chain(user=None, docs=None):
         request_timeout=GPT_MODEL_TIMEOUT
     )
 
-    # Crea catena RAG
+    # Crea la catena RAG con il prompt personalizzato
     qa = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
@@ -341,9 +362,7 @@ def create_rag_chain(user=None, docs=None):
         chain_type_kwargs={"prompt": PROMPT},
         return_source_documents=True
     )
-
     return qa
-
 
 def get_answer_from_rag(user, question):
     """
@@ -732,6 +751,7 @@ def get_answer_from_project(project, question):
 
 def create_retrieval_qa_chain(vectordb, project=None):
     """
+    Configura il retriever, il prompt e l'LLM in base alle impostazioni dell'utente:
     Crea una catena RetrievalQA utilizzando le impostazioni RAG dell'utente.
     Configura il retriever, il prompt e il modello LLM in base alle preferenze.
     """
@@ -744,7 +764,7 @@ def create_retrieval_qa_chain(vectordb, project=None):
     template_type = "Predefinito"
     customized = []
 
-    # Ottieni impostazioni RAG utente
+    # Ottieni impostazioni RAG utente: recupera le impostazioni RAG dell'utente, compreso il preset attivo
     rag_settings = None
     if user:
         try:
@@ -758,7 +778,8 @@ def create_retrieval_qa_chain(vectordb, project=None):
         except Exception as e:
             logger.error(f"Errore nel recuperare le impostazioni RAG: {str(e)}")
 
-    # Carica parametri (da utente o predefiniti)
+    # Carica parametri (da utente o predefiniti): Vengono caricati i parametri dalle impostazioni dell'utente
+    # o dal preset selezionato
     if rag_settings:
         # Parametri di ricerca
         similarity_top_k = rag_settings.get_similarity_top_k()
@@ -818,7 +839,7 @@ def create_retrieval_qa_chain(vectordb, project=None):
     # Configurazione prompt
     template = system_prompt
     logger.info(f"Generazione prompt (lunghezza base: {len(system_prompt)} caratteri)")
-
+    logger.debug(f"Template: {template}")
     # Aggiungi moduli al prompt
     modules_added = []
 

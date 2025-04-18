@@ -1117,8 +1117,10 @@ def get_answer_from_project(project, question):
         update_needed = check_project_index_update_needed(project)
 
         # Crea o aggiorna la catena RAG se necessario
-        qa_chain = create_project_rag_chain(project=project) if update_needed else create_project_rag_chain(
-            project=project, docs=[])
+        if update_needed:
+            qa_chain = create_project_rag_chain(project=project)
+        else:
+            qa_chain = create_project_rag_chain(project=project, docs=[])
 
         if qa_chain is None:
             return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.",

@@ -129,6 +129,20 @@
 </div>
 
 <div class="container-fluid">
+    <!-- Inserisci qui l'alert -->
+    <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+        <div class="d-flex">
+            <div class="flex-shrink-0">
+                <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+            </div>
+            <div>
+                <h4 class="alert-heading">Configurazione API Keys</h4>
+                <p>Questa pagina ti permette di configurare le chiavi API per i diversi motori di intelligenza artificiale.</p>
+                <p class="mb-0"><strong>Nota:</strong> Le API keys personali sono sempre crittografate per proteggere la tua sicurezza. Assicurati che le chiavi siano corrette per evitare errori di autenticazione.</p>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Chiudi"></button>
+    </div>
     <!-- General Information Card -->
     <div class="card mb-4">
         <div class="card-body">
@@ -615,67 +629,89 @@
             <h5 class="card-title mb-0">Configurazione API Keys</h5>
         </div>
         <div class="card-body">
-            <p class="text-muted mb-4">Configura le chiavi API per i diversi servizi di IA. Queste chiavi sono necessarie per utilizzare i rispettivi motori.</p>
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                Puoi scegliere di utilizzare il credito disponibile sulla piattaforma o inserire le tue chiavi API personali.
+            </div>
 
             <form id="api-keys-form">
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label for="openai-api-key" class="form-label">OpenAI API Key</label>
+                <div class="mb-4">
+                    <h6 class="border-bottom pb-2">Modalità di utilizzo</h6>
+                    <div class="form-check form-check-inline mt-2">
+                        <input class="form-check-input" type="radio" name="api_mode" id="use-platform-credit" value="platform" checked>
+                        <label class="form-check-label" for="use-platform-credit">
+                            Usa credito piattaforma <span class="badge bg-success ms-1">€ 5.50 disponibili</span>
+                        </label>
                     </div>
-                    <div class="col-md-9">
-                        <div class="input-group">
-                            <input type="password" class="form-control" id="openai-api-key" placeholder="sk-..." value="{{ openai_api_key|default:'' }}">
-                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="openai-api-key">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                            <a href="https://platform.openai.com/account/api-keys" target="_blank" class="btn btn-outline-info">
-                                <i class="bi bi-question-circle me-1"></i> Ottieni
-                            </a>
-                        </div>
-                        <div class="form-text">Chiave API per accedere ai modelli di OpenAI come GPT-4o.</div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="api_mode" id="use-personal-keys" value="personal">
+                        <label class="form-check-label" for="use-personal-keys">
+                            Usa chiavi API personali
+                        </label>
                     </div>
                 </div>
 
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label for="claude-api-key" class="form-label">Anthropic API Key</label>
-                    </div>
-                    <div class="col-md-9">
-                        <div class="input-group">
-                            <input type="password" class="form-control" id="claude-api-key" placeholder="sk-ant-..." value="{{ claude_api_key|default:'' }}">
-                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="claude-api-key">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                            <a href="https://console.anthropic.com/account/keys" target="_blank" class="btn btn-outline-info">
-                                <i class="bi bi-question-circle me-1"></i> Ottieni
-                            </a>
+                <div id="personal-keys-section" style="display: none;">
+                    <h6 class="border-bottom pb-2">Chiavi API personali</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="openai-api-key" class="form-label">OpenAI API Key</label>
                         </div>
-                        <div class="form-text">Chiave API per accedere ai modelli Claude di Anthropic.</div>
+                        <div class="col-md-9">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="openai-api-key" placeholder="sk-..." value="{{ openai_api_key|default:'' }}">
+                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="openai-api-key">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <a href="https://platform.openai.com/account/api-keys" target="_blank" class="btn btn-outline-info">
+                                    <i class="bi bi-question-circle me-1"></i> Ottieni
+                                </a>
+                            </div>
+                            <div class="form-text">Chiave API per accedere ai modelli di OpenAI come GPT-4o.</div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="row">
-                    <div class="col-md-3">
-                        <label for="deepseek-api-key" class="form-label">DeepSeek API Key</label>
-                    </div>
-                    <div class="col-md-9">
-                        <div class="input-group">
-                            <input type="password" class="form-control" id="deepseek-api-key" placeholder="sk-..." value="{{ deepseek_api_key|default:'' }}">
-                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="deepseek-api-key">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                            <a href="https://platform.deepseek.com/" target="_blank" class="btn btn-outline-info">
-                                <i class="bi bi-question-circle me-1"></i> Ottieni
-                            </a>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="claude-api-key" class="form-label">Anthropic API Key</label>
                         </div>
-                        <div class="form-text">Chiave API per accedere ai modelli DeepSeek.</div>
+                        <div class="col-md-9">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="claude-api-key" placeholder="sk-ant-..." value="{{ claude_api_key|default:'' }}">
+                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="claude-api-key">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <a href="https://console.anthropic.com/account/keys" target="_blank" class="btn btn-outline-info">
+                                    <i class="bi bi-question-circle me-1"></i> Ottieni
+                                </a>
+                            </div>
+                            <div class="form-text">Chiave API per accedere ai modelli Claude di Anthropic.</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="deepseek-api-key" class="form-label">DeepSeek API Key</label>
+                        </div>
+                        <div class="col-md-9">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="deepseek-api-key" placeholder="sk-..." value="{{ deepseek_api_key|default:'' }}">
+                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="deepseek-api-key">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <a href="https://platform.deepseek.com/" target="_blank" class="btn btn-outline-info">
+                                    <i class="bi bi-question-circle me-1"></i> Ottieni
+                                </a>
+                            </div>
+                            <div class="form-text">Chiave API per accedere ai modelli DeepSeek.</div>
+                        </div>
                     </div>
                 </div>
             </form>
         </div>
         <div class="card-footer">
             <button class="btn btn-primary" id="save-api-keys-btn">
-                <i class="bi bi-key me-1"></i> Salva API Keys
+                <i class="bi bi-key me-1"></i> Salva configurazione
             </button>
         </div>
     </div>
@@ -924,6 +960,67 @@
                 }, 500);
             });
         });
+
+        // Gestione delle opzioni API key
+        document.querySelectorAll('input[name="api_mode"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const personalKeysSection = document.getElementById('personal-keys-section');
+                if (this.value === 'personal') {
+                    personalKeysSection.style.display = 'block';
+                } else {
+                    personalKeysSection.style.display = 'none';
+                }
+            });
+        });
+
+        // Modifica handler del form API keys
+        document.getElementById('save-api-keys-btn').addEventListener('click', function() {
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+
+            // Raccogli tutti i dati da inviare
+            const data = {
+                'action': 'save_api_keys',
+                'api_mode': document.querySelector('input[name="api_mode"]:checked').value,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            };
+
+            // Se la modalità è personal, aggiungi le chiavi API
+            if (data.api_mode === 'personal') {
+                data.openai_api_key = document.getElementById('openai-api-key').value;
+                data.claude_api_key = document.getElementById('claude-api-key').value;
+                data.deepseek_api_key = document.getElementById('deepseek-api-key').value;
+            }
+
+            // Invia i dati al server
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-key me-1"></i> Salva configurazione';
+
+                if (data.success) {
+                    showToast('Configurazione API salvata con successo', 'success');
+                } else {
+                    showToast(data.message || 'Errore durante il salvataggio', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-key me-1"></i> Salva configurazione';
+                showToast('Errore di connessione', 'danger');
+            });
+        });
+
     });
 </script>
 {% endblock %}

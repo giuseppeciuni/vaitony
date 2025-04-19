@@ -614,14 +614,14 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Tab persistence
+    // Persistenza del tab attivo
     const triggerTabList = document.querySelectorAll('#projectTabs button');
     const activeTab = document.querySelector('#projectTabs button.active');
     if (activeTab && activeTab.getAttribute('data-bs-target') === '#ask') {
         document.getElementById('fixed-chat-input').style.display = 'block';
     }
 
-    // Gestisce la visibilità dell'input fisso in base al tab attivo
+    // Gestione della visibilità dell'input fisso in base al tab attivo
     document.querySelectorAll('#projectTabs button').forEach(tabButton => {
         tabButton.addEventListener('shown.bs.tab', function(event) {
             const targetTab = event.target.getAttribute('data-bs-target');
@@ -630,12 +630,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Salva il tab attivo nel localStorage
     triggerTabList.forEach(tabEl => {
         tabEl.addEventListener('shown.bs.tab', function(event) {
             localStorage.setItem('activeProjectTab', event.target.getAttribute('data-bs-target'));
         });
     });
-
 
     // Gestione delle azioni dei form
     const forms = document.querySelectorAll('form');
@@ -645,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Document Modal
+    // Modal per la visualizzazione dei documenti
     const documentModal = document.getElementById('documentModal');
     if (documentModal) {
         documentModal.addEventListener('show.bs.modal', function(event) {
@@ -666,7 +666,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (openDocumentLink) openDocumentLink.href = filePath;
             if (downloadDocumentLink) downloadDocumentLink.href = filePath + '?download=1';
 
-            // Determina il tipo di file e mostra l'anteprima appropriata
+            // Determina il tipo di file
             const fileExtension = fileName.split('.').pop().toLowerCase();
 
             // Reset dei container
@@ -680,7 +680,7 @@ document.addEventListener('DOMContentLoaded', function() {
             imageContainer.style.display = 'none';
             unsupportedContainer.style.display = 'none';
 
-            // Mostra il container appropriato in base al tipo di file
+            // Mostra l'anteprima appropriata
             if (fileExtension === 'pdf') {
                 documentFrame.src = filePath;
                 documentFrame.style.display = 'block';
@@ -696,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Delete File Modal
+    // Modal per l'eliminazione dei file
     const deleteFileModal = document.getElementById('deleteFileModal');
     if (deleteFileModal) {
         deleteFileModal.addEventListener('show.bs.modal', function(event) {
@@ -704,7 +704,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const fileId = button.getAttribute('data-file-id');
             const fileName = button.getAttribute('data-file-name');
 
-            // Imposta l'ID del file e il nome nel modal
             document.getElementById('delete-file-id').value = fileId;
             document.getElementById('delete-file-name').textContent = fileName;
         });
@@ -714,7 +713,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (deleteFileForm) {
             deleteFileForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-
                 const fileId = document.getElementById('delete-file-id').value;
 
                 fetch('{% url "project" project.id %}', {
@@ -731,17 +729,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     })
                 })
                 .then(response => {
-                    // A prescindere dal tipo di risposta, chiudi il modal
                     const modal = bootstrap.Modal.getInstance(deleteFileModal);
                     modal.hide();
 
-                    // Rimuovi l'elemento dalla pagina
                     const fileCard = document.querySelector(`.document-card[data-file-id="${fileId}"]`);
                     if (fileCard) {
                         fileCard.closest('.col').remove();
                     }
 
-                    // Mostra un messaggio di successo
                     const alertDiv = document.createElement('div');
                     alertDiv.className = 'alert alert-success alert-dismissible fade show';
                     alertDiv.innerHTML = `
@@ -750,14 +745,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     `;
                     document.querySelector('.project-header').after(alertDiv);
 
-                    // Rimuovi l'alert dopo 3 secondi
-                    setTimeout(() => {
-                        alertDiv.remove();
-                    }, 3000);
+                    setTimeout(() => alertDiv.remove(), 3000);
 
-                    // Se non ci sono più file, mostra il messaggio "vuoto"
-                    const remainingFiles = document.querySelectorAll('.document-card');
-                    if (remainingFiles.length === 0) {
+                    if (document.querySelectorAll('.document-card').length === 0) {
                         const documentsTab = document.getElementById('documents');
                         if (documentsTab) {
                             documentsTab.innerHTML = `
@@ -787,7 +777,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Edit Note Modal
+    // Modal per la modifica delle note
     const editNoteModal = document.getElementById('editNoteModal');
     if (editNoteModal) {
         editNoteModal.addEventListener('show.bs.modal', function(event) {
@@ -800,150 +790,236 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Form per l'aggiunta di note
+    const addNoteForm = document.getElementById('add-note-form');
+    if (addNoteForm) {
+        addNoteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const content = document.getElementById('note-content').value.trim();
+            if (!content) return;
 
-    // Add Note Form
-        const addNoteForm = document.getElementById('add-note-form');
-        if (addNoteForm) {
-            addNoteForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                const content = document.getElementById('note-content').value.trim();
-                if (!content) return;
-
-                fetch('{% url "project" project.id %}', {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        'action': 'add_note',
-                        'project_id': '{{ project.id }}',
-                        'content': content,
-                        'csrfmiddlewaretoken': '{{ csrf_token }}'
-                    })
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'add_note',
+                    'project_id': '{{ project.id }}',
+                    'content': content,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Chiudi il modal
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('addNoteModal'));
-                        modal.hide();
-
-                        // Ricarica la pagina per mostrare la nuova nota
-                        window.location.reload();
-                    } else {
-                        alert('Errore: ' + (data.error || 'Impossibile aggiungere la nota'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Errore:', error);
-                    alert('Errore di rete. Riprova più tardi.');
-                });
-            });
-        }
-
-        // Ask AI functionality
-        const sendButton = document.getElementById('send-question-btn');
-        const questionInput = document.getElementById('question-input');
-        const chatMessages = document.getElementById('chat-messages');
-
-        if (sendButton && questionInput) {
-            sendButton.addEventListener('click', sendQuestion);
-            questionInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendQuestion();
-                }
-            });
-
-            // In project.html, sostituisci la funzione sendQuestion con questa versione
-            function sendQuestion() {
-        const question = questionInput.value.trim();
-        if (!question) return;
-
-        // Add user message
-        const userMsg = document.createElement('div');
-        userMsg.className = 'mb-3 p-3 user-message ml-auto';
-        userMsg.style.maxWidth = '80%';
-        userMsg.innerHTML = `
-            <div class="small fw-bold mb-1">Tu</div>
-            <div>${question.replace(/\n/g, '<br>')}</div>
-        `;
-        chatMessages.appendChild(userMsg);
-
-        // Clear input and disable
-        questionInput.value = '';
-        questionInput.disabled = true;
-        sendButton.disabled = true;
-        sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-        // Scroll to bottom
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        // Send request
-        fetch('{% url "project" project.id %}', {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                'action': 'ask_question',
-                'project_id': '{{ project.id }}',
-                'question': question,
-                'csrfmiddlewaretoken': '{{ csrf_token }}'
             })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Add AI response (only the answer, no sources)
-                const aiMsg = document.createElement('div');
-                aiMsg.className = 'mb-3 p-3 ai-message mr-auto';
-                aiMsg.style.maxWidth = '80%';
-                aiMsg.innerHTML = `
-                    <div class="small fw-bold mb-1">Assistente AI</div>
-                    <div>${data.answer.replace(/\n/g, '<br>')}</div>
-                `;
-                chatMessages.appendChild(aiMsg);
-
-                // Update the sources tab if there are sources
-                if (data.sources && data.sources.length > 0) {
-                    updateSourcesTab(data.sources);
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addNoteModal'));
+                    modal.hide();
+                    window.location.reload();
+                } else {
+                    alert('Errore: ' + (data.error || 'Impossibile aggiungere la nota'));
                 }
-            } else {
-                showError('Errore: ' + (data.error || 'Errore sconosciuto'));
-            }
-        })
-        .catch(error => {
-            showError('Errore di rete. Riprova più tardi.');
-            console.error('Errore:', error);
-        })
-        .finally(() => {
-            questionInput.disabled = false;
-            sendButton.disabled = false;
-            sendButton.innerHTML = '<i class="bi bi-send"></i>';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                alert('Errore di rete. Riprova più tardi.');
+            });
         });
     }
 
+    // Funzionalità di chat con l'AI
+    const sendButton = document.getElementById('send-question-btn');
+    const questionInput = document.getElementById('question-input');
+    const chatMessages = document.getElementById('chat-messages');
+
+    if (sendButton && questionInput) {
+        sendButton.addEventListener('click', sendQuestion);
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendQuestion();
+            }
+        });
+
+        function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            // Aggiunge il messaggio dell'utente
+            const userMsg = document.createElement('div');
+            userMsg.className = 'mb-3 p-3 user-message ml-auto';
+            userMsg.style.maxWidth = '80%';
+            userMsg.innerHTML = `
+                <div class="small fw-bold mb-1">Tu</div>
+                <div>${question.replace(/\n/g, '<br>')}</div>
+            `;
+            chatMessages.appendChild(userMsg);
+
+            // Reset input
+            questionInput.value = '';
+            questionInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            // Scroll automatico
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Timeout per la richiesta
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000);
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'ask_question',
+                    'project_id': '{{ project.id }}',
+                    'question': question,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                }),
+                signal: controller.signal
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`Errore HTTP! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Aggiunge la risposta dell'AI
+                    const aiMsg = document.createElement('div');
+                    aiMsg.className = 'mb-3 p-3 ai-message mr-auto';
+                    aiMsg.style.maxWidth = '80%';
+                    aiMsg.innerHTML = `
+                        <div class="small fw-bold mb-1">Assistente AI</div>
+                        <div>${data.answer.replace(/\n/g, '<br>')}</div>
+                    `;
+                    chatMessages.appendChild(aiMsg);
+
+                    // Aggiorna le fonti se presenti
+                    if (data.sources && data.sources.length > 0) {
+                        updateSourcesTab(data.sources);
+                    }
+                } else if (data.error === "api_auth_error") {
+                    // Gestione specifica dell'errore di autenticazione API
+                    showApiAuthErrorMessage();
+                } else {
+                    throw new Error(data.error || 'Errore sconosciuto dal server');
+                }
+            })
+            .catch(error => {
+                // Gestione errori: verifica se è un errore di autenticazione API
+                if (error.message && (error.message.includes('invalid_api_key') ||
+                                     error.message.includes('authentication') ||
+                                     error.message.includes('api_auth_error'))) {
+                    showApiAuthErrorMessage();
+                } else {
+                    // Altri tipi di errore
+                    showError(`Errore: ${error.message}`);
+                }
+            })
+            .finally(() => {
+                // Ripristina sempre lo stato iniziale
+                questionInput.disabled = false;
+                sendButton.disabled = false;
+                sendButton.innerHTML = '<i class="bi bi-send"></i>';
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                clearTimeout(timeout);
+            });
+        }
+
+        function showApiAuthErrorMessage() {
+            // Crea una risposta di errore dell'AI con avviso e suggerimento di azione
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'mb-3 p-3 ai-message mr-auto';
+            errorMsg.style.maxWidth = '80%';
+
+            errorMsg.innerHTML = `
+                <div class="small fw-bold mb-1">Assistente AI</div>
+                <div class="alert alert-danger mb-2">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Problema con le chiavi API</strong>
+                </div>
+                <p>Non è stato possibile contattare il servizio AI a causa di un errore di autenticazione.</p>
+                <div class="alert alert-light border">
+                    <h6 class="mb-2"><i class="bi bi-wrench me-1"></i> Come risolvere:</h6>
+                    <ol class="mb-2">
+                        <li>Vai alle <a href="{% url 'ia_engine' %}" class="fw-medium">Impostazioni del Motore IA</a></li>
+                        <li>Verifica che le chiavi API siano corrette</li>
+                        <li>Oppure passa alla modalità "Usa credito piattaforma"</li>
+                    </ol>
+                </div>
+            `;
+
+            chatMessages.appendChild(errorMsg);
+
+            // Mostra anche una notifica Toast per attirare l'attenzione
+            showErrorToast('Errore di autenticazione API', 'Controlla le tue chiavi API nelle impostazioni del motore IA');
+        }
+
         function showError(message) {
             const errorMsg = document.createElement('div');
-            errorMsg.className = 'mb-3 p-3 bg-danger text-white rounded';
+            errorMsg.className = 'mb-3 p-3 ai-message mr-auto';
             errorMsg.style.maxWidth = '80%';
-            errorMsg.innerHTML = message;
+            errorMsg.innerHTML = `
+                <div class="small fw-bold mb-1">Assistente AI</div>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    ${message}
+                </div>
+            `;
             chatMessages.appendChild(errorMsg);
+        }
+
+        function showErrorToast(title, message) {
+            // Crea un toast di errore persistente
+            const toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '1080';
+
+            const toastEl = document.createElement('div');
+            toastEl.className = 'toast show';
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            toastEl.innerHTML = `
+                <div class="toast-header bg-danger text-white">
+                    <i class="bi bi-exclamation-circle me-2"></i>
+                    <strong class="me-auto">${title}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Chiudi"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                    <div class="mt-2 pt-2 border-top">
+                        <a href="{% url 'ia_engine' %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-gear me-1"></i> Vai alle impostazioni
+                        </a>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="toast">
+                            Chiudi
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            toastContainer.appendChild(toastEl);
+            document.body.appendChild(toastContainer);
+
+            // Rimuovi il toast dopo 10 secondi
+            setTimeout(() => {
+                toastContainer.remove();
+            }, 10000);
         }
     }
 
-
+    // Aggiorna il tab delle fonti
     function updateSourcesTab(sources) {
-        // Get the sources tab content area
         const sourcesTab = document.getElementById('sources');
         if (!sourcesTab) return;
 
-        // Create the HTML for the sources
         let sourcesHTML = `
             <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
             <div class="list-group">
@@ -964,14 +1040,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         sourcesHTML += `</div>`;
-
-        // Update the tab content
         sourcesTab.innerHTML = sourcesHTML;
 
-        // Opzionale: aggiorna il badge sul tab per indicare nuove fonti
         const sourcesTabButton = document.getElementById('sources-tab');
         if (sourcesTabButton) {
-            // Aggiungi un piccolo badge per indicare nuove fonti
             if (!sourcesTabButton.querySelector('.badge')) {
                 const badge = document.createElement('span');
                 badge.className = 'badge bg-primary ms-1';
@@ -983,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Note management
+    // Gestione eliminazione note
     document.querySelectorAll('.delete-note-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             if (confirm('Eliminare questa nota?')) {
@@ -1017,7 +1089,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Include note toggle
+    // Toggle per l'inclusione delle note nella ricerca AI
     document.querySelectorAll('.include-note-check').forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             const noteId = this.getAttribute('data-note-id');
@@ -1039,48 +1111,21 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Errore:', error);
-                this.checked = !isIncluded; // Revoca in caso di errore
+                this.checked = !isIncluded;
             });
         });
     });
 
-    // Gestisce la visibilità dell'input fisso in base al tab attivo
-    document.querySelectorAll('#projectTabs button').forEach(tabButton => {
-        tabButton.addEventListener('shown.bs.tab', function(event) {
-            const targetTab = event.target.getAttribute('data-bs-target');
-            const fixedInput = document.getElementById('fixed-chat-input');
-
-            if (targetTab === '#ask') {
-                fixedInput.style.display = 'block';
-            } else {
-                fixedInput.style.display = 'none';
-            }
-        });
-    });
-
-    // Mostra l'input fisso se il tab attivo è "Chiedi all'AI" all'avvio
-    document.addEventListener('DOMContentLoaded', function() {
-        const activeTab = document.querySelector('#projectTabs button.active');
-        if (activeTab && activeTab.getAttribute('data-bs-target') === '#ask') {
-            document.getElementById('fixed-chat-input').style.display = 'block';
-        }
-    });
-
+    // Gestione hash URL per l'apertura automatica dei tab
     if (window.location.hash) {
-    const hash = window.location.hash;
-    const tabId = hash.substring(1); // Rimuovi il # dall'inizio
-
-    // Trova il pulsante del tab corrispondente
-    const tabEl = document.querySelector(`button[data-bs-target="#${tabId}"]`);
-    if (tabEl) {
-        // Attendi un breve momento per assicurarsi che la pagina sia completamente caricata
-        setTimeout(() => {
-            // Attiva il tab
-            const tab = new bootstrap.Tab(tabEl);
-            tab.show();
-        }, 100);
+        const hash = window.location.hash.substring(1);
+        const tabEl = document.querySelector(`button[data-bs-target="#${hash}"]`);
+        if (tabEl) {
+            setTimeout(() => {
+                new bootstrap.Tab(tabEl).show();
+            }, 100);
+        }
     }
-}
 });
 </script>
 {% endblock %}

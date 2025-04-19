@@ -7,6 +7,10 @@ from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
+from cryptography.fernet import Fernet
+import base64
+import hashlib
+
 
 # Profile type: Single User Profile or Company Profile
 class Profile_type(models.Model):
@@ -384,10 +388,120 @@ class RAGConfiguration(models.Model):
         return False
 
 
+class AIEngineSettings(models.Model):
+    """Impostazioni per i motori di intelligenza artificiale"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='ai_engine_settings')
+    api_mode = models.CharField(
+        max_length=20,
+        choices=[
+            ('platform', 'Usa credito piattaforma'),
+            ('personal', 'Usa chiavi API personali')
+        ],
+        default='platform'
+    )
 
+    # Chiavi API (criptate)
+    openai_api_key = models.TextField(blank=True, null=True)
+    claude_api_key = models.TextField(blank=True, null=True)
+    deepseek_api_key = models.TextField(blank=True, null=True)
 
+    # Parametri del modello
+    gpt_max_tokens = models.IntegerField(default=4096)
+    gpt_timeout = models.IntegerField(default=60)  # in secondi
+    gpt_model = models.CharField(
+        max_length=50,
+        choices=[
+            ('gpt-4o', 'GPT-4o'),
+            ('gpt-4-turbo', 'GPT-4 Turbo'),
+            ('gpt-3.5-turbo', 'GPT-3.5 Turbo')
+        ],
+        default='gpt-4o'
+    )
 
+    # Parametri Claude
+    claude_max_tokens = models.IntegerField(default=4096)
+    claude_timeout = models.IntegerField(default=90)
+    claude_model = models.CharField(
+        max_length=50,
+        choices=[
+            ('claude-3-7-sonnet', 'Claude 3.7 Sonnet'),
+            ('claude-3-opus', 'Claude 3 Opus'),
+            ('claude-3-haiku', 'Claude 3 Haiku')
+        ],
+        default='claude-3-7-sonnet'
+    )
 
+    # Parametri DeepSeek
+    deepseek_max_tokens = models.IntegerField(default=2048)
+    deepseek_timeout = models.IntegerField(default=30)
+    deepseek_model = models.CharField(
+        max_length=50,
+        choices=[
+            ('deepseek-coder', 'DeepSeek Coder'),
+            ('deepseek-chat', 'DeepSeek Chat'),
+            ('deepseek-lite', 'DeepSeek Lite')
+        ],
+        default='deepseek-coder'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Impostazioni AI per {self.user.username}"
+
+    def save(self, *args, **kwargs):
+        # Cripta le chiavi API prima di salvarle
+        if self.openai_api_key and not self.openai_api_key.startswith('enc_'):
+            self.openai_api_key = f"enc_{self._encrypt_value(self.openai_api_key)}"
+
+        if self.claude_api_key and not self.claude_api_key.startswith('enc_'):
+            self.claude_api_key = f"enc_{self._encrypt_value(self.claude_api_key)}"
+
+        if self.deepseek_api_key and not self.deepseek_api_key.startswith('enc_'):
+            self.deepseek_api_key = f"enc_{self._encrypt_value(self.deepseek_api_key)}"
+
+        super().save(*args, **kwargs)
+
+    def _encrypt_value(self, value):
+        """Cripta un valore usando Fernet (richiede cryptography)"""
+
+        # Genera una chiave derivata dalla SECRET_KEY di Django
+        digest = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+        key = base64.urlsafe_b64encode(digest)
+
+        f = Fernet(key)
+        encrypted_data = f.encrypt(value.encode())
+        return encrypted_data.decode()
+
+    def get_openai_api_key(self):
+        """Restituisce la API key OpenAI decriptata"""
+        if self.openai_api_key and self.openai_api_key.startswith('enc_'):
+            return self._decrypt_value(self.openai_api_key[4:])
+        return self.openai_api_key
+
+    def get_claude_api_key(self):
+        """Restituisce la API key Claude decriptata"""
+        if self.claude_api_key and self.claude_api_key.startswith('enc_'):
+            return self._decrypt_value(self.claude_api_key[4:])
+        return self.claude_api_key
+
+    def get_deepseek_api_key(self):
+        """Restituisce la API key DeepSeek decriptata"""
+        if self.deepseek_api_key and self.deepseek_api_key.startswith('enc_'):
+            return self._decrypt_value(self.deepseek_api_key[4:])
+        return self.deepseek_api_key
+
+    def _decrypt_value(self, value):
+        """Decripta un valore usando Fernet"""
+
+        # Genera la stessa chiave usata per la cifratura
+        digest = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+        key = base64.urlsafe_b64encode(digest)
+
+        f = Fernet(key)
+        decrypted_data = f.decrypt(value.encode())
+        return decrypted_data.decode()
 
 
 

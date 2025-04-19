@@ -15,9 +15,10 @@ from dashboard.rag_utils import create_project_rag_chain, handle_add_note, handl
     handle_toggle_note_inclusion
 from dashboard.rag_utils import get_answer_from_project
 # Modifica questa riga per includere ProjectNote
-from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource
+from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource, AIEngineSettings
 from profiles.models import RagTemplateType, RagDefaultSettings, RAGConfiguration
 from .utils import process_user_files
+import openai
 
 
 # Get logger
@@ -324,6 +325,120 @@ def project(request, project_id=None):
                     return redirect('project', project_id=project.id)
 
 
+                # elif action == 'ask_question':
+                #     # Gestisci domanda RAG
+                #     question = request.POST.get('question', '').strip()
+                #
+                #     if question:
+                #         # Misura il tempo di elaborazione
+                #         start_time = time.time()
+                #
+                #         # Ottieni la risposta dal sistema RAG
+                #         try:
+                #             logger.info(f"Elaborazione domanda RAG: '{question[:50]}...' per progetto {project.id}")
+                #
+                #             # Verifica configurazione RAG attuale
+                #             try:
+                #                 rag_config = RAGConfiguration.objects.get(user=request.user)
+                #                 current_preset = rag_config.current_settings
+                #                 if current_preset:
+                #                     logger.info(
+                #                         f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+                #                 else:
+                #                     logger.info(
+                #                         "Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+                #             except Exception as config_error:
+                #                 logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
+                #
+                #             # Verifica che il progetto abbia documenti e note prima di processare la query
+                #             project_files = ProjectFile.objects.filter(project=project)
+                #             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+                #
+                #             logger.info(
+                #                 f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
+                #
+                #             try:
+                #                 # Usa la funzione ottimizzata per ottenere la risposta
+                #                 rag_response = get_answer_from_project(project, question)
+                #
+                #                 # Calculate processing time
+                #                 processing_time = round(time.time() - start_time, 2)
+                #                 logger.info(f"RAG processing completed in {processing_time} seconds")
+                #
+                #                 # Log delle fonti trovate
+                #                 if 'sources' in rag_response and rag_response['sources']:
+                #                     logger.info(f"Trovate {len(rag_response['sources'])} fonti rilevanti")
+                #                 else:
+                #                     logger.warning("Nessuna fonte trovata per la risposta")
+                #
+                #                 # Salva la conversazione nel database
+                #                 try:
+                #                     conversation = ProjectConversation.objects.create(
+                #                         project=project,
+                #                         question=question,
+                #                         answer=rag_response.get('answer', 'No answer found.'),
+                #                         processing_time=processing_time
+                #                     )
+                #
+                #                     # Salva le fonti utilizzate
+                #                     for source in rag_response.get('sources', []):
+                #                         # Cerchiamo di trovare il ProjectFile corrispondente
+                #                         project_file = None
+                #                         if source.get('type') != 'note':
+                #                             source_path = source.get('metadata', {}).get('source', '')
+                #                             if source_path:
+                #                                 # Cerca il file per path
+                #                                 try:
+                #                                     project_file = ProjectFile.objects.get(project=project,
+                #                                                                            file_path=source_path)
+                #                                 except ProjectFile.DoesNotExist:
+                #                                     pass
+                #
+                #                         # Salva la fonte
+                #                         AnswerSource.objects.create(
+                #                             conversation=conversation,
+                #                             project_file=project_file,
+                #                             content=source.get('content', ''),
+                #                             page_number=source.get('metadata', {}).get('page'),
+                #                             relevance_score=source.get('score')
+                #                         )
+                #                 except Exception as save_error:
+                #                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
+                #                     # Non interrompiamo il flusso se il salvataggio fallisce
+                #
+                #                 # Create AJAX response
+                #                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                #                     return JsonResponse({
+                #                         "success": True,
+                #                         "answer": rag_response.get('answer', 'No answer found.'),
+                #                         "sources": rag_response.get('sources', []),
+                #                         "processing_time": processing_time
+                #                     })
+                #             except Exception as specific_error:
+                #                 logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
+                #                 error_message = str(specific_error)
+                #
+                #                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                #                     return JsonResponse({
+                #                         "success": False,
+                #                         "error": error_message,
+                #                         "answer": f"Error processing your question: {error_message}",
+                #                         "sources": []
+                #                     })
+                #
+                #                 messages.error(request, f"Error processing your question: {error_message}")
+                #
+                #         except Exception as e:
+                #             logger.exception(f"Error processing RAG query: {str(e)}")
+                #             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                #                 return JsonResponse({
+                #                     "success": False,
+                #                     "error": str(e),
+                #                     "answer": f"Error processing your question: {str(e)}",
+                #                     "sources": []
+                #                 })
+                #
+                #             messages.error(request, f"Error processing your question: {str(e)}")
                 elif action == 'ask_question':
                     # Gestisci domanda RAG
                     question = request.POST.get('question', '').strip()
@@ -363,6 +478,25 @@ def project(request, project_id=None):
                                 # Calculate processing time
                                 processing_time = round(time.time() - start_time, 2)
                                 logger.info(f"RAG processing completed in {processing_time} seconds")
+
+                                # Verifica se c'è stato un errore di autenticazione API
+                                if rag_response.get('error') == 'api_auth_error':
+                                    # Crea una risposta JSON specifica per questo errore
+                                    error_response = {
+                                        "success": False,
+                                        "error": "api_auth_error",
+                                        "error_details": rag_response.get('error_details', ''),
+                                        "answer": rag_response.get('answer', 'Errore di autenticazione API'),
+                                        "sources": []
+                                    }
+
+                                    # Non salvare conversazioni con errori di autenticazione
+                                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                        return JsonResponse(error_response)
+                                    else:
+                                        messages.error(request,
+                                                       "Errore di autenticazione API. Verifica le chiavi API nelle impostazioni del motore IA.")
+                                        return redirect('project', project_id=project.id)
 
                                 # Log delle fonti trovate
                                 if 'sources' in rag_response and rag_response['sources']:
@@ -417,13 +551,27 @@ def project(request, project_id=None):
                                 logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
                                 error_message = str(specific_error)
 
-                                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                                    return JsonResponse({
+                                # Verifica se l'errore è di autenticazione OpenAI
+                                if 'openai.AuthenticationError' in str(
+                                        type(specific_error)) or 'invalid_api_key' in error_message:
+                                    error_response = {
                                         "success": False,
-                                        "error": error_message,
+                                        "error": "api_auth_error",
+                                        "error_details": error_message,
+                                        "answer": "Errore di autenticazione con l'API. Verifica le tue chiavi API nelle impostazioni.",
+                                        "sources": []
+                                    }
+                                else:
+                                    error_response = {
+                                        "success": False,
+                                        "error": "processing_error",
+                                        "error_details": error_message,
                                         "answer": f"Error processing your question: {error_message}",
                                         "sources": []
-                                    })
+                                    }
+
+                                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                    return JsonResponse(error_response)
 
                                 messages.error(request, f"Error processing your question: {error_message}")
 
@@ -1102,45 +1250,94 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
 def get_answer_from_project(project, question):
     """
     Ottiene una risposta dal sistema RAG per la domanda su un progetto.
+    Gestisce l'indice, recupera le fonti pertinenti e formatta la risposta.
+    Gestisce anche gli errori di autenticazione API in modo appropriato.
     """
-    logger.debug(f"---> get_answer_from_project for project {project.id}")
+    logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
 
     try:
-        # Verifica se il progetto ha documenti o note
+        # Verifica documenti e note
         project_files = ProjectFile.objects.filter(project=project)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
         if not project_files.exists() and not project_notes.exists():
             return {"answer": "Il progetto non contiene documenti o note attive.", "sources": []}
 
-        # Verifica se è necessario aggiornare l'indice
+        # Verifica configurazione RAG
+        try:
+            rag_config = RAGConfiguration.objects.get(user=project.user)
+            current_preset = rag_config.current_settings
+            if current_preset:
+                logger.info(f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+            else:
+                logger.info("Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+        except Exception as config_error:
+            logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
+
+        # Verifica necessità aggiornamento indice
         update_needed = check_project_index_update_needed(project)
 
-        # Crea o aggiorna la catena RAG se necessario
+        # Crea o aggiorna catena RAG
         if update_needed:
+            logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
             qa_chain = create_project_rag_chain(project=project)
         else:
+            logger.info("Indice aggiornato, utilizzando indice esistente")
             qa_chain = create_project_rag_chain(project=project, docs=[])
 
         if qa_chain is None:
             return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.",
                     "sources": []}
 
-        # Ottieni la risposta
-        logger.info(f"🔎 Eseguendo ricerca su indice vettoriale del progetto {project.id} per: '{question}'")
-        result = qa_chain.invoke(question)
-        logger.info(f"✅ Ricerca completata per il progetto {project.id}")
+        # Esegui la ricerca
+        logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
+        start_time = time.time()
+        try:
+            result = qa_chain.invoke(question)
+            processing_time = round(time.time() - start_time, 2)
+            logger.info(f"Ricerca completata in {processing_time} secondi")
+        except openai.AuthenticationError as auth_error:
+            # Gestione specifica dell'errore di autenticazione API
+            error_message = str(auth_error)
+            logger.error(f"Errore di autenticazione API OpenAI: {error_message}")
+            return {
+                "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
+                          "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                "sources": [],
+                "error": "api_auth_error",
+                "error_details": error_message
+            }
+        except Exception as query_error:
+            logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
 
-        # Formato della risposta
+            # Verifica se l'errore è di autenticazione API anche se non catturato direttamente
+            if "invalid_api_key" in str(query_error) or "authentication" in str(query_error).lower():
+                return {
+                    "answer": "Si è verificato un errore di autenticazione con l'API. " +
+                              "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                    "sources": [],
+                    "error": "api_auth_error",
+                    "error_details": str(query_error)
+                }
+
+            return {
+                "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(query_error)}",
+                "sources": [],
+                "error": "query_error"
+            }
+
+        # Log fonti trovate
+        source_documents = result.get('source_documents', [])
+        logger.info(f"Trovate {len(source_documents)} fonti pertinenti")
+
+        # Formatta risposta
         response = {
             "answer": result.get('result', 'Nessuna risposta trovata.'),
             "sources": []
         }
 
-        # Aggiungi le fonti se disponibili
-        source_documents = result.get('source_documents', [])
+        # Aggiungi fonti alla risposta
         for doc in source_documents:
-            # Determina il tipo di fonte (file o nota)
             metadata = doc.metadata
 
             if metadata.get("type") == "note":
@@ -1149,9 +1346,9 @@ def get_answer_from_project(project, question):
             else:
                 source_type = "file"
                 source_path = metadata.get("source", "")
-                filename = os.path.basename(source_path) if source_path else "Documento sconosciuto"
+                filename = metadata.get('filename',
+                                        os.path.basename(source_path) if source_path else "Documento sconosciuto")
 
-            # Aggiungi eventuali informazioni su pagina o sezione
             page_info = ""
             if "page" in metadata:
                 page_info = f" (pag. {metadata['page'] + 1})"
@@ -1166,11 +1363,33 @@ def get_answer_from_project(project, question):
             response["sources"].append(source)
 
         return response
+
+    except openai.AuthenticationError as auth_error:
+        logger.exception(f"Errore di autenticazione API OpenAI in get_answer_from_project: {str(auth_error)}")
+        return {
+            "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
+                      "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+            "sources": [],
+            "error": "api_auth_error",
+            "error_details": str(auth_error)
+        }
     except Exception as e:
         logger.exception(f"Errore in get_answer_from_project: {str(e)}")
+
+        # Verifica anche qui se l'errore è correlato all'autenticazione
+        if "invalid_api_key" in str(e) or "authentication" in str(e).lower():
+            return {
+                "answer": "Si è verificato un errore di autenticazione con l'API. " +
+                          "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                "sources": [],
+                "error": "api_auth_error",
+                "error_details": str(e)
+            }
+
         return {
             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
-            "sources": []
+            "sources": [],
+            "error": "general_error"
         }
 
 
@@ -1293,79 +1512,179 @@ def project_details(request, project_id):
         return redirect('login')
 
 
-# Aggiungere queste funzioni in views.py
-
 def ia_engine(request):
     """
     Vista per la configurazione del motore IA (OpenAI, Claude, DeepSeek)
     """
     logger.debug("---> ia_engine")
     if request.user.is_authenticated:
-        # In una vera implementazione, qui recupereresti le impostazioni dal database
-        # per mostrare i valori attualmente configurati
+        # Ottieni o crea le impostazioni dell'utente
+        try:
+            engine_settings, created = AIEngineSettings.objects.get_or_create(user=request.user)
+        except Exception as e:
+            logger.error(f"Errore nel recupero impostazioni AI: {str(e)}")
+            engine_settings = None
 
+        # Prepara il contesto con i valori esistenti
         context = {
-            # Imposta i valori predefiniti o quelli recuperati dal database
+            'api_mode': engine_settings.api_mode if engine_settings else 'platform',
             'openai_api_key': '************************************',  # Mascherata per sicurezza
             'claude_api_key': '************************************',  # Mascherata per sicurezza
             'deepseek_api_key': '************************************',  # Mascherata per sicurezza
+
+            # Parametri OpenAI
+            'gpt_max_tokens': engine_settings.gpt_max_tokens if engine_settings else 4096,
+            'gpt_timeout': engine_settings.gpt_timeout if engine_settings else 60,
+            'gpt_model': engine_settings.gpt_model if engine_settings else 'gpt-4o',
+
+            # Parametri Claude
+            'claude_max_tokens': engine_settings.claude_max_tokens if engine_settings else 4096,
+            'claude_timeout': engine_settings.claude_timeout if engine_settings else 90,
+            'claude_model': engine_settings.claude_model if engine_settings else 'claude-3-7-sonnet',
+
+            # Parametri DeepSeek
+            'deepseek_max_tokens': engine_settings.deepseek_max_tokens if engine_settings else 2048,
+            'deepseek_timeout': engine_settings.deepseek_timeout if engine_settings else 30,
+            'deepseek_model': engine_settings.deepseek_model if engine_settings else 'deepseek-coder',
         }
 
-        # Gestione della richiesta POST per salvare le impostazioni
-        if request.method == 'POST':
+        # Gestione della richiesta AJAX
+        if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            action = request.POST.get('action', '')
+
+            if action == 'save_api_keys':
+                # Salva la modalità e le API key
+                try:
+                    api_mode = request.POST.get('api_mode')
+
+                    if not engine_settings:
+                        engine_settings = AIEngineSettings(user=request.user)
+
+                    engine_settings.api_mode = api_mode
+
+                    # Se la modalità è personal, salva le chiavi API
+                    if api_mode == 'personal':
+                        if request.POST.get('openai_api_key'):
+                            engine_settings.openai_api_key = request.POST.get('openai_api_key')
+                        if request.POST.get('claude_api_key'):
+                            engine_settings.claude_api_key = request.POST.get('claude_api_key')
+                        if request.POST.get('deepseek_api_key'):
+                            engine_settings.deepseek_api_key = request.POST.get('deepseek_api_key')
+
+                    engine_settings.save()
+                    return JsonResponse({'success': True, 'message': 'Configurazione API salvata con successo'})
+
+                except Exception as e:
+                    logger.error(f"Errore nel salvare le impostazioni API: {str(e)}")
+                    return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+            elif action == 'save_engine_settings':
+                # Salva i parametri del motore IA
+                try:
+                    engine_type = request.POST.get('engine_type')
+
+                    if not engine_settings:
+                        engine_settings = AIEngineSettings(user=request.user)
+
+                    # Salva i parametri specifici del motore selezionato
+                    if engine_type == 'openai':
+                        engine_settings.gpt_max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
+                        engine_settings.gpt_timeout = int(request.POST.get('gpt_timeout', 60))
+                        engine_settings.gpt_model = request.POST.get('gpt_model', 'gpt-4o')
+
+                    elif engine_type == 'claude':
+                        engine_settings.claude_max_tokens = int(request.POST.get('claude_max_tokens', 4096))
+                        engine_settings.claude_timeout = int(request.POST.get('claude_timeout', 90))
+                        engine_settings.claude_model = request.POST.get('claude_model', 'claude-3-7-sonnet')
+
+                    elif engine_type == 'deepseek':
+                        engine_settings.deepseek_max_tokens = int(request.POST.get('deepseek_max_tokens', 2048))
+                        engine_settings.deepseek_timeout = int(request.POST.get('deepseek_timeout', 30))
+                        engine_settings.deepseek_model = request.POST.get('deepseek_model', 'deepseek-coder')
+
+                    engine_settings.save()
+                    return JsonResponse(
+                        {'success': True, 'message': f'Impostazioni di {engine_type} salvate con successo'})
+
+                except Exception as e:
+                    logger.error(f"Errore nel salvare le impostazioni del motore: {str(e)}")
+                    return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+        # Gestione della richiesta POST standard (non AJAX)
+        elif request.method == 'POST':
             action = request.POST.get('action', '')
 
             if action == 'save_engine_settings':
                 # Salva le impostazioni del motore IA
-                engine_type = request.POST.get('engine_type')
+                try:
+                    engine_type = request.POST.get('engine_type')
 
-                # Salva i parametri specifici del motore selezionato
-                if engine_type == 'openai':
-                    temperature = request.POST.get('gpt_temperature')
-                    max_tokens = request.POST.get('gpt_max_tokens')
-                    timeout = request.POST.get('gpt_timeout')
-                    model = request.POST.get('gpt_model')
+                    if not engine_settings:
+                        engine_settings = AIEngineSettings(user=request.user)
 
-                    # Qui dovresti salvare queste impostazioni nel database
-                    # ad esempio in una tabella UserSettings o simile
+                    # Salva i parametri specifici del motore selezionato
+                    if engine_type == 'openai':
+                        engine_settings.gpt_max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
+                        engine_settings.gpt_timeout = int(request.POST.get('gpt_timeout', 60))
+                        engine_settings.gpt_model = request.POST.get('gpt_model', 'gpt-4o')
 
-                    messages.success(request, "Impostazioni di OpenAI salvate con successo.")
+                    elif engine_type == 'claude':
+                        engine_settings.claude_max_tokens = int(request.POST.get('claude_max_tokens', 4096))
+                        engine_settings.claude_timeout = int(request.POST.get('claude_timeout', 90))
+                        engine_settings.claude_model = request.POST.get('claude_model', 'claude-3-7-sonnet')
 
-                elif engine_type == 'claude':
-                    temperature = request.POST.get('claude_temperature')
-                    max_tokens = request.POST.get('claude_max_tokens')
-                    timeout = request.POST.get('claude_timeout')
-                    model = request.POST.get('claude_model')
+                    elif engine_type == 'deepseek':
+                        engine_settings.deepseek_max_tokens = int(request.POST.get('deepseek_max_tokens', 2048))
+                        engine_settings.deepseek_timeout = int(request.POST.get('deepseek_timeout', 30))
+                        engine_settings.deepseek_model = request.POST.get('deepseek_model', 'deepseek-coder')
 
-                    # Qui dovresti salvare queste impostazioni nel database
+                    engine_settings.save()
 
-                    messages.success(request, "Impostazioni di Claude salvate con successo.")
+                    logger.info(
+                        f"Impostazioni {engine_type} salvate: max_tokens={getattr(engine_settings, f'{engine_type}_max_tokens')}, timeout={getattr(engine_settings, f'{engine_type}_timeout')}, model={getattr(engine_settings, f'{engine_type}_model')}")
+                    messages.success(request, f"Impostazioni di {engine_type} salvate con successo.")
 
-                elif engine_type == 'deepseek':
-                    temperature = request.POST.get('deepseek_temperature')
-                    max_tokens = request.POST.get('deepseek_max_tokens')
-                    timeout = request.POST.get('deepseek_timeout')
-                    model = request.POST.get('deepseek_model')
+                except Exception as e:
+                    logger.error(f"Errore nel salvare le impostazioni del motore: {str(e)}")
+                    messages.error(request, f"Errore nel salvare le impostazioni: {str(e)}")
 
-                    # Qui dovresti salvare queste impostazioni nel database
-
-                    messages.success(request, "Impostazioni di DeepSeek salvate con successo.")
-
-                # Redirect per evitare richieste duplicate
                 return redirect('ia_engine')
 
             elif action == 'save_api_keys':
-                # Salva le API keys
-                openai_api_key = request.POST.get('openai_api_key')
-                claude_api_key = request.POST.get('claude_api_key')
-                deepseek_api_key = request.POST.get('deepseek_api_key')
+                # Salva la modalità e le API key
+                try:
+                    api_mode = request.POST.get('api_mode')
 
-                # Qui dovresti salvare queste chiavi API nel database in modo sicuro
-                # Idealmente utilizzando una crittografia adeguata
+                    if not engine_settings:
+                        engine_settings = AIEngineSettings(user=request.user)
 
-                messages.success(request, "API keys salvate con successo.")
+                    engine_settings.api_mode = api_mode
 
-                # Redirect per evitare richieste duplicate
+                    # Se la modalità è personal, salva le chiavi API
+                    if api_mode == 'personal':
+                        if request.POST.get('openai_api_key'):
+                            # Verifica la validità della chiave OpenAI
+                            openai_key = request.POST.get('openai_api_key')
+                            is_valid, error = verify_api_key('openai', openai_key)
+                            if not is_valid:
+                                messages.error(request, f"Chiave API OpenAI non valida: {error}")
+                                return redirect('ia_engine')
+                            engine_settings.openai_api_key = openai_key
+
+                        if request.POST.get('claude_api_key'):
+                            engine_settings.claude_api_key = request.POST.get('claude_api_key')
+
+                        if request.POST.get('deepseek_api_key'):
+                            engine_settings.deepseek_api_key = request.POST.get('deepseek_api_key')
+
+                    engine_settings.save()
+                    logger.info(f"Configurazione API salvata: modalità={api_mode}")
+                    messages.success(request, "Configurazione API salvata con successo.")
+
+                except Exception as e:
+                    logger.error(f"Errore nel salvare le impostazioni API: {str(e)}")
+                    messages.error(request, f"Errore nel salvare le API keys: {str(e)}")
+
                 return redirect('ia_engine')
 
         return render(request, 'be/ia_engine.html', context)
@@ -1373,7 +1692,6 @@ def ia_engine(request):
         logger.warning("User not Authenticated!")
         return redirect('login')
 
-# Aggiungere alle viste esistenti in views.py
 
 def rag_settings(request):
     """
@@ -1534,3 +1852,55 @@ def billing_settings(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+
+
+def verify_api_key(api_type, api_key):
+    """
+    Verifica che una chiave API sia valida facendo una richiesta di test.
+
+    Args:
+        api_type: Tipo di API ('openai', 'claude', 'deepseek')
+        api_key: Chiave API da verificare
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    try:
+        if api_type == 'openai':
+            # Verifica la chiave API con una richiesta semplice
+            import openai
+            client = openai.OpenAI(api_key=api_key)
+            # Utilizza una chiamata leggera che non consuma credito significativo
+            response = client.models.list()
+            # Se arriviamo qui, la chiave è valida
+            return True, None
+
+        elif api_type == 'claude':
+            # Implementazione per la verifica delle API Claude
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            # Verifica se la chiave è valida con una richiesta leggera
+            response = client.models.list()
+            return True, None
+
+        elif api_type == 'deepseek':
+            # Placeholder per DeepSeek - implementazione da completare
+            # quando sarà disponibile un metodo di verifica ufficiale
+            # Per ora restituiamo True per evitare problemi
+            return True, None
+
+        else:
+            return False, f"Tipo API non supportato: {api_type}"
+
+    except Exception as e:
+        logger.error(f"Errore nella verifica della chiave API {api_type}: {str(e)}")
+
+        # Gestione migliorata dei messaggi di errore
+        if api_type == 'openai':
+            if 'invalid_api_key' in str(e) or 'authentication' in str(e).lower():
+                return False, "La chiave API OpenAI non è valida o è scaduta. Verifica la chiave nelle impostazioni."
+            elif 'rate_limit' in str(e):
+                return False, "Hai raggiunto il limite di richieste per questa chiave API. Riprova più tardi."
+
+        # Messaggi generici
+        return False, f"Errore nella verifica: {str(e)}"

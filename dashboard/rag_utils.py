@@ -20,7 +20,7 @@ from langchain_openai import ChatOpenAI
 from dashboard.rag_document_utils import check_index_update_needed, compute_file_hash, scan_user_directory
 from dashboard.rag_document_utils import update_index_status
 from dashboard.rag_document_utils import update_project_index_status
-from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, AIEngineSettings
 from profiles.models import UserDocument, RAGConfiguration
 
 # Configurazione logger
@@ -36,17 +36,96 @@ GPT_MODEL_MAX_TOKENS = settings.GPT_MODEL_MAX_TOKENS
 GPT_MODEL_TIMEOUT = int(settings.GPT_MODEL_TIMEOUT)
 
 
-def process_image(image_path):
+def get_openai_api_key(user=None):
+    """
+    Ottiene la chiave API OpenAI per l'utente corrente o quella predefinita.
+    Gestisce sia il credito della piattaforma sia le chiavi personali.
+    """
+    if user:
+        try:
+            engine_settings = AIEngineSettings.objects.get(user=user)
+            if engine_settings.api_mode == 'personal' and engine_settings.openai_api_key:
+                logger.info(f"Utilizzo API key OpenAI personale per l'utente {user.username}")
+                return engine_settings.get_openai_api_key()
+        except (AIEngineSettings.DoesNotExist, Exception) as e:
+            logger.warning(f"Impossibile recuperare API key OpenAI per l'utente {user.username}: {str(e)}")
+
+    logger.info("Utilizzo API key OpenAI della piattaforma")
+    return settings.OPENAI_API_KEY
+
+
+def get_ai_engine_settings(user=None, engine_type='openai'):
+    """
+    Ottiene i parametri del motore IA per l'utente specificato.
+    Restituisce un dizionario con i parametri.
+    """
+    default_settings = {
+        'openai': {
+            'model': settings.GPT_MODEL,
+            'max_tokens': settings.GPT_MODEL_MAX_TOKENS,
+            'timeout': settings.GPT_MODEL_TIMEOUT,
+        },
+        'claude': {
+            'model': settings.CLAUDE_MODEL,
+            'max_tokens': settings.CLAUDE_MODEL_MAX_TOKENS,
+            'timeout': settings.CLAUDE_MODEL_TIMEOUT,
+        },
+        'deepseek': {
+            'model': settings.DEEPSEEK_MODEL,
+            'max_tokens': settings.DEEPSEEK_MODEL_MAX_TOKENS,
+            'timeout': settings.DEEPSEEK_MODEL_TIMEOUT,
+        }
+    }
+
+    if user:
+        try:
+            engine_settings = AIEngineSettings.objects.get(user=user)
+
+            if engine_type == 'openai':
+                return {
+                    'model': engine_settings.gpt_model,
+                    'max_tokens': engine_settings.gpt_max_tokens,
+                    'timeout': engine_settings.gpt_timeout,
+                }
+            elif engine_type == 'claude':
+                return {
+                    'model': engine_settings.claude_model,
+                    'max_tokens': engine_settings.claude_max_tokens,
+                    'timeout': engine_settings.claude_timeout,
+                }
+            elif engine_type == 'deepseek':
+                return {
+                    'model': engine_settings.deepseek_model,
+                    'max_tokens': engine_settings.deepseek_max_tokens,
+                    'timeout': engine_settings.deepseek_timeout,
+                }
+        except (AIEngineSettings.DoesNotExist, Exception) as e:
+            logger.warning(f"Impossibile recuperare impostazioni per {engine_type}: {str(e)}")
+
+    # Restituisci le impostazioni predefinite se non è possibile ottenere quelle personalizzate
+    return default_settings.get(engine_type, default_settings['openai'])
+
+
+def process_image(image_path, user=None):
     """
     Processa un'immagine usando OpenAI Vision per estrarne testo e contenuto.
     Restituisce un oggetto Document di LangChain con il testo estratto e i metadati.
     """
     logger.debug(f"Elaborazione immagine: {image_path}")
     try:
+        # Ottieni la chiave API OpenAI per l'utente
+        api_key = get_openai_api_key(user)
+
+        # Ottieni le impostazioni del motore
+        ai_settings = get_ai_engine_settings(user, 'openai')
+
         with open(image_path, "rb") as image_file:
             image_base64 = base64.b64encode(image_file.read()).decode("utf-8")
 
-        response = openai.chat.completions.create(
+        # Configura il client OpenAI con la chiave corretta
+        client = openai.OpenAI(api_key=api_key)
+
+        response = client.chat.completions.create(
             model="gpt-4-vision",
             messages=[
                 {
@@ -58,7 +137,7 @@ def process_image(image_path):
                     ]
                 }
             ],
-            max_tokens=1000
+            max_tokens=ai_settings['max_tokens']
         )
 
         content = response.choices[0].message.content
@@ -179,12 +258,15 @@ def load_user_documents(user):
     return all_docs, document_ids
 
 
-def create_embeddings_with_retry(documents, max_retries=3, retry_delay=2):
+def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_delay=2):
     """
     Crea embedding con gestione dei tentativi in caso di errori di connessione.
     Utilizza backoff esponenziale tra i tentativi.
     """
-    embeddings = OpenAIEmbeddings()
+    # Ottieni la chiave API OpenAI per l'utente
+    api_key = get_openai_api_key(user)
+
+    embeddings = OpenAIEmbeddings(openai_api_key=api_key)
 
     for attempt in range(max_retries):
         try:
@@ -363,6 +445,7 @@ def create_rag_chain(user=None, docs=None):
         return_source_documents=True
     )
     return qa
+
 
 def get_answer_from_rag(user, question):
     """
@@ -699,9 +782,27 @@ def get_answer_from_project(project, question):
         # Esegui la ricerca
         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
         start_time = time.time()
-        result = qa_chain.invoke(question)
-        processing_time = round(time.time() - start_time, 2)
-        logger.info(f"Ricerca completata in {processing_time} secondi")
+        try:
+            result = qa_chain.invoke(question)
+            processing_time = round(time.time() - start_time, 2)
+            logger.info(f"Ricerca completata in {processing_time} secondi")
+        except openai.AuthenticationError as auth_error:
+            # Cattura errori specifici di autenticazione API
+            logger.error(f"Errore di autenticazione API OpenAI: {str(auth_error)}")
+            return {
+                "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
+                         "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                "sources": [],
+                "error": "api_auth_error",
+                "error_details": str(auth_error)
+            }
+        except Exception as query_error:
+            logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
+            return {
+                "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(query_error)}",
+                "sources": [],
+                "error": "query_error"
+            }
 
         # Log fonti trovate
         source_documents = result.get('source_documents', [])
@@ -741,11 +842,21 @@ def get_answer_from_project(project, question):
 
         return response
 
+    except openai.AuthenticationError as auth_error:
+        logger.exception(f"Errore di autenticazione API OpenAI in get_answer_from_project: {str(auth_error)}")
+        return {
+            "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
+                     "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+            "sources": [],
+            "error": "api_auth_error",
+            "error_details": str(auth_error)
+        }
     except Exception as e:
         logger.exception(f"Errore in get_answer_from_project: {str(e)}")
         return {
             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
-            "sources": []
+            "sources": [],
+            "error": "general_error"
         }
 
 
@@ -895,15 +1006,23 @@ def create_retrieval_qa_chain(vectordb, project=None):
         )
         logger.info(f"Parametri similarity: k={similarity_top_k}")
 
-    # Configura modello LLM
+    # Ottieni impostazioni del motore IA
+    ai_settings = get_ai_engine_settings(user, 'openai')
+
+    # Imposta la chiave API OpenAI
+    openai_api_key = get_openai_api_key(user)
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+
+    # Configura modello LLM con i parametri personalizzati
     llm = ChatOpenAI(
-        model=GPT_MODEL,
+        model=ai_settings['model'],
         temperature=GPT_MODEL_TEMPERATURE,
-        max_tokens=GPT_MODEL_MAX_TOKENS,
-        request_timeout=GPT_MODEL_TIMEOUT
+        max_tokens=ai_settings['max_tokens'],
+        request_timeout=ai_settings['timeout'],
+        openai_api_key=openai_api_key
     )
     logger.info(
-        f"Configurazione LLM: model={GPT_MODEL}, temp={GPT_MODEL_TEMPERATURE}, max_tokens={GPT_MODEL_MAX_TOKENS}")
+        f"Configurazione LLM: model={ai_settings['model']}, temp={GPT_MODEL_TEMPERATURE}, max_tokens={ai_settings['max_tokens']}, timeout={ai_settings['timeout']}")
 
     # Crea catena RAG
     qa = RetrievalQA.from_chain_type(

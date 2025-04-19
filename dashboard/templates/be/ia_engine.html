@@ -110,6 +110,8 @@
 </style>
 {% endblock %}
 
+
+
 {% block content %}
 <div class="app-content-header">
     <div class="container-fluid">
@@ -169,7 +171,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
                             <img src="{% static 'dist/assets/img/openai-logo.png' %}" alt="OpenAI Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg'" class="engine-logo me-2">
-                            <h5 class="mb-0">ChatGPT 4o</h5>
+                            <h5 class="mb-0">ChatGPT <span id="openai-model-display">4o</span></h5>
                         </div>
                         <span class="badge bg-success">Consigliato</span>
                     </div>
@@ -363,7 +365,11 @@
         <div class="card-body">
             <!-- OpenAI Config Panel -->
             <div id="openai-config" class="config-panel active">
-                <form id="openai-form">
+                <form id="openai-form" method="post" action="{% url 'ia_engine' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_engine_settings">
+                    <input type="hidden" name="engine_type" value="openai">
+
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="gpt-temperature" class="param-label">Temperatura</label>
@@ -387,8 +393,8 @@
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
-                            <label for="gpt-max-tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="gpt-max-tokens" value="4096" min="100" max="8192" step="1">
+                            <label for="gpt_max_tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="gpt_max_tokens" name="gpt_max_tokens" value="{{ gpt_max_tokens|default:4096 }}" min="100" max="8192" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -405,8 +411,8 @@
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
-                            <label for="gpt-timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="gpt-timeout" value="60" min="10" max="300" step="1">
+                            <label for="gpt_timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="gpt_timeout" name="gpt_timeout" value="{{ gpt_timeout|default:60 }}" min="10" max="300" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -423,11 +429,11 @@
 
                     <div class="row">
                         <div class="col-md-3">
-                            <label for="gpt-model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="gpt-model">
-                                <option value="gpt-4o" selected>GPT-4o (ultima versione)</option>
-                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (economico)</option>
+                            <label for="gpt_model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="gpt_model" name="gpt_model">
+                                <option value="gpt-4o" {% if gpt_model == 'gpt-4o' %}selected{% endif %}>GPT-4o (ultima versione)</option>
+                                <option value="gpt-4-turbo" {% if gpt_model == 'gpt-4-turbo' %}selected{% endif %}>GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo" {% if gpt_model == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo (economico)</option>
                             </select>
                         </div>
                         <div class="col-md-9">
@@ -442,12 +448,21 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Salva configurazione OpenAI
+                        </button>
+                    </div>
                 </form>
             </div>
 
             <!-- Claude Config Panel -->
             <div id="claude-config" class="config-panel">
-                <form id="claude-form">
+                <form id="claude-form" method="post" action="{% url 'ia_engine' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_engine_settings">
+                    <input type="hidden" name="engine_type" value="claude">
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="claude-temperature" class="param-label">Temperatura</label>
@@ -471,8 +486,8 @@
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
-                            <label for="claude-max-tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="claude-max-tokens" value="4096" min="100" max="10000" step="1">
+                            <label for="claude_max_tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="claude_max_tokens" name="claude_max_tokens" value="{{ claude_max_tokens|default:4096 }}" min="100" max="10000" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -489,8 +504,8 @@
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
-                            <label for="claude-timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="claude-timeout" value="90" min="10" max="300" step="1">
+                            <label for="claude_timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="claude_timeout" name="claude_timeout" value="{{ claude_timeout|default:90 }}" min="10" max="300" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -507,11 +522,11 @@
 
                     <div class="row">
                         <div class="col-md-3">
-                            <label for="claude-model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="claude-model">
-                                <option value="claude-3-7-sonnet" selected>Claude 3.7 Sonnet</option>
-                                <option value="claude-3-opus">Claude 3 Opus (più potente)</option>
-                                <option value="claude-3-haiku">Claude 3 Haiku (più veloce)</option>
+                            <label for="claude_model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="claude_model" name="claude_model">
+                                <option value="claude-3-7-sonnet" {% if claude_model == 'claude-3-7-sonnet' %}selected{% endif %}>Claude 3.7 Sonnet</option>
+                                <option value="claude-3-opus" {% if claude_model == 'claude-3-opus' %}selected{% endif %}>Claude 3 Opus (più potente)</option>
+                                <option value="claude-3-haiku" {% if claude_model == 'claude-3-haiku' %}selected{% endif %}>Claude 3 Haiku (più veloce)</option>
                             </select>
                         </div>
                         <div class="col-md-9">
@@ -526,12 +541,21 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Salva configurazione Claude
+                        </button>
+                    </div>
                 </form>
             </div>
 
             <!-- DeepSeek Config Panel -->
             <div id="deepseek-config" class="config-panel">
-                <form id="deepseek-form">
+                <form id="deepseek-form" method="post" action="{% url 'ia_engine' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_engine_settings">
+                    <input type="hidden" name="engine_type" value="deepseek">
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="deepseek-temperature" class="param-label">Temperatura</label>
@@ -555,8 +579,8 @@
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
-                            <label for="deepseek-max-tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="deepseek-max-tokens" value="2048" min="100" max="4096" step="1">
+                            <label for="deepseek_max_tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="deepseek_max_tokens" name="deepseek_max_tokens" value="{{ deepseek_max_tokens|default:2048 }}" min="100" max="4096" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -573,8 +597,8 @@
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
-                            <label for="deepseek-timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="deepseek-timeout" value="30" min="5" max="180" step="1">
+                            <label for="deepseek_timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="deepseek_timeout" name="deepseek_timeout" value="{{ deepseek_timeout|default:30 }}" min="5" max="180" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -591,11 +615,11 @@
 
                     <div class="row">
                         <div class="col-md-3">
-                            <label for="deepseek-model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="deepseek-model">
-                                <option value="deepseek-coder" selected>DeepSeek Coder</option>
-                                <option value="deepseek-chat">DeepSeek Chat</option>
-                                <option value="deepseek-lite">DeepSeek Lite (veloce)</option>
+                            <label for="deepseek_model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="deepseek_model" name="deepseek_model">
+                                <option value="deepseek-coder" {% if deepseek_model == 'deepseek-coder' %}selected{% endif %}>DeepSeek Coder</option>
+                                <option value="deepseek-chat" {% if deepseek_model == 'deepseek-chat' %}selected{% endif %}>DeepSeek Chat</option>
+                                <option value="deepseek-lite" {% if deepseek_model == 'deepseek-lite' %}selected{% endif %}>DeepSeek Lite (veloce)</option>
                             </select>
                         </div>
                         <div class="col-md-9">
@@ -610,15 +634,18 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Salva configurazione DeepSeek
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
         <div class="card-footer d-flex justify-content-between">
             <button class="btn btn-outline-secondary" id="reset-defaults-btn">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Ripristina valori predefiniti
-            </button>
-            <button class="btn btn-primary" id="save-settings-btn">
-                <i class="bi bi-save me-1"></i> Salva configurazione
             </button>
         </div>
     </div>
@@ -634,24 +661,26 @@
                 Puoi scegliere di utilizzare il credito disponibile sulla piattaforma o inserire le tue chiavi API personali.
             </div>
 
-            <form id="api-keys-form">
+            <form id="api-keys-form" method="post" action="{% url 'ia_engine' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_api_keys">
                 <div class="mb-4">
                     <h6 class="border-bottom pb-2">Modalità di utilizzo</h6>
                     <div class="form-check form-check-inline mt-2">
-                        <input class="form-check-input" type="radio" name="api_mode" id="use-platform-credit" value="platform" checked>
+                        <input class="form-check-input" type="radio" name="api_mode" id="use-platform-credit" value="platform" {% if api_mode == 'platform' %}checked{% endif %}>
                         <label class="form-check-label" for="use-platform-credit">
                             Usa credito piattaforma <span class="badge bg-success ms-1">€ 5.50 disponibili</span>
                         </label>
                     </div>
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="api_mode" id="use-personal-keys" value="personal">
+                        <input class="form-check-input" type="radio" name="api_mode" id="use-personal-keys" value="personal" {% if api_mode == 'personal' %}checked{% endif %}>
                         <label class="form-check-label" for="use-personal-keys">
                             Usa chiavi API personali
                         </label>
                     </div>
                 </div>
 
-                <div id="personal-keys-section" style="display: none;">
+                <div id="personal-keys-section" {% if api_mode != 'personal' %}style="display: none;"{% endif %}>
                     <h6 class="border-bottom pb-2">Chiavi API personali</h6>
                     <div class="row mb-3">
                         <div class="col-md-3">
@@ -710,7 +739,7 @@
             </form>
         </div>
         <div class="card-footer">
-            <button class="btn btn-primary" id="save-api-keys-btn">
+            <button class="btn btn-primary" type="submit">
                 <i class="bi bi-key me-1"></i> Salva configurazione
             </button>
         </div>
@@ -750,9 +779,40 @@
 </div>
 {% endblock %}
 
+
+
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Inizializza lo stato del modello visualizzato (per OpenAI)
+        const updateModelDisplay = () => {
+            const modelSelect = document.getElementById('gpt_model');
+            const modelDisplay = document.getElementById('openai-model-display');
+
+            if (modelSelect && modelDisplay) {
+                const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+                let displayText = '';
+
+                if (selectedOption.value === 'gpt-4o') {
+                    displayText = '4o';
+                } else if (selectedOption.value === 'gpt-4-turbo') {
+                    displayText = '4 Turbo';
+                } else if (selectedOption.value === 'gpt-3.5-turbo') {
+                    displayText = '3.5 Turbo';
+                } else {
+                    displayText = selectedOption.value.replace('gpt-', '');
+                }
+
+                modelDisplay.textContent = displayText;
+            }
+        };
+
+        // Inizializza la visualizzazione del modello corrente
+        updateModelDisplay();
+
+        // Aggiorna la visualizzazione quando il modello cambia
+        document.getElementById('gpt_model').addEventListener('change', updateModelDisplay);
+
         // Engine selection
         const engineCards = document.querySelectorAll('.engine-card');
         const configPanels = document.querySelectorAll('.config-panel');
@@ -842,23 +902,24 @@
                 case 'openai':
                     document.getElementById('gpt-temperature').value = '0.7';
                     document.getElementById('gpt-temperature-value').textContent = '0.7';
-                    document.getElementById('gpt-max-tokens').value = '4096';
-                    document.getElementById('gpt-timeout').value = '60';
-                    document.getElementById('gpt-model').value = 'gpt-4o';
+                    document.getElementById('gpt_max_tokens').value = '4096';
+                    document.getElementById('gpt_timeout').value = '60';
+                    document.getElementById('gpt_model').value = 'gpt-4o';
+                    updateModelDisplay(); // Aggiorna la visualizzazione del modello
                     break;
                 case 'claude':
                     document.getElementById('claude-temperature').value = '0.5';
                     document.getElementById('claude-temperature-value').textContent = '0.5';
-                    document.getElementById('claude-max-tokens').value = '4096';
-                    document.getElementById('claude-timeout').value = '90';
-                    document.getElementById('claude-model').value = 'claude-3-7-sonnet';
+                    document.getElementById('claude_max_tokens').value = '4096';
+                    document.getElementById('claude_timeout').value = '90';
+                    document.getElementById('claude_model').value = 'claude-3-7-sonnet';
                     break;
                 case 'deepseek':
                     document.getElementById('deepseek-temperature').value = '0.4';
                     document.getElementById('deepseek-temperature-value').textContent = '0.4';
-                    document.getElementById('deepseek-max-tokens').value = '2048';
-                    document.getElementById('deepseek-timeout').value = '30';
-                    document.getElementById('deepseek-model').value = 'deepseek-coder';
+                    document.getElementById('deepseek_max_tokens').value = '2048';
+                    document.getElementById('deepseek_timeout').value = '30';
+                    document.getElementById('deepseek_model').value = 'deepseek-coder';
                     break;
             }
 
@@ -866,36 +927,26 @@
             showToast('Valori ripristinati con successo', 'success');
         });
 
-        // Save settings
-        document.getElementById('save-settings-btn').addEventListener('click', function() {
-            // Show loading state
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
-
-            // Simulate saving (in a real app, this would be an AJAX request)
-            setTimeout(() => {
-                this.disabled = false;
-                this.innerHTML = '<i class="bi bi-save me-1"></i> Salva configurazione';
-
-                // Show success toast
-                showToast('Configurazione salvata con successo', 'success');
-            }, 1500);
+        // Sostituiamo l'handler con il form submit standard
+        document.getElementById('api-keys-form').addEventListener('submit', function(e) {
+            // Mostra stato di caricamento nel pulsante
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+            }
         });
 
-        // Save API keys
-        document.getElementById('save-api-keys-btn').addEventListener('click', function() {
-            // Show loading state
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
-
-            // Simulate saving (in a real app, this would be an AJAX request)
-            setTimeout(() => {
-                this.disabled = false;
-                this.innerHTML = '<i class="bi bi-key me-1"></i> Salva API Keys';
-
-                // Show success toast
-                showToast('API Keys salvate con successo', 'success');
-            }, 1500);
+        // Gestione delle opzioni API key
+        document.querySelectorAll('input[name="api_mode"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const personalKeysSection = document.getElementById('personal-keys-section');
+                if (this.value === 'personal') {
+                    personalKeysSection.style.display = 'block';
+                } else {
+                    personalKeysSection.style.display = 'none';
+                }
+            });
         });
 
         // Toast function
@@ -941,86 +992,22 @@
         }
 
         // Fix per il problema dello spinner del browser
-        document.addEventListener('DOMContentLoaded', function() {
-            // Assicurati che tutti i caricamenti siano considerati completati
+        setTimeout(function() {
+            if (document.readyState !== 'complete') {
+                document.readyState = 'complete';
+                window.dispatchEvent(new Event('load'));
+            }
+        }, 3000); // Timeout di sicurezza dopo 3 secondi
+
+        // Verifica lo stato della pagina quando il browser cambia URL
+        window.addEventListener('hashchange', function() {
             setTimeout(function() {
                 if (document.readyState !== 'complete') {
                     document.readyState = 'complete';
                     window.dispatchEvent(new Event('load'));
                 }
-            }, 3000); // Timeout di sicurezza dopo 3 secondi
-
-            // Verifica lo stato della pagina quando il browser cambia URL
-            window.addEventListener('hashchange', function() {
-                setTimeout(function() {
-                    if (document.readyState !== 'complete') {
-                        document.readyState = 'complete';
-                        window.dispatchEvent(new Event('load'));
-                    }
-                }, 500);
-            });
+            }, 500);
         });
-
-        // Gestione delle opzioni API key
-        document.querySelectorAll('input[name="api_mode"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const personalKeysSection = document.getElementById('personal-keys-section');
-                if (this.value === 'personal') {
-                    personalKeysSection.style.display = 'block';
-                } else {
-                    personalKeysSection.style.display = 'none';
-                }
-            });
-        });
-
-        // Modifica handler del form API keys
-        document.getElementById('save-api-keys-btn').addEventListener('click', function() {
-            // Show loading state
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
-
-            // Raccogli tutti i dati da inviare
-            const data = {
-                'action': 'save_api_keys',
-                'api_mode': document.querySelector('input[name="api_mode"]:checked').value,
-                'csrfmiddlewaretoken': '{{ csrf_token }}'
-            };
-
-            // Se la modalità è personal, aggiungi le chiavi API
-            if (data.api_mode === 'personal') {
-                data.openai_api_key = document.getElementById('openai-api-key').value;
-                data.claude_api_key = document.getElementById('claude-api-key').value;
-                data.deepseek_api_key = document.getElementById('deepseek-api-key').value;
-            }
-
-            // Invia i dati al server
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: new URLSearchParams(data)
-            })
-            .then(response => response.json())
-            .then(data => {
-                this.disabled = false;
-                this.innerHTML = '<i class="bi bi-key me-1"></i> Salva configurazione';
-
-                if (data.success) {
-                    showToast('Configurazione API salvata con successo', 'success');
-                } else {
-                    showToast(data.message || 'Errore durante il salvataggio', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                this.disabled = false;
-                this.innerHTML = '<i class="bi bi-key me-1"></i> Salva configurazione';
-                showToast('Errore di connessione', 'danger');
-            });
-        });
-
     });
 </script>
 {% endblock %}

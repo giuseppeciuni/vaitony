@@ -4,9 +4,185 @@ from django.conf import settings
 from profiles.models import UserDocument, IndexStatus
 import logging
 from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+from profiles.models import GlobalEmbeddingCache
+
 
 # Get logger
 logger = logging.getLogger(__name__)
+
+# Aggiungi queste funzioni in rag_document_utils.py
+
+
+
+
+def get_embedding_cache_dir():
+	"""
+	Restituisce la directory per la cache globale degli embedding.
+	La crea se non esiste.
+	"""
+	cache_dir = os.path.join(settings.MEDIA_ROOT, 'embedding_cache')
+	os.makedirs(cache_dir, exist_ok=True)
+	return cache_dir
+
+
+def get_cached_embedding(file_hash, chunk_size=500, chunk_overlap=50):
+	"""
+	Controlla se esiste già un embedding per il file con l'hash specificato.
+
+	Args:
+		file_hash: Hash SHA-256 del file
+		chunk_size: Dimensione dei chunk utilizzata (per garantire coerenza)
+		chunk_overlap: Sovrapposizione dei chunk utilizzata (per garantire coerenza)
+
+	Returns:
+		dict: Informazioni sulla cache se trovata, None altrimenti
+	"""
+	try:
+		# Cerca una cache con lo stesso hash e parametri di chunking
+		cache = GlobalEmbeddingCache.objects.get(
+			file_hash=file_hash,
+			chunk_size=chunk_size,
+			chunk_overlap=chunk_overlap
+		)
+
+		# Verifica che il file di embedding esista
+		if os.path.exists(cache.embedding_path):
+			# Incrementa il contatore di utilizzi
+			cache.usage_count += 1
+			cache.save(update_fields=['usage_count'])
+
+			return {
+				'cache_id': cache.file_hash,
+				'embedding_path': cache.embedding_path,
+				'chunk_size': cache.chunk_size,
+				'chunk_overlap': cache.chunk_overlap
+			}
+		else:
+			# Se il file non esiste, elimina la cache dal database
+			cache.delete()
+			return None
+
+	except GlobalEmbeddingCache.DoesNotExist:
+		return None
+
+
+def create_embedding_cache(file_hash, embedding_data, file_info):
+	"""
+	Crea una nuova cache degli embedding per un file.
+
+	Args:
+		file_hash: Hash SHA-256 del file
+		embedding_data: Dati dell'embedding (oggetto FAISS)
+		file_info: Dizionario con informazioni sul file (tipo, nome, dimensione)
+
+	Returns:
+		GlobalEmbeddingCache: L'oggetto cache creato
+	"""
+	cache_dir = get_embedding_cache_dir()
+	embedding_path = os.path.join(cache_dir, f"{file_hash}")
+
+	# Salva l'embedding nella cache
+	os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
+	embedding_data.save_local(embedding_path)
+
+	# Registra la cache nel database
+	cache = GlobalEmbeddingCache.objects.create(
+		file_hash=file_hash,
+		file_type=file_info.get('file_type', ''),
+		original_filename=file_info.get('filename', 'unknown'),
+		embedding_path=embedding_path,
+		chunk_size=file_info.get('chunk_size', 500),
+		chunk_overlap=file_info.get('chunk_overlap', 50),
+		embedding_model=file_info.get('embedding_model', 'OpenAIEmbeddings'),
+		file_size=file_info.get('file_size', 0)
+	)
+
+	return cache
+
+
+def copy_embedding_to_user_index(user_id, cache_info, user_index_path):
+	"""
+	Copia un embedding dalla cache globale all'indice dell'utente.
+
+	Args:
+		user_id: ID dell'utente
+		cache_info: Informazioni sulla cache dell'embedding
+		user_index_path: Percorso all'indice dell'utente
+
+	Returns:
+		bool: True se l'operazione è riuscita, False altrimenti
+	"""
+	try:
+		# Crea la directory dell'indice dell'utente se non esiste
+		os.makedirs(os.path.dirname(user_index_path), exist_ok=True)
+
+		# Carica l'embedding dalla cache
+		from langchain_community.embeddings import OpenAIEmbeddings
+		from langchain_community.vectorstores import FAISS
+
+		embeddings = OpenAIEmbeddings()
+		cached_vectordb = FAISS.load_local(cache_info['embedding_path'], embeddings,
+										   allow_dangerous_deserialization=True)
+
+		# Salva l'embedding nell'indice dell'utente
+		cached_vectordb.save_local(user_index_path)
+
+		return True
+	except Exception as e:
+		logger.error(f"Errore nella copia dell'embedding dalla cache globale all'utente {user_id}: {str(e)}")
+		return False
+
+
+def copy_embedding_to_project_index(project, cache_info, project_index_path):
+	"""
+	Copia un embedding dalla cache globale all'indice del progetto.
+
+	Args:
+		project: Oggetto Project
+		cache_info: Informazioni sulla cache dell'embedding
+		project_index_path: Percorso all'indice del progetto
+
+	Returns:
+		bool: True se l'operazione è riuscita, False altrimenti
+	"""
+	try:
+		# Crea la directory dell'indice del progetto se non esiste
+		os.makedirs(os.path.dirname(project_index_path), exist_ok=True)
+
+		# Carica l'embedding dalla cache
+		from langchain_community.embeddings import OpenAIEmbeddings
+		from langchain_community.vectorstores import FAISS
+
+		embeddings = OpenAIEmbeddings()
+		cached_vectordb = FAISS.load_local(cache_info['embedding_path'], embeddings,
+										   allow_dangerous_deserialization=True)
+
+		# Salva l'embedding nell'indice del progetto
+		cached_vectordb.save_local(project_index_path)
+
+		# Aggiorna lo stato dell'indice del progetto
+		from django.utils import timezone
+		from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+
+		try:
+			index_status = ProjectIndexStatus.objects.get(project=project)
+			index_status.index_exists = True
+			index_status.last_updated = timezone.now()
+			index_status.save(update_fields=['index_exists', 'last_updated'])
+		except ProjectIndexStatus.DoesNotExist:
+			ProjectIndexStatus.objects.create(
+				project=project,
+				index_exists=True,
+				last_updated=timezone.now(),
+				documents_count=ProjectFile.objects.filter(project=project).count() +
+								ProjectNote.objects.filter(project=project, is_included_in_rag=True).count()
+			)
+
+		return True
+	except Exception as e:
+		logger.error(f"Errore nella copia dell'embedding dalla cache globale al progetto {project.id}: {str(e)}")
+		return False
+
 
 
 def compute_file_hash(file_path):

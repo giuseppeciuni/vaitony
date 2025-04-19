@@ -17,17 +17,32 @@ from dashboard.rag_utils import get_answer_from_project
 # Modifica questa riga per includere ProjectNote
 from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource, AIEngineSettings
 from profiles.models import RagTemplateType, RagDefaultSettings, RAGConfiguration
+from .cache_statistics import update_embedding_cache_stats
 from .utils import process_user_files
 import openai
+from profiles.models import EmbeddingCacheStats, GlobalEmbeddingCache
+from django.db.models import Sum
+from dashboard.cache_statistics import update_embedding_cache_stats
 
 
 # Get logger
 logger = logging.getLogger(__name__)
 
 
+# Modifica della funzione dashboard in dashboard/views.py per supportare richieste AJAX
+
 def dashboard(request):
     logger.debug("---> dashboard")
     if request.user.is_authenticated:
+        # Controlla se è una richiesta di aggiornamento delle statistiche della cache
+        if request.GET.get('update_cache_stats') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            try:
+                stats = update_embedding_cache_stats()
+                return JsonResponse({'success': True, 'message': 'Statistiche aggiornate con successo'})
+            except Exception as e:
+                logger.error(f"Errore nell'aggiornamento delle statistiche: {str(e)}")
+                return JsonResponse({'success': False, 'message': str(e)})
+
         # Recupera i progetti dell'utente
         projects = Project.objects.filter(user=request.user).order_by('-created_at')
 
@@ -74,6 +89,70 @@ def dashboard(request):
         document_types_values = list(document_types.values())
         document_types_labels = list(document_types.keys())
 
+        # Statistiche sulla cache degli embedding
+        # Inizializza con valori predefiniti per evitare errori nel template
+        total_cache_stats = {
+            'count': 0,
+            'usage': 1,  # Utilizziamo 1 come valore predefinito per evitare divisioni per zero
+            'reuses': 0
+        }
+
+        # Ottieni le statistiche più recenti
+        latest_stats = EmbeddingCacheStats.objects.first()
+
+        # Se non ci sono statistiche, calcolale ora
+        if not latest_stats:
+            try:
+                latest_stats = update_embedding_cache_stats()
+            except Exception as e:
+                logger.error(f"Errore nell'aggiornamento delle statistiche: {str(e)}")
+                latest_stats = None
+
+        # Ottieni dati per i grafici storici (ultimi 7 giorni)
+        from django.utils import timezone
+        from datetime import timedelta
+
+        seven_days_ago = timezone.now().date() - timedelta(days=7)
+        historical_stats = EmbeddingCacheStats.objects.filter(date__gte=seven_days_ago).order_by('date')
+
+        # Crea dati per i grafici
+        dates = [stat.date.strftime('%d/%m') for stat in historical_stats]
+        embeddings_count = [stat.total_embeddings for stat in historical_stats]
+        reuse_count = [stat.reuse_count for stat in historical_stats]
+        savings = [round(stat.estimated_savings, 2) for stat in historical_stats]
+
+        # Se non ci sono dati storici, usa dei dati di esempio
+        if not dates:
+            dates = [(timezone.now().date() - timedelta(days=i)).strftime('%d/%m') for i in range(7, 0, -1)]
+            embeddings_count = [0] * 7
+            reuse_count = [0] * 7
+            savings = [0.0] * 7
+
+        # Distribuzione per tipo di file nella cache
+        cache_file_types = {}
+        if latest_stats:
+            cache_file_types = {
+                'PDF': latest_stats.pdf_count,
+                'DOCX': latest_stats.docx_count,
+                'TXT': latest_stats.txt_count,
+                'CSV': latest_stats.csv_count,
+                'ALTRO': latest_stats.other_count
+            }
+        cache_file_types_values = list(cache_file_types.values())
+        cache_file_types_labels = list(cache_file_types.keys())
+
+        # Ottieni le statistiche totali direttamente dal database
+        cache_count = GlobalEmbeddingCache.objects.count()
+        if cache_count > 0:
+            cache_sum = GlobalEmbeddingCache.objects.aggregate(
+                total_usage=Sum('usage_count')
+            )
+            total_cache_stats = {
+                'count': cache_count,
+                'usage': cache_sum['total_usage'] or 1,  # Utilizziamo 1 come minimo per evitare divisioni per zero
+                'reuses': (cache_sum['total_usage'] or 0) - cache_count if cache_sum['total_usage'] else 0
+            }
+
         context = {
             'projects': projects,
             'documents_count': documents_count,
@@ -86,7 +165,17 @@ def dashboard(request):
             'recent_files': recent_files,
             'document_types_values': document_types_values,
             'document_types_labels': document_types_labels,
+            # Statistiche sulla cache
+            'cache_stats': latest_stats,
+            'cache_dates': dates,
+            'cache_embeddings_count': embeddings_count,
+            'cache_reuse_count': reuse_count,
+            'cache_savings': savings,
+            'cache_file_types_values': cache_file_types_values,
+            'cache_file_types_labels': cache_file_types_labels,
+            'total_cache_stats': total_cache_stats
         }
+
         return render(request, 'be/dashboard.html', context)
     else:
         logger.warning("User not Authenticated!")
@@ -1582,6 +1671,7 @@ def ia_engine(request):
                 # Salva i parametri del motore IA
                 try:
                     engine_type = request.POST.get('engine_type')
+                    logger.info(f"Salvataggio impostazioni AJAX per motore: {engine_type}")
 
                     if not engine_settings:
                         engine_settings = AIEngineSettings(user=request.user)
@@ -1591,16 +1681,22 @@ def ia_engine(request):
                         engine_settings.gpt_max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
                         engine_settings.gpt_timeout = int(request.POST.get('gpt_timeout', 60))
                         engine_settings.gpt_model = request.POST.get('gpt_model', 'gpt-4o')
+                        logger.info(
+                            f"Parametri OpenAI salvati: max_tokens={engine_settings.gpt_max_tokens}, timeout={engine_settings.gpt_timeout}, model={engine_settings.gpt_model}")
 
                     elif engine_type == 'claude':
                         engine_settings.claude_max_tokens = int(request.POST.get('claude_max_tokens', 4096))
                         engine_settings.claude_timeout = int(request.POST.get('claude_timeout', 90))
                         engine_settings.claude_model = request.POST.get('claude_model', 'claude-3-7-sonnet')
+                        logger.info(
+                            f"Parametri Claude salvati: max_tokens={engine_settings.claude_max_tokens}, timeout={engine_settings.claude_timeout}, model={engine_settings.claude_model}")
 
                     elif engine_type == 'deepseek':
                         engine_settings.deepseek_max_tokens = int(request.POST.get('deepseek_max_tokens', 2048))
                         engine_settings.deepseek_timeout = int(request.POST.get('deepseek_timeout', 30))
                         engine_settings.deepseek_model = request.POST.get('deepseek_model', 'deepseek-coder')
+                        logger.info(
+                            f"Parametri DeepSeek salvati: max_tokens={engine_settings.deepseek_max_tokens}, timeout={engine_settings.deepseek_timeout}, model={engine_settings.deepseek_model}")
 
                     engine_settings.save()
                     return JsonResponse(
@@ -1613,11 +1709,13 @@ def ia_engine(request):
         # Gestione della richiesta POST standard (non AJAX)
         elif request.method == 'POST':
             action = request.POST.get('action', '')
+            logger.info(f"Richiesta POST ricevuta con azione: {action}")
 
             if action == 'save_engine_settings':
                 # Salva le impostazioni del motore IA
                 try:
                     engine_type = request.POST.get('engine_type')
+                    logger.info(f"Salvataggio impostazioni POST standard per motore: {engine_type}")
 
                     if not engine_settings:
                         engine_settings = AIEngineSettings(user=request.user)
@@ -1627,21 +1725,24 @@ def ia_engine(request):
                         engine_settings.gpt_max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
                         engine_settings.gpt_timeout = int(request.POST.get('gpt_timeout', 60))
                         engine_settings.gpt_model = request.POST.get('gpt_model', 'gpt-4o')
+                        logger.info(
+                            f"Parametri OpenAI salvati: max_tokens={engine_settings.gpt_max_tokens}, timeout={engine_settings.gpt_timeout}, model={engine_settings.gpt_model}")
 
                     elif engine_type == 'claude':
                         engine_settings.claude_max_tokens = int(request.POST.get('claude_max_tokens', 4096))
                         engine_settings.claude_timeout = int(request.POST.get('claude_timeout', 90))
                         engine_settings.claude_model = request.POST.get('claude_model', 'claude-3-7-sonnet')
+                        logger.info(
+                            f"Parametri Claude salvati: max_tokens={engine_settings.claude_max_tokens}, timeout={engine_settings.claude_timeout}, model={engine_settings.claude_model}")
 
                     elif engine_type == 'deepseek':
                         engine_settings.deepseek_max_tokens = int(request.POST.get('deepseek_max_tokens', 2048))
                         engine_settings.deepseek_timeout = int(request.POST.get('deepseek_timeout', 30))
                         engine_settings.deepseek_model = request.POST.get('deepseek_model', 'deepseek-coder')
+                        logger.info(
+                            f"Parametri DeepSeek salvati: max_tokens={engine_settings.deepseek_max_tokens}, timeout={engine_settings.deepseek_timeout}, model={engine_settings.deepseek_model}")
 
                     engine_settings.save()
-
-                    logger.info(
-                        f"Impostazioni {engine_type} salvate: max_tokens={getattr(engine_settings, f'{engine_type}_max_tokens')}, timeout={getattr(engine_settings, f'{engine_type}_timeout')}, model={getattr(engine_settings, f'{engine_type}_model')}")
                     messages.success(request, f"Impostazioni di {engine_type} salvate con successo.")
 
                 except Exception as e:
@@ -1686,6 +1787,9 @@ def ia_engine(request):
                     messages.error(request, f"Errore nel salvare le API keys: {str(e)}")
 
                 return redirect('ia_engine')
+
+        # Aggiungi log per verificare il valore di gpt_model nel contesto
+        logger.info(f"Modello GPT nel contesto: {context.get('gpt_model')}")
 
         return render(request, 'be/ia_engine.html', context)
     else:

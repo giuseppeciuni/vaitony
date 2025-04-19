@@ -9,3 +9,13 @@ def get_item(dictionary, key):
     Utilizzo: {{ dictionary|get_item:key }}
     """
     return dictionary.get(key, [])
+
+
+
+@register.filter
+def multiply(value, arg):
+    """Moltiplica il valore per l'argomento"""
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return value

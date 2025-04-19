@@ -388,6 +388,8 @@ class RAGConfiguration(models.Model):
         return False
 
 
+
+
 class AIEngineSettings(models.Model):
     """Impostazioni per i motori di intelligenza artificiale"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='ai_engine_settings')
@@ -504,8 +506,71 @@ class AIEngineSettings(models.Model):
         return decrypted_data.decode()
 
 
+class GlobalEmbeddingCache(models.Model):
+    """
+    Cache globale degli embedding per i documenti.
+    Permette di riutilizzare gli embedding tra diversi utenti basandosi sull'hash del file.
+    """
+    file_hash = models.CharField(max_length=64, primary_key=True)  # SHA-256 hash del file
+    file_type = models.CharField(max_length=20)  # Tipo di file
+    original_filename = models.CharField(max_length=255)  # Nome originale del file
+    embedding_path = models.CharField(max_length=500)  # Percorso al file di embedding
+    chunk_size = models.IntegerField(default=500)  # Dimensione chunk usata
+    chunk_overlap = models.IntegerField(default=50)  # Sovrapposizione chunk usata
+    embedding_model = models.CharField(max_length=50, default="OpenAIEmbeddings")  # Modello di embedding usato
+    processed_at = models.DateTimeField(auto_now=True)  # Data ultimo aggiornamento
+    file_size = models.BigIntegerField()  # Dimensione del file
+    usage_count = models.IntegerField(default=1)  # Numero di utilizzi della cache
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['file_hash']),
+        ]
+
+    def __str__(self):
+        return f"Embedding cache for {self.original_filename} ({self.file_hash[:8]}...)"
 
 
+class EmbeddingCacheStats(models.Model):
+    """
+    Modello per memorizzare le statistiche della cache degli embedding.
+    Viene aggiornato periodicamente per tenere traccia dell'utilizzo della cache.
+    """
+    date = models.DateField(auto_now_add=True)
+    total_embeddings = models.IntegerField(default=0)
+    total_size = models.BigIntegerField(default=0)  # Dimensione totale in bytes
+    total_usage = models.IntegerField(default=0)  # Numero totale di utilizzi
+    reuse_count = models.IntegerField(default=0)  # Numero di riutilizzi (total_usage - total_embeddings)
+    estimated_savings = models.FloatField(default=0.0)  # Risparmio stimato in dollari
+
+    # Distribuzione per tipo di file
+    pdf_count = models.IntegerField(default=0)
+    docx_count = models.IntegerField(default=0)
+    txt_count = models.IntegerField(default=0)
+    csv_count = models.IntegerField(default=0)
+    other_count = models.IntegerField(default=0)
+
+    # Statistiche aggiuntive
+    avg_file_size = models.BigIntegerField(default=0)  # Dimensione media dei file in bytes
+    max_reuses = models.IntegerField(default=0)  # Embedding più riutilizzato
+
+    class Meta:
+        ordering = ['-date']
+        verbose_name = 'Statistica Cache Embedding'
+        verbose_name_plural = 'Statistiche Cache Embedding'
+
+    def __str__(self):
+        return f"Statistiche Cache del {self.date}"
+
+    @property
+    def size_in_mb(self):
+        """Restituisce la dimensione totale in MB"""
+        return self.total_size / (1024 * 1024)
+
+    @property
+    def avg_size_in_kb(self):
+        """Restituisce la dimensione media in KB"""
+        return self.avg_file_size / 1024
 
 
 # ----- SEGNALI PER L'AGGIORNAMENTO AUTOMATICO DEGLI INDICI -----

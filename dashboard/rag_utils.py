@@ -18,8 +18,8 @@ from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 from dashboard.rag_document_utils import check_index_update_needed, compute_file_hash, scan_user_directory
-from dashboard.rag_document_utils import update_index_status
-from dashboard.rag_document_utils import update_project_index_status
+from dashboard.rag_document_utils import update_index_status, create_embedding_cache, copy_embedding_to_project_index
+from dashboard.rag_document_utils import update_project_index_status, get_cached_embedding
 from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, AIEngineSettings
 from profiles.models import UserDocument, RAGConfiguration
 
@@ -547,12 +547,20 @@ def check_project_index_update_needed(project):
         return True
 
 
+# Modifica della funzione create_project_rag_chain in rag_utils.py
+
+# Modifica della funzione create_project_rag_chain in rag_utils.py
+
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
     Crea o aggiorna la catena RAG per un progetto, includendo sia i file che le note.
     Permette di forzare la ricostruzione dell'indice se necessario.
+    Utilizza la cache globale degli embedding quando possibile.
     """
     logger.debug(f"Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
+
+    # Inizializza cached_files come lista vuota
+    cached_files = []
 
     if project:
         # Configurazione percorsi
@@ -589,9 +597,40 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             document_ids = []
             note_ids = []
 
+            # Ottieni impostazioni RAG utente per chunking
+            rag_settings = None
+            try:
+                rag_settings, _ = RAGConfiguration.objects.get_or_create(user=project.user)
+                chunk_size = rag_settings.get_chunk_size()
+                chunk_overlap = rag_settings.get_chunk_overlap()
+            except Exception as e:
+                logger.error(f"Errore nel recuperare le impostazioni RAG: {str(e)}")
+                chunk_size = 500
+                chunk_overlap = 50
+
             # Elabora i file
+            cached_files = []
             for doc_model in files_to_embed:
                 logger.debug(f"Caricamento documento per embedding: {doc_model.filename}")
+
+                # Verifica se esiste già un embedding per questo file nella cache globale
+                cached_embedding = get_cached_embedding(
+                    doc_model.file_hash,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap
+                )
+
+                if cached_embedding:
+                    logger.info(
+                        f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
+                    cached_files.append({
+                        'doc_model': doc_model,
+                        'cache_info': cached_embedding
+                    })
+                    # Non carichiamo il documento in quanto useremo la cache
+                    continue
+
+                # Se non abbiamo trovato una cache, procediamo normalmente
                 langchain_docs = load_document(doc_model.file_path)
                 if langchain_docs:
                     # Aggiungi metadati
@@ -619,18 +658,20 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 note_ids.append(note.id)
 
             logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note)")
+            logger.info(f"Documenti in cache: {len(cached_files)}")
     else:
         # Caso di fallback
         index_name = "default_index"
         index_path = os.path.join(settings.MEDIA_ROOT, index_name)
         document_ids = None
         note_ids = None
+        cached_files = []
 
     embeddings = OpenAIEmbeddings()
     vectordb = None
 
     # Se ci sono documenti da processare o l'indice deve essere rigenerato
-    if (docs and len(docs) > 0) or force_rebuild:
+    if (docs and len(docs) > 0) or force_rebuild or cached_files:
         logger.info(
             f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
 
@@ -686,9 +727,59 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 logger.info(f"Creazione di un nuovo indice FAISS")
                 try:
                     vectordb = create_embeddings_with_retry(split_docs)
+
+                    # NOVITÀ: Salviamo gli embedding nella cache globale per ogni documento
+                    if document_ids and project:
+                        for doc_id in document_ids:
+                            try:
+                                doc = ProjectFile.objects.get(id=doc_id)
+                                file_info = {
+                                    'file_type': doc.file_type,
+                                    'filename': doc.filename,
+                                    'file_size': doc.file_size,
+                                    'chunk_size': chunk_size,
+                                    'chunk_overlap': chunk_overlap,
+                                    'embedding_model': 'OpenAIEmbeddings'
+                                }
+                                create_embedding_cache(doc.file_hash, vectordb, file_info)
+                                logger.info(f"Embedding salvato nella cache globale per {doc.filename}")
+                            except Exception as cache_error:
+                                logger.error(f"Errore nel salvare l'embedding nella cache: {str(cache_error)}")
+
                 except Exception as e:
                     logger.error(f"Errore nella creazione dell'indice con retry: {str(e)}")
                     vectordb = FAISS.from_documents(split_docs, embeddings)
+
+        # Usa la cache per i file già elaborati in precedenza
+        elif cached_files and not vectordb:
+            # Se abbiamo solo file in cache e nessun nuovo documento
+            if os.path.exists(index_path) and not force_rebuild:
+                try:
+                    # Carica l'indice esistente
+                    vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+                    logger.info(f"Indice esistente caricato, aggiungeremo i documenti dalla cache")
+                except Exception as e:
+                    logger.error(f"Errore nel caricare l'indice esistente: {str(e)}")
+                    vectordb = None
+
+            # Se non abbiamo un indice o è stato forzato un rebuild
+            if vectordb is None:
+                # Usa il primo documento in cache come base
+                first_cache = cached_files[0]['cache_info']
+                copy_embedding_to_project_index(project, first_cache, index_path)
+                vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+                logger.info(f"Creato nuovo indice copiando dalla cache")
+
+                # Rimuovi il primo file dalla lista perché l'abbiamo già usato
+                cached_files.pop(0)
+
+            # Aggiorna i documenti con l'indice dalla cache
+            for cached_file in cached_files:
+                doc_model = cached_file['doc_model']
+                doc_model.is_embedded = True
+                doc_model.last_indexed_at = timezone.now()
+                doc_model.save(update_fields=['is_embedded', 'last_indexed_at'])
+                logger.info(f"Documento {doc_model.filename} marcato come embedded (usando cache)")
 
         # Salva indice e aggiorna stato
         if vectordb:
@@ -1023,6 +1114,7 @@ def create_retrieval_qa_chain(vectordb, project=None):
     )
     logger.info(
         f"Configurazione LLM: model={ai_settings['model']}, temp={GPT_MODEL_TEMPERATURE}, max_tokens={ai_settings['max_tokens']}, timeout={ai_settings['timeout']}")
+    logger.info(f"\n=========================\nEngine usato: {ai_settings['model']}\n=========================")
 
     # Crea catena RAG
     qa = RetrievalQA.from_chain_type(

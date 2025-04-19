@@ -417,7 +417,7 @@ class AIEngineSettings(models.Model):
             ('gpt-4-turbo', 'GPT-4 Turbo'),
             ('gpt-3.5-turbo', 'GPT-3.5 Turbo')
         ],
-        default='gpt-4o'
+        default='gpt-3.5-turbo'
     )
 
     # Parametri Claude

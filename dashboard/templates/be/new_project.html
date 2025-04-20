@@ -18,6 +18,7 @@
         border: 4px dashed #0d6efd;
         border-radius: 10px;
         margin-bottom: 20px;
+        transition: all 0.3s ease;
     }
 
     .drop-zone--over {
@@ -29,41 +30,17 @@
         display: none;
     }
 
-    .files-info {
-        max-height: 300px;
-        overflow-y: auto;
-        margin-top: 15px;
-        padding: 10px;
-        border-radius: 5px;
-        background-color: #f8f9fa;
-    }
-
-    .file-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px;
-        border-bottom: 1px solid #e9ecef;
-    }
-
-    .file-item:last-child {
-        border-bottom: none;
-    }
-
-    .file-icon {
-        margin-right: 10px;
-        color: #0d6efd;
-    }
-
     .project-card {
         border-left: 4px solid #0d6efd;
         background-color: #f8f9fa;
         padding: 20px;
         transition: all 0.3s ease;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
     }
 
     .project-card:hover {
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
     }
 
     .tab-content {
@@ -86,6 +63,176 @@
 
     .upload-option.active i {
         color: #0d6efd;
+    }
+
+    /* Nuovi stili per la visualizzazione paginata dei file */
+    .files-preview {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+    }
+
+    .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #e9ecef;
+        background-color: white;
+        border-radius: 5px;
+        margin-bottom: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .file-item:hover {
+        background-color: #f8f9fa;
+        transform: translateY(-2px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .file-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .file-icon {
+        margin-right: 10px;
+        color: #0d6efd;
+    }
+
+    .file-item .file-actions {
+        display: flex;
+        align-items: center;
+    }
+
+    .file-item .file-actions button {
+        background: none;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .file-item .file-actions button:hover {
+        color: #b02a37;
+        transform: scale(1.1);
+    }
+
+    .file-item .file-info {
+        display: flex;
+        align-items: center;
+        flex: 1;
+    }
+
+    .file-item .file-name {
+        font-weight: 500;
+        color: #212529;
+        flex: 1;
+        margin-right: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 400px;
+    }
+
+    .file-item .file-size {
+        font-size: 0.875rem;
+        color: #6c757d;
+        white-space: nowrap;
+        padding: 0.25em 0.65em;
+        border-radius: 0.25rem;
+        background-color: #e9ecef;
+    }
+
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 15px;
+    }
+
+    .page-status {
+        margin-bottom: 10px;
+        text-align: center;
+        color: #6c757d;
+    }
+
+    .file-actions-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .animate-fade {
+        animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .folder-path {
+        margin-bottom: 5px;
+        font-family: monospace;
+        padding: 5px 10px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .folder-structure {
+        margin-bottom: 15px;
+    }
+
+    .folder-icon {
+        color: #ffc107;
+    }
+
+    .file-count-badge {
+        position: relative;
+        top: -1px;
+    }
+
+    /* Loading spinner overlay */
+    .spinner-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        visibility: hidden;
+        opacity: 0;
+        transition: all 0.2s ease;
+    }
+
+    .spinner-overlay.visible {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .spinner-container {
+        background-color: white;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .spinner-text {
+        margin-top: 15px;
+        color: #0d6efd;
+        font-weight: 500;
     }
 </style>
 {% endblock %}
@@ -123,9 +270,9 @@
         </div>
         {% endif %}
 
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Create a new project</h3>
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0"><i class="bi bi-plus-square me-2"></i> Create a new project</h3>
             </div>
             <div class="card-body">
                 <form action="{% url 'new_project' %}" method="post" enctype="multipart/form-data" id="new-project-form">
@@ -133,6 +280,7 @@
 
                     <!-- Project Details -->
                     <div class="project-card mb-4">
+                        <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>Project Information</h5>
                         <div class="mb-3">
                             <label for="project-name" class="form-label">Project Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="project-name" name="project_name" required>
@@ -147,16 +295,20 @@
                     </div>
 
                     <!-- Upload Options -->
-                    <h5 class="mb-3">Project Files (Optional)</h5>
+                    <h5 class="mb-3"><i class="bi bi-file-earmark me-2"></i>Project Files (Optional)</h5>
                     <div class="mb-4">
                         <ul class="nav nav-tabs" id="uploadTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button"
-                                    role="tab" aria-controls="files" aria-selected="true">Upload Files</button>
+                                    role="tab" aria-controls="files" aria-selected="true">
+                                    <i class="bi bi-file-earmark me-1"></i>Upload Files
+                                </button>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="folder-tab" data-bs-toggle="tab" data-bs-target="#folder" type="button"
-                                    role="tab" aria-controls="folder" aria-selected="false">Upload Folder</button>
+                                    role="tab" aria-controls="folder" aria-selected="false">
+                                    <i class="bi bi-folder me-1"></i>Upload Folder
+                                </button>
                             </li>
                         </ul>
 
@@ -172,9 +324,29 @@
                                         accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
                                 </div>
 
-                                <div class="files-info d-none" id="files-info">
-                                    <h6 class="mb-3">Selected Files</h6>
-                                    <div id="file-list"></div>
+                                <div class="files-preview d-none" id="files-preview">
+                                    <div class="file-actions-header">
+                                        <h6 class="mb-0"><i class="bi bi-files me-2"></i><span id="file-count-badge">0</span> files selected</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="clear-files-btn">
+                                            <i class="bi bi-trash me-1"></i>Clear All
+                                        </button>
+                                    </div>
+
+                                    <div class="page-status d-none" id="file-pagination-status">
+                                        Showing <span id="file-start-range">1</span>-<span id="file-end-range">10</span> of <span id="file-total">0</span> files
+                                    </div>
+
+                                    <div id="file-list-container">
+                                        <!-- Files will be populated here by JavaScript -->
+                                    </div>
+
+                                    <div class="pagination-container mt-3" id="file-pagination">
+                                        <nav aria-label="File pagination">
+                                            <ul class="pagination pagination-sm">
+                                                <!-- Pagination will be populated by JavaScript -->
+                                            </ul>
+                                        </nav>
+                                    </div>
                                 </div>
                             </div>
 
@@ -189,11 +361,37 @@
                                         accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
                                 </div>
 
-                                <div class="files-info d-none" id="folder-info">
-                                    <h6 class="mb-3">Folder Contents</h6>
-                                    <p><strong>Folder name:</strong> <span id="folder-name"></span></p>
-                                    <p><strong>Total files:</strong> <span id="file-count">0</span></p>
-                                    <div id="folder-file-list"></div>
+                                <div class="files-preview d-none" id="folder-preview">
+                                    <div class="file-actions-header">
+                                        <h6 class="mb-0">
+                                            <i class="bi bi-folder2-open me-2 folder-icon"></i>
+                                            <span id="folder-name-display">Folder</span>
+                                            <span class="badge bg-primary ms-2 file-count-badge" id="folder-file-count-badge">0</span>
+                                        </h6>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="clear-folder-btn">
+                                            <i class="bi bi-trash me-1"></i>Clear All
+                                        </button>
+                                    </div>
+
+                                    <div class="folder-structure mb-3" id="folder-structure">
+                                        <!-- Folder structure will be shown here -->
+                                    </div>
+
+                                    <div class="page-status d-none" id="folder-pagination-status">
+                                        Showing <span id="folder-start-range">1</span>-<span id="folder-end-range">10</span> of <span id="folder-total">0</span> files
+                                    </div>
+
+                                    <div id="folder-list-container">
+                                        <!-- Files will be populated here by JavaScript -->
+                                    </div>
+
+                                    <div class="pagination-container mt-3" id="folder-pagination">
+                                        <nav aria-label="Folder files pagination">
+                                            <ul class="pagination pagination-sm">
+                                                <!-- Pagination will be populated by JavaScript -->
+                                            </ul>
+                                        </nav>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -212,6 +410,16 @@
         </div>
     </div>
 </div>
+
+<!-- Loading Spinner Overlay -->
+<div class="spinner-overlay" id="spinner-overlay">
+    <div class="spinner-container">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="spinner-text" id="spinner-text">Creating project...</div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -221,20 +429,36 @@
         const projectNameInput = document.getElementById("project-name");
         const createButton = document.getElementById("create-btn");
         const newProjectForm = document.getElementById("new-project-form");
+        const spinnerOverlay = document.getElementById("spinner-overlay");
+        const spinnerText = document.getElementById("spinner-text");
 
         // File upload elements
         const fileDropZone = document.getElementById("file-drop-zone");
         const fileInput = document.getElementById("file-input");
-        const filesInfo = document.getElementById("files-info");
-        const fileList = document.getElementById("file-list");
+        const filesPreview = document.getElementById("files-preview");
+        const fileListContainer = document.getElementById("file-list-container");
+        const clearFilesBtn = document.getElementById("clear-files-btn");
+        const fileCountBadge = document.getElementById("file-count-badge");
+        const filePaginationStatus = document.getElementById("file-pagination-status");
+        const fileStartRange = document.getElementById("file-start-range");
+        const fileEndRange = document.getElementById("file-end-range");
+        const fileTotal = document.getElementById("file-total");
+        const filePagination = document.getElementById("file-pagination");
 
         // Folder upload elements
         const folderDropZone = document.getElementById("folder-drop-zone");
         const folderInput = document.getElementById("folder-input");
-        const folderInfo = document.getElementById("folder-info");
-        const folderName = document.getElementById("folder-name");
-        const fileCount = document.getElementById("file-count");
-        const folderFileList = document.getElementById("folder-file-list");
+        const folderPreview = document.getElementById("folder-preview");
+        const folderListContainer = document.getElementById("folder-list-container");
+        const clearFolderBtn = document.getElementById("clear-folder-btn");
+        const folderNameDisplay = document.getElementById("folder-name-display");
+        const folderFileCountBadge = document.getElementById("folder-file-count-badge");
+        const folderStructure = document.getElementById("folder-structure");
+        const folderPaginationStatus = document.getElementById("folder-pagination-status");
+        const folderStartRange = document.getElementById("folder-start-range");
+        const folderEndRange = document.getElementById("folder-end-range");
+        const folderTotal = document.getElementById("folder-total");
+        const folderPagination = document.getElementById("folder-pagination");
 
         // Tab elements
         const uploadTabs = document.getElementById("uploadTabs");
@@ -244,10 +468,27 @@
         // Track current tab
         let activeTab = "files";
 
+        // Pagination state
+        const paginationState = {
+            files: {
+                items: [],
+                currentPage: 1,
+                itemsPerPage: 10
+            },
+            folder: {
+                items: [],
+                currentPage: 1,
+                itemsPerPage: 10
+            }
+        };
+
+        // Valid file extensions
+        const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+
         // Check if form can be submitted
         function checkFormValidity() {
             const projectName = projectNameInput.value.trim();
-            // Attiva il pulsante solo se c'è un nome progetto
+            // Enable button only if project name exists
             createButton.disabled = !projectName;
         }
 
@@ -256,32 +497,36 @@
 
         // Form submit event
         newProjectForm.addEventListener("submit", function(e) {
-            // Verifica se il form è valido
+            // Verify form is valid
             if (!projectNameInput.value.trim()) {
                 e.preventDefault();
-                alert("Inserisci un nome per il progetto");
+                alert("Please enter a project name");
                 return false;
             }
 
-            // IMPORTANTE: Prima di inviare il form, rimuovi l'attributo disabled
-            // dagli input che non sono attivi in questo momento
+            // Show loading spinner
+            spinnerOverlay.classList.add("visible");
+            spinnerText.textContent = "Creating project...";
+
+            // IMPORTANT: Before submitting, remove disabled attribute
+            // from inputs that are not active at this moment
             if (activeTab === "files") {
-                // Se stiamo caricando file singoli, assicuriamoci che l'input folder non sia disabilitato
+                // If we're uploading individual files, make sure folder input is not disabled
                 if (folderInput.disabled) {
                     folderInput.disabled = false;
-                    // Ma assicuriamoci che sia vuoto
+                    // But make sure it's empty
                     folderInput.value = "";
                 }
             } else {
-                // Se stiamo caricando una cartella, assicuriamoci che l'input file non sia disabilitato
+                // If we're uploading a folder, make sure file input is not disabled
                 if (fileInput.disabled) {
                     fileInput.disabled = false;
-                    // Ma assicuriamoci che sia vuoto
+                    // But make sure it's empty
                     fileInput.value = "";
                 }
             }
 
-            // Continua con l'invio
+            // Continue with submission
             return true;
         });
 
@@ -294,16 +539,39 @@
         // Tab change listener
         filesTab.addEventListener("click", function() {
             activeTab = "files";
-            // NON disattivare gli input, solo cambiare la tab attiva
-            // folderInput.disabled = true;
-            // fileInput.disabled = false;
         });
 
         folderTab.addEventListener("click", function() {
             activeTab = "folder";
-            // NON disattivare gli input, solo cambiare la tab attiva
-            // fileInput.disabled = true;
-            // folderInput.disabled = false;
+        });
+
+        // Clear files button
+        clearFilesBtn.addEventListener("click", function() {
+            fileInput.value = "";
+            filesPreview.classList.add("d-none");
+            fileListContainer.innerHTML = "";
+            fileDropZone.querySelector(".drop-zone__prompt").innerHTML = `
+                <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
+                Drop files here or click to select
+            `;
+            paginationState.files.items = [];
+            paginationState.files.currentPage = 1;
+            updateFilePagination();
+        });
+
+        // Clear folder button
+        clearFolderBtn.addEventListener("click", function() {
+            folderInput.value = "";
+            folderPreview.classList.add("d-none");
+            folderListContainer.innerHTML = "";
+            folderStructure.innerHTML = "";
+            folderDropZone.querySelector(".drop-zone__prompt").innerHTML = `
+                <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
+                Drop folder here or click to select
+            `;
+            paginationState.folder.items = [];
+            paginationState.folder.currentPage = 1;
+            updateFolderPagination();
         });
 
         // Setup drop zone
@@ -342,16 +610,14 @@
 
         // Handle individual files upload
         function handleFiles(files) {
-            // Reset the file list
-            fileList.innerHTML = "";
-
             if (files.length === 0) {
-                filesInfo.classList.add("d-none");
+                filesPreview.classList.add("d-none");
                 return;
             }
 
-            // Valid file extensions
-            const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+            // Reset the pagination state
+            paginationState.files.items = [];
+            paginationState.files.currentPage = 1;
 
             // Process all files
             let validCount = 0;
@@ -365,8 +631,11 @@
 
                 if (isValid) {
                     validCount++;
-                    // Create file item element
-                    createFileItem(file, fileList, fileExtension);
+                    // Add to pagination items
+                    paginationState.files.items.push({
+                        file: file,
+                        extension: fileExtension
+                    });
                 }
             }
 
@@ -381,8 +650,14 @@
                     `;
                 }
 
-                // Show files info
-                filesInfo.classList.remove("d-none");
+                // Update count badge
+                fileCountBadge.textContent = validCount;
+
+                // Show files preview
+                filesPreview.classList.remove("d-none");
+
+                // Update pagination
+                updateFilePagination();
             }
 
             // Always check form validity
@@ -391,42 +666,67 @@
 
         // Handle folder upload
         function handleFolder(files) {
-            // Reset the folder file list
-            folderFileList.innerHTML = "";
-
             if (files.length === 0) {
-                folderInfo.classList.add("d-none");
+                folderPreview.classList.add("d-none");
                 return;
             }
+
+            // Reset the pagination state
+            paginationState.folder.items = [];
+            paginationState.folder.currentPage = 1;
 
             // Get the root folder name from the first file's path
             const firstFilePath = files[0].webkitRelativePath;
             const rootFolder = firstFilePath.split('/')[0];
-            folderName.textContent = rootFolder;
-
-            // Valid file extensions
-            const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
+            folderNameDisplay.textContent = rootFolder;
 
             // Count valid files
             let validCount = 0;
+            let folderStructureMap = {};
 
             // Process all files
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+                const relativePath = file.webkitRelativePath;
 
-                // Check if this is a valid file type
-                const isValid = validExtensions.includes(fileExtension);
+                // Build folder structure
+                const pathParts = relativePath.split('/');
+                let currentPath = '';
+                let currentMap = folderStructureMap;
 
-                if (isValid) {
+                for (let j = 0; j < pathParts.length - 1; j++) {
+                    const part = pathParts[j];
+                    currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+                    if (!currentMap[part]) {
+                        currentMap[part] = {
+                            __files: [],
+                            __path: currentPath
+                        };
+                    }
+
+                    currentMap = currentMap[part];
+                }
+
+                // Add file to the last folder
+                if (validExtensions.includes(fileExtension)) {
+                    currentMap.__files.push({
+                        name: pathParts[pathParts.length - 1],
+                        extension: fileExtension,
+                        file: file,
+                        path: relativePath
+                    });
+
                     validCount++;
-                    // Create file item with relative path
-                    createFileItem(file, folderFileList, fileExtension, file.webkitRelativePath);
+                    // Add to pagination items
+                    paginationState.folder.items.push({
+                        file: file,
+                        extension: fileExtension,
+                        path: relativePath
+                    });
                 }
             }
-
-            // Update file count
-            fileCount.textContent = validCount;
 
             if (validCount > 0) {
                 // Update drop zone visually
@@ -439,42 +739,321 @@
                     `;
                 }
 
-                // Show folder info
-                folderInfo.classList.remove("d-none");
+                // Update count badge
+                folderFileCountBadge.textContent = validCount;
+
+                // Build folder structure HTML
+                folderStructure.innerHTML = buildFolderStructureHTML(folderStructureMap, rootFolder);
+
+                // Show folder preview
+                folderPreview.classList.remove("d-none");
+
+                // Update pagination
+                updateFolderPagination();
             }
 
             // Always check form validity
             checkFormValidity();
         }
 
-        // Create a file item element
-        function createFileItem(file, listElement, fileExtension, filePath = null) {
-            // Get icon class based on file extension
-            let iconClass = getFileIconClass(fileExtension);
+        // Build HTML for folder structure
+        function buildFolderStructureHTML(structureMap, rootFolder) {
+            let html = `<div class="folder-path"><i class="bi bi-folder me-2 folder-icon"></i>${rootFolder}/</div>`;
 
+            // Get top level folders
+            const rootMap = structureMap[rootFolder];
+            if (rootMap) {
+                // Get folders excluding special keys
+                const folders = Object.keys(rootMap).filter(key => !key.startsWith('__'));
+
+                if (folders.length > 0) {
+                    for (const folder of folders) {
+                        html += `<div class="folder-path ms-3"><i class="bi bi-folder me-2 folder-icon"></i>${folder}/</div>`;
+                    }
+                }
+            }
+
+            return html;
+        }
+
+        // Update file pagination
+        function updateFilePagination() {
+            const { items, currentPage, itemsPerPage } = paginationState.files;
+            const totalItems = items.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+            // Skip pagination if no items
+            if (totalItems === 0) {
+                fileListContainer.innerHTML = '';
+                filePagination.innerHTML = '';
+                filePaginationStatus.classList.add('d-none');
+                return;
+            }
+
+            // Show pagination status
+            filePaginationStatus.classList.remove('d-none');
+
+            // Calculate start and end item indices
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+
+            // Update pagination status text
+            fileStartRange.textContent = startIndex + 1;
+            fileEndRange.textContent = endIndex;
+            fileTotal.textContent = totalItems;
+
+            // Clear current list
+            fileListContainer.innerHTML = '';
+
+            // Add files for current page
+            for (let i = startIndex; i < endIndex; i++) {
+                const item = items[i];
+                const itemElement = createFileItemElement(item.file, item.extension);
+                fileListContainer.appendChild(itemElement);
+            }
+
+            // Generate pagination controls
+            generatePaginationControls('files', totalPages, currentPage);
+        }
+
+        // Update folder pagination
+        function updateFolderPagination() {
+            const { items, currentPage, itemsPerPage } = paginationState.folder;
+            const totalItems = items.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+            // Skip pagination if no items
+            if (totalItems === 0) {
+                folderListContainer.innerHTML = '';
+                folderPagination.innerHTML = '';
+                folderPaginationStatus.classList.add('d-none');
+                return;
+            }
+
+            // Show pagination status
+            folderPaginationStatus.classList.remove('d-none');
+
+            // Calculate start and end item indices
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+
+            // Update pagination status text
+            folderStartRange.textContent = startIndex + 1;
+            folderEndRange.textContent = endIndex;
+            folderTotal.textContent = totalItems;
+
+            // Clear current list
+            folderListContainer.innerHTML = '';
+
+            // Add files for current page
+            for (let i = startIndex; i < endIndex; i++) {
+                const item = items[i];
+                const itemElement = createFileItemElement(item.file, item.extension, item.path);
+                folderListContainer.appendChild(itemElement);
+            }
+
+            // Generate pagination controls
+            generatePaginationControls('folder', totalPages, currentPage);
+        }
+
+        // Generate pagination controls
+        function generatePaginationControls(type, totalPages, currentPage) {
+            const paginationElement = type === 'files' ? filePagination.querySelector('ul') : folderPagination.querySelector('ul');
+            paginationElement.innerHTML = '';
+
+            // Skip pagination for single page
+            if (totalPages <= 1) {
+                return;
+            }
+
+            // Previous button
+            const prevItem = document.createElement('li');
+            prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevItem.innerHTML = `
+                <button class="page-link" data-page="prev" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </button>
+            `;
+            paginationElement.appendChild(prevItem);
+
+            // Page buttons
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+            // Adjust if at the edges
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // First page button if needed
+            if (startPage > 1) {
+                const firstItem = document.createElement('li');
+                firstItem.className = 'page-item';
+                firstItem.innerHTML = `
+                    <button class="page-link" data-page="1">1</button>
+                `;
+                paginationElement.appendChild(firstItem);
+
+                // Ellipsis if needed
+                if (startPage > 2) {
+                    const ellipsisItem = document.createElement('li');
+                    ellipsisItem.className = 'page-item disabled';
+                    ellipsisItem.innerHTML = `
+                        <button class="page-link">...</button>
+                    `;
+                    paginationElement.appendChild(ellipsisItem);
+                }
+            }
+
+            // Page numbers
+            for (let i = startPage; i <= endPage; i++) {
+                const pageItem = document.createElement('li');
+                pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                pageItem.innerHTML = `
+                    <button class="page-link" data-page="${i}">${i}</button>
+                `;
+                paginationElement.appendChild(pageItem);
+            }
+
+            // Last page button if needed
+            if (endPage < totalPages) {
+                // Ellipsis if needed
+                if (endPage < totalPages - 1) {
+                    const ellipsisItem = document.createElement('li');
+                    ellipsisItem.className = 'page-item disabled';
+                    ellipsisItem.innerHTML = `
+                        <button class="page-link">...</button>
+                    `;
+                    paginationElement.appendChild(ellipsisItem);
+                }
+
+                const lastItem = document.createElement('li');
+                lastItem.className = 'page-item';
+                lastItem.innerHTML = `
+                    <button class="page-link" data-page="${totalPages}">${totalPages}</button>
+                `;
+                paginationElement.appendChild(lastItem);
+            }
+
+            // Next button
+            const nextItem = document.createElement('li');
+            nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextItem.innerHTML = `
+                <button class="page-link" data-page="next" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </button>
+            `;
+            paginationElement.appendChild(nextItem);
+
+            // Add event listeners to pagination buttons
+            paginationElement.querySelectorAll('.page-link').forEach(button => {
+                button.addEventListener('click', function() {
+                    const pageData = this.getAttribute('data-page');
+                    let newPage = currentPage;
+
+                    if (pageData === 'prev') {
+                        newPage = Math.max(1, currentPage - 1);
+                    } else if (pageData === 'next') {
+                        newPage = Math.min(totalPages, currentPage + 1);
+                    } else {
+                        newPage = parseInt(pageData);
+                    }
+
+                    if (newPage !== currentPage) {
+                        if (type === 'files') {
+                            paginationState.files.currentPage = newPage;
+                            updateFilePagination();
+                        } else {
+                            paginationState.folder.currentPage = newPage;
+                            updateFolderPagination();
+                        }
+                    }
+                });
+            });
+        }
+
+        // Create a file item element
+        function createFileItemElement(file, fileExtension, filePath = null) {
             // Format file size
             const fileSizeKB = Math.round(file.size / 1024);
             const fileSizeDisplay = fileSizeKB < 1024
                 ? fileSizeKB + " KB"
                 : (fileSizeKB / 1024).toFixed(2) + " MB";
 
+            // Get icon class based on file extension
+            let iconClass = getFileIconClass(fileExtension);
+
             // Create file item element
             const fileItem = document.createElement("div");
-            fileItem.className = "file-item";
+            fileItem.className = "file-item animate-fade";
+
+            // Display name based on path or just filename
+            const displayName = filePath || file.name;
 
             // Set file item content
             fileItem.innerHTML = `
-                <div>
+                <div class="file-info">
                     <i class="bi ${iconClass} file-icon"></i>
-                    <span>${filePath || file.name}</span>
+                    <span class="file-name" title="${displayName}">${displayName}</span>
+                    <span class="file-size">${fileSizeDisplay}</span>
                 </div>
-                <div>
-                    <span class="badge bg-secondary">${fileSizeDisplay}</span>
+                <div class="file-actions">
+                    <button type="button" class="remove-file-btn" title="Remove file">
+                        <i class="bi bi-x-circle"></i>
+                    </button>
                 </div>
             `;
 
-            // Add to list
-            listElement.appendChild(fileItem);
+            // Add event listener for remove button
+            const removeButton = fileItem.querySelector('.remove-file-btn');
+            removeButton.addEventListener('click', function() {
+                const isFolder = filePath !== null;
+                const stateKey = isFolder ? 'folder' : 'files';
+                const items = paginationState[stateKey].items;
+
+                // Find the index of the file to remove
+                const itemIndex = items.findIndex(item =>
+                    (isFolder && item.path === filePath) ||
+                    (!isFolder && item.file.name === file.name)
+                );
+
+                if (itemIndex !== -1) {
+                    // Remove the file from the items array
+                    items.splice(itemIndex, 1);
+
+                    // Update the file count
+                    const countBadge = isFolder ? folderFileCountBadge : fileCountBadge;
+                    countBadge.textContent = items.length;
+
+                    // Update pagination
+                    if (isFolder) {
+                        updateFolderPagination();
+
+                        // Hide folder preview if no files left
+                        if (items.length === 0) {
+                            folderPreview.classList.add('d-none');
+                            folderDropZone.querySelector(".drop-zone__prompt").innerHTML = `
+                                <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
+                                Drop folder here or click to select
+                            `;
+                        }
+                    } else {
+                        updateFilePagination();
+
+                        // Hide files preview if no files left
+                        if (items.length === 0) {
+                            filesPreview.classList.add('d-none');
+                            fileDropZone.querySelector(".drop-zone__prompt").innerHTML = `
+                                <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
+                                Drop files here or click to select
+                            `;
+                        }
+                    }
+                }
+            });
+
+            return fileItem;
         }
 
         // Get file icon class based on extension

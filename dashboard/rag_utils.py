@@ -54,6 +54,23 @@ def get_openai_api_key(user=None):
     return settings.OPENAI_API_KEY
 
 
+def get_gemini_api_key(user=None):
+    """
+    Ottiene la chiave API Gemini per l'utente corrente o quella predefinita.
+    Gestisce sia il credito della piattaforma sia le chiavi personali.
+    """
+    if user:
+        try:
+            engine_settings = AIEngineSettings.objects.get(user=user)
+            if engine_settings.api_mode == 'personal' and engine_settings.gemini_api_key:
+                logger.info(f"Utilizzo API key Gemini personale per l'utente {user.username}")
+                return engine_settings.get_gemini_api_key()
+        except (AIEngineSettings.DoesNotExist, Exception) as e:
+            logger.warning(f"Impossibile recuperare API key Gemini per l'utente {user.username}: {str(e)}")
+
+    logger.info("Utilizzo API key Gemini della piattaforma")
+    return settings.GEMINI_API_KEY  # Assicurati di aggiungere questa variabile in settings.py
+
 def get_ai_engine_settings(user=None, engine_type='openai'):
     """
     Ottiene i parametri del motore IA per l'utente specificato.
@@ -74,6 +91,11 @@ def get_ai_engine_settings(user=None, engine_type='openai'):
             'model': settings.DEEPSEEK_MODEL,
             'max_tokens': settings.DEEPSEEK_MODEL_MAX_TOKENS,
             'timeout': settings.DEEPSEEK_MODEL_TIMEOUT,
+        },
+        'gemini': {
+            'model': settings.GEMINI_MODEL,
+            'max_tokens': settings.GEMINI_MODEL_MAX_TOKENS,
+            'timeout': settings.GEMINI_MODEL_TIMEOUT,
         }
     }
 
@@ -98,6 +120,12 @@ def get_ai_engine_settings(user=None, engine_type='openai'):
                     'model': engine_settings.deepseek_model,
                     'max_tokens': engine_settings.deepseek_max_tokens,
                     'timeout': engine_settings.deepseek_timeout,
+                }
+            elif engine_type == 'gemini':
+                return {
+                    'model': engine_settings.gemini_model,
+                    'max_tokens': engine_settings.gemini_max_tokens,
+                    'timeout': engine_settings.gemini_timeout,
                 }
         except (AIEngineSettings.DoesNotExist, Exception) as e:
             logger.warning(f"Impossibile recuperare impostazioni per {engine_type}: {str(e)}")

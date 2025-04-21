@@ -163,14 +163,14 @@
     <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
         <!-- OpenAI Card -->
         <div class="col">
-            <div class="card h-100 engine-card selected" id="openai-card">
+            <div class="card h-100 engine-card {% if selected_engine == 'openai' %}selected{% endif %}" id="openai-card">
                 <div class="selected-badge">
                     <i class="bi bi-check-lg"></i>
                 </div>
                 <div class="engine-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/openai-logo.png' %}" alt="OpenAI Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg'" class="engine-logo me-2">
+                            <img src="{% static 'dist/assets/img/openai.svg' %}" alt="OpenAI Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg'" class="engine-logo me-2">
                             <h5 class="mb-0">ChatGPT <span id="openai-model-display">4o</span></h5>
                         </div>
                         <span class="badge bg-success">Consigliato</span>
@@ -219,8 +219,8 @@
                 </div>
                 <div class="engine-footer">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="text-success">Attivo</span></span>
-                        <button class="btn btn-sm btn-primary select-engine" data-engine="openai">Seleziona</button>
+                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'openai' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'openai' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                        <button class="btn btn-sm {% if selected_engine == 'openai' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="openai">{% if selected_engine == 'openai' %}Selezionato{% else %}Seleziona{% endif %}</button>
                     </div>
                 </div>
             </div>
@@ -228,14 +228,14 @@
 
         <!-- Claude Card -->
         <div class="col">
-            <div class="card h-100 engine-card" id="claude-card">
+             <div class="card h-100 engine-card {% if selected_engine == 'claude' %}selected{% endif %}" id="claude-card">
                 <div class="selected-badge">
                     <i class="bi bi-check-lg"></i>
                 </div>
                 <div class="engine-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/anthropic-logo.png' %}" alt="Anthropic Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/7/7e/Claude_Wordmark_Black_%28Light_Theme%29.svg'" class="engine-logo me-2">
+                            <img src="{% static 'dist/assets/img/claude.png' %}" alt="Anthropic Logo" class="engine-logo me-2">
                             <h5 class="mb-0">Claude 3.7 Sonnet</h5>
                         </div>
                         <span class="badge bg-info">Alta precisione</span>
@@ -284,8 +284,8 @@
                 </div>
                 <div class="engine-footer">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="text-secondary">Inattivo</span></span>
-                        <button class="btn btn-sm btn-outline-primary select-engine" data-engine="claude">Seleziona</button>
+                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'claude' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'claude' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                        <button class="btn btn-sm {% if selected_engine == 'claude' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="claude">{% if selected_engine == 'claude' %}Selezionato{% else %}Seleziona{% endif %}</button>
                     </div>
                 </div>
             </div>
@@ -293,14 +293,14 @@
 
         <!-- DeepSeek Card -->
         <div class="col">
-            <div class="card h-100 engine-card" id="deepseek-card">
+             <div class="card h-100 engine-card {% if selected_engine == 'deepseek' %}selected{% endif %}" id="deepseek-card">
                 <div class="selected-badge">
                     <i class="bi bi-check-lg"></i>
                 </div>
                 <div class="engine-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/deepseek-logo.png' %}" alt="DeepSeek Logo" onerror="this.src='https://assets-global.website-files.com/64f8c16944e1274f4965537c/65047172825c4cca1d45ce24_deepseekAi-social-logo.jpg'" class="engine-logo me-2">
+                            <img src="{% static 'dist/assets/img/deepseek.svg' %}" alt="DeepSeek Logo" class="engine-logo me-2">
                             <h5 class="mb-0">DeepSeek Coder</h5>
                         </div>
                         <span class="badge bg-warning">Economico</span>
@@ -349,10 +349,76 @@
                 </div>
                 <div class="engine-footer">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="text-secondary">Inattivo</span></span>
-                        <button class="btn btn-sm btn-outline-primary select-engine" data-engine="deepseek">Seleziona</button>
+                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'deepseek' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'deepseek' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                        <button class="btn btn-sm {% if selected_engine == 'deepseek' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="deepseek">{% if selected_engine == 'deepseek' %}Selezionato{% else %}Seleziona{% endif %}</button>
                     </div>
                 </div>
+             </div>
+        </div>
+
+        <!-- Gemini Card -->
+        <div class="col">
+            <div class="card h-100 engine-card {% if selected_engine == 'gemini' %}selected{% endif %}" id="gemini-card">
+                <div class="selected-badge">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <div class="engine-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <img src="{% static 'dist/assets/img/gemini.svg' %}" alt="Gemini Logo" class="engine-logo me-2">
+                            <h5 class="mb-0">Gemini 1.5 Pro</h5>
+                        </div>
+                        <span class="badge bg-primary">Versatile</span>
+                    </div>
+                </div>
+                <div class="engine-body">
+                    <p class="card-text">Gemini di Google è un modello multimodale avanzato, ottimo per analisi complesse, codice, creatività e compiti generali.</p>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-lightning me-2 text-warning"></i>
+                            <span class="fw-medium">Velocità:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-brightness-high me-2 text-primary"></i>
+                            <span class="fw-medium">Precisione:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-fill text-primary"></i>
+                                <i class="bi bi-star-half text-primary"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-currency-euro me-2 text-success"></i>
+                            <span class="fw-medium">Costo:</span>
+                            <div class="ms-2">
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star-fill text-success"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                                <i class="bi bi-star text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="engine-footer">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'gemini' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'gemini' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                        <button class="btn btn-sm {% if selected_engine == 'gemini' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="gemini">{% if selected_engine == 'gemini' %}Selezionato{% else %}Seleziona{% endif %}</button>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -364,7 +430,7 @@
         </div>
         <div class="card-body">
             <!-- OpenAI Config Panel -->
-            <div id="openai-config" class="config-panel active">
+            <div id="openai-config" class="config-panel {% if selected_engine == 'openai' %}active{% endif %}">
                 <form id="openai-form" method="post" action="{% url 'ia_engine' %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="save_engine_settings">
@@ -458,7 +524,7 @@
             </div>
 
             <!-- Claude Config Panel -->
-            <div id="claude-config" class="config-panel">
+            <div id="claude-config" class="config-panel {% if selected_engine == 'claude' %}active{% endif %}">
                 <form id="claude-form" method="post" action="{% url 'ia_engine' %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="save_engine_settings">
@@ -551,7 +617,7 @@
             </div>
 
             <!-- DeepSeek Config Panel -->
-            <div id="deepseek-config" class="config-panel">
+            <div id="deepseek-config" class="config-panel {% if selected_engine == 'deepseek' %}active{% endif %}">
                 <form id="deepseek-form" method="post" action="{% url 'ia_engine' %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="save_engine_settings">
@@ -642,6 +708,100 @@
                     </div>
                 </form>
             </div>
+
+            <!-- Gemini Config Panel -->
+            <div id="gemini-config" class="config-panel {% if selected_engine == 'gemini' %}active{% endif %}">
+                <form id="gemini-form" method="post" action="{% url 'ia_engine' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_engine_settings">
+                    <input type="hidden" name="engine_type" value="gemini">
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="gemini-temperature" class="param-label">Temperatura</label>
+                            <div class="d-flex align-items-center mt-2">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="gemini-temperature" min="0" max="1" step="0.1" value="0.7">
+                                <span id="gemini-temperature-value" class="badge bg-primary">0.7</span>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Controlla la casualità delle risposte. Valori più bassi rendono le risposte più prevedibili e focalizzate, mentre valori più alti producono risposte più creative e varie.
+                            </p>
+                            <div class="mt-2 d-flex">
+                                <span class="badge bg-secondary me-2">0 = Preciso</span>
+                                <span class="badge bg-secondary me-2">0.7 = Bilanciato</span>
+                                <span class="badge bg-secondary">1.0 = Creativo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="gemini_max_tokens" class="param-label">Limite Tokens</label>
+                            <input type="number" class="form-control" id="gemini_max_tokens" name="gemini_max_tokens" value="{{ gemini_max_tokens|default:8192 }}" min="100" max="32768" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Limita la lunghezza massima della risposta in token. Gemini supporta risposte molto lunghe, fino a 32.768 token in alcuni casi.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 100</span>
+                                <span class="badge bg-secondary me-2">Standard: 8192</span>
+                                <span class="badge bg-secondary">Max: 32768</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row param-row align-items-center">
+                        <div class="col-md-3">
+                            <label for="gemini_timeout" class="param-label">Timeout (secondi)</label>
+                            <input type="number" class="form-control" id="gemini_timeout" name="gemini_timeout" value="{{ gemini_timeout|default:60 }}" min="10" max="300" step="1">
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Tempo massimo di attesa per una risposta. Modelli più avanzati di Gemini possono richiedere più tempo per risposte complesse.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary me-2">Min: 10s</span>
+                                <span class="badge bg-secondary me-2">Standard: 60s</span>
+                                <span class="badge bg-secondary">Max: 300s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="gemini_model" class="param-label">Versione modello</label>
+                            <select class="form-select" id="gemini_model" name="gemini_model">
+                                <option value="gemini-1.5-pro" {% if gemini_model == 'gemini-1.5-pro' %}selected{% endif %}>Gemini 1.5 Pro</option>
+                                <option value="gemini-1.5-flash" {% if gemini_model == 'gemini-1.5-flash' %}selected{% endif %}>Gemini 1.5 Flash (veloce)</option>
+                                <option value="gemini-1.0-pro" {% if gemini_model == 'gemini-1.0-pro' %}selected{% endif %}>Gemini 1.0 Pro (economico)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="param-help mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Seleziona la versione del modello Gemini da utilizzare. Le versioni più recenti e avanzate offrono migliori prestazioni ma possono avere costi più elevati.
+                            </p>
+                            <div class="mt-2">
+                                <span class="badge bg-success me-2">1.5 Pro: Massima qualità e lunghezza</span>
+                                <span class="badge bg-info me-2">1.5 Flash: Veloce ed efficiente</span>
+                                <span class="badge bg-warning">1.0 Pro: Più economico</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Salva configurazione Gemini
+                        </button>
+                    </div>
+                </form>
+            </div>
+
         </div>
         <div class="card-footer d-flex justify-content-between">
             <button class="btn btn-outline-secondary" id="reset-defaults-btn">
@@ -735,6 +895,25 @@
                             <div class="form-text">Chiave API per accedere ai modelli DeepSeek.</div>
                         </div>
                     </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            <label for="gemini-api-key" class="form-label">Google Gemini API Key</label>
+                        </div>
+                        <div class="col-md-9">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="gemini-api-key" placeholder="AIza..." value="{{ gemini_api_key|default:'' }}">
+                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="gemini-api-key">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <a href="https://ai.google.dev/" target="_blank" class="btn btn-outline-info">
+                                    <i class="bi bi-question-circle me-1"></i> Ottieni
+                                </a>
+                            </div>
+                            <div class="form-text">Chiave API per accedere ai modelli Gemini di Google AI.</div>
+                        </div>
+                    </div>
+
                 </div>
             </form>
         </div>
@@ -858,6 +1037,33 @@
                         statusSpan.className = 'text-secondary';
                     }
                 });
+
+                // Salva la selezione del motore via AJAX
+                // Aggiungi questo nuovo codice
+                const formData = new FormData();
+                formData.append('action', 'select_engine');
+                formData.append('engine', engine);
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+                fetch('{% url "ia_engine" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Motore selezionato: ' + engine, 'success');
+                    } else {
+                        showToast('Errore nella selezione del motore', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Errore di comunicazione', 'danger');
+                });
             });
         });
 
@@ -874,6 +1080,7 @@
         updateRangeValue('gpt-temperature', 'gpt-temperature-value');
         updateRangeValue('claude-temperature', 'claude-temperature-value');
         updateRangeValue('deepseek-temperature', 'deepseek-temperature-value');
+        updateRangeValue('gemini-temperature', 'gemini-temperature-value');
 
         // Toggle password visibility
         document.querySelectorAll('.toggle-password').forEach(button => {
@@ -920,6 +1127,13 @@
                     document.getElementById('deepseek_max_tokens').value = '2048';
                     document.getElementById('deepseek_timeout').value = '30';
                     document.getElementById('deepseek_model').value = 'deepseek-coder';
+                    break;
+                case 'gemini':
+                    document.getElementById('gemini-temperature').value = '0.7';
+                    document.getElementById('gemini-temperature-value').textContent = '0.7';
+                    document.getElementById('gemini_max_tokens').value = '8192';
+                    document.getElementById('gemini_timeout').value = '60';
+                    document.getElementById('gemini_model').value = 'gemini-1.5-pro';
                     break;
             }
 

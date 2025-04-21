@@ -402,10 +402,22 @@ class AIEngineSettings(models.Model):
         default='platform'
     )
 
+    selected_engine = models.CharField(
+        max_length=20,
+        choices=[
+            ('openai', 'OpenAI'),
+            ('claude', 'Claude'),
+            ('deepseek', 'DeepSeek'),
+            ('gemini', 'Gemini')
+        ],
+        default='openai'
+    )
+
     # Chiavi API (criptate)
     openai_api_key = models.TextField(blank=True, null=True)
     claude_api_key = models.TextField(blank=True, null=True)
     deepseek_api_key = models.TextField(blank=True, null=True)
+    gemini_api_key = models.TextField(blank=True, null=True)
 
     # Parametri del modello
     gpt_max_tokens = models.IntegerField(default=4096)
@@ -446,6 +458,19 @@ class AIEngineSettings(models.Model):
         default='deepseek-coder'
     )
 
+    # Parametri Gemini
+    gemini_max_tokens = models.IntegerField(default=8192)
+    gemini_timeout = models.IntegerField(default=60)
+    gemini_model = models.CharField(
+        max_length=50,
+        choices=[
+            ('gemini-1.5-flash', 'Gemini 1.5 Flash'),
+            ('gemini-1.5-pro', 'Gemini 1.5 Pro'),
+            ('gemini-1.0-pro', 'Gemini 1.0 Pro')
+        ],
+        default='gemini-1.5-pro'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -462,6 +487,9 @@ class AIEngineSettings(models.Model):
 
         if self.deepseek_api_key and not self.deepseek_api_key.startswith('enc_'):
             self.deepseek_api_key = f"enc_{self._encrypt_value(self.deepseek_api_key)}"
+
+        if self.gemini_api_key and not self.gemini_api_key.startswith('enc_'):
+            self.gemini_api_key = f"enc_{self._encrypt_value(self.gemini_api_key)}"
 
         super().save(*args, **kwargs)
 
@@ -493,6 +521,12 @@ class AIEngineSettings(models.Model):
         if self.deepseek_api_key and self.deepseek_api_key.startswith('enc_'):
             return self._decrypt_value(self.deepseek_api_key[4:])
         return self.deepseek_api_key
+
+    def get_gemini_api_key(self):
+        """Restituisce la API key Gemini decriptata"""
+        if self.gemini_api_key and self.gemini_api_key.startswith('enc_'):
+            return self._decrypt_value(self.gemini_api_key[4:])
+        return self.gemini_api_key
 
     def _decrypt_value(self, value):
         """Decripta un valore usando Fernet"""

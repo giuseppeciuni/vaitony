@@ -1620,6 +1620,7 @@ def ia_engine(request):
             'openai_api_key': '************************************',  # Mascherata per sicurezza
             'claude_api_key': '************************************',  # Mascherata per sicurezza
             'deepseek_api_key': '************************************',  # Mascherata per sicurezza
+            'gemini_api_key': '************************************',  # Mascherata per sicurezza
 
             # Parametri OpenAI
             'gpt_max_tokens': engine_settings.gpt_max_tokens if engine_settings else 4096,
@@ -1635,6 +1636,13 @@ def ia_engine(request):
             'deepseek_max_tokens': engine_settings.deepseek_max_tokens if engine_settings else 2048,
             'deepseek_timeout': engine_settings.deepseek_timeout if engine_settings else 30,
             'deepseek_model': engine_settings.deepseek_model if engine_settings else 'deepseek-coder',
+
+            # Parametri Gemini
+            'gemini_max_tokens': engine_settings.gemini_max_tokens if engine_settings else 8192,
+            'gemini_timeout': engine_settings.gemini_timeout if engine_settings else 60,
+            'gemini_model': engine_settings.gemini_model if engine_settings else 'gemini-1.5-pro',
+
+            'selected_engine': engine_settings.selected_engine if engine_settings else 'openai',
         }
 
         # Gestione della richiesta AJAX
@@ -1676,6 +1684,9 @@ def ia_engine(request):
                     if not engine_settings:
                         engine_settings = AIEngineSettings(user=request.user)
 
+                    # Salva il motore selezionato
+                    engine_settings.selected_engine = engine_type
+
                     # Salva i parametri specifici del motore selezionato
                     if engine_type == 'openai':
                         engine_settings.gpt_max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
@@ -1698,12 +1709,35 @@ def ia_engine(request):
                         logger.info(
                             f"Parametri DeepSeek salvati: max_tokens={engine_settings.deepseek_max_tokens}, timeout={engine_settings.deepseek_timeout}, model={engine_settings.deepseek_model}")
 
+                    elif engine_type == 'gemini':
+                        engine_settings.gemini_max_tokens = int(request.POST.get('gemini_max_tokens', 8192))
+                        engine_settings.gemini_timeout = int(request.POST.get('gemini_timeout', 60))
+                        engine_settings.gemini_model = request.POST.get('gemini_model', 'gemini-1.5-pro')
+                        logger.info(
+                            f"Parametri Gemini salvati: max_tokens={engine_settings.gemini_max_tokens}, timeout={engine_settings.gemini_timeout}, model={engine_settings.gemini_model}")
+
                     engine_settings.save()
                     return JsonResponse(
                         {'success': True, 'message': f'Impostazioni di {engine_type} salvate con successo'})
 
                 except Exception as e:
                     logger.error(f"Errore nel salvare le impostazioni del motore: {str(e)}")
+                    return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+            elif action == 'select_engine':
+                # Seleziona un motore
+                try:
+                    engine = request.POST.get('engine')
+
+                    if not engine_settings:
+                        engine_settings = AIEngineSettings(user=request.user)
+
+                    engine_settings.selected_engine = engine
+                    engine_settings.save()
+
+                    return JsonResponse({'success': True, 'message': f'Motore {engine} selezionato'})
+                except Exception as e:
+                    logger.error(f"Errore nella selezione del motore: {str(e)}")
                     return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
 
         # Gestione della richiesta POST standard (non AJAX)
@@ -1777,6 +1811,9 @@ def ia_engine(request):
 
                         if request.POST.get('deepseek_api_key'):
                             engine_settings.deepseek_api_key = request.POST.get('deepseek_api_key')
+
+                    if request.POST.get('gemini_api_key'):
+                        engine_settings.gemini_api_key = request.POST.get('gemini_api_key')
 
                     engine_settings.save()
                     logger.info(f"Configurazione API salvata: modalità={api_mode}")
@@ -1992,6 +2029,15 @@ def verify_api_key(api_type, api_key):
             # quando sarà disponibile un metodo di verifica ufficiale
             # Per ora restituiamo True per evitare problemi
             return True, None
+
+        elif api_type == 'gemini':
+            # Implementazione per la verifica delle API Gemini
+            try:
+                # Aggiungi qui la verifica per Gemini quando implementerai la libreria
+                # Per ora restituiamo True per mantenere la funzionalità
+                return True, None
+            except Exception as e:
+                return False, f"Errore nella verifica della chiave Gemini: {str(e)}"
 
         else:
             return False, f"Tipo API non supportato: {api_type}"

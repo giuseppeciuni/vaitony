@@ -71,23 +71,6 @@
         overflow: hidden;
     }
 
-    /* Chat Interface */
-    .chat-messages {
-        height: calc(100vh - 170px);
-        overflow-y: auto;
-        padding-bottom: 20px;
-    }
-
-    .user-message {
-        background-color: #e9f5ff;
-        border-radius: 1rem 1rem 0 1rem;
-    }
-
-    .ai-message {
-        background-color: #f8f9fa;
-        border-radius: 1rem 1rem 1rem 0;
-    }
-
     /* Notes List */
     .note-item {
         border-bottom: 1px solid rgba(0,0,0,0.05);
@@ -123,16 +106,94 @@
         padding-bottom: 60px;
     }
 
-    /* Chat Input Fixed */
+    /* Chat Interface - Versione Aggiornata */
+    .chat-messages {
+        height: calc(100vh - 220px);
+        overflow-y: auto;
+        padding: 1.5rem;
+        background: #f8f9fa;
+        border-radius: 1rem;
+        box-shadow: inset 0 0 0.5rem rgba(0,0,0,0.05);
+        scroll-behavior: smooth;
+    }
+
+    .message-container {
+        display: flex;
+        margin-bottom: 1.25rem;
+        position: relative;
+    }
+
+    .user-container {
+        justify-content: flex-end;
+        padding-right: 1.5rem; /* Aggiungi spazio a destra per evitare la scrollbar */
+    }
+
+    .user-message, .ai-message {
+        max-width: 70%;
+        padding: 1rem;
+        border-radius: 1.25rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        position: relative;
+    }
+
+    .user-message {
+        background-color: #0d6efd;
+        color: white;
+        border-bottom-right-radius: 0.25rem;
+        margin-right: 0.5rem;
+    }
+
+    .ai-message {
+        background-color: white;
+        color: #212529;
+        border-bottom-left-radius: 0.25rem;
+        margin-left: 0.5rem;
+    }
+
+    .message-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .user-avatar {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    .ai-avatar {
+        background-color: #6f42c1;
+        color: white;
+    }
+
+    .message-time {
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.75);
+        position: absolute;
+        bottom: 0.4rem;
+        right: 0.75rem;
+    }
+
+    .ai-message .message-time {
+        color: #6c757d;
+    }
+
+    /* Chat Input */
     .chat-input-container {
         position: fixed;
         bottom: 0;
         left: 0;
         right: 0;
         background: white;
-        padding: 12px 15px;
+        padding: 1rem 1.5rem;
         z-index: 1000;
-        border-top: 1px solid #dee2e6;
+        border-top: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 -0.25rem 0.75rem rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
     }
 
     /* Adjust for sidebar on desktop */
@@ -143,32 +204,148 @@
     }
 
     .chat-input-wrapper {
+        max-width: 900px;
+        margin: 0 auto;
+        position: relative;
         display: flex;
         align-items: center;
-        position: relative;
-        flex: 1;
     }
 
     .chat-input-container .form-control {
-        border-radius: 20px;
-        padding-right: 50px;
+        border-radius: 1.5rem;
+        padding: 0.75rem 3.5rem 0.75rem 1.25rem;
         resize: none;
-        height: 45px;
-        padding-top: 10px;
+        border: 1px solid rgba(0,0,0,0.2);
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
+    }
+
+    .chat-input-container .form-control:focus {
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+        border-color: #0d6efd;
     }
 
     .chat-input-container .btn {
         position: absolute;
-        right: 5px;
+        right: 0.5rem;
         top: 50%;
         transform: translateY(-50%);
-        width: 35px;
-        height: 35px;
+        width: 2.5rem;
+        height: 2.5rem;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 0;
+        background-color: #0d6efd;
+        color: white;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+    }
+
+    .chat-input-container .btn:hover {
+        background-color: #0b5ed7;
+        transform: translateY(-50%) scale(1.05);
+    }
+
+    .chat-input-container .btn:active {
+        transform: translateY(-50%) scale(0.95);
+    }
+
+    .chat-input-container .btn i {
+        font-size: 1.25rem;
+    }
+
+    /* Empty chat state */
+    .chat-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 2rem;
+        color: #6c757d;
+        text-align: center;
+    }
+
+    .chat-empty-state i {
+        font-size: 3.5rem;
+        margin-bottom: 1.25rem;
+        color: #dee2e6;
+    }
+
+    .chat-empty-state h4 {
+        margin-bottom: 0.75rem;
+        color: #495057;
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        background-color: white;
+        border-radius: 1.25rem;
+        margin-bottom: 1.25rem;
+        margin-left: 0.5rem;
+        width: max-content;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+
+    .typing-indicator span {
+        height: 0.5rem;
+        width: 0.5rem;
+        margin: 0 0.1rem;
+        background-color: #6c757d;
+        border-radius: 50%;
+        display: inline-block;
+        opacity: 0.4;
+    }
+
+    .typing-indicator span:nth-child(1) {
+        animation: typing 1.5s infinite 0s;
+    }
+
+    .typing-indicator span:nth-child(2) {
+        animation: typing 1.5s infinite 0.3s;
+    }
+
+    .typing-indicator span:nth-child(3) {
+        animation: typing 1.5s infinite 0.6s;
+    }
+
+    @keyframes typing {
+        0% { opacity: 0.4; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.2); }
+        100% { opacity: 0.4; transform: scale(1); }
+    }
+
+    /* Message separator */
+    .message-date-separator {
+        text-align: center;
+        margin: 1.5rem 0;
+        position: relative;
+    }
+
+    .message-date-separator::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+        background-color: #dee2e6;
+        z-index: 1;
+    }
+
+    .message-date-separator span {
+        background-color: #f8f9fa;
+        padding: 0 1rem;
+        position: relative;
+        z-index: 2;
+        color: #6c757d;
+        font-size: 0.85rem;
     }
 
     /* Responsive Adjustments */
@@ -304,25 +481,54 @@
         <!-- Ask AI Tab -->
         <div class="tab-pane fade" id="ask" role="tabpanel">
             <div class="mb-4">
-                <h2 class="h5 mb-3">Chiedi informazioni sul tuo progetto</h2>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Chiedi all'IA sui tuoi documenti</h2>
+                    <span class="badge bg-primary d-flex align-items-center">
+                        <i class="bi bi-lightning-fill me-1"></i> Powered by
+                        {% if user.ai_engine_settings.selected_engine == 'openai' %}ChatGPT
+                        {% elif user.ai_engine_settings.selected_engine == 'claude' %}Claude
+                        {% elif user.ai_engine_settings.selected_engine == 'deepseek' %}DeepSeek
+                        {% elif user.ai_engine_settings.selected_engine == 'gemini' %}Gemini
+                        {% else %}AI Engine{% endif %}
+                    </span>
+                </div>
 
-                <!-- Solo l'area messaggi qui - l'input è fuori e fisso in basso -->
-                <div class="chat-messages p-3 bg-light rounded" id="chat-messages">
+                <!-- Chat messages area -->
+                <div class="chat-messages p-0 rounded" id="chat-messages">
                     {% if conversation_history %}
                         {% for message in conversation_history %}
-                        <div class="mb-3 p-3 {% if message.is_user %}user-message ml-auto{% else %}ai-message mr-auto{% endif %}"
-                             style="max-width: 80%;">
-                            <div class="small fw-bold mb-1">
-                                {% if message.is_user %}Tu{% else %}Assistente AI{% endif %}
+                            <div class="message-container {% if message.is_user %}user-container{% endif %}">
+                                <div class="message-avatar {% if message.is_user %}user-avatar{% else %}ai-avatar{% endif %}">
+                                    {% if message.is_user %}
+                                        <i class="bi bi-person-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-robot"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="{% if message.is_user %}user-message{% else %}ai-message{% endif %}">
+                                    {{ message.content|linebreaks }}
+                                    <span class="message-time">
+                                        {% now "H:i" %}
+                                    </span>
+                                </div>
                             </div>
-                            <div>{{ message.content|linebreaks }}</div>
-                        </div>
                         {% endfor %}
                     {% else %}
-                        <div class="empty-state py-4">
-                            <i class="bi bi-chat-square-text"></i>
-                            <h4>Chiedi qualsiasi cosa</h4>
-                            <p class="text-muted">Posso analizzare i tuoi documenti e le tue note</p>
+                        <div class="chat-empty-state">
+                            <i class="bi bi-chat-square-dots"></i>
+                            <h4>Chiedi qualsiasi cosa riguardo i tuoi documenti</h4>
+                            <p class="text-muted mb-4">L'IA analizzerà i tuoi file e le tue note per darti risposte dettagliate</p>
+                            <div class="suggestions">
+                                <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Riassumi i punti principali di tutti i documenti">
+                                    <i class="bi bi-file-text me-1"></i> Riassumi tutti i documenti
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Quali sono le informazioni più importanti in questi documenti?">
+                                    <i class="bi bi-lightbulb me-1"></i> Informazioni principali
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Elenca 5 punti chiave tratti dalle mie note">
+                                    <i class="bi bi-list-check me-1"></i> Punti chiave dalle note
+                                </button>
+                            </div>
                         </div>
                     {% endif %}
                 </div>
@@ -333,13 +539,12 @@
         <div class="chat-input-container" id="fixed-chat-input" style="display: none;">
             <div class="chat-input-wrapper">
                 <textarea class="form-control" id="question-input" rows="1"
-                          placeholder="Scrivi la tua domanda qui..."></textarea>
-                <button id="send-question-btn" class="btn btn-primary">
-                    <i class="bi bi-send"></i>
+                          placeholder="Scrivi la tua domanda qui o premi '/' per i suggerimenti..."></textarea>
+                <button id="send-question-btn" class="btn">
+                    <i class="bi bi-send-fill"></i>
                 </button>
             </div>
         </div>
-
         <!-- Notes Tab -->
         <div class="tab-pane fade" id="notes" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -933,37 +1138,133 @@ document.addEventListener('DOMContentLoaded', function() {
     const questionInput = document.getElementById('question-input');
     const chatMessages = document.getElementById('chat-messages');
 
-    if (sendButton && questionInput) {
+    if (sendButton && questionInput && chatMessages) {
         sendButton.addEventListener('click', sendQuestion);
         questionInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendQuestion();
             }
+            if (e.key === '/' && questionInput.value === '') {
+                e.preventDefault();
+                // Mostra suggerimenti
+                showSuggestions();
+            }
         });
+
+        // Focus automatico sull'input quando la tab è attiva
+        document.getElementById('ask-tab').addEventListener('shown.bs.tab', function() {
+            setTimeout(() => {
+                questionInput.focus();
+                // Scroll all'ultimo messaggio
+                scrollToBottom();
+            }, 200);
+        });
+
+        // Gestione dei suggerimenti
+        document.querySelectorAll('.suggestion-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                questionInput.value = this.getAttribute('data-text');
+                questionInput.focus();
+            });
+        });
+
+        function showSuggestions() {
+            // Implementa la logica per mostrare suggerimenti dinamici
+            const suggestionsPopup = document.createElement('div');
+            suggestionsPopup.className = 'dropdown-menu show p-2';
+            suggestionsPopup.style.position = 'absolute';
+            suggestionsPopup.style.bottom = '60px';
+            suggestionsPopup.style.width = '100%';
+            suggestionsPopup.style.maxHeight = '200px';
+            suggestionsPopup.style.overflowY = 'auto';
+
+            const suggestions = [
+                { text: 'Riassumi il contenuto di tutti i documenti', icon: 'file-text' },
+                { text: 'Quali sono i punti chiave del progetto?', icon: 'key' },
+                { text: 'Estrai le informazioni più importanti dalle note', icon: 'journal-text' },
+                { text: 'Trova eventuali contraddizioni nei documenti', icon: 'exclamation-triangle' },
+                { text: 'Crea una lista di azioni da eseguire in base ai contenuti', icon: 'check2-square' }
+            ];
+
+            suggestions.forEach(suggestion => {
+                const item = document.createElement('button');
+                item.className = 'dropdown-item d-flex align-items-center';
+                item.innerHTML = `<i class="bi bi-${suggestion.icon} me-2"></i> ${suggestion.text}`;
+                item.addEventListener('click', function() {
+                    questionInput.value = suggestion.text;
+                    suggestionsPopup.remove();
+                    questionInput.focus();
+                });
+                suggestionsPopup.appendChild(item);
+            });
+
+            document.querySelector('.chat-input-wrapper').appendChild(suggestionsPopup);
+
+            // Chiudi i suggerimenti quando si fa clic all'esterno
+            document.addEventListener('click', function closePopup(e) {
+                if (!suggestionsPopup.contains(e.target) && e.target !== questionInput) {
+                    suggestionsPopup.remove();
+                    document.removeEventListener('click', closePopup);
+                }
+            });
+        }
+
+        function getCurrentTimeString() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
 
         function sendQuestion() {
             const question = questionInput.value.trim();
             if (!question) return;
 
+            // Rimuovi lo stato vuoto se presente
+            const emptyState = chatMessages.querySelector('.chat-empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
             // Aggiunge il messaggio dell'utente
             const userMsg = document.createElement('div');
-            userMsg.className = 'mb-3 p-3 user-message ml-auto';
-            userMsg.style.maxWidth = '80%';
+            userMsg.className = 'message-container user-container';
             userMsg.innerHTML = `
-                <div class="small fw-bold mb-1">Tu</div>
-                <div>${question.replace(/\n/g, '<br>')}</div>
+                <div class="message-avatar user-avatar">
+                    <i class="bi bi-person-fill"></i>
+                </div>
+                <div class="user-message">
+                    ${question.replace(/\n/g, '<br>')}
+                    <span class="message-time">${getCurrentTimeString()}</span>
+                </div>
             `;
             chatMessages.appendChild(userMsg);
+
+            // Scroll automatico
+            scrollToBottom();
 
             // Reset input
             questionInput.value = '';
             questionInput.disabled = true;
             sendButton.disabled = true;
-            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            sendButton.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
 
-            // Scroll automatico
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Aggiungi indicatore di digitazione
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'message-container';
+            typingIndicator.innerHTML = `
+                <div class="message-avatar ai-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            `;
+            chatMessages.appendChild(typingIndicator);
+            scrollToBottom();
 
             // Timeout per la richiesta
             const controller = new AbortController();
@@ -988,20 +1289,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
+                // Rimuovi indicatore di digitazione
+                typingIndicator.remove();
+
                 if (data.success) {
                     // Aggiunge la risposta dell'AI
                     const aiMsg = document.createElement('div');
-                    aiMsg.className = 'mb-3 p-3 ai-message mr-auto';
-                    aiMsg.style.maxWidth = '80%';
+                    aiMsg.className = 'message-container';
                     aiMsg.innerHTML = `
-                        <div class="small fw-bold mb-1">Assistente AI</div>
-                        <div>${data.answer.replace(/\n/g, '<br>')}</div>
+                        <div class="message-avatar ai-avatar">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div class="ai-message">
+                            ${data.answer.replace(/\n/g, '<br>')}
+                            <span class="message-time">${getCurrentTimeString()}</span>
+                        </div>
                     `;
                     chatMessages.appendChild(aiMsg);
 
                     // Aggiorna le fonti se presenti
                     if (data.sources && data.sources.length > 0) {
                         updateSourcesTab(data.sources);
+
+                        // Notifica visiva sulle fonti
+                        const sourcesNotice = document.createElement('div');
+                        sourcesNotice.className = 'text-center mt-3 mb-3';
+                        sourcesNotice.innerHTML = `
+                            <span class="badge bg-light text-primary shadow-sm">
+                                <i class="bi bi-info-circle me-1"></i>
+                                ${data.sources.length} fonti disponibili nel tab "Fonti"
+                            </span>
+                        `;
+                        chatMessages.appendChild(sourcesNotice);
                     }
                 } else if (data.error === "api_auth_error") {
                     // Gestione specifica dell'errore di autenticazione API
@@ -1011,6 +1330,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
+                // Rimuovi indicatore di digitazione
+                typingIndicator.remove();
+
                 // Gestione errori: verifica se è un errore di autenticazione API
                 if (error.message && (error.message.includes('invalid_api_key') ||
                                      error.message.includes('authentication') ||
@@ -1025,57 +1347,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Ripristina sempre lo stato iniziale
                 questionInput.disabled = false;
                 sendButton.disabled = false;
-                sendButton.innerHTML = '<i class="bi bi-send"></i>';
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                sendButton.innerHTML = '<i class="bi bi-send-fill"></i>';
+                scrollToBottom();
+                questionInput.focus();
                 clearTimeout(timeout);
             });
+        }
+
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         function showApiAuthErrorMessage() {
             // Crea una risposta di errore dell'AI con avviso e suggerimento di azione
             const errorMsg = document.createElement('div');
-            errorMsg.className = 'mb-3 p-3 ai-message mr-auto';
-            errorMsg.style.maxWidth = '80%';
-
+            errorMsg.className = 'message-container';
             errorMsg.innerHTML = `
-                <div class="small fw-bold mb-1">Assistente AI</div>
-                <div class="alert alert-danger mb-2">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    <strong>Problema con le chiavi API</strong>
+                <div class="message-avatar ai-avatar">
+                    <i class="bi bi-robot"></i>
                 </div>
-                <p>Non è stato possibile contattare il servizio AI a causa di un errore di autenticazione.</p>
-                <div class="alert alert-light border">
-                    <h6 class="mb-2"><i class="bi bi-wrench me-1"></i> Come risolvere:</h6>
-                    <ol class="mb-2">
-                        <li>Vai alle <a href="{% url 'ia_engine' %}" class="fw-medium">Impostazioni del Motore IA</a></li>
-                        <li>Verifica che le chiavi API siano corrette</li>
-                        <li>Oppure passa alla modalità "Usa credito piattaforma"</li>
-                    </ol>
+                <div class="ai-message">
+                    <div class="alert alert-danger mb-2">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Problema con le chiavi API</strong>
+                    </div>
+                    <p>Non è stato possibile contattare il servizio AI a causa di un errore di autenticazione.</p>
+                    <div class="alert alert-light border">
+                        <h6 class="mb-2"><i class="bi bi-wrench me-1"></i> Come risolvere:</h6>
+                        <ol class="mb-2">
+                            <li>Vai alle <a href="{% url 'ia_engine' %}" class="fw-medium">Impostazioni del Motore IA</a></li>
+                            <li>Verifica che le chiavi API siano corrette</li>
+                            <li>Oppure passa alla modalità "Usa credito piattaforma"</li>
+                        </ol>
+                    </div>
+                    <span class="message-time">${getCurrentTimeString()}</span>
                 </div>
             `;
-
             chatMessages.appendChild(errorMsg);
 
             // Mostra anche una notifica Toast per attirare l'attenzione
             showErrorToast('Errore di autenticazione API', 'Controlla le tue chiavi API nelle impostazioni del motore IA');
         }
 
+
         function showError(message) {
             const errorMsg = document.createElement('div');
-            errorMsg.className = 'mb-3 p-3 ai-message mr-auto';
-            errorMsg.style.maxWidth = '80%';
+            errorMsg.className = 'message-container';
             errorMsg.innerHTML = `
-                <div class="small fw-bold mb-1">Assistente AI</div>
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    ${message}
+                <div class="message-avatar ai-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="ai-message">
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        ${message}
+                    </div>
+                    <span class="message-time">${getCurrentTimeString()}</span>
                 </div>
             `;
             chatMessages.appendChild(errorMsg);
         }
 
         function showErrorToast(title, message) {
-            // Crea un toast di errore persistente
+            // Crea un toast di errore con stile migliorato
             const toastContainer = document.createElement('div');
             toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
             toastContainer.style.zIndex = '1080';
@@ -1085,17 +1419,22 @@ document.addEventListener('DOMContentLoaded', function() {
             toastEl.setAttribute('role', 'alert');
             toastEl.setAttribute('aria-live', 'assertive');
             toastEl.setAttribute('aria-atomic', 'true');
+            toastEl.style.boxShadow = '0 0.5rem 1rem rgba(0,0,0,0.15)';
+            toastEl.style.borderRadius = '0.5rem';
+            toastEl.style.overflow = 'hidden';
+            toastEl.style.border = 'none';
 
             toastEl.innerHTML = `
                 <div class="toast-header bg-danger text-white">
                     <i class="bi bi-exclamation-circle me-2"></i>
                     <strong class="me-auto">${title}</strong>
+                    <small>Adesso</small>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Chiudi"></button>
                 </div>
-                <div class="toast-body">
-                    ${message}
-                    <div class="mt-2 pt-2 border-top">
-                        <a href="{% url 'ia_engine' %}" class="btn btn-sm btn-outline-primary">
+                <div class="toast-body bg-white">
+                    <p class="mb-2">${message}</p>
+                    <div class="mt-2 pt-2 border-top d-flex justify-content-end">
+                        <a href="{% url 'ia_engine' %}" class="btn btn-sm btn-outline-primary me-2">
                             <i class="bi bi-gear me-1"></i> Vai alle impostazioni
                         </a>
                         <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="toast">
@@ -1108,11 +1447,24 @@ document.addEventListener('DOMContentLoaded', function() {
             toastContainer.appendChild(toastEl);
             document.body.appendChild(toastContainer);
 
-            // Rimuovi il toast dopo 10 secondi
+            // Rimuovi il toast dopo 15 secondi
             setTimeout(() => {
+                if (document.body.contains(toastContainer)) {
+                    toastContainer.remove();
+                }
+            }, 15000);
+
+            // Aggiungi un event listener per rimuovere il toast quando viene chiuso
+            toastEl.querySelector('.btn-close').addEventListener('click', () => {
                 toastContainer.remove();
-            }, 10000);
+            });
+            toastEl.querySelector('.btn-secondary').addEventListener('click', () => {
+                toastContainer.remove();
+            });
         }
+
+        // Assicurati che il focus sia sull'input e lo scroll sia in fondo all'apertura
+        scrollToBottom();
     }
 
     // Aggiorna il tab delle fonti

@@ -508,7 +508,7 @@
                                 <div class="{% if message.is_user %}user-message{% else %}ai-message{% endif %}">
                                     {{ message.content|linebreaks }}
                                     <span class="message-time">
-                                        {% now "H:i" %}
+                                        {{ message.timestamp|date:"H:i" }}
                                     </span>
                                 </div>
                             </div>
@@ -1156,8 +1156,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('ask-tab').addEventListener('shown.bs.tab', function() {
             setTimeout(() => {
                 questionInput.focus();
-                // Scroll all'ultimo messaggio
-                scrollToBottom();
+                // Migliora lo scroll al fondo con doppio ritardo per garantire che tutti gli elementi siano renderizzati
+                setTimeout(() => {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 300);
             }, 200);
         });
 
@@ -1355,8 +1357,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function scrollToBottom() {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            setTimeout(() => {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 100);
         }
+
+        // Miglioramento della gestione dello scroll quando si cambia tab
+        document.getElementById('ask-tab').addEventListener('shown.bs.tab', function() {
+            setTimeout(() => {
+                questionInput.focus();
+                // Migliora lo scroll al fondo con doppio ritardo per garantire che tutti gli elementi siano renderizzati
+                setTimeout(() => {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 300);
+            }, 200);
+        });
+
+        // Ulteriore chiamata allo scroll quando la pagina è completamente caricata
+        window.addEventListener('load', function() {
+            if (document.querySelector('#projectTabs button.active').getAttribute('data-bs-target') === '#ask') {
+                setTimeout(() => {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 500);
+            }
+        });
 
         function showApiAuthErrorMessage() {
             // Crea una risposta di errore dell'AI con avviso e suggerimento di azione

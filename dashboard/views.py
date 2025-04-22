@@ -413,121 +413,6 @@ def project(request, project_id=None):
                     messages.success(request, "Notes saved successfully.")
                     return redirect('project', project_id=project.id)
 
-
-                # elif action == 'ask_question':
-                #     # Gestisci domanda RAG
-                #     question = request.POST.get('question', '').strip()
-                #
-                #     if question:
-                #         # Misura il tempo di elaborazione
-                #         start_time = time.time()
-                #
-                #         # Ottieni la risposta dal sistema RAG
-                #         try:
-                #             logger.info(f"Elaborazione domanda RAG: '{question[:50]}...' per progetto {project.id}")
-                #
-                #             # Verifica configurazione RAG attuale
-                #             try:
-                #                 rag_config = RAGConfiguration.objects.get(user=request.user)
-                #                 current_preset = rag_config.current_settings
-                #                 if current_preset:
-                #                     logger.info(
-                #                         f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
-                #                 else:
-                #                     logger.info(
-                #                         "Nessun profilo RAG specifico attivo, usando configurazione predefinita")
-                #             except Exception as config_error:
-                #                 logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
-                #
-                #             # Verifica che il progetto abbia documenti e note prima di processare la query
-                #             project_files = ProjectFile.objects.filter(project=project)
-                #             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-                #
-                #             logger.info(
-                #                 f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
-                #
-                #             try:
-                #                 # Usa la funzione ottimizzata per ottenere la risposta
-                #                 rag_response = get_answer_from_project(project, question)
-                #
-                #                 # Calculate processing time
-                #                 processing_time = round(time.time() - start_time, 2)
-                #                 logger.info(f"RAG processing completed in {processing_time} seconds")
-                #
-                #                 # Log delle fonti trovate
-                #                 if 'sources' in rag_response and rag_response['sources']:
-                #                     logger.info(f"Trovate {len(rag_response['sources'])} fonti rilevanti")
-                #                 else:
-                #                     logger.warning("Nessuna fonte trovata per la risposta")
-                #
-                #                 # Salva la conversazione nel database
-                #                 try:
-                #                     conversation = ProjectConversation.objects.create(
-                #                         project=project,
-                #                         question=question,
-                #                         answer=rag_response.get('answer', 'No answer found.'),
-                #                         processing_time=processing_time
-                #                     )
-                #
-                #                     # Salva le fonti utilizzate
-                #                     for source in rag_response.get('sources', []):
-                #                         # Cerchiamo di trovare il ProjectFile corrispondente
-                #                         project_file = None
-                #                         if source.get('type') != 'note':
-                #                             source_path = source.get('metadata', {}).get('source', '')
-                #                             if source_path:
-                #                                 # Cerca il file per path
-                #                                 try:
-                #                                     project_file = ProjectFile.objects.get(project=project,
-                #                                                                            file_path=source_path)
-                #                                 except ProjectFile.DoesNotExist:
-                #                                     pass
-                #
-                #                         # Salva la fonte
-                #                         AnswerSource.objects.create(
-                #                             conversation=conversation,
-                #                             project_file=project_file,
-                #                             content=source.get('content', ''),
-                #                             page_number=source.get('metadata', {}).get('page'),
-                #                             relevance_score=source.get('score')
-                #                         )
-                #                 except Exception as save_error:
-                #                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
-                #                     # Non interrompiamo il flusso se il salvataggio fallisce
-                #
-                #                 # Create AJAX response
-                #                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                #                     return JsonResponse({
-                #                         "success": True,
-                #                         "answer": rag_response.get('answer', 'No answer found.'),
-                #                         "sources": rag_response.get('sources', []),
-                #                         "processing_time": processing_time
-                #                     })
-                #             except Exception as specific_error:
-                #                 logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
-                #                 error_message = str(specific_error)
-                #
-                #                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                #                     return JsonResponse({
-                #                         "success": False,
-                #                         "error": error_message,
-                #                         "answer": f"Error processing your question: {error_message}",
-                #                         "sources": []
-                #                     })
-                #
-                #                 messages.error(request, f"Error processing your question: {error_message}")
-                #
-                #         except Exception as e:
-                #             logger.exception(f"Error processing RAG query: {str(e)}")
-                #             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                #                 return JsonResponse({
-                #                     "success": False,
-                #                     "error": str(e),
-                #                     "answer": f"Error processing your question: {str(e)}",
-                #                     "sources": []
-                #                 })
-                #
-                #             messages.error(request, f"Error processing your question: {str(e)}")
                 elif action == 'ask_question':
                     # Gestisci domanda RAG
                     question = request.POST.get('question', '').strip()
@@ -902,15 +787,22 @@ def project(request, project_id=None):
 
                         sources.append(source_data)
 
+                # SOLUZIONE AL PROBLEMA: inverti l'ordine delle conversazioni per mostrare
+                # le chat in ordine cronologico corretto (dalla più vecchia alla più recente)
+                ordered_conversations = list(conversations)
+                ordered_conversations.reverse()
+
                 # Prepara la cronologia delle conversazioni per l'interfaccia di chat
-                for conv in conversations:
+                for conv in ordered_conversations:
                     conversation_history.append({
                         'is_user': True,
-                        'content': conv.question
+                        'content': conv.question,
+                        'timestamp': conv.created_at
                     })
                     conversation_history.append({
                         'is_user': False,
-                        'content': conv.answer
+                        'content': conv.answer,
+                        'timestamp': conv.created_at
                     })
 
             project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
@@ -966,7 +858,6 @@ def project(request, project_id=None):
                 'customized_values': customized_values,
                 'all_presets': all_presets,
             })
-
 
             return render(request, 'be/project.html', context)
 

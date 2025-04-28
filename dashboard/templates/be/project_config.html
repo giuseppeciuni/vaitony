@@ -1,0 +1,721 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block title %}Configurazione Progetto - {{ project.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .config-section {
+        margin-bottom: 2rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .config-header {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .config-body {
+        padding: 1.5rem;
+    }
+
+    .custom-badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+    }
+
+    .preset-card {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        height: 100%;
+    }
+
+    .preset-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .preset-card.selected {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .form-label {
+        font-weight: 500;
+    }
+
+    .custom-value-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.25rem;
+        background-color: #0dcaf0;
+    }
+
+    /* Range input styling */
+    .range-wrapper {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+
+    .range-value {
+        position: absolute;
+        top: -1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        background-color: #0d6efd;
+        color: white;
+        font-size: 0.75rem;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .range-wrapper:hover .range-value {
+        opacity: 1;
+    }
+
+    .param-info {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Configurazione Progetto</h1>
+            <p class="text-muted">{{ project.name }}</p>
+        </div>
+        <div>
+            <a href="{% url 'project' project.id %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Torna al progetto
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="messages mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="configTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="engine-tab" data-bs-toggle="tab" data-bs-target="#engine" type="button" role="tab">
+                <i class="bi bi-cpu me-1"></i> Motore IA
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="rag-tab" data-bs-toggle="tab" data-bs-target="#rag" type="button" role="tab">
+                <i class="bi bi-diagram-3 me-1"></i> Parametri RAG
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced" type="button" role="tab">
+                <i class="bi bi-sliders me-1"></i> Impostazioni Avanzate
+            </button>
+        </li>
+    </ul>
+    <!-- Tab Content -->
+    <div class="tab-content py-4" id="configTabsContent">
+        <!-- Engine Tab -->
+        <div class="tab-pane fade show active" id="engine" role="tabpanel" aria-labelledby="engine-tab">
+            <div class="config-section mb-4">
+                <div class="config-header">
+                    <h4 class="h5 mb-0">Motore IA per il Progetto</h4>
+                </div>
+                <div class="config-body">
+                    <form id="engine-form" method="post" action="{% url 'project_config' project.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_llm_settings">
+
+                        <div class="mb-4">
+                            <label class="form-label">Seleziona Motore IA</label>
+                            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3">
+                                <!-- OpenAI / ChatGPT -->
+                                <div class="col">
+                                    <div class="card h-100 {% if project_config.selected_engine == 'openai' %}border-primary{% endif %}">
+                                        <div class="card-header d-flex align-items-center">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="selected_engine" id="engine-openai" value="openai"
+                                                       {% if project_config.selected_engine == 'openai' %}checked{% endif %}>
+                                                <label class="form-check-label" for="engine-openai">
+                                                    <img src="{% static 'dist/assets/img/openai.svg' %}" alt="OpenAI" style="height: 20px;" class="me-2">
+                                                    OpenAI
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label for="gpt-model" class="form-label small">Modello</label>
+                                                <select class="form-select form-select-sm" id="gpt-model" name="gpt_model">
+                                                    <option value="gpt-4o" {% if project_config.gpt_model == 'gpt-4o' %}selected{% endif %}>GPT-4o</option>
+                                                    <option value="gpt-4-turbo" {% if project_config.gpt_model == 'gpt-4-turbo' %}selected{% endif %}>GPT-4 Turbo</option>
+                                                    <option value="gpt-3.5-turbo" {% if project_config.gpt_model == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="gpt-max-tokens" class="form-label small">Max tokens</label>
+                                                <input type="number" class="form-control form-control-sm" id="gpt-max-tokens" name="gpt_max_tokens"
+                                                       value="{{ project_config.gpt_max_tokens }}" min="1" max="16000">
+                                            </div>
+                                            <div class="mb-0">
+                                                <label for="gpt-timeout" class="form-label small">Timeout (sec)</label>
+                                                <input type="number" class="form-control form-control-sm" id="gpt-timeout" name="gpt_timeout"
+                                                       value="{{ project_config.gpt_timeout }}" min="10" max="300">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Claude -->
+                                <div class="col">
+                                    <div class="card h-100 {% if project_config.selected_engine == 'claude' %}border-primary{% endif %}">
+                                        <div class="card-header d-flex align-items-center">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="selected_engine" id="engine-claude" value="claude"
+                                                       {% if project_config.selected_engine == 'claude' %}checked{% endif %}>
+                                                <label class="form-check-label" for="engine-claude">
+                                                    <img src="{% static 'dist/assets/img/claude.png' %}" alt="Claude" style="height: 20px;" class="me-2">
+                                                    Claude
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label for="claude-model" class="form-label small">Modello</label>
+                                                <select class="form-select form-select-sm" id="claude-model" name="claude_model">
+                                                    <option value="claude-3-7-sonnet" {% if project_config.claude_model == 'claude-3-7-sonnet' %}selected{% endif %}>Claude 3.7 Sonnet</option>
+                                                    <option value="claude-3-opus" {% if project_config.claude_model == 'claude-3-opus' %}selected{% endif %}>Claude 3 Opus</option>
+                                                    <option value="claude-3-haiku" {% if project_config.claude_model == 'claude-3-haiku' %}selected{% endif %}>Claude 3 Haiku</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="claude-max-tokens" class="form-label small">Max tokens</label>
+                                                <input type="number" class="form-control form-control-sm" id="claude-max-tokens" name="claude_max_tokens"
+                                                       value="{{ project_config.claude_max_tokens }}" min="1" max="16000">
+                                            </div>
+                                            <div class="mb-0">
+                                                <label for="claude-timeout" class="form-label small">Timeout (sec)</label>
+                                                <input type="number" class="form-control form-control-sm" id="claude-timeout" name="claude_timeout"
+                                                       value="{{ project_config.claude_timeout }}" min="10" max="300">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- DeepSeek -->
+                                <div class="col">
+                                    <div class="card h-100 {% if project_config.selected_engine == 'deepseek' %}border-primary{% endif %}">
+                                        <div class="card-header d-flex align-items-center">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="selected_engine" id="engine-deepseek" value="deepseek"
+                                                       {% if project_config.selected_engine == 'deepseek' %}checked{% endif %}>
+                                                <label class="form-check-label" for="engine-deepseek">
+                                                    <img src="{% static 'dist/assets/img/deepseek.svg' %}" alt="DeepSeek" style="height: 20px;" class="me-2">
+                                                    DeepSeek
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label for="deepseek-model" class="form-label small">Modello</label>
+                                                <select class="form-select form-select-sm" id="deepseek-model" name="deepseek_model">
+                                                    <option value="deepseek-coder" {% if project_config.deepseek_model == 'deepseek-coder' %}selected{% endif %}>DeepSeek Coder</option>
+                                                    <option value="deepseek-chat" {% if project_config.deepseek_model == 'deepseek-chat' %}selected{% endif %}>DeepSeek Chat</option>
+                                                    <option value="deepseek-lite" {% if project_config.deepseek_model == 'deepseek-lite' %}selected{% endif %}>DeepSeek Lite</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="deepseek-max-tokens" class="form-label small">Max tokens</label>
+                                                <input type="number" class="form-control form-control-sm" id="deepseek-max-tokens" name="deepseek_max_tokens"
+                                                       value="{{ project_config.deepseek_max_tokens }}" min="1" max="8000">
+                                            </div>
+                                            <div class="mb-0">
+                                                <label for="deepseek-timeout" class="form-label small">Timeout (sec)</label>
+                                                <input type="number" class="form-control form-control-sm" id="deepseek-timeout" name="deepseek_timeout"
+                                                       value="{{ project_config.deepseek_timeout }}" min="10" max="300">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Gemini -->
+                                <div class="col">
+                                    <div class="card h-100 {% if project_config.selected_engine == 'gemini' %}border-primary{% endif %}">
+                                        <div class="card-header d-flex align-items-center">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="selected_engine" id="engine-gemini" value="gemini"
+                                                       {% if project_config.selected_engine == 'gemini' %}checked{% endif %}>
+                                                <label class="form-check-label" for="engine-gemini">
+                                                    <img src="{% static 'dist/assets/img/gemini.svg' %}" alt="Gemini" style="height: 20px;" class="me-2">
+                                                    Gemini
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label for="gemini-model" class="form-label small">Modello</label>
+                                                <select class="form-select form-select-sm" id="gemini-model" name="gemini_model">
+                                                    <option value="gemini-1.5-pro" {% if project_config.gemini_model == 'gemini-1.5-pro' %}selected{% endif %}>Gemini 1.5 Pro</option>
+                                                    <option value="gemini-1.5-flash" {% if project_config.gemini_model == 'gemini-1.5-flash' %}selected{% endif %}>Gemini 1.5 Flash</option>
+                                                    <option value="gemini-1.0-pro" {% if project_config.gemini_model == 'gemini-1.0-pro' %}selected{% endif %}>Gemini 1.0 Pro</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="gemini-max-tokens" class="form-label small">Max tokens</label>
+                                                <input type="number" class="form-control form-control-sm" id="gemini-max-tokens" name="gemini_max_tokens"
+                                                       value="{{ project_config.gemini_max_tokens }}" min="1" max="16000">
+                                            </div>
+                                            <div class="mb-0">
+                                                <label for="gemini-timeout" class="form-label small">Timeout (sec)</label>
+                                                <input type="number" class="form-control form-control-sm" id="gemini-timeout" name="gemini_timeout"
+                                                       value="{{ project_config.gemini_timeout }}" min="10" max="300">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i> Salva Configurazione Motore
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAG Tab -->
+        <div class="tab-pane fade" id="rag" role="tabpanel" aria-labelledby="rag-tab">
+            <!-- RAG Presets -->
+            <div class="config-section mb-4">
+                <div class="config-header">
+                    <h4 class="h5 mb-0">Profilo RAG</h4>
+                </div>
+                <div class="config-body">
+                    <p class="mb-3">Seleziona un profilo RAG predefinito o personalizza i parametri manualmente.</p>
+
+                    <form id="rag-preset-form" method="post" action="{% url 'project_config' project.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_rag_preset">
+                        <input type="hidden" id="rag-preset-id" name="rag_preset_id" value="{{ project_config.rag_preset.id|default_if_none:'' }}">
+
+                        <div class="mb-4">
+                            <div class="row">
+                                {% for template_type in rag_templates %}
+                                <div class="col-12 mb-3">
+                                    <h5 class="h6 fw-bold">{{ template_type.name }}</h5>
+                                    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+                                        {% for preset in rag_presets %}
+                                        {% if preset.template_type.id == template_type.id %}
+                                        <div class="col">
+                                            <div class="card preset-card {% if project_config.rag_preset.id == preset.id %}selected{% endif %}"
+                                                 data-preset-id="{{ preset.id }}" onclick="selectPreset(this, {{ preset.id }})">
+                                                <div class="card-body">
+                                                    <h5 class="card-title fw-bold">{{ preset.name }}</h5>
+                                                    <p class="card-text small text-muted">{{ preset.description }}</p>
+                                                    <div class="mt-2">
+                                                        {% if preset.is_default %}
+                                                        <span class="badge bg-success">Default</span>
+                                                        {% endif %}
+                                                        {% if project_config.rag_preset.id == preset.id %}
+                                                        <span class="badge bg-primary">Selezionato</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg me-1"></i> Applica Profilo Selezionato
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- RAG Parameters -->
+            <div class="config-section mb-4">
+                <div class="config-header">
+                    <h4 class="h5 mb-0">Parametri RAG Personalizzati</h4>
+                </div>
+                <div class="config-body">
+                    <form id="rag-params-form" method="post" action="{% url 'project_config' project.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_rag_settings">
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5 class="h6 mb-3">Parametri di Chunking</h5>
+
+                                <div class="mb-3">
+                                    <label for="chunk-size" class="form-label d-flex justify-content-between">
+                                        <span>
+                                            {% if 'chunk_size' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                            Dimensione dei chunk
+                                        </span>
+                                        <small class="text-muted">{{ effective_values.chunk_size }} caratteri</small>
+                                    </label>
+                                    <input type="range" class="form-range" id="chunk-size" name="chunk_size"
+                                           min="200" max="1000" step="50" value="{{ effective_values.chunk_size }}">
+                                    <div class="param-info mt-1">
+                                        Dimensione in caratteri di ciascun frammento di testo. Valori più piccoli aumentano la precisione ma richiedono più risorse.
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="chunk-overlap" class="form-label d-flex justify-content-between">
+                                        <span>
+                                            {% if 'chunk_overlap' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                            Sovrapposizione dei chunk
+                                        </span>
+                                        <small class="text-muted">{{ effective_values.chunk_overlap }} caratteri</small>
+                                    </label>
+                                    <input type="range" class="form-range" id="chunk-overlap" name="chunk_overlap"
+                                           min="0" max="200" step="10" value="{{ effective_values.chunk_overlap }}">
+                                    <div class="param-info mt-1">
+                                        Numero di caratteri sovrapposti tra chunk adiacenti. Aiuta a mantenere il contesto tra i frammenti.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h5 class="h6 mb-3">Parametri di Ricerca</h5>
+
+                                <div class="mb-3">
+                                    <label for="similarity-top-k" class="form-label d-flex justify-content-between">
+                                        <span>
+                                            {% if 'similarity_top_k' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                            Numero di risultati (Top K)
+                                        </span>
+                                        <small class="text-muted">{{ effective_values.similarity_top_k }} risultati</small>
+                                    </label>
+                                    <input type="range" class="form-range" id="similarity-top-k" name="similarity_top_k"
+                                           min="2" max="12" step="1" value="{{ effective_values.similarity_top_k }}">
+                                    <div class="param-info mt-1">
+                                        Numero di frammenti più rilevanti da utilizzare per generare la risposta.
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="mmr-lambda" class="form-label d-flex justify-content-between">
+                                        <span>
+                                            {% if 'mmr_lambda' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                            Lambda MMR
+                                        </span>
+                                        <small class="text-muted">{{ effective_values.mmr_lambda }}</small>
+                                    </label>
+                                    <input type="range" class="form-range" id="mmr-lambda" name="mmr_lambda"
+                                           min="0" max="1" step="0.1" value="{{ effective_values.mmr_lambda }}">
+                                    <div class="param-info mt-1">
+                                        Bilanciamento tra rilevanza e diversità. Valori più alti privilegiano la rilevanza.
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="similarity-threshold" class="form-label d-flex justify-content-between">
+                                        <span>
+                                            {% if 'similarity_threshold' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                            Soglia di similarità
+                                        </span>
+                                        <small class="text-muted">{{ effective_values.similarity_threshold }}</small>
+                                    </label>
+                                    <input type="range" class="form-range" id="similarity-threshold" name="similarity_threshold"
+                                           min="0.1" max="0.9" step="0.05" value="{{ effective_values.similarity_threshold }}">
+                                    <div class="param-info mt-1">
+                                        Soglia minima di similarità per includere un frammento. Usato solo con retriever similarity_score_threshold.
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label">
+                                        {% if 'retriever_type' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                        Tipo di Retriever
+                                    </label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="retriever_type" id="retriever-mmr" value="mmr"
+                                               {% if effective_values.retriever_type == 'mmr' %}checked{% endif %}>
+                                        <label class="form-check-label" for="retriever-mmr">
+                                            Maximum Marginal Relevance (Bilanciato)
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="retriever_type" id="retriever-similarity" value="similarity"
+                                               {% if effective_values.retriever_type == 'similarity' %}checked{% endif %}>
+                                        <label class="form-check-label" for="retriever-similarity">
+                                            Similarity Search (Rapido)
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="retriever_type" id="retriever-threshold" value="similarity_score_threshold"
+                                               {% if effective_values.retriever_type == 'similarity_score_threshold' %}checked{% endif %}>
+                                        <label class="form-check-label" for="retriever-threshold">
+                                            Similarity with Threshold (Preciso)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>
+                                I parametri con <span class="custom-value-indicator"></span> sono personalizzati e non ereditati dal profilo.
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i> Salva Parametri
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Tab -->
+        <div class="tab-pane fade" id="advanced" role="tabpanel" aria-labelledby="advanced-tab">
+            <div class="config-section mb-4">
+                <div class="config-header">
+                    <h4 class="h5 mb-0">Impostazioni Avanzate RAG</h4>
+                </div>
+                <div class="config-body">
+                    <form id="advanced-form" method="post" action="{% url 'project_config' project.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_advanced_settings">
+
+                        <div class="mb-4">
+                            <label for="system-prompt" class="form-label">
+                                {% if 'system_prompt' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                Prompt di Sistema
+                            </label>
+                            <textarea class="form-control" id="system-prompt" name="system_prompt" rows="8">{{ effective_values.system_prompt }}</textarea>
+                            <div class="form-text">
+                                Prompt di sistema che definisce il comportamento dell'IA nella generazione di risposte.
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <h5 class="h6 mb-3">Comportamento IA</h5>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="auto-citation" name="auto_citation"
+                                       {% if effective_values.auto_citation %}checked{% endif %}>
+                                <label class="form-check-label" for="auto-citation">
+                                    {% if 'auto_citation' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                    Citazioni automatiche
+                                </label>
+                                <div class="form-text">
+                                    Attiva per includere riferimenti espliciti alle fonti nelle risposte.
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="prioritize-filenames" name="prioritize_filenames"
+                                       {% if effective_values.prioritize_filenames %}checked{% endif %}>
+                                <label class="form-check-label" for="prioritize-filenames">
+                                    {% if 'prioritize_filenames' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                    Priorità ai nomi file
+                                </label>
+                                <div class="form-text">
+                                    Attiva per dare priorità ai documenti con nomi menzionati nella domanda.
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="equal-notes-weight" name="equal_notes_weight"
+                                       {% if effective_values.equal_notes_weight %}checked{% endif %}>
+                                <label class="form-check-label" for="equal-notes-weight">
+                                    {% if 'equal_notes_weight' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                    Stesso peso per note e documenti
+                                </label>
+                                <div class="form-text">
+                                    Attiva per dare uguale importanza alle note e ai documenti caricati.
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="strict-context" name="strict_context"
+                                       {% if effective_values.strict_context %}checked{% endif %}>
+                                <label class="form-check-label" for="strict-context">
+                                    {% if 'strict_context' in customized_values %}<span class="custom-value-indicator"></span>{% endif %}
+                                    Contesto rigoroso
+                                </label>
+                                <div class="form-text">
+                                    Attiva per forzare l'IA a rispondere SOLO in base ai documenti disponibili.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i> Salva Impostazioni Avanzate
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Reset to Default -->
+            <div class="config-section">
+                <div class="config-header bg-light">
+                    <h4 class="h5 mb-0">Reset della Configurazione</h4>
+                </div>
+                <div class="config-body">
+                    <form id="reset-form" method="post" action="{% url 'project_config' project.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reset_to_user_defaults">
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Attenzione:</strong> Questa azione reimpostera tutte le impostazioni del progetto alle impostazioni predefinite dell'utente.
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-warning" onclick="return confirm('Sei sicuro di voler reimpostare la configurazione?');">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Ripristina Impostazioni Utente
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal per conferma cambio modello -->
+    <div class="modal fade" id="model-change-modal" tabindex="-1" aria-labelledby="model-change-modal-label" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-warning text-dark">
+            <h5 class="modal-title" id="model-change-modal-label">
+                <i class="bi bi-exclamation-triangle me-2"></i> Attenzione: Cambio Modello
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>La modifica del modello IA comporterà la <strong>ri-vettorializzazione di tutti i file e le note</strong> caricati in questo progetto.</p>
+            <div class="alert alert-info">
+                <div class="d-flex">
+                    <div><i class="bi bi-info-circle-fill me-2 fs-4"></i></div>
+                    <div>
+                        <p class="mb-2">Questa operazione potrebbe:</p>
+                        <ul class="mb-0">
+                            <li>Richiedere diversi minuti in base alla quantità di dati</li>
+                            <li>Comportare costi aggiuntivi di API per la generazione degli embedding</li>
+                            <li>Cambiare leggermente i risultati delle ricerche precedenti</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <p class="mb-0">Sei sicuro di voler procedere con questa operazione?</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+            <button type="button" class="btn btn-warning" id="confirm-model-change">Procedi con la modifica</button>
+          </div>
+        </div>
+      </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestione selezione preset
+        window.selectPreset = function(element, presetId) {
+            // Rimuovi la classe 'selected' da tutte le card
+            document.querySelectorAll('.preset-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            // Aggiungi la classe 'selected' alla card cliccata
+            element.classList.add('selected');
+
+            // Imposta l'ID del preset nel campo nascosto
+            document.getElementById('rag-preset-id').value = presetId;
+        };
+
+        // Aggiorna i valori visualizzati per gli input range
+        function updateRangeValues() {
+            document.querySelectorAll('input[type="range"]').forEach(input => {
+                // Trova l'elemento label associato
+                const label = document.querySelector(`label[for="${input.id}"]`);
+                if (label) {
+                    // Trova l'elemento small all'interno della label
+                    const valueDisplay = label.querySelector('small');
+                    if (valueDisplay) {
+                        let suffix = '';
+                        if (input.id === 'chunk-size' || input.id === 'chunk-overlap') {
+                            suffix = ' caratteri';
+                        } else if (input.id === 'similarity-top-k') {
+                            suffix = ' risultati';
+                        }
+                        valueDisplay.textContent = input.value + suffix;
+                    }
+                }
+            });
+        }
+
+        // Aggiungi listener per gli input range
+        document.querySelectorAll('input[type="range"]').forEach(input => {
+            input.addEventListener('input', updateRangeValues);
+        });
+
+        // Inizializza i valori
+        updateRangeValues();
+
+        // Evidenzia il motore selezionato
+        function highlightSelectedEngine() {
+            document.querySelectorAll('input[name="selected_engine"]').forEach(radio => {
+                const card = radio.closest('.card');
+                if (radio.checked) {
+                    card.classList.add('border-primary');
+                } else {
+                    card.classList.remove('border-primary');
+                }
+            });
+        }
+
+        // Aggiungi listener per i radio button del motore
+        document.querySelectorAll('input[name="selected_engine"]').forEach(radio => {
+            radio.addEventListener('change', highlightSelectedEngine);
+
+            // Aggiungi anche un listener al click sulla card per selezionare il radio button
+            const card = radio.closest('.card');
+            if (card) {
+                card.addEventListener('click', function() {
+                    radio.checked = true;
+                    highlightSelectedEngine();
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

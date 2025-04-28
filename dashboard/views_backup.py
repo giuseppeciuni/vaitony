@@ -2,7 +2,6 @@ import logging
 import mimetypes
 import os
 import time
-import uuid
 from datetime import timedelta, datetime
 from django.conf import settings
 from django.contrib import messages
@@ -11,42 +10,29 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from django.db.models import Sum
-from django.utils import timezone
-
-# Importazioni dai nuovi moduli RAG
-from dashboard.rag_document_utils import (
-    register_document, compute_file_hash, check_project_index_update_needed,
-    scan_user_directory, update_project_index_status, get_cached_embedding,
-    create_embedding_cache, copy_embedding_to_project_index
-)
-from dashboard.rag_utils import (
-    create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note,
-    handle_toggle_note_inclusion, get_answer_from_project, handle_project_file_upload,
-    get_project_engine_settings, get_project_rag_settings
-)
-# Modelli aggiornati
-from profiles.models import (
-    Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource,
-    LLMEngine, UserAPIKey, LLMProvider, RagTemplateType, RagDefaultSettings,
-    RAGConfiguration, EmbeddingCacheStats, GlobalEmbeddingCache, ProjectConfiguration,
-    ProjectLLMConfig, ProjectIndexStatus, DefaultSystemPrompts, UserDocument
-)
+from dashboard.rag_document_utils import register_document, compute_file_hash, check_project_index_update_needed
+from dashboard.rag_utils import create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note, \
+    handle_toggle_note_inclusion
+from dashboard.rag_utils import get_answer_from_project
+# Modifica questa riga per includere ProjectNote
+from profiles.models import Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource, AIEngineSettings, \
+    LLMEngine, UserAPIKey, LLMProvider
+from profiles.models import RagTemplateType, RagDefaultSettings, RAGConfiguration
 from .cache_statistics import update_embedding_cache_stats
 from .utils import process_user_files
 import openai
+from profiles.models import EmbeddingCacheStats, GlobalEmbeddingCache, ProjectConfiguration
+from django.db.models import Sum
+from dashboard.cache_statistics import update_embedding_cache_stats
+import import uuid
 
 # Get logger
 logger = logging.getLogger(__name__)
 
 
-def dashboard(request):
-    """
-    Vista principale della dashboard che mostra una panoramica dei progetti dell'utente,
-    statistiche sui documenti, note e conversazioni, e informazioni sulla cache degli embedding.
+# Modifica della funzione dashboard in dashboard/views.py per supportare richieste AJAX
 
-    Supporta richieste AJAX per aggiornare le statistiche della cache degli embedding senza ricaricare la pagina.
-    """
+def dashboard(request):
     logger.debug("---> dashboard")
     if request.user.is_authenticated:
         # Controlla se è una richiesta di aggiornamento delle statistiche della cache
@@ -124,6 +110,9 @@ def dashboard(request):
                 latest_stats = None
 
         # Ottieni dati per i grafici storici (ultimi 7 giorni)
+        from django.utils import timezone
+        from datetime import timedelta
+
         seven_days_ago = timezone.now().date() - timedelta(days=7)
         historical_stats = EmbeddingCacheStats.objects.filter(date__gte=seven_days_ago).order_by('date')
 
@@ -195,12 +184,6 @@ def dashboard(request):
 
 
 def upload_document(request):
-    """
-    Gestisce il caricamento di un singolo documento da parte dell'utente.
-
-    Verifica che il file abbia un'estensione supportata, lo salva nella directory dell'utente,
-    e registra il documento nel database per l'indicizzazione.
-    """
     logger.debug("---> upload_document")
     if request.user.is_authenticated:
         context = {}
@@ -259,289 +242,23 @@ def upload_document(request):
         return redirect('login')
 
 
-def upload_folder(request):
-    """
-    Gestisce il caricamento di una cartella completa di file.
-
-    Mantiene la struttura delle sottocartelle e filtra i file per estensioni supportate.
-    Ogni file valido viene salvato nella directory appropriata e registrato nel database.
-    """
-    logger.debug("---> upload_folder")
-    if request.user.is_authenticated:
-        context = {}
-
-        if request.method == 'POST':
-            # Check if files were uploaded
-            files = request.FILES.getlist('files[]')
-
-            logger.debug(f"Received {len(files)} files in upload_folder request")
-
-            if files:
-                # Get allowed file extensions
-                allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx',
-                                      '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif']
-
-                # Count the successful uploads
-                successful_uploads = 0
-                skipped_files = 0
-
-                # Create the user upload directory
-                user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
-                os.makedirs(user_upload_dir, exist_ok=True)
-
-                # Process each file
-                for uploaded_file in files:
-                    # Get file extension
-                    file_name = uploaded_file.name
-                    _, file_extension = os.path.splitext(file_name)
-
-                    # Check if extension is allowed
-                    if file_extension.lower() not in allowed_extensions:
-                        logger.debug(
-                            f"Skipping file with unsupported extension: {file_name}, extension: {file_extension}")
-                        skipped_files += 1
-                        continue
-
-                    logger.debug(f"Processing file: {file_name}, extension: {file_extension}")
-
-                    # Get the relative path from webkitRelativePath
-                    # Note: In reality, we need to parse this from the request
-                    # For this example, we'll extract from the filename if possible
-                    relative_path = uploaded_file.name
-
-                    # Remove the first folder name (the root folder being uploaded)
-                    path_parts = relative_path.split('/')
-                    if len(path_parts) > 1:
-                        # Reconstruct the path without the root folder
-                        subfolder_path = '/'.join(path_parts[1:-1])
-
-                        # Create the subfolder structure if needed
-                        if subfolder_path:
-                            subfolder_dir = os.path.join(user_upload_dir, subfolder_path)
-                            os.makedirs(subfolder_dir, exist_ok=True)
-
-                            # Set the file path to include subfolders
-                            file_path = os.path.join(subfolder_dir, path_parts[-1])
-                        else:
-                            file_path = os.path.join(user_upload_dir, path_parts[-1])
-                    else:
-                        file_path = os.path.join(user_upload_dir, relative_path)
-
-                    # Handle file with same name
-                    counter = 1
-                    original_name = os.path.splitext(os.path.basename(file_path))[0]
-                    while os.path.exists(file_path):
-                        new_name = f"{original_name}_{counter}{file_extension}"
-                        file_path = os.path.join(os.path.dirname(file_path), new_name)
-                        counter += 1
-
-                    # Save the file
-                    try:
-                        with open(file_path, 'wb+') as destination:
-                            for chunk in uploaded_file.chunks():
-                                destination.write(chunk)
-
-                        # Registra il documento nel database
-                        doc, is_new_or_modified = register_document(request.user, file_path)
-
-                        logger.debug(f"Successfully saved file: {file_path}")
-                        successful_uploads += 1
-                    except Exception as e:
-                        logger.error(f"Error saving file {file_path}: {str(e)}")
-                        messages.error(request, f"Error saving file {file_name}: {str(e)}")
-
-                # Log the successful upload
-                logger.info(
-                    f"Folder uploaded successfully by user {request.user.username} - {successful_uploads} files processed, {skipped_files} files skipped")
-
-                if successful_uploads > 0:
-                    messages.success(request,
-                                     f"Folder uploaded successfully! {successful_uploads} files processed, {skipped_files} files skipped.")
-                else:
-                    messages.warning(request, "No valid files were found in the uploaded folder.")
-
-                # Redirect to documents page
-                return redirect('documents_uploaded')
-            else:
-                messages.error(request, "No files were uploaded.")
-
-        return render(request, 'be/upload_folder.html', context)
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
-
-
-def documents_uploaded(request):
-    """
-    Visualizza tutti i documenti caricati dall'utente con opzioni di filtro e paginazione.
-
-    Per gli amministratori, mostra i documenti di tutti gli utenti. Supporta la ricerca
-    di documenti per nome e la paginazione dei risultati.
-    """
-    logger.debug("---> documents_uploaded")
-    if request.user.is_authenticated:
-        # Get search query if exists
-        search_query = request.GET.get('search', '')
-
-        # Initialize empty document list
-        documents = []
-
-        # Determina se l'utente è amministratore (superuser o ha profile_type ADMIN_USER)
-        is_admin = request.user.is_superuser
-
-        # Se l'utente ha un profilo, controlla anche il profile_type
-        if hasattr(request.user, 'profile'):
-            is_admin = is_admin or request.user.profile.profile_type.type == "ADMIN_USER"
-
-        if is_admin:
-            # Gli amministratori vedono tutti i file di tutti gli utenti
-            # Ottieni la lista di tutte le directory degli utenti
-            user_dirs = os.path.join(settings.MEDIA_ROOT, 'uploads')
-            if os.path.exists(user_dirs):
-                for user_id in os.listdir(user_dirs):
-                    user_dir = os.path.join(user_dirs, user_id)
-
-                    # Salta se non è una directory
-                    if not os.path.isdir(user_dir):
-                        continue
-
-                    # Ottieni l'utente corrispondente all'ID (per mostrare informazioni sull'utente)
-                    try:
-                        file_owner = User.objects.get(id=int(user_id))
-                        owner_username = file_owner.username
-                    except (User.DoesNotExist, ValueError):
-                        owner_username = f"User ID {user_id}"
-
-                    # Processiamo i file di questo utente
-                    process_user_files(user_dir, documents, search_query, owner_username)
-        else:
-            # Gli utenti normali vedono solo i propri file
-            user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
-
-            # Processa i file se la directory esiste
-            if os.path.exists(user_upload_dir):
-                process_user_files(user_upload_dir, documents, search_query)
-
-        # Ordina tutti i documenti per data (più recenti prima)
-        documents.sort(key=lambda x: x['upload_date'], reverse=True)
-
-        # Pagination
-        page = request.GET.get('page', 1)
-        paginator = Paginator(documents, 10)  # 10 documenti per pagina
-
-        try:
-            documents = paginator.page(page)
-        except PageNotAnInteger:
-            documents = paginator.page(1)
-        except EmptyPage:
-            documents = paginator.page(paginator.num_pages)
-
-        context = {
-            'documents': documents,
-            'search_query': search_query,
-            'is_admin': is_admin
-        }
-
-        return render(request, 'be/documents_uploaded.html', context)
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
-
-
-def download_document(request, document_id):
-    """
-    Permette di scaricare un documento specifico.
-
-    Verifica che l'utente abbia accesso al documento e imposta le intestazioni
-    HTTP appropriate per il download.
-    """
-    logger.debug(f"---> download_document: {document_id}")
-    if request.user.is_authenticated:
-        # Directory where user documents are stored
-        user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
-        file_path = os.path.join(user_upload_dir, document_id)
-
-        # Check if file exists
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            # Determine content type based on file extension
-            content_type, _ = mimetypes.guess_type(file_path)
-            if content_type is None:
-                content_type = 'application/octet-stream'
-
-            # Open file for reading
-            with open(file_path, 'rb') as file:
-                response = HttpResponse(file.read(), content_type=content_type)
-                # Set content disposition for download
-                response['Content-Disposition'] = f'attachment; filename="{document_id}"'
-                return response
-        else:
-            logger.warning(f"File not found: {file_path}")
-            raise Http404("Document not found")
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
-
-
-def delete_document(request, document_id):
-    """
-    Elimina un documento dall'archivio dell'utente.
-
-    Rimuove sia il file fisico che il record dal database dopo aver verificato
-    che l'utente abbia accesso al documento.
-    """
-    logger.debug(f"---> delete_document: {document_id}")
-    if request.user.is_authenticated:
-        if request.method == 'POST':
-            # Directory where user documents are stored
-            user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
-            file_path = os.path.join(user_upload_dir, document_id)
-
-            # Check if file exists
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                try:
-                    # Trova il documento nel database per eliminarlo
-                    try:
-                        doc = UserDocument.objects.get(user=request.user, file_path=file_path)
-                        doc.delete()
-                        logger.debug(f"Documento rimosso dal database: {document_id}")
-                    except UserDocument.DoesNotExist:
-                        logger.warning(f"Documento non trovato nel database: {document_id}")
-
-                    # Elimina il file fisico
-                    os.remove(file_path)
-                    messages.success(request, f"Document '{document_id}' has been deleted.")
-                    logger.info(f"Document '{document_id}' deleted by user {request.user.username}")
-                except Exception as e:
-                    messages.error(request, f"Error deleting document: {str(e)}")
-                    logger.error(f"Error deleting document '{document_id}': {str(e)}")
-            else:
-                messages.error(request, "Document not found.")
-                logger.warning(f"File not found: {file_path}")
-
-        return redirect('documents_uploaded')
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
-
-
 def new_project(request):
-    """
-    Crea un nuovo progetto con la possibilità di caricare file iniziali.
-
-    Il progetto creato sarà associato all'utente corrente. Se vengono caricati file,
-    questi saranno elaborati e aggiunti al progetto, mantenendo la struttura delle cartelle se presente.
-    Dopo la creazione, l'utente viene reindirizzato alla pagina del progetto.
-    """
     logger.debug("---> new_project")
     if request.user.is_authenticated:
         context = {}
         if request.method == 'POST':
             project_name = request.POST.get('project_name')
             description = request.POST.get('description')
+            files = request.FILES.getlist('files[]')
 
             # Controlla entrambi i nomi possibili dei campi
             files = request.FILES.getlist('files') or request.FILES.getlist('files[]')
             folder_files = request.FILES.getlist('folder') or request.FILES.getlist('folder[]')
+
+            print("DEBUG - È una richiesta POST")
+            print(f"DEBUG - POST data: {request.POST}")
+            print(f"DEBUG - FILES data: {request.FILES}")
+
 
             if not project_name:
                 messages.error(request, "Project name is required.")
@@ -557,6 +274,10 @@ def new_project(request):
                     description=description
                 )
                 project.save()
+                logger.info(f"Project created with ID: {project.id if project else 'No ID'}")
+                logger.info(f"Project object: {project.__dict__}")
+
+
                 logger.info(f"Project created with ID: {project.id}")
 
                 # Gestisci eventuali file caricati
@@ -572,6 +293,7 @@ def new_project(request):
                     logger.info(f"Added {len(files)} files to project '{project_name}'")
 
                 # Gestisci eventuale cartella caricata
+                folder_files = request.FILES.getlist('folder[]')
                 if folder_files:
                     # Crea directory del progetto
                     project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id), str(project.id))
@@ -600,7 +322,10 @@ def new_project(request):
 
                 messages.success(request, f"Project '{project_name}' created successfully.")
 
-                # Reindirizza alla vista project con l'ID come parametro
+                # Verifica che project.id abbia un valore
+                logger.info(f"Redirecting to project with ID: {project.id}")
+
+                # Opzione 1: Reindirizza alla vista project con l'ID come parametro
                 return redirect(reverse('project', kwargs={'project_id': project.id}))
 
             except Exception as e:
@@ -618,12 +343,6 @@ def new_project(request):
 
 
 def projects_list(request):
-    """
-    Visualizza l'elenco di tutti i progetti dell'utente corrente.
-
-    Permette anche di eliminare progetti, rimuovendo sia i dati dal database
-    che i file fisici associati al progetto.
-    """
     logger.debug("---> projects_list")
     if request.user.is_authenticated:
         # Ottieni i progetti dell'utente
@@ -658,72 +377,7 @@ def projects_list(request):
         return redirect('login')
 
 
-def project_details(request, project_id):
-    """
-    Visualizza i dettagli analitici di un progetto, inclusi grafici di interazione
-    e informazioni sui costi.
-
-    Mostra statistiche sull'utilizzo del progetto e sulle interazioni con il RAG.
-    """
-    logger.debug(f"---> project_details: {project_id}")
-    if request.user.is_authenticated:
-        try:
-            # Ottiene il progetto
-            project = get_object_or_404(Project, id=project_id, user=request.user)
-
-            # Conta le fonti utilizzate in tutte le conversazioni di questo progetto
-            sources_count = AnswerSource.objects.filter(conversation__project=project).count()
-
-            # Dati per i grafici basati sulle interazioni reali
-            # Raggruppa per giorno della settimana
-            interactions_by_day = [0, 0, 0, 0, 0, 0, 0]  # Lun-Dom
-            costs_by_day = [0, 0, 0, 0, 0, 0, 0]  # Costi corrispondenti
-
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=7)
-            recent_conversations = project.conversations.filter(created_at__gte=start_date, created_at__lte=end_date)
-
-            # Calcolo del costo basato sulle interazioni reali
-            conversation_count = project.conversations.count()
-            average_cost_per_interaction = 0.28  # Euro per interazione
-            total_cost = conversation_count * average_cost_per_interaction
-
-            for conv in recent_conversations:
-                day_of_week = conv.created_at.weekday()  # 0=Lun, 6=Dom
-                interactions_by_day[day_of_week] += 1
-                costs_by_day[day_of_week] += average_cost_per_interaction
-
-            context = {
-                'project': project,
-                'sources_count': sources_count,
-                'total_cost': total_cost,
-                'average_cost': average_cost_per_interaction,
-                'interactions_by_day': interactions_by_day,
-                'costs_by_day': costs_by_day,
-            }
-
-            return render(request, 'be/project_details.html', context)
-
-        except Project.DoesNotExist:
-            messages.error(request, "Progetto non trovato.")
-            return redirect('projects_list')
-    else:
-        logger.warning("User not Authenticated!")
-        return redirect('login')
-
-
 def project(request, project_id=None):
-    """
-    Vista principale di un progetto che mostra file, note e conversazioni.
-
-    Gestisce varie operazioni:
-    - Salvataggio delle note generali del progetto
-    - Elaborazione di domande RAG
-    - Aggiunta/modifica/eliminazione di file e note
-    - Gestione delle conversazioni con il modello AI
-
-    La vista supporta richieste AJAX per operazioni asincrone.
-    """
     logger.debug(f"---> project: {project_id}")
     if request.user.is_authenticated:
         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
@@ -748,8 +402,6 @@ def project(request, project_id=None):
             # Gestisci diverse azioni
             if request.method == 'POST':
                 action = request.POST.get('action')
-
-                # Gestione del salvataggio delle note generali
                 if action == 'save_notes':
                     # Salva le note
                     project.notes = request.POST.get('notes', '')
@@ -762,7 +414,6 @@ def project(request, project_id=None):
                     messages.success(request, "Notes saved successfully.")
                     return redirect('project', project_id=project.id)
 
-                # Gestione delle domande al modello RAG
                 elif action == 'ask_question':
                     # Gestisci domanda RAG
                     question = request.POST.get('question', '').strip()
@@ -869,8 +520,7 @@ def project(request, project_id=None):
                                         "success": True,
                                         "answer": rag_response.get('answer', 'No answer found.'),
                                         "sources": rag_response.get('sources', []),
-                                        "processing_time": processing_time,
-                                        "engine_info": rag_response.get('engine', {})
+                                        "processing_time": processing_time
                                     })
                             except Exception as specific_error:
                                 logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
@@ -912,7 +562,6 @@ def project(request, project_id=None):
 
                             messages.error(request, f"Error processing your question: {str(e)}")
 
-                # Gestione dell'aggiunta di file
                 elif action == 'add_files':
                     # Aggiunta di file al progetto
                     files = request.FILES.getlist('files[]')
@@ -930,7 +579,6 @@ def project(request, project_id=None):
                         messages.success(request, f"{len(files)} files uploaded successfully.")
                         return redirect('project', project_id=project.id)
 
-                # Gestione dell'aggiunta di una cartella
                 elif action == 'add_folder':
                     # Aggiunta di una cartella al progetto
                     folder_files = request.FILES.getlist('folder[]')
@@ -963,7 +611,6 @@ def project(request, project_id=None):
                         messages.success(request, f"Folder with {len(folder_files)} files uploaded successfully.")
                         return redirect('project', project_id=project.id)
 
-                # Gestione dell'eliminazione dei file
                 elif action == 'delete_file':
                     # Eliminazione di un file dal progetto
                     file_id = request.POST.get('file_id')
@@ -1020,7 +667,6 @@ def project(request, project_id=None):
                         messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
                         return redirect('project', project_id=project.id)
 
-                # Gestione delle note (aggiunta, modifica, eliminazione)
                 # Quando viene aggiunta una nota
                 elif action == 'add_note':
                     # Aggiungi una nuova nota al progetto
@@ -1041,7 +687,6 @@ def project(request, project_id=None):
                         # Se non è una richiesta AJAX, aggiungi un messaggio e reindirizza
                         messages.success(request, "Note added successfully.")
                         return redirect('project', project_id=project.id)
-
                 # Quando viene modificata una nota
                 elif action == 'edit_note':
                     # Modifica una nota esistente
@@ -1087,7 +732,6 @@ def project(request, project_id=None):
                             messages.error(request, message)
                         return redirect('project', project_id=project.id)
 
-                # Inclusione/esclusione di note dal RAG
                 elif action == 'toggle_note_inclusion':
                     # Toggle inclusione nella ricerca RAG
                     note_id = request.POST.get('note_id')
@@ -1174,35 +818,30 @@ def project(request, project_id=None):
                 'project_notes': project_notes
             }
 
-            # Al context aggiungo i dati che descrivono il tipo di RAG usato
+            # Al context aggiungo i dati che descrivono il tipo di RAG usato (uso context.update per aggiungere dati
             try:
-                # Ottieni le impostazioni RAG del progetto
-                project_config, created = ProjectConfiguration.objects.get_or_create(project=project)
+                rag_config, _ = RAGConfiguration.objects.get_or_create(user=request.user)
+                current_preset = rag_config.current_settings
 
                 # Determina i valori effettivi (personalizzati o ereditati dal preset)
                 rag_values = {
-                    'chunk_size': project_config.get_chunk_size(),
-                    'chunk_overlap': project_config.get_chunk_overlap(),
-                    'similarity_top_k': project_config.get_similarity_top_k(),
-                    'mmr_lambda': project_config.get_mmr_lambda(),
-                    'similarity_threshold': project_config.get_similarity_threshold(),
-                    'retriever_type': project_config.get_retriever_type(),
-                    'auto_citation': project_config.get_auto_citation(),
-                    'prioritize_filenames': project_config.get_prioritize_filenames(),
-                    'equal_notes_weight': project_config.get_equal_notes_weight(),
-                    'strict_context': project_config.get_strict_context(),
+                    'chunk_size': rag_config.get_chunk_size(),
+                    'chunk_overlap': rag_config.get_chunk_overlap(),
+                    'similarity_top_k': rag_config.get_similarity_top_k(),
+                    'mmr_lambda': rag_config.get_mmr_lambda(),
+                    'similarity_threshold': rag_config.get_similarity_threshold(),
+                    'retriever_type': rag_config.get_retriever_type(),
+                    'auto_citation': rag_config.get_auto_citation(),
+                    'prioritize_filenames': rag_config.get_prioritize_filenames(),
+                    'equal_notes_weight': rag_config.get_equal_notes_weight(),
+                    'strict_context': rag_config.get_strict_context(),
                 }
 
                 # Identifica quali valori sono personalizzati e quali provengono dal preset
                 customized_values = {}
-                for key in ['chunk_size', 'chunk_overlap', 'similarity_top_k', 'mmr_lambda',
-                            'similarity_threshold', 'retriever_type', 'system_prompt',
-                            'auto_citation', 'prioritize_filenames', 'equal_notes_weight', 'strict_context']:
-                    if getattr(project_config, key, None) is not None:
+                for key in rag_values:
+                    if getattr(rag_config, key) is not None:
                         customized_values[key] = True
-
-                # Ottieni il preset attualmente selezionato
-                current_preset = project_config.rag_preset
 
                 # Ottieni tutti i preset disponibili per mostrare come opzioni
                 all_presets = RagDefaultSettings.objects.all().order_by('template_type__name', 'name')
@@ -1221,20 +860,6 @@ def project(request, project_id=None):
                 'all_presets': all_presets,
             })
 
-            # Ottieni anche informazioni sul motore LLM utilizzato
-            try:
-                project_llm_config, llm_created = ProjectLLMConfig.objects.get_or_create(project=project)
-                engine = project_llm_config.engine
-
-                # Aggiungi informazioni sul motore al context
-                context.update({
-                    'llm_config': project_llm_config,
-                    'engine': engine,
-                    'provider': engine.provider if engine else None,
-                })
-            except Exception as e:
-                logger.error(f"Errore nel recuperare la configurazione LLM: {str(e)}")
-
             return render(request, 'be/project.html', context)
 
         except Project.DoesNotExist:
@@ -1244,13 +869,12 @@ def project(request, project_id=None):
         logger.warning("User not Authenticated!")
         return redirect('login')
 
+"""Mostra i file allegati nella finestra modale di project o per scaricarli in locale"""
+
 
 def serve_project_file(request, file_id):
     """
     Serve un file di progetto con le intestazioni HTTP appropriate.
-
-    Permette di visualizzare il file nel browser o scaricarlo a seconda del parametro 'download'.
-    Verifica che l'utente abbia accesso al file e imposta il content-type corretto.
     """
     # Ottieni il file dal database
     project_file = get_object_or_404(ProjectFile, id=file_id)
@@ -1289,358 +913,471 @@ def serve_project_file(request, file_id):
     return response
 
 
-def project_config(request, project_id):
-    """
-    Vista per modificare la configurazione specifica di un progetto.
-
-    Permette di configurare sia le impostazioni LLM che le opzioni RAG per un singolo progetto.
-    Supporta il reset alle impostazioni utente e diverse operazioni di salvataggio.
-    """
-    logger.debug(f"---> project_config: {project_id}")
+def documents_uploaded(request):
+    logger.debug("---> documents_uploaded")
     if request.user.is_authenticated:
+        # Get search query if exists
+        search_query = request.GET.get('search', '')
+
+        # Initialize empty document list
+        documents = []
+
+        # Determina se l'utente è amministratore (superuser o ha profile_type ADMIN_USER)
+        is_admin = request.user.is_superuser
+
+        # Se l'utente ha un profilo, controlla anche il profile_type
+        if hasattr(request.user, 'profile'):
+            is_admin = is_admin or request.user.profile.profile_type.type == "ADMIN_USER"
+
+        if is_admin:
+            # Gli amministratori vedono tutti i file di tutti gli utenti
+            # Ottieni la lista di tutte le directory degli utenti
+            user_dirs = os.path.join(settings.MEDIA_ROOT, 'uploads')
+            if os.path.exists(user_dirs):
+                for user_id in os.listdir(user_dirs):
+                    user_dir = os.path.join(user_dirs, user_id)
+
+                    # Salta se non è una directory
+                    if not os.path.isdir(user_dir):
+                        continue
+
+                    # Ottieni l'utente corrispondente all'ID (per mostrare informazioni sull'utente)
+                    try:
+                        file_owner = User.objects.get(id=int(user_id))
+                        owner_username = file_owner.username
+                    except (User.DoesNotExist, ValueError):
+                        owner_username = f"User ID {user_id}"
+
+                    # Processiamo i file di questo utente
+                    process_user_files(user_dir, documents, search_query, owner_username)
+        else:
+            # Gli utenti normali vedono solo i propri file
+            user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
+
+            # Processa i file se la directory esiste
+            if os.path.exists(user_upload_dir):
+                process_user_files(user_upload_dir, documents, search_query)
+
+        # Ordina tutti i documenti per data (più recenti prima)
+        documents.sort(key=lambda x: x['upload_date'], reverse=True)
+
+        # Pagination
+        page = request.GET.get('page', 1)
+        paginator = Paginator(documents, 10)  # 10 documenti per pagina
+
         try:
-            # Ottieni il progetto
-            project = get_object_or_404(Project, id=project_id, user=request.user)
+            documents = paginator.page(page)
+        except PageNotAnInteger:
+            documents = paginator.page(1)
+        except EmptyPage:
+            documents = paginator.page(paginator.num_pages)
 
-            # Ottieni o crea la configurazione del progetto
-            project_config, project_conf_created = ProjectConfiguration.objects.get_or_create(project=project)
+        context = {
+            'documents': documents,
+            'search_query': search_query,
+            'is_admin': is_admin
+        }
 
-            # Ottieni o crea la configurazione LLM del progetto
-            llm_config, llm_created = ProjectLLMConfig.objects.get_or_create(project=project)
-
-            # Prepara il contesto iniziale
-            context = {
-                'project': project,
-                'project_config': project_config,
-                'llm_config': llm_config,
-                'created_project_conf': project_conf_created,
-                'created_llm': llm_created,
-                # Provider LLM e motori
-                'providers': LLMProvider.objects.filter(is_active=True).order_by('name'),
-                'all_engines': LLMEngine.objects.filter(is_active=True).order_by('provider__name', 'name'),
-                # Preset RAG disponibili
-                'rag_templates': RagTemplateType.objects.all().order_by('name'),
-                'rag_presets': RagDefaultSettings.objects.all().order_by('template_type__name', 'name'),
-            }
-
-            # Gestione della richiesta POST
-            if request.method == 'POST':
-                action = request.POST.get('action', '')
-
-                if action == 'save_llm_settings':
-                    # Salvataggio delle impostazioni LLM
-                    try:
-                        # Verifica se il cambio è stato confermato
-                        confirmed_change = request.POST.get('confirmed_change') == 'true'
-
-                        # Ottieni l'engine ID selezionato
-                        engine_id = request.POST.get('engine_id')
-
-                        # Carica l'engine selezionato
-                        if engine_id:
-                            new_engine = get_object_or_404(LLMEngine, id=engine_id)
-
-                            # Controlla se il motore è cambiato
-                            engine_changed = llm_config.engine != new_engine
-
-                            # Se c'è un cambio di motore e non è stato confermato, chiedi conferma
-                            if engine_changed and not confirmed_change:
-                                messages.warning(request,
-                                                 "Il cambio di motore LLM richiede conferma a causa della possibile ri-vettorializzazione necessaria.")
-                                return redirect('project_config', project_id=project.id)
-
-                            # Imposta il nuovo motore
-                            llm_config.engine = new_engine
-
-                            # Aggiorna gli altri parametri
-                            llm_config.temperature = float(request.POST.get('temperature', 0.7))
-                            llm_config.max_tokens = int(request.POST.get('max_tokens', new_engine.default_max_tokens))
-                            llm_config.timeout = int(request.POST.get('timeout', new_engine.default_timeout))
-                            llm_config.system_prompt = request.POST.get('system_prompt', '')
-
-                            llm_config.save()
-
-                            # Se c'è stato un cambio di motore ed è stato confermato, procedi con la ri-vettorializzazione
-                            if engine_changed and confirmed_change:
-                                # Resetta lo stato degli embedding per tutti i file del progetto
-                                ProjectFile.objects.filter(project=project).update(is_embedded=False,
-                                                                                   last_indexed_at=None)
-
-                                # Resetta lo stato degli embedding per tutte le note del progetto
-                                ProjectNote.objects.filter(project=project).update(last_indexed_at=None)
-
-                                # Elimina l'indice corrente
-                                project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id),
-                                                           str(project.id))
-                                index_path = os.path.join(project_dir, "vector_index")
-                                if os.path.exists(index_path):
-                                    import shutil
-                                    shutil.rmtree(index_path)
-                                    logger.info(f"Indice vettoriale eliminato per ri-vettorializzazione: {index_path}")
-
-                                # Forza la ricostruzione dell'indice con i nuovi parametri
-                                try:
-                                    create_project_rag_chain(project=project, force_rebuild=True)
-                                    messages.success(request,
-                                                     "Operazione di vettorializzazione completata con successo.")
-                                    logger.info(f"Ri-vettorializzazione completata per il progetto {project.id}")
-                                except Exception as e:
-                                    logger.error(f"Errore nella ri-vettorializzazione: {str(e)}")
-                                    messages.error(request, f"Errore nella vettorializzazione: {str(e)}")
-                            else:
-                                messages.success(request,
-                                                 f"Impostazioni del motore IA salvate per il progetto {project.name}")
-
-                        else:
-                            messages.error(request, "Nessun motore LLM selezionato.")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': True if engine_id else False,
-                                'message': 'Impostazioni del motore IA salvate con successo' if engine_id else 'Nessun motore selezionato'
-                            })
-
-                    except Exception as e:
-                        logger.error(f"Errore nel salvare le impostazioni LLM: {str(e)}")
-                        messages.error(request, f"Errore: {str(e)}")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': False,
-                                'message': f'Errore: {str(e)}'
-                            })
-
-                elif action == 'save_rag_preset':
-                    # Selezione di un preset RAG
-                    try:
-                        preset_id = request.POST.get('rag_preset_id')
-
-                        if preset_id:
-                            rag_preset = RagDefaultSettings.objects.get(id=preset_id)
-                            project_config.rag_preset = rag_preset
-
-                            # Reset delle sovrascritture RAG
-                            project_config.chunk_size = None
-                            project_config.chunk_overlap = None
-                            project_config.similarity_top_k = None
-                            project_config.mmr_lambda = None
-                            project_config.similarity_threshold = None
-                            project_config.retriever_type = None
-                            project_config.system_prompt = None
-                            project_config.auto_citation = None
-                            project_config.prioritize_filenames = None
-                            project_config.equal_notes_weight = None
-                            project_config.strict_context = None
-
-                            project_config.save()
-                            messages.success(request, f"Preset RAG '{rag_preset.name}' applicato al progetto")
-                        else:
-                            messages.warning(request, "Nessun preset RAG selezionato")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': True if preset_id else False,
-                                'message': f"Preset RAG '{rag_preset.name if preset_id else ''}' applicato al progetto" if preset_id else "Nessun preset selezionato"
-                            })
-
-                    except Exception as e:
-                        logger.error(f"Errore nell'applicare il preset RAG: {str(e)}")
-                        messages.error(request, f"Errore: {str(e)}")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': False,
-                                'message': f'Errore: {str(e)}'
-                            })
-
-                elif action == 'save_rag_settings':
-                    # Salvataggio di impostazioni RAG personalizzate
-                    try:
-                        # Salva i parametri di chunking
-                        project_config.chunk_size = int(request.POST.get('chunk_size', 500))
-                        project_config.chunk_overlap = int(request.POST.get('chunk_overlap', 50))
-
-                        # Salva i parametri di ricerca
-                        project_config.similarity_top_k = int(request.POST.get('similarity_top_k', 6))
-                        project_config.mmr_lambda = float(request.POST.get('mmr_lambda', 0.7))
-                        project_config.similarity_threshold = float(request.POST.get('similarity_threshold', 0.7))
-                        project_config.retriever_type = request.POST.get('retriever_type', 'mmr')
-
-                        project_config.save()
-                        messages.success(request, "Parametri RAG personalizzati salvati")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': True,
-                                'message': 'Parametri RAG personalizzati salvati con successo'
-                            })
-
-                    except Exception as e:
-                        logger.error(f"Errore nel salvare i parametri RAG: {str(e)}")
-                        messages.error(request, f"Errore: {str(e)}")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': False,
-                                'message': f'Errore: {str(e)}'
-                            })
-
-                elif action == 'save_advanced_settings':
-                    # Salvataggio delle impostazioni avanzate RAG
-                    try:
-                        project_config.system_prompt = request.POST.get('system_prompt', '')
-                        project_config.auto_citation = request.POST.get('auto_citation') == 'on'
-                        project_config.prioritize_filenames = request.POST.get('prioritize_filenames') == 'on'
-                        project_config.equal_notes_weight = request.POST.get('equal_notes_weight') == 'on'
-                        project_config.strict_context = request.POST.get('strict_context') == 'on'
-
-                        project_config.save()
-                        messages.success(request, "Impostazioni avanzate RAG salvate")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': True,
-                                'message': 'Impostazioni avanzate RAG salvate con successo'
-                            })
-
-                    except Exception as e:
-                        logger.error(f"Errore nel salvare le impostazioni avanzate RAG: {str(e)}")
-                        messages.error(request, f"Errore: {str(e)}")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': False,
-                                'message': f'Errore: {str(e)}'
-                            })
-
-                elif action == 'reset_to_user_defaults':
-                    # Reset delle impostazioni alle impostazioni predefinite dell'utente
-                    try:
-                        # Ottieni le impostazioni dell'utente
-                        user_rag_config = RAGConfiguration.objects.get(user=request.user)
-
-                        # Ottieni le impostazioni del motore LLM predefinite per l'utente
-                        engine_settings = get_project_engine_settings(None)
-
-                        # Aggiorna la configurazione LLM del progetto
-                        if engine_settings['engine']:
-                            llm_config.engine = engine_settings['engine']
-                        llm_config.temperature = engine_settings['temperature']
-                        llm_config.max_tokens = engine_settings['max_tokens']
-                        llm_config.timeout = engine_settings['timeout']
-                        llm_config.save()
-
-                        # Aggiorna la configurazione RAG del progetto
-                        # RAG preset
-                        project_config.rag_preset = user_rag_config.current_settings
-
-                        # Reset delle sovrascritture RAG
-                        project_config.chunk_size = None
-                        project_config.chunk_overlap = None
-                        project_config.similarity_top_k = None
-                        project_config.mmr_lambda = None
-                        project_config.similarity_threshold = None
-                        project_config.retriever_type = None
-                        project_config.system_prompt = None
-                        project_config.auto_citation = None
-                        project_config.prioritize_filenames = None
-                        project_config.equal_notes_weight = None
-                        project_config.strict_context = None
-
-                        project_config.save()
-                        messages.success(request, "Configurazione reimpostata alle impostazioni utente predefinite")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': True,
-                                'message': 'Configurazione reimpostata alle impostazioni utente predefinite'
-                            })
-
-                    except Exception as e:
-                        logger.error(f"Errore nel reimpostare le impostazioni: {str(e)}")
-                        messages.error(request, f"Errore: {str(e)}")
-
-                        # Se è una richiesta AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({
-                                'success': False,
-                                'message': f'Errore: {str(e)}'
-                            })
-
-                # Redirect alla pagina di configurazione del progetto dopo POST
-                return redirect('project_config', project_id=project.id)
-
-            # Recupera i valori effettivi RAG per il template
-            context['effective_rag_values'] = {
-                'chunk_size': project_config.get_chunk_size(),
-                'chunk_overlap': project_config.get_chunk_overlap(),
-                'similarity_top_k': project_config.get_similarity_top_k(),
-                'mmr_lambda': project_config.get_mmr_lambda(),
-                'similarity_threshold': project_config.get_similarity_threshold(),
-                'retriever_type': project_config.get_retriever_type(),
-                'system_prompt': project_config.get_system_prompt(),
-                'auto_citation': project_config.get_auto_citation(),
-                'prioritize_filenames': project_config.get_prioritize_filenames(),
-                'equal_notes_weight': project_config.get_equal_notes_weight(),
-                'strict_context': project_config.get_strict_context(),
-            }
-
-            # Recupera i valori effettivi LLM
-            context['effective_llm_values'] = {
-                'temperature': llm_config.get_temperature(),
-                'max_tokens': llm_config.get_max_tokens(),
-                'timeout': llm_config.get_timeout(),
-            }
-
-            # Identifica i valori RAG personalizzati (non ereditati dal preset)
-            context['customized_rag_values'] = {}
-            if project_config.chunk_size is not None: context['customized_rag_values']['chunk_size'] = True
-            if project_config.chunk_overlap is not None: context['customized_rag_values']['chunk_overlap'] = True
-            if project_config.similarity_top_k is not None: context['customized_rag_values']['similarity_top_k'] = True
-            if project_config.mmr_lambda is not None: context['customized_rag_values']['mmr_lambda'] = True
-            if project_config.similarity_threshold is not None: context['customized_rag_values'][
-                'similarity_threshold'] = True
-            if project_config.retriever_type is not None: context['customized_rag_values']['retriever_type'] = True
-            if project_config.system_prompt is not None: context['customized_rag_values']['system_prompt'] = True
-            if project_config.auto_citation is not None: context['customized_rag_values']['auto_citation'] = True
-            if project_config.prioritize_filenames is not None: context['customized_rag_values'][
-                'prioritize_filenames'] = True
-            if project_config.equal_notes_weight is not None: context['customized_rag_values'][
-                'equal_notes_weight'] = True
-            if project_config.strict_context is not None: context['customized_rag_values']['strict_context'] = True
-
-            # Identifica i valori LLM personalizzati
-            context['customized_llm_values'] = {}
-            if llm_config.temperature is not None: context['customized_llm_values']['temperature'] = True
-            if llm_config.max_tokens is not None: context['customized_llm_values']['max_tokens'] = True
-            if llm_config.timeout is not None: context['customized_llm_values']['timeout'] = True
-            if llm_config.system_prompt is not None: context['customized_llm_values']['system_prompt'] = True
-
-            return render(request, 'be/project_config.html', context)
-
-        except Project.DoesNotExist:
-            messages.error(request, "Progetto non trovato.")
-            return redirect('projects_list')
+        return render(request, 'be/documents_uploaded.html', context)
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
 
 
+def download_document(request, document_id):
+    logger.debug(f"---> download_document: {document_id}")
+    if request.user.is_authenticated:
+        # Directory where user documents are stored
+        user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
+        file_path = os.path.join(user_upload_dir, document_id)
+
+        # Check if file exists
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            # Determine content type based on file extension
+            content_type, _ = mimetypes.guess_type(file_path)
+            if content_type is None:
+                content_type = 'application/octet-stream'
+
+            # Open file for reading
+            with open(file_path, 'rb') as file:
+                response = HttpResponse(file.read(), content_type=content_type)
+                # Set content disposition for download
+                response['Content-Disposition'] = f'attachment; filename="{document_id}"'
+                return response
+        else:
+            logger.warning(f"File not found: {file_path}")
+            raise Http404("Document not found")
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+def delete_document(request, document_id):
+    logger.debug(f"---> delete_document: {document_id}")
+    if request.user.is_authenticated:
+        if request.method == 'POST':
+            # Directory where user documents are stored
+            user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
+            file_path = os.path.join(user_upload_dir, document_id)
+
+            # Check if file exists
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                try:
+                    os.remove(file_path)
+                    messages.success(request, f"Document '{document_id}' has been deleted.")
+                    logger.info(f"Document '{document_id}' deleted by user {request.user.username}")
+                except Exception as e:
+                    messages.error(request, f"Error deleting document: {str(e)}")
+                    logger.error(f"Error deleting document '{document_id}': {str(e)}")
+            else:
+                messages.error(request, "Document not found.")
+                logger.warning(f"File not found: {file_path}")
+
+        return redirect('documents_uploaded')
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+def upload_folder(request):
+    logger.debug("---> upload_folder")
+    if request.user.is_authenticated:
+        context = {}
+
+        if request.method == 'POST':
+            # Check if files were uploaded
+            files = request.FILES.getlist('files[]')
+
+            logger.debug(f"Received {len(files)} files in upload_folder request")
+
+            if files:
+                # Get allowed file extensions
+                allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx',
+                                      '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif']
+
+                # Count the successful uploads
+                successful_uploads = 0
+                skipped_files = 0
+
+                # Create the user upload directory
+                user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
+                os.makedirs(user_upload_dir, exist_ok=True)
+
+                # Process each file
+                for uploaded_file in files:
+                    # Get file extension
+                    file_name = uploaded_file.name
+                    _, file_extension = os.path.splitext(file_name)
+
+                    # Check if extension is allowed
+                    if file_extension.lower() not in allowed_extensions:
+                        logger.debug(
+                            f"Skipping file with unsupported extension: {file_name}, extension: {file_extension}")
+                        skipped_files += 1
+                        continue
+
+                    logger.debug(f"Processing file: {file_name}, extension: {file_extension}")
+
+                    # Get the relative path from webkitRelativePath
+                    # Note: In reality, we need to parse this from the request
+                    # For this example, we'll extract from the filename if possible
+                    relative_path = uploaded_file.name
+
+                    # Remove the first folder name (the root folder being uploaded)
+                    path_parts = relative_path.split('/')
+                    if len(path_parts) > 1:
+                        # Reconstruct the path without the root folder
+                        subfolder_path = '/'.join(path_parts[1:-1])
+
+                        # Create the subfolder structure if needed
+                        if subfolder_path:
+                            subfolder_dir = os.path.join(user_upload_dir, subfolder_path)
+                            os.makedirs(subfolder_dir, exist_ok=True)
+
+                            # Set the file path to include subfolders
+                            file_path = os.path.join(subfolder_dir, path_parts[-1])
+                        else:
+                            file_path = os.path.join(user_upload_dir, path_parts[-1])
+                    else:
+                        file_path = os.path.join(user_upload_dir, relative_path)
+
+                    # Handle file with same name
+                    counter = 1
+                    original_name = os.path.splitext(os.path.basename(file_path))[0]
+                    while os.path.exists(file_path):
+                        new_name = f"{original_name}_{counter}{file_extension}"
+                        file_path = os.path.join(os.path.dirname(file_path), new_name)
+                        counter += 1
+
+                    # Save the file
+                    try:
+                        with open(file_path, 'wb+') as destination:
+                            for chunk in uploaded_file.chunks():
+                                destination.write(chunk)
+
+                        logger.debug(f"Successfully saved file: {file_path}")
+                        successful_uploads += 1
+                    except Exception as e:
+                        logger.error(f"Error saving file {file_path}: {str(e)}")
+                        messages.error(request, f"Error saving file {file_name}: {str(e)}")
+
+                # Log the successful upload
+                logger.info(
+                    f"Folder uploaded successfully by user {request.user.username} - {successful_uploads} files processed, {skipped_files} files skipped")
+
+                if successful_uploads > 0:
+                    messages.success(request,
+                                     f"Folder uploaded successfully! {successful_uploads} files processed, {skipped_files} files skipped.")
+                else:
+                    messages.warning(request, "No valid files were found in the uploaded folder.")
+
+                # Redirect to documents page
+                return redirect('documents_uploaded')
+            else:
+                messages.error(request, "No files were uploaded.")
+
+        return render(request, 'be/upload_folder.html', context)
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+# Funzione di utilità per gestire il caricamento dei file del progetto
+def handle_project_file_upload(project, file, project_dir, file_path=None):
+    """
+    Gestisce il caricamento di un file per un progetto.
+
+    Args:
+        project: Oggetto Project
+        file: File caricato
+        project_dir: Directory del progetto
+        file_path: Percorso completo del file (opzionale)
+
+    Returns:
+        ProjectFile: Il file del progetto creato
+    """
+    # Ottieni il percorso del file se non specificato
+    if file_path is None:
+        try:
+            # Assicuriamoci che file.name esista e non sia None
+            if file.name:  # Prova ad accedere all'attributo .name
+                file_path = os.path.join(project_dir, file.name)
+        except AttributeError:  # Se .name non esiste ne genero uno usando la libreria uuid. Es. di generazione: file_f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            random_name = f"file_{uuid.uuid4()}"
+            file_path = os.path.join(project_dir, random_name)
+            logger.warning(f"Nome file non disponibile, generato nome casuale: {random_name}")
+
+    # Gestisci i file con lo stesso nome
+    if os.path.exists(file_path):
+        filename = os.path.basename(file_path)
+        base_name, extension = os.path.splitext(filename)
+        counter = 1
+
+        while os.path.exists(file_path):
+            new_name = f"{base_name}_{counter}{extension}"
+            file_path = os.path.join(os.path.dirname(file_path), new_name)
+            counter += 1
+
+    # Crea le cartelle necessarie
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Salva il file
+    with open(file_path, 'wb+') as destination:
+        for chunk in file.chunks():
+            destination.write(chunk)
+
+    # Ottieni le informazioni sul file
+    file_stats = os.stat(file_path)
+    file_size = file_stats.st_size
+
+    # Determina il tipo di file in modo sicuro
+    try:
+        if file.name:  # Se esiste ed è non vuoto
+            file_type = os.path.splitext(file.name)[1].lower().strip('.') #estraggo l'estensione del file senza punto e in minuscolo
+        else:
+            raise AttributeError  # Forza il fallback su file_path
+    except AttributeError:  # Se file.name non esiste o è None
+        file_type = os.path.splitext(file_path)[1].lower().strip('.')
+
+    # Calcola l'hash del file
+    file_hash = compute_file_hash(file_path)
+
+    # Crea il record del file nel database
+    project_file = ProjectFile.objects.create(
+        project=project,
+        filename=os.path.basename(file_path),
+        file_path=file_path,
+        file_type=file_type,
+        file_size=file_size,
+        file_hash=file_hash,
+        is_embedded=False
+    )
+
+    logger.debug(f"Created project file record for {file_path}")
+
+    # Aggiorna l'indice vettoriale in background
+    try:
+        logger.info(f"🔄 Avvio aggiornamento dell'indice vettoriale per il progetto {project.id} dopo caricamento file")
+
+        # Crea o aggiorna la catena RAG
+        create_project_rag_chain(project=project)
+
+        logger.info(f"✅ Indice vettoriale aggiornato con successo per il progetto {project.id}")
+    except Exception as e:
+        logger.error(f"❌ Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+
+    return project_file
+
+
+def get_answer_from_project(project, question):
+    """
+    Ottiene una risposta dal sistema RAG per la domanda su un progetto.
+    Gestisce l'indice, recupera le fonti pertinenti e formatta la risposta.
+    Gestisce anche gli errori di autenticazione API in modo appropriato.
+    """
+    logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
+
+    try:
+        # Verifica documenti e note
+        project_files = ProjectFile.objects.filter(project=project)
+        project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+
+        if not project_files.exists() and not project_notes.exists():
+            return {"answer": "Il progetto non contiene documenti o note attive.", "sources": []}
+
+        # Verifica configurazione RAG
+        try:
+            rag_config = RAGConfiguration.objects.get(user=project.user)
+            current_preset = rag_config.current_settings
+            if current_preset:
+                logger.info(f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+            else:
+                logger.info("Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+        except Exception as config_error:
+            logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
+
+        # Verifica necessità aggiornamento indice
+        update_needed = check_project_index_update_needed(project)
+
+        # Crea o aggiorna catena RAG
+        if update_needed:
+            logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
+            qa_chain = create_project_rag_chain(project=project)
+        else:
+            logger.info("Indice aggiornato, utilizzando indice esistente")
+            qa_chain = create_project_rag_chain(project=project, docs=[])
+
+        if qa_chain is None:
+            return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.",
+                    "sources": []}
+
+        # Esegui la ricerca
+        logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
+        start_time = time.time()
+        try:
+            result = qa_chain.invoke(question)
+            processing_time = round(time.time() - start_time, 2)
+            logger.info(f"Ricerca completata in {processing_time} secondi")
+        except openai.AuthenticationError as auth_error:
+            # Gestione specifica dell'errore di autenticazione API
+            error_message = str(auth_error)
+            logger.error(f"Errore di autenticazione API OpenAI: {error_message}")
+            return {
+                "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
+                          "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                "sources": [],
+                "error": "api_auth_error",
+                "error_details": error_message
+            }
+        except Exception as query_error:
+            logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
+
+            # Verifica se l'errore è di autenticazione API anche se non catturato direttamente
+            if "invalid_api_key" in str(query_error) or "authentication" in str(query_error).lower():
+                return {
+                    "answer": "Si è verificato un errore di autenticazione con l'API. " +
+                              "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                    "sources": [],
+                    "error": "api_auth_error",
+                    "error_details": str(query_error)
+                }
+
+            return {
+                "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(query_error)}",
+                "sources": [],
+                "error": "query_error"
+            }
+
+        # Log fonti trovate
+        source_documents = result.get('source_documents', [])
+        logger.info(f"Trovate {len(source_documents)} fonti pertinenti")
+
+        # Formatta risposta
+        response = {
+            "answer": result.get('result', 'Nessuna risposta trovata.'),
+            "sources": []
+        }
+
+        # Aggiungi fonti alla risposta
+        for doc in source_documents:
+            metadata = doc.metadata
+
+            if metadata.get("type") == "note":
+                source_type = "note"
+                filename = f"Nota: {metadata.get('title', 'Senza titolo')}"
+            else:
+                source_type = "file"
+                source_path = metadata.get("source", "")
+                filename = metadata.get('filename',
+                                        os.path.basename(source_path) if source_path else "Documento sconosciuto")
+
+            page_info = ""
+            if "page" in metadata:
+                page_info = f" (pag. {metadata['page'] + 1})"
+
+            source = {
+                "content": doc.page_content,
+                "metadata": metadata,
+                "score": getattr(doc, 'score', None),
+                "type": source_type,
+                "filename": f"{filename}{page_info}"
+            }
+            response["sources"].append(source)
+
+        return response
+
+    except openai.AuthenticationError as auth_error:
+        logger.exception(f"Errore di autenticazione API OpenAI in get_answer_from_project: {str(auth_error)}")
+        return {
+            "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
+                      "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+            "sources": [],
+            "error": "api_auth_error",
+            "error_details": str(auth_error)
+        }
+    except Exception as e:
+        logger.exception(f"Errore in get_answer_from_project: {str(e)}")
+
+        # Verifica anche qui se l'errore è correlato all'autenticazione
+        if "invalid_api_key" in str(e) or "authentication" in str(e).lower():
+            return {
+                "answer": "Si è verificato un errore di autenticazione con l'API. " +
+                          "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                "sources": [],
+                "error": "api_auth_error",
+                "error_details": str(e)
+            }
+
+        return {
+            "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
+            "sources": [],
+            "error": "general_error"
+        }
+
+
 def user_profile(request):
     """
     Vista per visualizzare e modificare il profilo utente con gestione completa delle immagini.
-
-    Permette di aggiornare informazioni personali, immagine del profilo,
-    e altre preferenze utente.
     """
     logger.debug("---> user_profile")
     if request.user.is_authenticated:
@@ -1700,12 +1437,66 @@ def user_profile(request):
         return redirect('login')
 
 
+def project_details(request, project_id):
+    """
+    Visualizza i dettagli analitici di un progetto, inclusi grafici di interazione e informazioni sui costi.
+    """
+    logger.debug(f"---> project_details: {project_id}")
+    if request.user.is_authenticated:
+        try:
+            # Ottiene il progetto
+            project = get_object_or_404(Project, id=project_id, user=request.user)
+
+            # Conta le fonti utilizzate in tutte le conversazioni di questo progetto
+            sources_count = AnswerSource.objects.filter(conversation__project=project).count()
+
+            # Prepara i dati per i grafici
+            # Nella versione reale, questi dati verrebbero calcolati in base ai dati effettivi
+            # Per ora utilizziamo dati statici
+
+            # Dati per i grafici basati sulle interazioni reali
+            # Raggruppa per giorno della settimana
+            interactions_by_day = [0, 0, 0, 0, 0, 0, 0]  # Lun-Dom
+            costs_by_day = [0, 0, 0, 0, 0, 0, 0]  # Costi corrispondenti
+
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=7)
+            recent_conversations = project.conversations.filter(created_at__gte=start_date, created_at__lte=end_date)
+
+            # Calcolo del costo basato sulle interazioni reali
+            conversation_count = project.conversations.count()
+            average_cost_per_interaction = 0.28  # Euro per interazione
+            total_cost = conversation_count * average_cost_per_interaction
+
+            for conv in recent_conversations:
+                day_of_week = conv.created_at.weekday()  # 0=Lun, 6=Dom
+                interactions_by_day[day_of_week] += 1
+                costs_by_day[day_of_week] += average_cost_per_interaction
+
+
+            context = {
+                'project': project,
+                'sources_count': sources_count,
+                'total_cost': total_cost,
+                'average_cost': average_cost_per_interaction,
+                'interactions_by_day': interactions_by_day,
+                'costs_by_day': costs_by_day,
+                # Aggiungi qui altri dati di contesto se necessario
+            }
+
+            return render(request, 'be/project_details.html', context)
+
+        except Project.DoesNotExist:
+            messages.error(request, "Progetto non trovato.")
+            return redirect('projects_list')
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
 def ia_engine(request):
     """
-    Vista per la configurazione dei provider LLM e le relative chiavi API.
-
-    Permette di gestire le chiavi API per vari provider LLM come OpenAI, Anthropic, Google, ecc.
-    Supporta la visualizzazione dei motori disponibili per ciascun provider.
+    Vista per la configurazione dei provider LLM e le relative chiavi API
     """
     logger.debug("---> ia_engine")
     if request.user.is_authenticated:
@@ -1719,8 +1510,8 @@ def ia_engine(request):
         # Prepara dati per i motori di ogni provider
         provider_engines = {}
         for provider in providers:
-            provider_engines[provider.id] = LLMEngine.objects.filter(provider=provider, is_active=True).order_by(
-                '-is_default')
+            provider_engines[provider.id] = \
+                LLMEngine.objects.filter(provider=provider,is_active=True).order_by('-is_default')
 
         # Prepara il contesto con i valori esistenti
         context = {
@@ -1765,21 +1556,12 @@ def ia_engine(request):
                     user_key = UserAPIKey.objects.get(id=key_id, user=request.user)
 
                     # Qui puoi implementare la validazione effettiva con l'API del provider
-                    # usando la funzione verify_api_key che verificherà il tipo di provider
-                    api_type = user_key.provider.name.lower()
-                    api_key = user_key.get_api_key()
+                    # Per ora impostiamo semplicemente come valida
+                    user_key.is_valid = True
+                    user_key.last_validation = time.timezone.now()
+                    user_key.save()
 
-                    is_valid, error_message = verify_api_key(api_type, api_key)
-
-                    if is_valid:
-                        user_key.is_valid = True
-                        user_key.last_validation = timezone.now()
-                        user_key.save()
-                        return JsonResponse({'success': True, 'message': 'Chiave validata con successo'})
-                    else:
-                        user_key.is_valid = False
-                        user_key.save()
-                        return JsonResponse({'success': False, 'message': f'Chiave non valida: {error_message}'})
+                    return JsonResponse({'success': True, 'message': 'Chiave validata con successo'})
 
                 except Exception as e:
                     logger.error(f"Errore nella validazione della chiave: {str(e)}")
@@ -1807,13 +1589,12 @@ def ia_engine(request):
 
 def rag_settings(request):
     """
-    Vista per la configurazione dettagliata dei parametri RAG (Retrieval Augmented Generation).
-
-    Permette di selezionare preset predefiniti o configurare manualmente i parametri RAG
-    come chunking, ricerca e impostazioni avanzate.
+    Vista per la configurazione dettagliata dei parametri RAG (Retrieval Augmented Generation)
     """
     logger.debug("---> rag_settings")
     if request.user.is_authenticated:
+        # Ottieni tutte le impostazioni predefinite dal database
+
         # Ottieni i template types
         template_types = RagTemplateType.objects.all()
 
@@ -1956,9 +1737,7 @@ def rag_settings(request):
 
 def billing_settings(request):
     """
-    Vista per la gestione delle impostazioni di fatturazione.
-
-    Visualizza informazioni sugli abbonamenti, utilizzo corrente e fatture.
+    Billing
     """
     logger.debug("---> billing_settings")
     if request.user.is_authenticated:
@@ -1974,7 +1753,7 @@ def verify_api_key(api_type, api_key):
     Verifica che una chiave API sia valida facendo una richiesta di test.
 
     Args:
-        api_type: Tipo di API ('openai', 'claude', 'deepseek', 'gemini', ecc.)
+        api_type: Tipo di API ('openai', 'claude', 'deepseek')
         api_key: Chiave API da verificare
 
     Returns:
@@ -1990,7 +1769,7 @@ def verify_api_key(api_type, api_key):
             # Se arriviamo qui, la chiave è valida
             return True, None
 
-        elif api_type == 'anthropic' or api_type == 'claude':
+        elif api_type == 'claude':
             # Implementazione per la verifica delle API Claude
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
@@ -2004,7 +1783,7 @@ def verify_api_key(api_type, api_key):
             # Per ora restituiamo True per evitare problemi
             return True, None
 
-        elif api_type == 'google' or api_type == 'gemini':
+        elif api_type == 'gemini':
             # Implementazione per la verifica delle API Gemini
             try:
                 # Aggiungi qui la verifica per Gemini quando implementerai la libreria
@@ -2012,21 +1791,6 @@ def verify_api_key(api_type, api_key):
                 return True, None
             except Exception as e:
                 return False, f"Errore nella verifica della chiave Gemini: {str(e)}"
-
-        elif api_type == 'mistral':
-            # Implementazione per la verifica delle API Mistral
-            # Per ora restituiamo True per mantenere la funzionalità
-            return True, None
-
-        elif api_type == 'groq':
-            # Implementazione per la verifica delle API Groq
-            # Per ora restituiamo True per mantenere la funzionalità
-            return True, None
-
-        elif api_type == 'togetherai':
-            # Implementazione per la verifica delle API TogetherAI
-            # Per ora restituiamo True per mantenere la funzionalità
-            return True, None
 
         else:
             return False, f"Tipo API non supportato: {api_type}"
@@ -2043,3 +1807,355 @@ def verify_api_key(api_type, api_key):
 
         # Messaggi generici
         return False, f"Errore nella verifica: {str(e)}"
+
+
+def project_config(request, project_id):
+    """
+    Vista per modificare la configurazione specifica di un progetto.
+    Permette di personalizzare le impostazioni LLM e RAG per un singolo progetto.
+    """
+    logger.debug(f"---> project_config: {project_id}")
+    if request.user.is_authenticated:
+        try:
+            # Ottieni il progetto
+            project = get_object_or_404(Project, id=project_id, user=request.user)
+
+            # Ottieni o crea la configurazione del progetto
+            project_config, created = ProjectConfiguration.objects.get_or_create(project=project)
+
+            # Prepara il contesto con i valori esistenti
+            context = {
+                'project': project,
+                'project_config': project_config,
+                'created': created,
+                # Preset RAG disponibili
+                'rag_templates': RagTemplateType.objects.all().order_by('name'),
+                'rag_presets': RagDefaultSettings.objects.all().order_by('template_type__name', 'name'),
+            }
+
+            # Gestione della richiesta POST
+            if request.method == 'POST':
+                action = request.POST.get('action', '')
+
+                if action == 'save_llm_settings':
+                    # Salvataggio delle impostazioni LLM
+                    try:
+                        # Verifica se il cambio è stato confermato
+                        confirmed_change = request.POST.get('confirmed_change') == 'true'
+
+                        # Ottieni il motore selezionato
+                        selected_engine = request.POST.get('selected_engine')
+
+                        # Controlla se il motore o il modello è cambiato
+                        engine_changed = project_config.selected_engine != selected_engine
+                        model_changed = False
+
+                        if selected_engine == 'openai':
+                            new_model = request.POST.get('gpt_model')
+                            model_changed = project_config.gpt_model != new_model
+                        elif selected_engine == 'claude':
+                            new_model = request.POST.get('claude_model')
+                            model_changed = project_config.claude_model != new_model
+                        elif selected_engine == 'deepseek':
+                            new_model = request.POST.get('deepseek_model')
+                            model_changed = project_config.deepseek_model != new_model
+                        elif selected_engine == 'gemini':
+                            new_model = request.POST.get('gemini_model')
+                            model_changed = project_config.gemini_model != new_model
+
+                        # Se c'è un cambio di motore/modello e non è stato confermato, reindirizza
+                        # alla pagina di configurazione senza salvare
+                        if (engine_changed or model_changed) and not confirmed_change:
+                            messages.warning(request,
+                                             "Il cambio di modello richiede conferma a causa della ri-vettorializzazione necessaria.")
+                            return redirect('project_config', project_id=project.id)
+
+                        # Procedi con il salvataggio delle impostazioni
+                        project_config.selected_engine = selected_engine
+
+                        # Aggiorna i parametri specifici del motore
+                        if selected_engine == 'openai':
+                            project_config.gpt_model = request.POST.get('gpt_model')
+                            project_config.gpt_max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
+                            project_config.gpt_timeout = int(request.POST.get('gpt_timeout', 60))
+                        elif selected_engine == 'claude':
+                            project_config.claude_model = request.POST.get('claude_model')
+                            project_config.claude_max_tokens = int(request.POST.get('claude_max_tokens', 4096))
+                            project_config.claude_timeout = int(request.POST.get('claude_timeout', 90))
+                        elif selected_engine == 'deepseek':
+                            project_config.deepseek_model = request.POST.get('deepseek_model')
+                            project_config.deepseek_max_tokens = int(request.POST.get('deepseek_max_tokens', 2048))
+                            project_config.deepseek_timeout = int(request.POST.get('deepseek_timeout', 30))
+                        elif selected_engine == 'gemini':
+                            project_config.gemini_model = request.POST.get('gemini_model')
+                            project_config.gemini_max_tokens = int(request.POST.get('gemini_max_tokens', 8192))
+                            project_config.gemini_timeout = int(request.POST.get('gemini_timeout', 60))
+
+                        project_config.save()
+
+                        # Se c'è stato un cambio di modello ed è stato confermato, procedi con la ri-vettorializzazione
+                        if (engine_changed or model_changed) and confirmed_change:
+                            # Resetta lo stato degli embedding per tutti i file del progetto
+                            ProjectFile.objects.filter(project=project).update(is_embedded=False, last_indexed_at=None)
+
+                            # Resetta lo stato degli embedding per tutte le note del progetto
+                            ProjectNote.objects.filter(project=project).update(last_indexed_at=None)
+
+                            # Elimina l'indice corrente
+                            project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id),
+                                                       str(project.id))
+                            index_path = os.path.join(project_dir, "vector_index")
+                            if os.path.exists(index_path):
+                                import shutil
+                                shutil.rmtree(index_path)
+                                logger.info(f"Indice vettoriale eliminato per ri-vettorializzazione: {index_path}")
+
+                            # Forza la ricostruzione dell'indice con i nuovi parametri
+                            try:
+                                create_project_rag_chain(project=project, force_rebuild=True)
+                                messages.success(request, "Operazione di vettorializzazione completata con successo.")
+                                logger.info(f"Ri-vettorializzazione completata per il progetto {project.id}")
+                            except Exception as e:
+                                logger.error(f"Errore nella ri-vettorializzazione: {str(e)}")
+                                messages.error(request, f"Errore nella vettorializzazione: {str(e)}")
+                        else:
+                            messages.success(request,
+                                             f"Impostazioni del motore IA salvate per il progetto {project.name}")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': 'Impostazioni del motore IA salvate con successo'
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Errore nel salvare le impostazioni LLM: {str(e)}")
+                        messages.error(request, f"Errore: {str(e)}")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore: {str(e)}'
+                            })
+
+                elif action == 'save_rag_preset':
+                    # Selezione di un preset RAG
+                    try:
+                        preset_id = request.POST.get('rag_preset_id')
+
+                        if preset_id:
+                            rag_preset = RagDefaultSettings.objects.get(id=preset_id)
+                            project_config.rag_preset = rag_preset
+
+                            # Reset delle sovrascritture RAG
+                            project_config.chunk_size = None
+                            project_config.chunk_overlap = None
+                            project_config.similarity_top_k = None
+                            project_config.mmr_lambda = None
+                            project_config.similarity_threshold = None
+                            project_config.retriever_type = None
+                            project_config.system_prompt = None
+                            project_config.auto_citation = None
+                            project_config.prioritize_filenames = None
+                            project_config.equal_notes_weight = None
+                            project_config.strict_context = None
+
+                            project_config.save()
+                            messages.success(request, f"Preset RAG '{rag_preset.name}' applicato al progetto")
+                        else:
+                            messages.warning(request, "Nessun preset RAG selezionato")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True if preset_id else False,
+                                'message': f"Preset RAG '{rag_preset.name if preset_id else ''}' applicato al progetto" if preset_id else "Nessun preset selezionato"
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Errore nell'applicare il preset RAG: {str(e)}")
+                        messages.error(request, f"Errore: {str(e)}")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore: {str(e)}'
+                            })
+
+                elif action == 'save_rag_settings':
+                    # Salvataggio di impostazioni RAG personalizzate
+                    try:
+                        # Salva i parametri di chunking
+                        project_config.chunk_size = int(request.POST.get('chunk_size', 500))
+                        project_config.chunk_overlap = int(request.POST.get('chunk_overlap', 50))
+
+                        # Salva i parametri di ricerca
+                        project_config.similarity_top_k = int(request.POST.get('similarity_top_k', 6))
+                        project_config.mmr_lambda = float(request.POST.get('mmr_lambda', 0.7))
+                        project_config.similarity_threshold = float(request.POST.get('similarity_threshold', 0.7))
+                        project_config.retriever_type = request.POST.get('retriever_type', 'mmr')
+
+                        project_config.save()
+                        messages.success(request, "Parametri RAG personalizzati salvati")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': 'Parametri RAG personalizzati salvati con successo'
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Errore nel salvare i parametri RAG: {str(e)}")
+                        messages.error(request, f"Errore: {str(e)}")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore: {str(e)}'
+                            })
+
+                elif action == 'save_advanced_settings':
+                    # Salvataggio delle impostazioni avanzate RAG
+                    try:
+                        project_config.system_prompt = request.POST.get('system_prompt', '')
+                        project_config.auto_citation = request.POST.get('auto_citation') == 'on'
+                        project_config.prioritize_filenames = request.POST.get('prioritize_filenames') == 'on'
+                        project_config.equal_notes_weight = request.POST.get('equal_notes_weight') == 'on'
+                        project_config.strict_context = request.POST.get('strict_context') == 'on'
+
+                        project_config.save()
+                        messages.success(request, "Impostazioni avanzate RAG salvate")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': 'Impostazioni avanzate RAG salvate con successo'
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Errore nel salvare le impostazioni avanzate RAG: {str(e)}")
+                        messages.error(request, f"Errore: {str(e)}")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore: {str(e)}'
+                            })
+
+                elif action == 'reset_to_user_defaults':
+                    # Reset delle impostazioni alle impostazioni predefinite dell'utente
+                    try:
+                        # Ottieni le impostazioni dell'utente
+                        user_engine_settings = AIEngineSettings.objects.get(user=request.user)
+                        user_rag_config = RAGConfiguration.objects.get(user=request.user)
+
+                        # Aggiorna la configurazione del progetto
+                        project_config.selected_engine = user_engine_settings.selected_engine
+
+                        # OpenAI settings
+                        project_config.gpt_model = user_engine_settings.gpt_model
+                        project_config.gpt_max_tokens = user_engine_settings.gpt_max_tokens
+                        project_config.gpt_timeout = user_engine_settings.gpt_timeout
+
+                        # Claude settings
+                        project_config.claude_model = user_engine_settings.claude_model
+                        project_config.claude_max_tokens = user_engine_settings.claude_max_tokens
+                        project_config.claude_timeout = user_engine_settings.claude_timeout
+
+                        # DeepSeek settings
+                        project_config.deepseek_model = user_engine_settings.deepseek_model
+                        project_config.deepseek_max_tokens = user_engine_settings.deepseek_max_tokens
+                        project_config.deepseek_timeout = user_engine_settings.deepseek_timeout
+
+                        # Gemini settings
+                        project_config.gemini_model = user_engine_settings.gemini_model
+                        project_config.gemini_max_tokens = user_engine_settings.gemini_max_tokens
+                        project_config.gemini_timeout = user_engine_settings.gemini_timeout
+
+                        # RAG preset
+                        project_config.rag_preset = user_rag_config.current_settings
+
+                        # Reset delle sovrascritture RAG
+                        project_config.chunk_size = None
+                        project_config.chunk_overlap = None
+                        project_config.similarity_top_k = None
+                        project_config.mmr_lambda = None
+                        project_config.similarity_threshold = None
+                        project_config.retriever_type = None
+                        project_config.system_prompt = None
+                        project_config.auto_citation = None
+                        project_config.prioritize_filenames = None
+                        project_config.equal_notes_weight = None
+                        project_config.strict_context = None
+
+                        project_config.save()
+                        messages.success(request, "Configurazione reimpostata alle impostazioni utente predefinite")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': 'Configurazione reimpostata alle impostazioni utente predefinite'
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Errore nel reimpostare le impostazioni: {str(e)}")
+                        messages.error(request, f"Errore: {str(e)}")
+
+                        # Se è una richiesta AJAX
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore: {str(e)}'
+                            })
+
+                # Redirect alla pagina di configurazione del progetto dopo POST
+                return redirect('project_config', project_id=project.id)
+
+            # Recupera i valori effettivi per il template
+            context['effective_values'] = {
+                'chunk_size': project_config.get_chunk_size(),
+                'chunk_overlap': project_config.get_chunk_overlap(),
+                'similarity_top_k': project_config.get_similarity_top_k(),
+                'mmr_lambda': project_config.get_mmr_lambda(),
+                'similarity_threshold': project_config.get_similarity_threshold(),
+                'retriever_type': project_config.get_retriever_type(),
+                'system_prompt': project_config.get_system_prompt(),
+                'auto_citation': project_config.get_auto_citation(),
+                'prioritize_filenames': project_config.get_prioritize_filenames(),
+                'equal_notes_weight': project_config.get_equal_notes_weight(),
+                'strict_context': project_config.get_strict_context(),
+            }
+
+            # Identifica i valori personalizzati (non ereditati dal preset)
+            context['customized_values'] = {}
+            if project_config.chunk_size is not None: context['customized_values']['chunk_size'] = True
+            if project_config.chunk_overlap is not None: context['customized_values']['chunk_overlap'] = True
+            if project_config.similarity_top_k is not None: context['customized_values']['similarity_top_k'] = True
+            if project_config.mmr_lambda is not None: context['customized_values']['mmr_lambda'] = True
+            if project_config.similarity_threshold is not None: context['customized_values'][
+                'similarity_threshold'] = True
+            if project_config.retriever_type is not None: context['customized_values']['retriever_type'] = True
+            if project_config.system_prompt is not None: context['customized_values']['system_prompt'] = True
+            if project_config.auto_citation is not None: context['customized_values']['auto_citation'] = True
+            if project_config.prioritize_filenames is not None: context['customized_values'][
+                'prioritize_filenames'] = True
+            if project_config.equal_notes_weight is not None: context['customized_values']['equal_notes_weight'] = True
+            if project_config.strict_context is not None: context['customized_values']['strict_context'] = True
+
+            return render(request, 'be/project_config.html', context)
+
+        except Project.DoesNotExist:
+            messages.error(request, "Progetto non trovato.")
+            return redirect('projects_list')
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+

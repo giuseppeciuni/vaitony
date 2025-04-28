@@ -1,3 +1,13 @@
+"""
+Utility di supporto per le funzionalità RAG (Retrieval Augmented Generation).
+Questo modulo gestisce:
+- Caricamento e processamento dei documenti
+- Creazione e gestione degli indici vettoriali
+- Configurazione delle catene RAG
+- Gestione delle query e recupero delle risposte
+- Operazioni sulle note e sui file dei progetti
+"""
+
 import base64
 import hashlib
 import logging
@@ -20,34 +30,36 @@ from langchain_openai import ChatOpenAI
 from dashboard.rag_document_utils import check_index_update_needed, compute_file_hash, scan_user_directory
 from dashboard.rag_document_utils import update_index_status, create_embedding_cache, copy_embedding_to_project_index
 from dashboard.rag_document_utils import update_project_index_status, get_cached_embedding
-from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, AIEngineSettings
+from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, LLMProvider, UserAPIKey, ProjectLLMConfig, \
+    LLMEngine, RagDefaultSettings, RagTemplateType
 from profiles.models import UserDocument, RAGConfiguration
+from profiles.models import ProjectConfiguration
 
 # Configurazione logger
 logger = logging.getLogger(__name__)
 
-# Configurazione OpenAI API
-os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
-
-# Variabili globali dalle impostazioni
-GPT_MODEL = settings.GPT_MODEL
-GPT_MODEL_TEMPERATURE = settings.GPT_MODEL_TEMPERATURE
-GPT_MODEL_MAX_TOKENS = settings.GPT_MODEL_MAX_TOKENS
-GPT_MODEL_TIMEOUT = int(settings.GPT_MODEL_TIMEOUT)
-
 
 def get_openai_api_key(user=None):
     """
-    Ottiene la chiave API OpenAI per l'utente corrente o quella predefinita.
-    Gestisce sia il credito della piattaforma sia le chiavi personali.
+    Ottiene la chiave API OpenAI per l'utente corrente o utilizza quella di sistema.
+
+    Verifica se l'utente ha una chiave API personale valida per OpenAI.
+    Se disponibile, utilizza quella, altrimenti utilizza la chiave predefinita del sistema.
+
+    Args:
+        user: Oggetto User Django (opzionale)
+
+    Returns:
+        str: Chiave API OpenAI
     """
     if user:
         try:
-            engine_settings = AIEngineSettings.objects.get(user=user)
-            if engine_settings.api_mode == 'personal' and engine_settings.openai_api_key:
+            provider = LLMProvider.objects.get(name="OpenAI")
+            user_key = UserAPIKey.objects.get(user=user, provider=provider)
+            if user_key.is_valid:
                 logger.info(f"Utilizzo API key OpenAI personale per l'utente {user.username}")
-                return engine_settings.get_openai_api_key()
-        except (AIEngineSettings.DoesNotExist, Exception) as e:
+                return user_key.get_api_key()
+        except (LLMProvider.DoesNotExist, UserAPIKey.DoesNotExist, Exception) as e:
             logger.warning(f"Impossibile recuperare API key OpenAI per l'utente {user.username}: {str(e)}")
 
     logger.info("Utilizzo API key OpenAI della piattaforma")
@@ -56,88 +68,243 @@ def get_openai_api_key(user=None):
 
 def get_gemini_api_key(user=None):
     """
-    Ottiene la chiave API Gemini per l'utente corrente o quella predefinita.
-    Gestisce sia il credito della piattaforma sia le chiavi personali.
+    Ottiene la chiave API Gemini per l'utente corrente o utilizza quella di sistema.
+
+    Verifica se l'utente ha una chiave API personale valida per Gemini (Google).
+    Se disponibile, utilizza quella, altrimenti utilizza la chiave predefinita del sistema.
+
+    Args:
+        user: Oggetto User Django (opzionale)
+
+    Returns:
+        str: Chiave API Gemini
     """
     if user:
         try:
-            engine_settings = AIEngineSettings.objects.get(user=user)
-            if engine_settings.api_mode == 'personal' and engine_settings.gemini_api_key:
+            provider = LLMProvider.objects.get(name="Google")
+            user_key = UserAPIKey.objects.get(user=user, provider=provider)
+            if user_key.is_valid:
                 logger.info(f"Utilizzo API key Gemini personale per l'utente {user.username}")
-                return engine_settings.get_gemini_api_key()
-        except (AIEngineSettings.DoesNotExist, Exception) as e:
+                return user_key.get_api_key()
+        except (LLMProvider.DoesNotExist, UserAPIKey.DoesNotExist, Exception) as e:
             logger.warning(f"Impossibile recuperare API key Gemini per l'utente {user.username}: {str(e)}")
 
     logger.info("Utilizzo API key Gemini della piattaforma")
-    return settings.GEMINI_API_KEY  # Assicurati di aggiungere questa variabile in settings.py
+    return settings.GEMINI_API_KEY
 
-def get_ai_engine_settings(user=None, engine_type='openai'):
-    """
-    Ottiene i parametri del motore IA per l'utente specificato.
-    Restituisce un dizionario con i parametri.
-    """
-    default_settings = {
-        'openai': {
-            'model': settings.GPT_MODEL,
-            'max_tokens': settings.GPT_MODEL_MAX_TOKENS,
-            'timeout': settings.GPT_MODEL_TIMEOUT,
-        },
-        'claude': {
-            'model': settings.CLAUDE_MODEL,
-            'max_tokens': settings.CLAUDE_MODEL_MAX_TOKENS,
-            'timeout': settings.CLAUDE_MODEL_TIMEOUT,
-        },
-        'deepseek': {
-            'model': settings.DEEPSEEK_MODEL,
-            'max_tokens': settings.DEEPSEEK_MODEL_MAX_TOKENS,
-            'timeout': settings.DEEPSEEK_MODEL_TIMEOUT,
-        },
-        'gemini': {
-            'model': settings.GEMINI_MODEL,
-            'max_tokens': settings.GEMINI_MODEL_MAX_TOKENS,
-            'timeout': settings.GEMINI_MODEL_TIMEOUT,
-        }
-    }
 
-    if user:
+def get_project_engine_settings(project=None):
+    """
+    Ottiene le impostazioni del motore LLM per un progetto specifico o le impostazioni predefinite.
+
+    Se il progetto ha una configurazione, utilizza quella, altrimenti utilizza le impostazioni dell'utente
+    o le impostazioni predefinite recuperate dal database.
+
+    Args:
+        project: Oggetto Project (opzionale)
+
+    Returns:
+        dict: Dizionario con i parametri del motore (provider, engine, model, temperature, max_tokens, timeout)
+    """
+    # Se non è specificato un progetto, usa le impostazioni predefinite dal database
+    if not project:
+        # Ottieni le impostazioni predefinite dal database
         try:
-            engine_settings = AIEngineSettings.objects.get(user=user)
+            # Cerca il motore predefinito di OpenAI
+            openai_provider = LLMProvider.objects.get(name="OpenAI")
+            default_engine = LLMEngine.objects.get(provider=openai_provider, is_default=True)
 
-            if engine_type == 'openai':
-                return {
-                    'model': engine_settings.gpt_model,
-                    'max_tokens': engine_settings.gpt_max_tokens,
-                    'timeout': engine_settings.gpt_timeout,
-                }
-            elif engine_type == 'claude':
-                return {
-                    'model': engine_settings.claude_model,
-                    'max_tokens': engine_settings.claude_max_tokens,
-                    'timeout': engine_settings.claude_timeout,
-                }
-            elif engine_type == 'deepseek':
-                return {
-                    'model': engine_settings.deepseek_model,
-                    'max_tokens': engine_settings.deepseek_max_tokens,
-                    'timeout': engine_settings.deepseek_timeout,
-                }
-            elif engine_type == 'gemini':
-                return {
-                    'model': engine_settings.gemini_model,
-                    'max_tokens': engine_settings.gemini_max_tokens,
-                    'timeout': engine_settings.gemini_timeout,
-                }
-        except (AIEngineSettings.DoesNotExist, Exception) as e:
-            logger.warning(f"Impossibile recuperare impostazioni per {engine_type}: {str(e)}")
+            return {
+                'provider': openai_provider,
+                'engine': default_engine,
+                'model': default_engine.model_id,
+                'temperature': default_engine.default_temperature,
+                'max_tokens': default_engine.default_max_tokens,
+                'timeout': default_engine.default_timeout,
+                'type': 'openai'  # Aggiungiamo il tipo per riferimento
+            }
+        except (LLMProvider.DoesNotExist, LLMEngine.DoesNotExist) as e:
+            logger.error(f"Errore nel recuperare il motore predefinito: {str(e)}")
+            # Fallback ai valori di default dagli altri motori disponibili
+            try:
+                # Prova a ottenere qualsiasi engine disponibile
+                any_engine = LLMEngine.objects.filter(is_active=True).first()
+                if any_engine:
+                    return {
+                        'provider': any_engine.provider,
+                        'engine': any_engine,
+                        'model': any_engine.model_id,
+                        'temperature': any_engine.default_temperature,
+                        'max_tokens': any_engine.default_max_tokens,
+                        'timeout': any_engine.default_timeout,
+                        'type': any_engine.provider.name.lower()
+                    }
+            except Exception as ee:
+                logger.error(f"Errore nel recuperare qualsiasi engine attivo: {str(ee)}")
 
-    # Restituisci le impostazioni predefinite se non è possibile ottenere quelle personalizzate
-    return default_settings.get(engine_type, default_settings['openai'])
+            # Fallback estremo ai valori hard-coded come ultima risorsa
+            return {
+                'provider': None,
+                'engine': None,
+                'model': 'gpt-3.5-turbo',  # Il modello più economico come fallback
+                'temperature': 0.7,
+                'max_tokens': 4096,
+                'timeout': 60,
+                'type': 'openai'
+            }
+
+    # Se è specificato un progetto, controlla se ha una configurazione LLM
+    try:
+        project_llm_config = ProjectLLMConfig.objects.get(project=project)
+        engine = project_llm_config.engine
+
+        if engine:
+            return {
+                'provider': engine.provider,
+                'engine': engine,
+                'model': engine.model_id,
+                'temperature': project_llm_config.get_temperature(),
+                'max_tokens': project_llm_config.get_max_tokens(),
+                'timeout': project_llm_config.get_timeout(),
+                'type': engine.provider.name.lower()
+            }
+    except ProjectLLMConfig.DoesNotExist:
+        # Se il progetto non ha una configurazione specifica, usa le impostazioni predefinite
+        logger.warning(f"Nessuna configurazione LLM trovata per il progetto {project.id}, uso dei valori predefiniti")
+        pass
+
+    # Se arriviamo qui, il progetto non ha configurazioni LLM o non ha un engine associato
+    # Utilizziamo le impostazioni predefinite globali
+    return get_project_engine_settings(None)  # Richiama questa funzione senza progetto
+
+    # Questo punto non dovrebbe mai essere raggiunto
+    return get_project_engine_settings(None)
+
+
+def get_project_rag_settings(project=None):
+    """
+    Ottiene le impostazioni RAG per un progetto specifico o le impostazioni predefinite.
+
+    Se il progetto ha una configurazione, utilizza quella, altrimenti utilizza le impostazioni dell'utente
+    o le impostazioni predefinite recuperate dal database.
+
+    Args:
+        project: Oggetto Project (opzionale)
+
+    Returns:
+        dict: Dizionario con i parametri RAG
+    """
+    # Se non è specificato un progetto, usa le impostazioni predefinite dal database
+    if not project:
+        try:
+            # Cerca le impostazioni bilanciate predefinite
+            balanced_type = RagTemplateType.objects.get(name="Bilanciato")
+            default_settings = RagDefaultSettings.objects.get(template_type=balanced_type, is_default=True)
+
+            return {
+                'chunk_size': default_settings.chunk_size,
+                'chunk_overlap': default_settings.chunk_overlap,
+                'similarity_top_k': default_settings.similarity_top_k,
+                'mmr_lambda': default_settings.mmr_lambda,
+                'similarity_threshold': default_settings.similarity_threshold,
+                'retriever_type': default_settings.retriever_type,
+                'system_prompt': default_settings.system_prompt,
+                'auto_citation': default_settings.auto_citation,
+                'prioritize_filenames': default_settings.prioritize_filenames,
+                'equal_notes_weight': default_settings.equal_notes_weight,
+                'strict_context': default_settings.strict_context,
+            }
+        except (RagTemplateType.DoesNotExist, RagDefaultSettings.DoesNotExist) as e:
+            logger.error(f"Errore nel recuperare le impostazioni RAG predefinite: {str(e)}")
+            # Fallback a qualsiasi preset disponibile
+            try:
+                any_preset = RagDefaultSettings.objects.filter(is_default=True).first()
+                if any_preset:
+                    return {
+                        'chunk_size': any_preset.chunk_size,
+                        'chunk_overlap': any_preset.chunk_overlap,
+                        'similarity_top_k': any_preset.similarity_top_k,
+                        'mmr_lambda': any_preset.mmr_lambda,
+                        'similarity_threshold': any_preset.similarity_threshold,
+                        'retriever_type': any_preset.retriever_type,
+                        'system_prompt': any_preset.system_prompt,
+                        'auto_citation': any_preset.auto_citation,
+                        'prioritize_filenames': any_preset.prioritize_filenames,
+                        'equal_notes_weight': any_preset.equal_notes_weight,
+                        'strict_context': any_preset.strict_context,
+                    }
+            except Exception as ee:
+                logger.error(f"Errore nel recuperare qualsiasi preset RAG: {str(ee)}")
+
+            # Fallback a valori predefiniti hard-coded come ultima risorsa
+            return {
+                'chunk_size': 500,
+                'chunk_overlap': 50,
+                'similarity_top_k': 6,
+                'mmr_lambda': 0.7,
+                'similarity_threshold': 0.7,
+                'retriever_type': 'mmr',
+                'system_prompt': "Sei un assistente che risponde a domande basandosi sui documenti forniti.",
+                'auto_citation': True,
+                'prioritize_filenames': True,
+                'equal_notes_weight': True,
+                'strict_context': False,
+            }
+
+    # Se è specificato un progetto, controlla se ha una configurazione
+    try:
+        # Verifica se il progetto ha una configurazione RAG
+        project_config = ProjectConfiguration.objects.get(project=project)
+
+        return {
+            'chunk_size': project_config.get_chunk_size(),
+            'chunk_overlap': project_config.get_chunk_overlap(),
+            'similarity_top_k': project_config.get_similarity_top_k(),
+            'mmr_lambda': project_config.get_mmr_lambda(),
+            'similarity_threshold': project_config.get_similarity_threshold(),
+            'retriever_type': project_config.get_retriever_type(),
+            'system_prompt': project_config.get_system_prompt(),
+            'auto_citation': project_config.get_auto_citation(),
+            'prioritize_filenames': project_config.get_prioritize_filenames(),
+            'equal_notes_weight': project_config.get_equal_notes_weight(),
+            'strict_context': project_config.get_strict_context(),
+        }
+    except ProjectConfiguration.DoesNotExist:
+        # Se il progetto non ha una configurazione, verifica se l'utente ha una configurazione
+        try:
+            user_config = RAGConfiguration.objects.get(user=project.user)
+
+            return {
+                'chunk_size': user_config.get_chunk_size(),
+                'chunk_overlap': user_config.get_chunk_overlap(),
+                'similarity_top_k': user_config.get_similarity_top_k(),
+                'mmr_lambda': user_config.get_mmr_lambda(),
+                'similarity_threshold': user_config.get_similarity_threshold(),
+                'retriever_type': user_config.get_retriever_type(),
+                'system_prompt': user_config.get_system_prompt(),
+                'auto_citation': user_config.get_auto_citation(),
+                'prioritize_filenames': user_config.get_prioritize_filenames(),
+                'equal_notes_weight': user_config.get_equal_notes_weight(),
+                'strict_context': user_config.get_strict_context(),
+            }
+        except RAGConfiguration.DoesNotExist:
+            # Se né il progetto né l'utente hanno una configurazione, usa le impostazioni predefinite
+            return get_project_rag_settings(None)  # Richiama questa funzione senza progetto
 
 
 def process_image(image_path, user=None):
     """
     Processa un'immagine usando OpenAI Vision per estrarne testo e contenuto.
-    Restituisce un oggetto Document di LangChain con il testo estratto e i metadati.
+
+    Converte l'immagine in base64 e utilizza il modello gpt-4-vision per estrarre
+    testo visibile e generare una descrizione dettagliata dell'immagine.
+
+    Args:
+        image_path: Percorso completo dell'immagine
+        user: Oggetto User Django (opzionale)
+
+    Returns:
+        Document: Documento LangChain con il testo estratto dall'immagine
     """
     logger.debug(f"Elaborazione immagine: {image_path}")
     try:
@@ -145,7 +312,7 @@ def process_image(image_path, user=None):
         api_key = get_openai_api_key(user)
 
         # Ottieni le impostazioni del motore
-        ai_settings = get_ai_engine_settings(user, 'openai')
+        ai_settings = get_project_engine_settings(None)
 
         with open(image_path, "rb") as image_file:
             image_base64 = base64.b64encode(image_file.read()).decode("utf-8")
@@ -154,7 +321,7 @@ def process_image(image_path, user=None):
         client = openai.OpenAI(api_key=api_key)
 
         response = client.chat.completions.create(
-            model="gpt-4-vision",
+            model="gpt-4-vision",  # Modello specifico per la visione
             messages=[
                 {
                     "role": "user",
@@ -182,21 +349,30 @@ def process_image(image_path, user=None):
 
 def load_document(file_path):
     """
-    Carica un singolo documento in base al suo tipo (PDF, DOCX, immagini, ecc).
+    Carica un singolo documento in base al suo tipo di file.
+
+    Supporta diversi formati come PDF, DOCX, PPT, immagini e testo plain.
     Aggiunge metadati utili come nome del file e gestisce vari tipi di errori.
-    Restituisce una lista di oggetti Document di LangChain.
+
+    Args:
+        file_path: Percorso completo del file da caricare
+
+    Returns:
+        list: Lista di oggetti Document di LangChain, uno per ogni pagina/sezione del documento
     """
     filename = os.path.basename(file_path)
 
     try:
         documents = []
 
+        # PDF: prova prima PyMuPDFLoader, se fallisce o non estrae contenuto, usa PDFMinerLoader
         if filename.lower().endswith(".pdf"):
             try:
                 logger.info(f"Caricamento PDF: {file_path}")
                 loader = PyMuPDFLoader(file_path)
                 documents = loader.load()
 
+                # Verifica se sono stati estratti contenuti
                 if not documents or all(not doc.page_content.strip() for doc in documents):
                     logger.warning(f"PDF caricato ma senza contenuto: {file_path}")
                     logger.info(f"Tentativo con PDFMinerLoader: {file_path}")
@@ -207,15 +383,19 @@ def load_document(file_path):
             except Exception as pdf_error:
                 logger.error(f"Errore specifico per PDF {file_path}: {str(pdf_error)}")
                 raise
+        # Documenti Word
         elif filename.lower().endswith((".docx", ".doc")):
             loader = UnstructuredWordDocumentLoader(file_path)
             documents = loader.load()
+        # Presentazioni PowerPoint
         elif filename.lower().endswith((".pptx", ".ppt")):
             loader = UnstructuredPowerPointLoader(file_path)
             documents = loader.load()
+        # Immagini: usa OpenAI Vision API
         elif filename.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp")):
             image_doc = process_image(file_path)
             documents = [image_doc]
+        # File di testo
         elif filename.lower().endswith((".txt")):
             loader = TextLoader(file_path)
             documents = loader.load()
@@ -243,7 +423,15 @@ def load_document(file_path):
 def load_all_documents(folder_path):
     """
     Carica tutti i documenti supportati da una directory specificata.
-    Restituisce una lista di tutti i documenti caricati.
+
+    Esplora ricorsivamente la directory, caricando tutti i file non nascosti e
+    di formato supportato.
+
+    Args:
+        folder_path: Percorso della directory da cui caricare i documenti
+
+    Returns:
+        list: Lista di tutti i documenti LangChain caricati
     """
     logger.debug(f"Caricamento documenti dalla cartella: {folder_path}")
     documents = []
@@ -264,7 +452,15 @@ def load_all_documents(folder_path):
 def load_user_documents(user):
     """
     Carica i documenti dell'utente che necessitano di embedding.
-    Restituisce una tupla (documenti, IDs documento).
+
+    Prima aggiorna il database con i file presenti nella directory dell'utente,
+    poi carica solo i documenti che non sono ancora stati incorporati nell'indice.
+
+    Args:
+        user: Oggetto User Django
+
+    Returns:
+        tuple: (Lista di documenti LangChain, Lista di ID documento nel database)
     """
     logger.debug(f"Caricamento documenti per l'utente: {user.username}")
 
@@ -289,7 +485,21 @@ def load_user_documents(user):
 def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_delay=2):
     """
     Crea embedding con gestione dei tentativi in caso di errori di connessione.
-    Utilizza backoff esponenziale tra i tentativi.
+
+    Utilizza backoff esponenziale tra i tentativi per gestire problemi temporanei
+    di connessione o limitazioni dell'API.
+
+    Args:
+        documents: Lista di documenti LangChain da incorporare
+        user: Oggetto User Django (opzionale)
+        max_retries: Numero massimo di tentativi prima di fallire
+        retry_delay: Ritardo iniziale (in secondi) tra i tentativi
+
+    Returns:
+        FAISS: Database vettoriale con gli embedding creati
+
+    Raises:
+        Exception: Se tutti i tentativi falliscono
     """
     # Ottieni la chiave API OpenAI per l'utente
     api_key = get_openai_api_key(user)
@@ -320,11 +530,26 @@ def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_dela
 
 def create_rag_chain(user=None, docs=None):
     """
-    Crea/aggiorna catena RAG per un progetto con file e note
-    Se un utente ha appena caricato un documento es "rapporto_2023.pdf", questa funzione caricherà il documento,
-    lo dividerà in chunk e creerà/aggiornerà l'indice vettoriale.
+    Crea o aggiorna una catena RAG per un utente.
+
+    Gestisce l'intero processo di creazione di una catena RAG:
+    1. Carica i documenti dell'utente se non specificati
+    2. Crea o aggiorna l'indice vettoriale FAISS
+    3. Configura il retriever con le impostazioni appropriate
+    4. Crea il modello LLM con parametri ottimali
+    5. Costruisce la catena RAG completa
+
+    Args:
+        user: Oggetto User Django (opzionale)
+        docs: Lista di documenti già caricati (opzionale)
+
+    Returns:
+        RetrievalQA: Catena RAG configurata, o None in caso di errore
     """
     logger.debug(f"Creazione catena RAG per utente: {user.username if user else 'Nessuno'}")
+
+    # Ottieni le impostazioni del motore LLM dal database
+    engine_settings = get_project_engine_settings(None)
 
     # Se l'utente è specificato, usa il suo indice specifico
     if user:
@@ -338,7 +563,8 @@ def create_rag_chain(user=None, docs=None):
         index_path = os.path.join(settings.MEDIA_ROOT, index_name)
         document_ids = None
 
-    embeddings = OpenAIEmbeddings()
+    # Inizializza l'oggetto per gli embedding
+    embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(user))
     vectordb = None
 
     # Se non ci sono documenti da processare e l'indice esiste, carica l'indice esistente
@@ -348,7 +574,7 @@ def create_rag_chain(user=None, docs=None):
             vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
         except Exception as e:
             logger.error(f"Errore nel caricare l'indice FAISS: {str(e)}")
-            # Se c'è un errore nel caricare l'indice, ricrealo
+            # Se c'è un errore nel caricare l'indice, tenta di ricrearlo
             if docs is None:
                 if user:
                     user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(user.id))
@@ -356,15 +582,21 @@ def create_rag_chain(user=None, docs=None):
                 else:
                     docs = load_all_documents(os.path.join(settings.MEDIA_ROOT, "docs"))
 
-    # Se abbiamo documenti da processare o l'indice non esiste o è corrotto (vectordb è ancora None)
+    # Se abbiamo documenti da processare o l'indice non esiste o è corrotto
     if docs and len(docs) > 0 and vectordb is None:
         logger.info(f"Creazione o aggiornamento dell'indice FAISS con {len(docs)} documenti")
 
+        # Ottieni impostazioni RAG per chunking dal database
+        rag_settings = get_project_rag_settings(None)
+        chunk_size = rag_settings['chunk_size']
+        chunk_overlap = rag_settings['chunk_overlap']
+
         # Dividi i documenti in chunk più piccoli
-        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         split_docs = splitter.split_documents(docs)
         split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
 
+        # Se esiste un indice, prova ad aggiornarlo, altrimenti crea un nuovo indice
         if os.path.exists(index_path):
             logger.info(f"Caricamento dell'indice FAISS esistente per aggiornamento: {index_path}")
             try:
@@ -377,7 +609,7 @@ def create_rag_chain(user=None, docs=None):
             # Crea un nuovo indice
             vectordb = FAISS.from_documents(split_docs, embeddings)
 
-        # Salva l'indice
+        # Salva l'indice appena creato o aggiornato
         if vectordb:
             os.makedirs(os.path.dirname(index_path), exist_ok=True)
             vectordb.save_local(index_path)
@@ -400,77 +632,59 @@ def create_rag_chain(user=None, docs=None):
             logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
             return None
 
-    # Carica il prompt dalle impostazioni RAG dell'utente o dalle impostazioni predefinite
-    try:
-        if user:
-            from profiles.models import RAGConfiguration
-            rag_settings, _ = RAGConfiguration.objects.get_or_create(user=user)
-            system_prompt = rag_settings.get_system_prompt()
-        else:
-            system_prompt = settings.DEFAULT_RAG_PROMPT
-    except Exception as e:
-        logger.error(f"Errore nel caricare il prompt di sistema: {str(e)}")
-        system_prompt = settings.DEFAULT_RAG_PROMPT
+    # Ottieni le impostazioni RAG dal database
+    rag_settings = get_project_rag_settings(None)
 
-    # Usa lo stesso approccio di create_retrieval_qa_chain per le opzioni aggiuntive
-    try:
-        if user:
-            from profiles.models import RAGConfiguration
-            rag_settings, _ = RAGConfiguration.objects.get_or_create(user=user)
-            auto_citation = rag_settings.get_auto_citation()
-            prioritize_filenames = rag_settings.get_prioritize_filenames()
-            strict_context = rag_settings.get_strict_context()
-        else:
-            auto_citation = settings.DEFAULT_AUTO_CITATION
-            prioritize_filenames = settings.DEFAULT_PRIORITIZE_FILENAMES
-            strict_context = settings.DEFAULT_STRICT_CONTEXT
-    except Exception as e:
-        logger.error(f"Errore nel caricare opzioni prompt: {str(e)}")
-        auto_citation = settings.DEFAULT_AUTO_CITATION
-        prioritize_filenames = settings.DEFAULT_PRIORITIZE_FILENAMES
-        strict_context = settings.DEFAULT_STRICT_CONTEXT
-
-    # Costruisci il prompt completo
+    # Costruisci il prompt di sistema a partire dalle impostazioni
+    system_prompt = rag_settings['system_prompt']
     template = system_prompt
-    logger.debug(f"Prompt template: {template}")
+    logger.debug(f"Prompt template base: {template}")
 
-    if prioritize_filenames:
-        template += settings.PRIORITIZE_FILENAMES_PROMPT
+    # Aggiungi moduli al prompt in base alle impostazioni
+    if rag_settings['prioritize_filenames']:
+        # Prompt per dare priorità ai documenti menzionati nella domanda
+        prioritize_prompt = "\n\nSe l'utente menziona il nome di un documento specifico nella domanda, dai priorità ai contenuti di quel documento nella tua risposta."
+        template += prioritize_prompt
 
-    if auto_citation:
-        template += settings.AUTO_CITATION_PROMPT
+    if rag_settings['auto_citation']:
+        # Prompt per citare le fonti
+        citation_prompt = "\n\nCita la fonte specifica (nome del documento o della nota) per ogni informazione che includi nella tua risposta."
+        template += citation_prompt
 
-    if strict_context:
-        template += settings.STRICT_CONTEXT_PROMPT
+    if rag_settings['strict_context']:
+        # Prompt per limitare le risposte al solo contesto fornito
+        strict_prompt = "\n\nRispondi SOLO in base al contesto fornito. Se il contesto non contiene informazioni sufficienti per rispondere alla domanda, di' chiaramente che l'informazione non è disponibile nei documenti forniti."
+        template += strict_prompt
 
-    template += settings.CONTEXT_QUESTION_PROMPT
-
+    # Aggiungi la parte finale del prompt per indicare il contesto e la domanda
+    template += "\n\nCONTESTO:\n{context}\n\nDOMANDA: {question}\nRISPOSTA:"
     logger.debug(f"Prompt template finale: {template}")
 
+    # Crea l'oggetto prompt
     PROMPT = PromptTemplate(
         template=template,
         input_variables=["context", "question"]
     )
 
+    # Configura il retriever con i parametri appropriati
+    retriever = vectordb.as_retriever(search_kwargs={"k": rag_settings['similarity_top_k']})
 
-    # Configura il retriever con un numero più alto di documenti da recuperare
-    retriever = vectordb.as_retriever(search_kwargs={"k": 6})
-
-    # Crea il modello con timeout più alto per risposte complesse
+    # Crea il modello LLM con i parametri dal database
     llm = ChatOpenAI(
-        model=GPT_MODEL,
-        temperature=GPT_MODEL_TEMPERATURE,
-        max_tokens=GPT_MODEL_MAX_TOKENS,
-        request_timeout=GPT_MODEL_TIMEOUT
+        model=engine_settings['model'],
+        temperature=engine_settings['temperature'],
+        max_tokens=engine_settings['max_tokens'],
+        request_timeout=engine_settings['timeout'],
+        openai_api_key=get_openai_api_key(user)
     )
 
     # Crea la catena RAG con il prompt personalizzato
     qa = RetrievalQA.from_chain_type(
         llm=llm,
-        chain_type="stuff",
+        chain_type="stuff",  # Utilizza "stuff" per inserire tutti i documenti nel prompt
         retriever=retriever,
         chain_type_kwargs={"prompt": PROMPT},
-        return_source_documents=True
+        return_source_documents=True  # Restituisce anche i documenti fonte
     )
     return qa
 
@@ -478,7 +692,16 @@ def create_rag_chain(user=None, docs=None):
 def get_answer_from_rag(user, question):
     """
     Ottiene una risposta dal sistema RAG per la domanda dell'utente.
-    Gestisce casi in cui non ci sono documenti o l'indice non può essere creato.
+
+    Verifica se l'utente ha documenti caricati, se è necessario aggiornare l'indice,
+    e utilizza la catena RAG per generare una risposta basata sui documenti pertinenti.
+
+    Args:
+        user: Oggetto User Django
+        question: Stringa contenente la domanda dell'utente
+
+    Returns:
+        dict: Dizionario con la risposta e le fonti utilizzate
     """
     logger.debug(f"Ottenimento risposta RAG per utente: {user.username}, domanda: '{question[:50]}...'")
 
@@ -497,15 +720,18 @@ def get_answer_from_rag(user, question):
         return {"answer": "Non è stato possibile creare un indice per i tuoi documenti.", "sources": []}
 
     # Ottieni la risposta
+    start_time = time.time()
     result = qa_chain.invoke(question)
+    processing_time = round(time.time() - start_time, 2)
 
     # Formato della risposta
     response = {
         "answer": result.get('result', 'Nessuna risposta trovata.'),
-        "sources": []
+        "sources": [],
+        "processing_time": processing_time
     }
 
-    # Aggiungi le fonti
+    # Aggiungi le fonti utilizzate
     source_documents = result.get('source_documents', [])
     for doc in source_documents:
         source = {
@@ -521,14 +747,27 @@ def get_answer_from_rag(user, question):
 def check_project_index_update_needed(project):
     """
     Verifica se l'indice FAISS del progetto deve essere aggiornato.
-    Controlla sia i file che le note per determinare se è necessario un aggiornamento.
+
+    Controlla vari fattori che potrebbero richiedere un aggiornamento dell'indice:
+    1. Documenti non ancora incorporati
+    2. Numero di documenti/note cambiato
+    3. Note modificate dopo l'ultimo aggiornamento
+    4. Hash delle note cambiato
+
+    Args:
+        project: Oggetto Project
+
+    Returns:
+        bool: True se l'indice deve essere aggiornato, False altrimenti
     """
+    # Ottieni tutti i documenti e le note attive del progetto
     documents = ProjectFile.objects.filter(project=project)
     active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
     logger.debug(f"Controllo aggiornamento indice per progetto {project.id}: " +
                  f"{documents.count()} documenti, {active_notes.count()} note attive")
 
+    # Se non ci sono documenti né note, non serve indice
     if not documents.exists() and not active_notes.exists():
         logger.debug(f"Nessun documento o nota per il progetto {project.id}")
         return False
@@ -539,7 +778,7 @@ def check_project_index_update_needed(project):
         logger.debug(f"Rilevati {non_embedded_docs.count()} documenti non embedded per il progetto {project.id}")
         return True
 
-    # Controlla lo stato dell'indice
+    # Controlla lo stato dell'indice nel database
     try:
         index_status = ProjectIndexStatus.objects.get(project=project)
 
@@ -555,7 +794,7 @@ def check_project_index_update_needed(project):
             logger.debug(f"Note modificate dopo l'ultimo aggiornamento dell'indice")
             return True
 
-        # Verifica hash delle note
+        # Verifica hash delle note (cambio contenuto)
         current_notes_hash = ""
         for note in active_notes:
             note_hash = hashlib.sha256(f"{note.id}_{note.content}_{note.is_included_in_rag}".encode()).hexdigest()
@@ -571,19 +810,26 @@ def check_project_index_update_needed(project):
         return False
 
     except ProjectIndexStatus.DoesNotExist:
+        # Se non esiste un record di stato dell'indice, è necessario crearlo
         logger.debug(f"Nessun record di stato dell'indice per il progetto {project.id}")
         return True
 
 
-# Modifica della funzione create_project_rag_chain in rag_utils.py
-
-# Modifica della funzione create_project_rag_chain in rag_utils.py
-
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
-    Crea o aggiorna la catena RAG per un progetto, includendo sia i file che le note.
-    Permette di forzare la ricostruzione dell'indice se necessario.
-    Utilizza la cache globale degli embedding quando possibile.
+    Crea o aggiorna la catena RAG per un progetto.
+
+    Gestisce sia i file che le note del progetto, permettendo di forzare la
+    ricostruzione dell'indice se necessario. Utilizza la cache globale degli
+    embedding quando possibile per ottimizzare le prestazioni.
+
+    Args:
+        project: Oggetto Project (opzionale)
+        docs: Lista di documenti già caricati (opzionale)
+        force_rebuild: Flag per forzare la ricostruzione dell'indice
+
+    Returns:
+        RetrievalQA: Catena RAG configurata, o None in caso di errore
     """
     logger.debug(f"Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
 
@@ -591,7 +837,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     cached_files = []
 
     if project:
-        # Configurazione percorsi
+        # Configurazione percorsi: crea la directory "vector_index" all'interno del progetto
         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
         index_name = "vector_index"
         index_path = os.path.join(project_dir, index_name)
@@ -605,18 +851,18 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
         # Elimina indice esistente se force_rebuild
         if force_rebuild and os.path.exists(index_path):
-            import shutil
+            import shutil  # Elimina ricorsivamente una directory e tutto il suo contenuto
             logger.info(f"Eliminazione forzata dell'indice precedente in {index_path}")
-            shutil.rmtree(index_path)
+            shutil.rmtree(index_path)  # Cancella tutto il contenuto della directory
 
         # Carica documenti se necessario
         if docs is None:
             if force_rebuild:
-                # Carica tutti i file
+                # Carica tutti i file se è richiesta la ricostruzione forzata
                 files_to_embed = all_files
                 logger.info(f"Ricostruendo indice con {files_to_embed.count()} file e {all_active_notes.count()} note")
             else:
-                # Solo file non ancora incorporati
+                # Altrimenti solo i file non ancora incorporati
                 files_to_embed = all_files.filter(is_embedded=False)
                 logger.info(f"File da incorporare: {[f.filename for f in files_to_embed]}")
                 logger.info(f"Note attive trovate: {all_active_notes.count()}")
@@ -625,16 +871,10 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             document_ids = []
             note_ids = []
 
-            # Ottieni impostazioni RAG utente per chunking
-            rag_settings = None
-            try:
-                rag_settings, _ = RAGConfiguration.objects.get_or_create(user=project.user)
-                chunk_size = rag_settings.get_chunk_size()
-                chunk_overlap = rag_settings.get_chunk_overlap()
-            except Exception as e:
-                logger.error(f"Errore nel recuperare le impostazioni RAG: {str(e)}")
-                chunk_size = 500
-                chunk_overlap = 50
+            # Ottieni impostazioni RAG per chunking
+            rag_settings = get_project_rag_settings(project)
+            chunk_size = rag_settings['chunk_size']
+            chunk_overlap = rag_settings['chunk_overlap']
 
             # Elabora i file
             cached_files = []
@@ -649,8 +889,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 )
 
                 if cached_embedding:
-                    logger.info(
-                        f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
+                    logger.info(f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
                     cached_files.append({
                         'doc_model': doc_model,
                         'cache_info': cached_embedding
@@ -695,37 +934,27 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         note_ids = None
         cached_files = []
 
-    embeddings = OpenAIEmbeddings()
+    # Inizializza oggetti per gli embedding
+    embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user if project else None))
     vectordb = None
 
-    # Se ci sono documenti da processare o l'indice deve essere rigenerato
+    # Gestione dei casi in cui bisogna creare o aggiornare l'indice
     if (docs and len(docs) > 0) or force_rebuild or cached_files:
-        logger.info(
-            f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
+        logger.info(f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
 
         if docs and len(docs) > 0:
-            # Ottieni impostazioni RAG utente per chunking
-            rag_settings = None
-            if project:
-                try:
-                    rag_settings, _ = RAGConfiguration.objects.get_or_create(user=project.user)
-                    chunk_size = rag_settings.get_chunk_size()
-                    chunk_overlap = rag_settings.get_chunk_overlap()
-                except Exception as e:
-                    logger.error(f"Errore nel recuperare le impostazioni RAG: {str(e)}")
-                    chunk_size = 500
-                    chunk_overlap = 50
-            else:
-                chunk_size = 500
-                chunk_overlap = 50
+            # Ottieni impostazioni RAG per chunking
+            rag_settings = get_project_rag_settings(project)
+            chunk_size = rag_settings['chunk_size']
+            chunk_overlap = rag_settings['chunk_overlap']
 
-            # Dividi documenti in chunk con parametri dell'utente
+            # Dividi documenti in chunk con parametri appropriati
             logger.info(f"Chunking con parametri: size={chunk_size}, overlap={chunk_overlap}")
             splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
             split_docs = splitter.split_documents(docs)
             split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
 
-            # Assicura metadati
+            # Assicura che ogni chunk abbia i metadati appropriati
             for chunk in split_docs:
                 if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
                     filename = os.path.basename(chunk.metadata['source'])
@@ -746,7 +975,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
                     logger.info(f"Creazione di un nuovo indice FAISS")
                     try:
-                        vectordb = create_embeddings_with_retry(split_docs)
+                        vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
                     except Exception as ee:
                         logger.error(f"Errore anche nella creazione dell'indice con retry: {str(ee)}")
                         vectordb = FAISS.from_documents(split_docs, embeddings)
@@ -754,9 +983,9 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 # Crea nuovo indice
                 logger.info(f"Creazione di un nuovo indice FAISS")
                 try:
-                    vectordb = create_embeddings_with_retry(split_docs)
+                    vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
 
-                    # NOVITÀ: Salviamo gli embedding nella cache globale per ogni documento
+                    # Salva gli embedding nella cache globale per ogni documento
                     if document_ids and project:
                         for doc_id in document_ids:
                             try:
@@ -780,7 +1009,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
         # Usa la cache per i file già elaborati in precedenza
         elif cached_files and not vectordb:
-            # Se abbiamo solo file in cache e nessun nuovo documento
+            # Gestione dei files in cache
             if os.path.exists(index_path) and not force_rebuild:
                 try:
                     # Carica l'indice esistente
@@ -791,7 +1020,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     vectordb = None
 
             # Se non abbiamo un indice o è stato forzato un rebuild
-            if vectordb is None:
+            if vectordb is None and cached_files:
                 # Usa il primo documento in cache come base
                 first_cache = cached_files[0]['cache_info']
                 copy_embedding_to_project_index(project, first_cache, index_path)
@@ -859,31 +1088,40 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
 def get_answer_from_project(project, question):
     """
-    Ottiene una risposta dal sistema RAG per la domanda su un progetto.
-    Gestisce l'indice, recupera le fonti pertinenti e formatta la risposta.
+    Ottiene una risposta dal sistema RAG per una domanda su un progetto specifico.
+
+    Gestisce l'intero processo di query RAG per un progetto: verifica se l'indice
+    deve essere aggiornato, esegue la query, gestisce le fonti ed eventuali errori,
+    inclusi errori di autenticazione API.
+
+    Args:
+        project: Oggetto Project
+        question: Stringa contenente la domanda dell'utente
+
+    Returns:
+        dict: Dizionario con la risposta, le fonti utilizzate e metadati aggiuntivi
     """
     logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
 
     try:
-        # Verifica documenti e note
+        # Verifica presenza di documenti e note nel progetto
         project_files = ProjectFile.objects.filter(project=project)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
 
         if not project_files.exists() and not project_notes.exists():
             return {"answer": "Il progetto non contiene documenti o note attive.", "sources": []}
 
-        # Verifica configurazione RAG
+        # Ottieni informazioni sul motore LLM usato dal progetto
         try:
-            rag_config = RAGConfiguration.objects.get(user=project.user)
-            current_preset = rag_config.current_settings
-            if current_preset:
-                logger.info(f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
-            else:
-                logger.info("Nessun profilo RAG specifico attivo, usando configurazione predefinita")
-        except Exception as config_error:
-            logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
+            engine_info = get_project_engine_settings(project)
+            logger.info(
+                f"Utilizzando motore {engine_info['provider'].name if engine_info['provider'] else 'openai'} - {engine_info['model']} per il progetto {project.id}")
+        except Exception as e:
+            logger.warning(f"Impossibile determinare il motore del progetto: {str(e)}")
+            # Usa engine_info di fallback
+            engine_info = get_project_engine_settings(None)
 
-        # Verifica necessità aggiornamento indice
+        # Verifica se l'indice deve essere aggiornato
         update_needed = check_project_index_update_needed(project)
 
         # Crea o aggiorna catena RAG
@@ -898,7 +1136,7 @@ def get_answer_from_project(project, question):
             return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.",
                     "sources": []}
 
-        # Esegui la ricerca
+        # Esegui la ricerca e ottieni la risposta
         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
         start_time = time.time()
         try:
@@ -906,21 +1144,34 @@ def get_answer_from_project(project, question):
             processing_time = round(time.time() - start_time, 2)
             logger.info(f"Ricerca completata in {processing_time} secondi")
         except openai.AuthenticationError as auth_error:
-            # Cattura errori specifici di autenticazione API
-            logger.error(f"Errore di autenticazione API OpenAI: {str(auth_error)}")
+            # Gestione specifica dell'errore di autenticazione API
+            error_message = str(auth_error)
+            logger.error(f"Errore di autenticazione API {engine_info['type']}: {error_message}")
             return {
-                "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
-                         "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+                "answer": f"Si è verificato un errore di autenticazione con l'API {engine_info['type'].upper()}. " +
+                          "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
                 "sources": [],
                 "error": "api_auth_error",
-                "error_details": str(auth_error)
+                "error_details": error_message
             }
         except Exception as query_error:
             logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
+
+            # Verifica se l'errore è di autenticazione API anche se non catturato direttamente
+            if "invalid_api_key" in str(query_error) or "authentication" in str(query_error).lower():
+                return {
+                    "answer": f"Si è verificato un errore di autenticazione con l'API {engine_info['type'].upper()}. " +
+                              "Verifica che le chiavi API siano corrette nelle impostazioni del progetto.",
+                    "sources": [],
+                    "error": "api_auth_error",
+                    "error_details": str(query_error)
+                }
+
             return {
                 "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(query_error)}",
                 "sources": [],
-                "error": "query_error"
+                "error": "query_error",
+                "engine_info": engine_info  # Includi info sul motore per debugging
             }
 
         # Log fonti trovate
@@ -930,7 +1181,12 @@ def get_answer_from_project(project, question):
         # Formatta risposta
         response = {
             "answer": result.get('result', 'Nessuna risposta trovata.'),
-            "sources": []
+            "sources": [],
+            "engine": {
+                "type": engine_info['type'],
+                "model": engine_info['model']
+            },
+            "processing_time": processing_time
         }
 
         # Aggiungi fonti alla risposta
@@ -962,16 +1218,27 @@ def get_answer_from_project(project, question):
         return response
 
     except openai.AuthenticationError as auth_error:
-        logger.exception(f"Errore di autenticazione API OpenAI in get_answer_from_project: {str(auth_error)}")
+        logger.exception(f"Errore di autenticazione API in get_answer_from_project: {str(auth_error)}")
         return {
-            "answer": "Si è verificato un errore di autenticazione con l'API OpenAI. " +
-                     "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+            "answer": "Si è verificato un errore di autenticazione con l'API. " +
+                      "Verifica che le chiavi API siano corrette nelle impostazioni del progetto.",
             "sources": [],
             "error": "api_auth_error",
             "error_details": str(auth_error)
         }
     except Exception as e:
         logger.exception(f"Errore in get_answer_from_project: {str(e)}")
+
+        # Verifica anche qui se l'errore è correlato all'autenticazione
+        if "invalid_api_key" in str(e) or "authentication" in str(e).lower():
+            return {
+                "answer": "Si è verificato un errore di autenticazione con l'API. " +
+                          "Verifica che le chiavi API siano corrette nelle impostazioni del progetto.",
+                "sources": [],
+                "error": "api_auth_error",
+                "error_details": str(e)
+            }
+
         return {
             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
             "sources": [],
@@ -981,178 +1248,106 @@ def get_answer_from_project(project, question):
 
 def create_retrieval_qa_chain(vectordb, project=None):
     """
-    Configura il retriever, il prompt e l'LLM in base alle impostazioni dell'utente:
-    Crea una catena RetrievalQA utilizzando le impostazioni RAG dell'utente.
-    Configura il retriever, il prompt e il modello LLM in base alle preferenze.
+    Configura e crea una catena RetrievalQA con le impostazioni appropriate.
+
+    Questa funzione si occupa di configurare il retriever, il prompt e l'LLM
+    in base alle impostazioni del progetto o alle impostazioni predefinite.
+
+    Args:
+        vectordb: Database vettoriale FAISS da utilizzare per il retrieval
+        project: Oggetto Project (opzionale)
+
+    Returns:
+        RetrievalQA: Catena di retrieval configurata
     """
-    # Ottieni l'utente dal progetto
-    user = project.user if project else None
+    # Ottieni le impostazioni del motore e RAG dal database
+    engine_settings = get_project_engine_settings(project)
+    rag_settings = get_project_rag_settings(project)
 
-    # Variabili per i log
-    config_source = "PREDEFINITA"
-    preset_name = "Nessuno"
-    template_type = "Predefinito"
-    customized = []
+    # Configurazione prompt di sistema
+    template = rag_settings['system_prompt']
+    logger.info(f"Generazione prompt (lunghezza base: {len(template)} caratteri)")
 
-    # Ottieni impostazioni RAG utente: recupera le impostazioni RAG dell'utente, compreso il preset attivo
-    rag_settings = None
-    if user:
-        try:
-            rag_settings, _ = RAGConfiguration.objects.get_or_create(user=user)
-            config_source = "UTENTE"
-
-            # Nome preset se disponibile
-            if rag_settings.current_settings:
-                preset_name = rag_settings.current_settings.name
-                template_type = rag_settings.current_settings.template_type.name
-        except Exception as e:
-            logger.error(f"Errore nel recuperare le impostazioni RAG: {str(e)}")
-
-    # Carica parametri (da utente o predefiniti): Vengono caricati i parametri dalle impostazioni dell'utente
-    # o dal preset selezionato
-    if rag_settings:
-        # Parametri di ricerca
-        similarity_top_k = rag_settings.get_similarity_top_k()
-        mmr_lambda = rag_settings.get_mmr_lambda()
-        similarity_threshold = rag_settings.get_similarity_threshold()
-        retriever_type = rag_settings.get_retriever_type()
-
-        # Parametri di chunking (informativi)
-        chunk_size = rag_settings.get_chunk_size()
-        chunk_overlap = rag_settings.get_chunk_overlap()
-
-        # Impostazioni avanzate
-        system_prompt = rag_settings.get_system_prompt()
-        auto_citation = rag_settings.get_auto_citation()
-        prioritize_filenames = rag_settings.get_prioritize_filenames()
-        equal_notes_weight = rag_settings.get_equal_notes_weight()
-        strict_context = rag_settings.get_strict_context()
-
-        # Identifica parametri personalizzati
-        if rag_settings.chunk_size is not None: customized.append("chunk_size")
-        if rag_settings.chunk_overlap is not None: customized.append("chunk_overlap")
-        if rag_settings.similarity_top_k is not None: customized.append("similarity_top_k")
-        if rag_settings.mmr_lambda is not None: customized.append("mmr_lambda")
-        if rag_settings.similarity_threshold is not None: customized.append("similarity_threshold")
-        if rag_settings.retriever_type is not None: customized.append("retriever_type")
-        if rag_settings.system_prompt is not None: customized.append("system_prompt")
-        if rag_settings.auto_citation is not None: customized.append("auto_citation")
-        if rag_settings.prioritize_filenames is not None: customized.append("prioritize_filenames")
-        if rag_settings.equal_notes_weight is not None: customized.append("equal_notes_weight")
-        if rag_settings.strict_context is not None: customized.append("strict_context")
-    else:
-        # Valori predefiniti
-        similarity_top_k = settings.DEFAULT_SIMILARITY_TOP_K
-        mmr_lambda = settings.DEFAULT_MMR_LAMBDA
-        similarity_threshold = settings.DEFAULT_SIMILARITY_THRESHOLD
-        retriever_type = settings.DEFAULT_RETRIEVER_TYPE
-        chunk_size = settings.DEFAULT_CHUNK_SIZE
-        chunk_overlap = settings.DEFAULT_CHUNK_OVERLAP
-        system_prompt = settings.DEFAULT_RAG_PROMPT
-        auto_citation = settings.DEFAULT_AUTO_CITATION
-        prioritize_filenames = settings.DEFAULT_PRIORITIZE_FILENAMES
-        equal_notes_weight = settings.DEFAULT_EQUAL_NOTES_WEIGHT
-        strict_context = settings.DEFAULT_STRICT_CONTEXT
-
-    # Log informativo configurazione
-    logger.info(f"=== CONFIGURAZIONE RAG [{config_source}] ===")
-    logger.info(f"Profilo: {template_type} - {preset_name}")
-    logger.info(
-        f"Parametri di ricerca: top_k={similarity_top_k}, mmr_lambda={mmr_lambda}, threshold={similarity_threshold}, retriever={retriever_type}")
-    logger.info(f"Parametri di chunking: size={chunk_size}, overlap={chunk_overlap}")
-    logger.info(
-        f"Comportamento IA: citation={auto_citation}, prioritize_files={prioritize_filenames}, equal_notes={equal_notes_weight}, strict={strict_context}")
-
-    if customized:
-        logger.info(f"Parametri personalizzati: {', '.join(customized)}")
-
-    # Configurazione prompt
-    template = system_prompt
-    logger.info(f"Generazione prompt (lunghezza base: {len(system_prompt)} caratteri)")
-    logger.debug(f"Template: {template}")
-    # Aggiungi moduli al prompt
+    # Aggiungi moduli al prompt in base alle impostazioni
     modules_added = []
 
-    if prioritize_filenames:
-        template += settings.PRIORITIZE_FILENAMES_PROMPT
+    if rag_settings['prioritize_filenames']:
+        # Prompt per dare priorità ai documenti menzionati nella domanda
+        template += "\n\nSe l'utente menziona il nome di un documento specifico nella domanda, dai priorità ai contenuti di quel documento nella tua risposta."
         modules_added.append("prioritize_filenames")
 
-    if auto_citation:
-        template += settings.AUTO_CITATION_PROMPT
+    if rag_settings['auto_citation']:
+        # Prompt per citare le fonti
+        template += "\n\nCita la fonte specifica (nome del documento o della nota) per ogni informazione che includi nella tua risposta."
         modules_added.append("auto_citation")
 
-    if strict_context:
-        template += settings.STRICT_CONTEXT_PROMPT
+    if rag_settings['strict_context']:
+        # Prompt per limitare le risposte al solo contesto fornito
+        template += "\n\nRispondi SOLO in base al contesto fornito. Se il contesto non contiene informazioni sufficienti per rispondere alla domanda, di' chiaramente che l'informazione non è disponibile nei documenti forniti."
         modules_added.append("strict_context")
 
-    if modules_added:
-        logger.info(f"Moduli di prompt aggiunti: {', '.join(modules_added)}")
+    # Aggiungi la parte finale del prompt per indicare il contesto e la domanda
+    template += "\n\nCONTESTO:\n{context}\n\nDOMANDA: {question}\nRISPOSTA:"
 
-    # Aggiungi contesto e domanda
-    template += settings.CONTEXT_QUESTION_PROMPT
-
-    # Crea prompt
+    # Crea l'oggetto prompt
     PROMPT = PromptTemplate(
         template=template,
         input_variables=["context", "question"]
     )
 
-    # Configura retriever
-    logger.info(f"Configurazione retriever: {retriever_type}")
+    # Configurazione del retriever in base al tipo specificato nelle impostazioni
+    logger.info(f"Configurazione retriever: {rag_settings['retriever_type']}")
 
-    if retriever_type == 'mmr':
+    if rag_settings['retriever_type'] == 'mmr':
+        # Maximum Marginal Relevance: bilancia rilevanza e diversità
         retriever = vectordb.as_retriever(
             search_type="mmr",
             search_kwargs={
-                "k": similarity_top_k,
-                "fetch_k": similarity_top_k * 2,
-                "lambda_mult": mmr_lambda
+                "k": rag_settings['similarity_top_k'],
+                "fetch_k": rag_settings['similarity_top_k'] * 2,  # Recupera il doppio dei documenti richiesti per la selezione MMR
+                "lambda_mult": rag_settings['mmr_lambda']  # Parametro di bilanciamento tra rilevanza e diversità
             }
         )
-        logger.info(f"Parametri MMR: k={similarity_top_k}, fetch_k={similarity_top_k * 2}, lambda={mmr_lambda}")
-    elif retriever_type == 'similarity_score_threshold':
+    elif rag_settings['retriever_type'] == 'similarity_score_threshold':
+        # Filtraggio per soglia di similarità
         retriever = vectordb.as_retriever(
             search_type="similarity_score_threshold",
             search_kwargs={
-                "k": similarity_top_k,
-                "score_threshold": similarity_threshold
+                "k": rag_settings['similarity_top_k'],
+                "score_threshold": rag_settings['similarity_threshold']  # Soglia minima di similarità
             }
         )
-        logger.info(f"Parametri similarity_score_threshold: k={similarity_top_k}, threshold={similarity_threshold}")
     else:  # default: similarity
+        # Ricerca standard per similarità
         retriever = vectordb.as_retriever(
-            search_kwargs={"k": similarity_top_k}
+            search_kwargs={"k": rag_settings['similarity_top_k']}
         )
-        logger.info(f"Parametri similarity: k={similarity_top_k}")
 
-    # Ottieni impostazioni del motore IA
-    ai_settings = get_ai_engine_settings(user, 'openai')
+    # Ottieni la chiave API appropriata in base al provider
+    if project and engine_settings['provider'] and engine_settings['provider'].name.lower() == 'openai':
+        api_key = get_openai_api_key(project.user)
+    elif project and engine_settings['provider'] and engine_settings['provider'].name.lower() == 'google':
+        api_key = get_gemini_api_key(project.user)
+    else:
+        api_key = get_openai_api_key(project.user if project else None)
 
-    # Imposta la chiave API OpenAI
-    openai_api_key = get_openai_api_key(user)
-    os.environ["OPENAI_API_KEY"] = openai_api_key
-
-    # Configura modello LLM con i parametri personalizzati
+    # Configura il modello LLM con i parametri dal database
     llm = ChatOpenAI(
-        model=ai_settings['model'],
-        temperature=GPT_MODEL_TEMPERATURE,
-        max_tokens=ai_settings['max_tokens'],
-        request_timeout=ai_settings['timeout'],
-        openai_api_key=openai_api_key
+        model=engine_settings['model'],
+        temperature=engine_settings['temperature'],
+        max_tokens=engine_settings['max_tokens'],
+        request_timeout=engine_settings['timeout'],
+        openai_api_key=api_key
     )
-    logger.info(
-        f"Configurazione LLM: model={ai_settings['model']}, temp={GPT_MODEL_TEMPERATURE}, max_tokens={ai_settings['max_tokens']}, timeout={ai_settings['timeout']}")
-    logger.info(f"\n=========================\nEngine usato: {ai_settings['model']}\n=========================")
 
-    # Crea catena RAG
+    # Crea la catena RAG con il prompt personalizzato
     qa = RetrievalQA.from_chain_type(
         llm=llm,
-        chain_type="stuff",
+        chain_type="stuff",  # Utilizza "stuff" per inserire tutti i documenti nel prompt
         retriever=retriever,
         chain_type_kwargs={"prompt": PROMPT},
-        return_source_documents=True
+        return_source_documents=True  # Restituisce anche i documenti fonte
     )
-    logger.info("=== CATENA RAG CREATA CON SUCCESSO ===")
 
     return qa
 
@@ -1160,22 +1355,23 @@ def create_retrieval_qa_chain(vectordb, project=None):
 def update_project_rag_chain(project):
     """
     Aggiorna la catena RAG per un progetto in modo incrementale.
-    Gestisce solo i documenti modificati per ottimizzare le prestazioni.
+
+    Ottimizza l'aggiornamento gestendo solo i documenti modificati o le note cambiate.
+    Supporta anche la rimozione di note dall'indice quando vengono escluse.
+
+    Args:
+        project: Oggetto Project
+
+    Returns:
+        RetrievalQA: Catena RAG aggiornata, o None in caso di errore
     """
     logger.debug(f"Aggiornamento incrementale dell'indice RAG per progetto {project.id}")
 
-    # Ottieni le impostazioni RAG dell'utente
-    rag_settings = None
-    try:
-        rag_settings, _ = RAGConfiguration.objects.get_or_create(user=project.user)
-        chunk_size = rag_settings.get_chunk_size()
-        chunk_overlap = rag_settings.get_chunk_overlap()
-        logger.info(f"Utilizzando parametri di chunking dall'utente: size={chunk_size}, overlap={chunk_overlap}")
-    except Exception as e:
-        logger.error(f"Errore nel recuperare le impostazioni RAG: {str(e)}")
-        chunk_size = settings.DEFAULT_CHUNK_SIZE
-        chunk_overlap = settings.DEFAULT_CHUNK_OVERLAP
-        logger.info(f"Utilizzando parametri di chunking predefiniti: size={chunk_size}, overlap={chunk_overlap}")
+    # Ottieni le impostazioni RAG dal database
+    rag_settings = get_project_rag_settings(project)
+    chunk_size = rag_settings['chunk_size']
+    chunk_overlap = rag_settings['chunk_overlap']
+    logger.info(f"Utilizzando parametri di chunking: size={chunk_size}, overlap={chunk_overlap}")
 
     # Percorsi indice
     project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
@@ -1193,7 +1389,7 @@ def update_project_rag_chain(project):
         (Q(last_indexed_at__isnull=True) | Q(updated_at__gt=F('last_indexed_at')))
     )
 
-    # Note ora escluse
+    # Note ora escluse (erano incluse precedentemente)
     removed_notes = ProjectNote.objects.filter(
         project=project,
         is_included_in_rag=False,
@@ -1208,7 +1404,7 @@ def update_project_rag_chain(project):
         if os.path.exists(index_path):
             logger.info(f"Nessun aggiornamento necessario, caricamento dell'indice esistente")
             try:
-                embeddings = OpenAIEmbeddings()
+                embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
                 vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
                 return create_retrieval_qa_chain(vectordb, project)
             except Exception as e:
@@ -1218,7 +1414,7 @@ def update_project_rag_chain(project):
             logger.info(f"Indice non trovato, creazione di un nuovo indice")
             return create_project_rag_chain(project, force_rebuild=True)
 
-    # Prepara nuovi documenti
+    # Prepara nuovi documenti da aggiungere all'indice
     new_docs = []
 
     # Carica nuovi file
@@ -1248,7 +1444,8 @@ def update_project_rag_chain(project):
                 "source": f"note_{note.id}",
                 "type": "note",
                 "title": note.title or "Nota senza titolo",
-                "note_id": note.id
+                "note_id": note.id,
+                "filename": f"Nota: {note.title or 'Senza titolo'}"
             }
         )
         new_docs.append(note_doc)
@@ -1273,15 +1470,17 @@ def update_project_rag_chain(project):
     else:
         new_chunks = []
 
-    # Gestione indice
-    embeddings = OpenAIEmbeddings()
+    # Inizializzazioni per l'aggiornamento dell'indice
+    embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
 
-    # Se ci sono note rimosse
+    # Strategie di aggiornamento in base ai cambiamenti
+
+    # Caso 1: Note rimosse - richiede ricostruzione dell'indice
     if removed_notes.exists() and os.path.exists(index_path):
         logger.info(f"Ricostruzione dell'indice per rimuovere note")
         try:
             existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-            all_docs = existing_vectordb.similarity_search("", k=10000)
+            all_docs = existing_vectordb.similarity_search("", k=10000)  # Recupera tutti i documenti nell'indice
 
             # Filtra note rimosse
             removed_note_ids = [note.id for note in removed_notes]
@@ -1291,7 +1490,7 @@ def update_project_rag_chain(project):
                 if doc.metadata.get('type') != 'note' or doc.metadata.get('note_id') not in removed_note_ids:
                     filtered_docs.append(doc)
 
-            # Ricrea indice
+            # Ricrea indice con documenti filtrati e nuovi chunk
             if filtered_docs or new_chunks:
                 all_chunks = filtered_docs + new_chunks
                 vectordb = FAISS.from_documents(all_chunks, embeddings)
@@ -1299,6 +1498,7 @@ def update_project_rag_chain(project):
                 vectordb.save_local(index_path)
                 logger.info(f"Indice ricostruito e salvato con {len(all_chunks)} documenti")
 
+                # Aggiorna lo stato delle note rimosse
                 removed_notes.update(last_indexed_at=None)
 
                 return create_retrieval_qa_chain(vectordb, project)
@@ -1310,7 +1510,7 @@ def update_project_rag_chain(project):
             logger.error(f"Errore nella ricostruzione dell'indice: {str(e)}")
             return create_project_rag_chain(project, force_rebuild=True)
 
-    # Aggiorna indice esistente
+    # Caso 2: Solo nuovi documenti da aggiungere all'indice esistente
     elif new_chunks and os.path.exists(index_path):
         logger.info(f"Aggiornamento dell'indice esistente con {len(new_chunks)} nuovi chunk")
         try:
@@ -1327,7 +1527,7 @@ def update_project_rag_chain(project):
             logger.error(f"Errore nell'aggiornamento dell'indice esistente: {str(e)}")
             return create_project_rag_chain(project, force_rebuild=True)
 
-    # Crea nuovo indice
+    # Caso 3: Nessun indice esistente o richiesta di ricostruzione
     else:
         logger.info(f"Creazione di un nuovo indice")
         return create_project_rag_chain(project, force_rebuild=True)
@@ -1336,10 +1536,21 @@ def update_project_rag_chain(project):
 def handle_add_note(project, content):
     """
     Aggiunge una nuova nota al progetto e aggiorna l'indice RAG.
+
+    Crea una nuova nota nel database con un titolo estratto automaticamente
+    dal contenuto, e aggiorna l'indice vettoriale per includere la nuova nota.
+
+    Args:
+        project: Oggetto Project
+        content: Contenuto testuale della nota
+
+    Returns:
+        ProjectNote: La nota creata
     """
+    # Estrai il titolo dalle prime righe del contenuto
     title = content.split('\n')[0][:50] if content else "Nota senza titolo"
 
-    # Crea la nota
+    # Crea la nota nel database
     note = ProjectNote.objects.create(
         project=project,
         title=title,
@@ -1348,7 +1559,7 @@ def handle_add_note(project, content):
         last_indexed_at=None
     )
 
-    # Aggiorna indice
+    # Aggiorna indice vettoriale
     try:
         logger.info(f"Aggiornamento dell'indice vettoriale dopo aggiunta nota")
         update_project_rag_chain(project)
@@ -1362,17 +1573,28 @@ def handle_add_note(project, content):
 def handle_update_note(project, note_id, content):
     """
     Aggiorna una nota esistente e aggiorna l'indice RAG se necessario.
+
+    Modifica il contenuto e il titolo di una nota esistente e aggiorna
+    l'indice vettoriale solo se la nota è inclusa nel RAG.
+
+    Args:
+        project: Oggetto Project
+        note_id: ID della nota da aggiornare
+        content: Nuovo contenuto della nota
+
+    Returns:
+        tuple: (bool successo, str messaggio)
     """
     try:
         note = ProjectNote.objects.get(id=note_id, project=project)
 
-        # Aggiorna contenuto
+        # Aggiorna il contenuto e il titolo
         title = content.split('\n')[0][:50] if content else "Nota senza titolo"
         note.title = title
         note.content = content
         note.save()
 
-        # Aggiorna indice se nota inclusa
+        # Aggiorna indice se la nota è inclusa nel RAG
         if note.is_included_in_rag:
             try:
                 logger.info(f"Aggiornamento dell'indice vettoriale dopo modifica nota")
@@ -1389,13 +1611,23 @@ def handle_update_note(project, note_id, content):
 def handle_delete_note(project, note_id):
     """
     Elimina una nota e aggiorna l'indice RAG se necessario.
+
+    Rimuove una nota dal database e aggiorna l'indice vettoriale
+    solo se la nota era inclusa nel RAG.
+
+    Args:
+        project: Oggetto Project
+        note_id: ID della nota da eliminare
+
+    Returns:
+        tuple: (bool successo, str messaggio)
     """
     try:
         note = ProjectNote.objects.get(id=note_id, project=project)
-        was_included = note.is_included_in_rag
+        was_included = note.is_included_in_rag  # Memorizza lo stato prima dell'eliminazione
         note.delete()
 
-        # Aggiorna indice se nota era inclusa
+        # Aggiorna indice solo se la nota era inclusa nel RAG
         if was_included:
             try:
                 logger.info(f"Aggiornamento dell'indice vettoriale dopo eliminazione nota")
@@ -1412,16 +1644,27 @@ def handle_delete_note(project, note_id):
 def handle_toggle_note_inclusion(project, note_id, is_included):
     """
     Cambia lo stato di inclusione di una nota nel RAG e aggiorna l'indice se necessario.
+
+    Modifica lo stato di inclusione di una nota nell'indice RAG e aggiorna
+    l'indice solo se lo stato è effettivamente cambiato.
+
+    Args:
+        project: Oggetto Project
+        note_id: ID della nota
+        is_included: True per includere la nota nel RAG, False per escluderla
+
+    Returns:
+        tuple: (bool successo, str messaggio)
     """
     try:
         note = ProjectNote.objects.get(id=note_id, project=project)
 
-        # Verifica cambio stato
+        # Verifica se c'è un effettivo cambio di stato
         state_changed = note.is_included_in_rag != is_included
         note.is_included_in_rag = is_included
         note.save()
 
-        # Aggiorna indice se stato cambiato
+        # Aggiorna indice solo se lo stato è effettivamente cambiato
         if state_changed:
             try:
                 logger.info(f"Aggiornamento dell'indice vettoriale dopo cambio stato nota")
@@ -1437,52 +1680,66 @@ def handle_toggle_note_inclusion(project, note_id, is_included):
 
 def handle_project_file_upload(project, file, project_dir, file_path=None):
     """
-    Gestisce il caricamento di un file per un progetto, creando la struttura directory
-    e aggiornando l'indice RAG.
+    Gestisce il caricamento di un file per un progetto.
+
+    Gestisce tutto il processo di caricamento: crea le directory necessarie,
+    salva il file, registra i metadati nel database e aggiorna l'indice vettoriale.
+    Supporta anche la gestione di file con nomi duplicati.
+
+    Args:
+        project: Oggetto Project
+        file: File caricato
+        project_dir: Directory del progetto
+        file_path: Percorso completo del file (opzionale)
+
+    Returns:
+        ProjectFile: Il file del progetto creato
     """
-    # Determina percorso file
+    # Determina il percorso del file
     if file_path is None:
         if hasattr(file, 'name') and file.name:
             file_path = os.path.join(project_dir, file.name)
         else:
+            # Genera un nome casuale se il nome del file non è disponibile
             import uuid
             random_name = f"file_{uuid.uuid4()}"
             file_path = os.path.join(project_dir, random_name)
             logger.warning(f"Nome file non disponibile, generato nome casuale: {random_name}")
 
-    # Gestione nomi duplicati
+    # Gestione dei file con lo stesso nome
     if os.path.exists(file_path):
         filename = os.path.basename(file_path)
         base_name, extension = os.path.splitext(filename)
         counter = 1
 
+        # Incrementa il contatore fino a trovare un nome non utilizzato
         while os.path.exists(file_path):
             new_name = f"{base_name}_{counter}{extension}"
             file_path = os.path.join(os.path.dirname(file_path), new_name)
             counter += 1
 
-    # Crea directory
+    # Crea la directory se non esiste
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    # Salva file
+    # Salva il file
     with open(file_path, 'wb+') as destination:
         for chunk in file.chunks():
             destination.write(chunk)
 
-    # Informazioni file
+    # Ottieni metadati del file
     file_stats = os.stat(file_path)
     file_size = file_stats.st_size
 
-    # Tipo file
+    # Determina il tipo di file
     if hasattr(file, 'name') and file.name:
         file_type = os.path.splitext(file.name)[1].lower().lstrip('.')
     else:
         file_type = os.path.splitext(file_path)[1].lower().lstrip('.')
 
-    # Hash file
+    # Calcola l'hash del file
     file_hash = compute_file_hash(file_path)
 
-    # Record nel database
+    # Crea il record nel database
     project_file = ProjectFile.objects.create(
         project=project,
         filename=os.path.basename(file_path),
@@ -1496,7 +1753,7 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
 
     logger.debug(f"File caricato: {file_path}")
 
-    # Aggiorna indice
+    # Aggiorna l'indice vettoriale
     try:
         logger.info(f"Aggiornamento dell'indice vettoriale dopo caricamento file")
         update_project_rag_chain(project)

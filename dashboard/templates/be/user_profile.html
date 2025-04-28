@@ -363,6 +363,71 @@
                 saveButton.innerHTML = '<i class="bi bi-save me-1"></i> Salva Modifiche';
             });
         }
+
+        // Modifica la parte dell'event listener per il form del motore
+        document.getElementById('engine-form').addEventListener('submit', function(e) {
+            // Verifica se il modello è stato cambiato
+            const originalEngine = '{{ project_config.selected_engine }}';
+            const originalModel = {
+                'openai': '{{ project_config.gpt_model }}',
+                'claude': '{{ project_config.claude_model }}',
+                'deepseek': '{{ project_config.deepseek_model }}',
+                'gemini': '{{ project_config.gemini_model }}'
+            };
+
+            const selectedEngine = document.querySelector('input[name="selected_engine"]:checked').value;
+            let selectedModel = "";
+
+            if (selectedEngine === 'openai') {
+                selectedModel = document.getElementById('gpt-model').value;
+            } else if (selectedEngine === 'claude') {
+                selectedModel = document.getElementById('claude-model').value;
+            } else if (selectedEngine === 'deepseek') {
+                selectedModel = document.getElementById('deepseek-model').value;
+            } else if (selectedEngine === 'gemini') {
+                selectedModel = document.getElementById('gemini-model').value;
+            }
+
+            // Controlla se c'è stato un cambiamento nel motore o nel modello
+            if (selectedEngine !== originalEngine || selectedModel !== originalModel[selectedEngine]) {
+                e.preventDefault(); // Blocca il submit del form
+
+                // Mostra la conferma
+                $('#model-change-modal').modal('show');
+            }
+        });
+
+        // Aggiungi un event listener per il pulsante di conferma
+        document.getElementById('confirm-model-change').addEventListener('click', function() {
+            // Nasconde la modale
+            $('#model-change-modal').modal('hide');
+
+            // Aggiunge un flag per indicare che la conferma è stata data
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'confirmed_change';
+            hiddenInput.value = 'true';
+            document.getElementById('engine-form').appendChild(hiddenInput);
+
+            // Mostra un avviso che l'operazione è in corso
+            const processingAlert = document.createElement('div');
+            processingAlert.className = 'alert alert-info position-fixed top-50 start-50 translate-middle p-4';
+            processingAlert.style.zIndex = '9999';
+            processingAlert.style.boxShadow = '0 0.5rem 1rem rgba(0, 0, 0, 0.15)';
+            processingAlert.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border text-primary me-3" role="status"></div>
+                    <div>
+                        <h5 class="alert-heading">Elaborazione in corso</h5>
+                        <p class="mb-0">Ri-vettorializzazione di tutti i dati del progetto. Questa operazione potrebbe richiedere alcuni minuti...</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(processingAlert);
+
+            // Invia il form
+            document.getElementById('engine-form').submit();
+        });
     });
 </script>
 {% endblock %}

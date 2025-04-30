@@ -10,11 +10,8 @@ Questo modulo si occupa di:
 
 import os
 import hashlib
-from django.conf import settings
-from profiles.models import UserDocument, IndexStatus, LLMProvider, UserAPIKey
 import logging
-from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
-from profiles.models import GlobalEmbeddingCache
+from django.conf import settings
 
 # Configurazione logger
 logger = logging.getLogger(__name__)
@@ -22,36 +19,96 @@ logger = logging.getLogger(__name__)
 
 def get_embedding_cache_dir():
 	"""
-	Restituisce la directory per la cache globale degli embedding.
+    Restituisce la directory per la cache globale degli embedding.
 
-	Verifica l'esistenza della directory per la cache degli embedding e
-	la crea se non esiste. Questo garantisce che ci sia sempre una
-	directory disponibile per salvare gli embedding condivisi.
+    Verifica l'esistenza della directory per la cache degli embedding e
+    la crea se non esiste. Questo garantisce che ci sia sempre una
+    directory disponibile per salvare gli embedding condivisi.
 
-	Returns:
-		str: Percorso alla directory per la cache degli embedding
-	"""
+    Returns:
+        str: Percorso alla directory per la cache degli embedding
+    """
 	cache_dir = os.path.join(settings.MEDIA_ROOT, 'embedding_cache')
 	os.makedirs(cache_dir, exist_ok=True)
 	return cache_dir
 
 
+def compute_file_hash(file_path):
+	"""
+    Calcola l'hash SHA-256 di un file.
+
+    Legge il file in piccoli chunk per supportare file di grandi dimensioni
+    senza sovraccaricare la memoria.
+
+    Args:
+        file_path: Percorso completo del file
+
+    Returns:
+        str: Hash SHA-256 del file come stringa esadecimale
+    """
+	sha256 = hashlib.sha256()
+
+	# Leggi il file in chunk per supportare file di grandi dimensioni
+	with open(file_path, 'rb') as f:
+		for chunk in iter(lambda: f.read(4096), b''):
+			sha256.update(chunk)
+
+	return sha256.hexdigest()
+
+
+def get_openai_api_key_for_embedding(user=None):
+	"""
+    Ottiene la chiave API OpenAI per le operazioni di embedding.
+
+    Verifica se l'utente specificato ha una chiave API personale valida;
+    in caso contrario, utilizza la chiave predefinita del sistema.
+
+    Args:
+        user: Oggetto User Django (opzionale)
+
+    Returns:
+        str: Chiave API OpenAI da utilizzare per gli embedding
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import LLMProvider, UserAPIKey
+
+	if user:
+		try:
+			# Cerca una chiave API valida associata all'utente
+			provider = LLMProvider.objects.get(name="OpenAI")
+			user_key = UserAPIKey.objects.get(user=user, provider=provider)
+
+			if user_key.is_valid:
+				logger.debug(f"Usando chiave API personale per embedding dell'utente {user.username}")
+				return user_key.get_api_key()
+		except (LLMProvider.DoesNotExist, UserAPIKey.DoesNotExist, Exception) as e:
+			logger.debug(f"Impossibile usare chiave API utente per embedding: {str(e)}")
+			pass
+
+	# Fallback alla chiave API di sistema
+	logger.debug("Usando chiave API di sistema per embedding")
+	return settings.OPENAI_API_KEY
+
+
 def get_cached_embedding(file_hash, chunk_size=500, chunk_overlap=50):
 	"""
-	Controlla se esiste già un embedding per il file con l'hash specificato.
+    Controlla se esiste già un embedding per il file con l'hash specificato.
 
-	Cerca nella cache globale un embedding esistente che corrisponda all'hash del file
-	e ai parametri di chunking specificati. Se trovato e il file esiste ancora,
-	incrementa il contatore di utilizzo e restituisce le informazioni sulla cache.
+    Cerca nella cache globale un embedding esistente che corrisponda all'hash del file
+    e ai parametri di chunking specificati. Se trovato e il file esiste ancora,
+    incrementa il contatore di utilizzo e restituisce le informazioni sulla cache.
 
-	Args:
-		file_hash: Hash SHA-256 del file
-		chunk_size: Dimensione dei chunk utilizzata (per garantire coerenza)
-		chunk_overlap: Sovrapposizione dei chunk utilizzata (per garantire coerenza)
+    Args:
+        file_hash: Hash SHA-256 del file
+        chunk_size: Dimensione dei chunk utilizzata (per garantire coerenza)
+        chunk_overlap: Sovrapposizione dei chunk utilizzata (per garantire coerenza)
 
-	Returns:
-		dict: Informazioni sulla cache se trovata, None altrimenti
-	"""
+    Returns:
+        dict: Informazioni sulla cache se trovata, None altrimenti
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import GlobalEmbeddingCache
+
 	try:
 		# Cerca una cache con lo stesso hash e parametri di chunking
 		cache = GlobalEmbeddingCache.objects.get(
@@ -85,19 +142,22 @@ def get_cached_embedding(file_hash, chunk_size=500, chunk_overlap=50):
 
 def create_embedding_cache(file_hash, embedding_data, file_info):
 	"""
-	Crea una nuova cache degli embedding per un file.
+    Crea una nuova cache degli embedding per un file.
 
-	Salva l'embedding FAISS su disco nella directory della cache
-	e crea un record nel database per tenere traccia dell'embedding.
+    Salva l'embedding FAISS su disco nella directory della cache
+    e crea un record nel database per tenere traccia dell'embedding.
 
-	Args:
-		file_hash: Hash SHA-256 del file
-		embedding_data: Dati dell'embedding (oggetto FAISS)
-		file_info: Dizionario con informazioni sul file (tipo, nome, dimensione)
+    Args:
+        file_hash: Hash SHA-256 del file
+        embedding_data: Dati dell'embedding (oggetto FAISS)
+        file_info: Dizionario con informazioni sul file (tipo, nome, dimensione)
 
-	Returns:
-		GlobalEmbeddingCache: L'oggetto cache creato
-	"""
+    Returns:
+        GlobalEmbeddingCache: L'oggetto cache creato
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import GlobalEmbeddingCache
+
 	# Ottieni la directory della cache
 	cache_dir = get_embedding_cache_dir()
 	embedding_path = os.path.join(cache_dir, f"{file_hash}")
@@ -126,19 +186,19 @@ def create_embedding_cache(file_hash, embedding_data, file_info):
 
 def copy_embedding_to_user_index(user_id, cache_info, user_index_path):
 	"""
-	Copia un embedding dalla cache globale all'indice dell'utente.
+    Copia un embedding dalla cache globale all'indice dell'utente.
 
-	Carica l'embedding dalla cache globale e lo salva nella directory
-	dell'indice dell'utente per riutilizzarlo, risparmiando tempo e risorse.
+    Carica l'embedding dalla cache globale e lo salva nella directory
+    dell'indice dell'utente per riutilizzarlo, risparmiando tempo e risorse.
 
-	Args:
-		user_id: ID dell'utente
-		cache_info: Informazioni sulla cache dell'embedding
-		user_index_path: Percorso all'indice dell'utente
+    Args:
+        user_id: ID dell'utente
+        cache_info: Informazioni sulla cache dell'embedding
+        user_index_path: Percorso all'indice dell'utente
 
-	Returns:
-		bool: True se l'operazione è riuscita, False altrimenti
-	"""
+    Returns:
+        bool: True se l'operazione è riuscita, False altrimenti
+    """
 	try:
 		# Crea la directory dell'indice dell'utente se non esiste
 		os.makedirs(os.path.dirname(user_index_path), exist_ok=True)
@@ -166,19 +226,19 @@ def copy_embedding_to_user_index(user_id, cache_info, user_index_path):
 
 def copy_embedding_to_project_index(project, cache_info, project_index_path):
 	"""
-	Copia un embedding dalla cache globale all'indice del progetto.
+    Copia un embedding dalla cache globale all'indice del progetto.
 
-	Carica l'embedding dalla cache globale e lo salva nella directory
-	dell'indice del progetto, aggiornando anche lo stato dell'indice nel database.
+    Carica l'embedding dalla cache globale e lo salva nella directory
+    dell'indice del progetto, aggiornando anche lo stato dell'indice nel database.
 
-	Args:
-		project: Oggetto Project
-		cache_info: Informazioni sulla cache dell'embedding
-		project_index_path: Percorso all'indice del progetto
+    Args:
+        project: Oggetto Project
+        cache_info: Informazioni sulla cache dell'embedding
+        project_index_path: Percorso all'indice del progetto
 
-	Returns:
-		bool: True se l'operazione è riuscita, False altrimenti
-	"""
+    Returns:
+        bool: True se l'operazione è riuscita, False altrimenti
+    """
 	try:
 		# Crea la directory dell'indice del progetto se non esiste
 		os.makedirs(os.path.dirname(project_index_path), exist_ok=True)
@@ -199,30 +259,7 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
 		logger.info(f"Embedding copiato dalla cache all'indice del progetto {project.id}")
 
 		# Aggiorna lo stato dell'indice del progetto nel database
-		from django.utils import timezone
-
-		# Conta i documenti e le note attive
-		documents_count = ProjectFile.objects.filter(project=project).count()
-		notes_count = ProjectNote.objects.filter(project=project, is_included_in_rag=True).count()
-		total_count = documents_count + notes_count
-
-		try:
-			# Aggiorna lo stato dell'indice se esiste
-			index_status = ProjectIndexStatus.objects.get(project=project)
-			index_status.index_exists = True
-			index_status.last_updated = timezone.now()
-			index_status.documents_count = total_count
-			index_status.save(update_fields=['index_exists', 'last_updated', 'documents_count'])
-			logger.debug(f"Stato indice aggiornato per progetto {project.id}")
-		except ProjectIndexStatus.DoesNotExist:
-			# Crea un nuovo stato dell'indice se non esiste
-			ProjectIndexStatus.objects.create(
-				project=project,
-				index_exists=True,
-				last_updated=timezone.now(),
-				documents_count=total_count
-			)
-			logger.debug(f"Nuovo stato indice creato per progetto {project.id}")
+		update_project_index_status(project)
 
 		return True
 	except Exception as e:
@@ -230,77 +267,26 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
 		return False
 
 
-def get_openai_api_key_for_embedding(user=None):
-	"""
-	Ottiene la chiave API OpenAI per le operazioni di embedding.
-
-	Verifica se l'utente specificato ha una chiave API personale valida;
-	in caso contrario, utilizza la chiave predefinita del sistema.
-
-	Args:
-		user: Oggetto User Django (opzionale)
-
-	Returns:
-		str: Chiave API OpenAI da utilizzare per gli embedding
-	"""
-	if user:
-		try:
-			# Cerca una chiave API valida associata all'utente
-			provider = LLMProvider.objects.get(name="OpenAI")
-			user_key = UserAPIKey.objects.get(user=user, provider=provider)
-
-			if user_key.is_valid:
-				logger.debug(f"Usando chiave API personale per embedding dell'utente {user.username}")
-				return user_key.get_api_key()
-		except (LLMProvider.DoesNotExist, UserAPIKey.DoesNotExist, Exception) as e:
-			logger.debug(f"Impossibile usare chiave API utente per embedding: {str(e)}")
-			pass
-
-	# Fallback alla chiave API di sistema
-	logger.debug("Usando chiave API di sistema per embedding")
-	return settings.OPENAI_API_KEY
-
-
-def compute_file_hash(file_path):
-	"""
-	Calcola l'hash SHA-256 di un file.
-
-	Legge il file in piccoli chunk per supportare file di grandi dimensioni
-	senza sovraccaricare la memoria.
-
-	Args:
-		file_path: Percorso completo del file
-
-	Returns:
-		str: Hash SHA-256 del file come stringa esadecimale
-	"""
-	sha256 = hashlib.sha256()
-
-	# Leggi il file in chunk per supportare file di grandi dimensioni
-	with open(file_path, 'rb') as f:
-		for chunk in iter(lambda: f.read(4096), b''):
-			sha256.update(chunk)
-
-	return sha256.hexdigest()
-
-
 def register_document(user, file_path, filename=None):
 	"""
-	Registra un documento nel database o aggiorna lo stato se già esiste.
+    Registra un documento nel database o aggiorna lo stato se già esiste.
 
-	Verifica se un documento esiste, calcola l'hash e altri metadati, e lo aggiorna
-	se è cambiato, oppure crea un nuovo record. Imposta is_embedded a False se il
-	documento è nuovo o modificato.
+    Verifica se un documento esiste, calcola l'hash e altri metadati, e lo aggiorna
+    se è cambiato, oppure crea un nuovo record. Imposta is_embedded a False se il
+    documento è nuovo o modificato.
 
-	Args:
-		user: Oggetto User Django
-		file_path: Percorso completo del file
-		filename: Nome del file (opzionale, se diverso dal basename del percorso)
+    Args:
+        user: Oggetto User Django
+        file_path: Percorso completo del file
+        filename: Nome del file (opzionale, se diverso dal basename del percorso)
 
-	Returns:
-		tuple: (UserDocument, bool) - Il documento registrato e un flag che indica
-			   se il documento è stato creato o modificato
-	"""
+    Returns:
+        tuple: (UserDocument, bool) - Il documento registrato e un flag che indica
+               se il documento è stato creato o modificato
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import UserDocument
+
 	# Verifica che il file esista
 	if not os.path.exists(file_path):
 		logger.warning(f"File non trovato: {file_path}")
@@ -353,19 +339,22 @@ def register_document(user, file_path, filename=None):
 
 def check_index_update_needed(user):
 	"""
-	Verifica se l'indice FAISS dell'utente deve essere aggiornato.
+    Verifica se l'indice FAISS dell'utente deve essere aggiornato.
 
-	Controlla vari fattori che indicano la necessità di aggiornare l'indice:
-	- Esistenza di documenti non ancora incorporati
-	- Cambiamento nel numero totale di documenti
-	- Mancanza del record di stato dell'indice
+    Controlla vari fattori che indicano la necessità di aggiornare l'indice:
+    - Esistenza di documenti non ancora incorporati
+    - Cambiamento nel numero totale di documenti
+    - Mancanza del record di stato dell'indice
 
-	Args:
-		user: Oggetto User Django
+    Args:
+        user: Oggetto User Django
 
-	Returns:
-		bool: True se l'indice deve essere aggiornato, False altrimenti
-	"""
+    Returns:
+        bool: True se l'indice deve essere aggiornato, False altrimenti
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import UserDocument
+
 	# Ottieni tutti i documenti dell'utente
 	documents = UserDocument.objects.filter(user=user)
 
@@ -380,55 +369,28 @@ def check_index_update_needed(user):
 		logger.info(f"Trovati {non_embedded_docs.count()} documenti non incorporati per l'utente {user.username}")
 		return True
 
-	# Controlla lo stato dell'indice nel database
-	try:
-		index_status = IndexStatus.objects.get(user=user)
-
-		# Se il numero di documenti è cambiato rispetto all'ultimo aggiornamento
-		if index_status.documents_count != documents.count():
-			logger.info(
-				f"Numero di documenti cambiato: da {index_status.documents_count} a {documents.count()} per l'utente {user.username}")
-			return True
-
-		# Indice aggiornato
-		logger.debug(f"Indice aggiornato per l'utente {user.username}")
-		return False
-
-	except IndexStatus.DoesNotExist:
-		# Se non esiste un record per lo stato dell'indice, è necessario crearlo
-		logger.info(f"Nessun record di stato indice trovato per l'utente {user.username}")
-		return True
+	# Nota: Rimosso il controllo IndexStatus poiché la tabella è stata eliminata
+	# L'indice verrà aggiornato in base alla presenza di documenti non incorporati
+	logger.debug(f"Controllo basato solo sui documenti non incorporati per l'utente {user.username}")
+	return False
 
 
 def update_index_status(user, document_ids=None):
 	"""
-	Aggiorna lo stato dell'indice FAISS per l'utente.
+    Aggiorna lo stato dei documenti indicizzati per l'utente.
 
-	Crea o aggiorna il record di stato dell'indice nel database e
-	imposta i documenti indicizzati come embedded.
+    Imposta i documenti indicizzati come embedded.
+    Nota: La tabella IndexStatus è stata rimossa, questa funzione mantiene
+    solo l'aggiornamento dello stato dei documenti.
 
-	Args:
-		user: Oggetto User Django
-		document_ids: Lista di ID dei documenti inclusi nell'indice (opzionale)
-	"""
-	# Ottieni tutti i documenti dell'utente
-	documents = UserDocument.objects.filter(user=user)
+    Args:
+        user: Oggetto User Django
+        document_ids: Lista di ID dei documenti inclusi nell'indice (opzionale)
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import UserDocument
 
-	# Crea o aggiorna lo stato dell'indice
-	index_status, created = IndexStatus.objects.get_or_create(user=user)
-
-	# Aggiorna i campi dello stato dell'indice
-	index_status.index_exists = True
-	index_status.documents_count = documents.count()
-
-	# Calcola un hash rappresentativo dello stato dell'indice
-	# Questa è una "firma" che può essere usata per verificare se l'indice è cambiato
-	doc_hashes = sorted([doc.file_hash for doc in documents])
-	index_hash_input = ','.join(doc_hashes)
-	index_status.index_hash = hashlib.sha256(index_hash_input.encode()).hexdigest()
-
-	index_status.save()
-	logger.info(f"Stato indice {'creato' if created else 'aggiornato'} per l'utente {user.username}")
+	# Nota: Rimosso il codice per IndexStatus poiché la tabella è stata eliminata
 
 	# Imposta i documenti specificati o tutti i documenti come embedded
 	if document_ids:
@@ -437,24 +399,27 @@ def update_index_status(user, document_ids=None):
 		logger.info(f"Aggiornati {docs_updated} documenti specificati come embedded")
 	else:
 		# Aggiorna tutti i documenti dell'utente
-		docs_updated = documents.update(is_embedded=True)
+		docs_updated = UserDocument.objects.filter(user=user).update(is_embedded=True)
 		logger.info(f"Aggiornati tutti i {docs_updated} documenti dell'utente come embedded")
 
 
 def scan_user_directory(user):
 	"""
-	Analizza la directory dell'utente per trovare nuovi documenti o modifiche.
+    Analizza la directory dell'utente per trovare nuovi documenti o modifiche.
 
-	Cerca nuovi file, aggiornamenti a file esistenti e file eliminati
-	nella directory dell'utente, aggiornando il database di conseguenza.
+    Cerca nuovi file, aggiornamenti a file esistenti e file eliminati
+    nella directory dell'utente, aggiornando il database di conseguenza.
 
-	Args:
-		user: Oggetto User Django
+    Args:
+        user: Oggetto User Django
 
-	Returns:
-		tuple: (added_docs, modified_docs, deleted_paths) - Liste di documenti
-			   aggiunti, modificati e percorsi di file eliminati
-	"""
+    Returns:
+        tuple: (added_docs, modified_docs, deleted_paths) - Liste di documenti
+               aggiunti, modificati e percorsi di file eliminati
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import UserDocument
+
 	# Determina la directory di upload dell'utente
 	user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(user.id))
 
@@ -505,19 +470,22 @@ def scan_user_directory(user):
 
 def check_project_index_update_needed(project):
 	"""
-	Verifica se l'indice FAISS del progetto deve essere aggiornato.
+    Verifica se l'indice FAISS del progetto deve essere aggiornato.
 
-	Controlla vari fattori che potrebbero richiedere un aggiornamento dell'indice:
-	- Documenti non ancora incorporati
-	- Cambiamento nel numero di documenti o note
-	- Note modificate dopo l'ultimo aggiornamento dell'indice
+    Controlla vari fattori che potrebbero richiedere un aggiornamento dell'indice:
+    - Documenti non ancora incorporati
+    - Cambiamento nel numero di documenti o note
+    - Note modificate dopo l'ultimo aggiornamento dell'indice
 
-	Args:
-		project: Oggetto Project
+    Args:
+        project: Oggetto Project
 
-	Returns:
-		bool: True se l'indice deve essere aggiornato, False altrimenti
-	"""
+    Returns:
+        bool: True se l'indice deve essere aggiornato, False altrimenti
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+
 	# Ottieni documenti e note attive del progetto
 	documents = ProjectFile.objects.filter(project=project)
 	active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
@@ -564,17 +532,19 @@ def check_project_index_update_needed(project):
 
 def update_project_index_status(project, document_ids=None, note_ids=None):
 	"""
-	Aggiorna lo stato dell'indice per un progetto.
+    Aggiorna lo stato dell'indice per un progetto.
 
-	Crea o aggiorna il record di stato dell'indice nel database, calcola
-	un hash delle note attive, e aggiorna lo stato di embedding dei documenti e note.
+    Crea o aggiorna il record di stato dell'indice nel database, calcola
+    un hash delle note attive, e aggiorna lo stato di embedding dei documenti e note.
 
-	Args:
-		project: Oggetto Project
-		document_ids: Lista di ID dei documenti aggiornati (opzionale)
-		note_ids: Lista di ID delle note aggiornate (opzionale)
-	"""
+    Args:
+        project: Oggetto Project
+        document_ids: Lista di ID dei documenti aggiornati (opzionale)
+        note_ids: Lista di ID delle note aggiornate (opzionale)
+    """
 	from django.utils import timezone
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
 
 	# Calcola l'hash delle note attive per tenere traccia dei loro cambiamenti
 	active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
@@ -637,18 +607,21 @@ def update_project_index_status(project, document_ids=None, note_ids=None):
 
 def scan_project_directory(project):
 	"""
-	Analizza la directory del progetto per trovare nuovi documenti o modifiche.
+    Analizza la directory del progetto per trovare nuovi documenti o modifiche.
 
-	Cerca nuovi file, aggiornamenti a file esistenti e file eliminati
-	nella directory del progetto, aggiornando il database di conseguenza.
+    Cerca nuovi file, aggiornamenti a file esistenti e file eliminati
+    nella directory del progetto, aggiornando il database di conseguenza.
 
-	Args:
-		project: Oggetto Project
+    Args:
+        project: Oggetto Project
 
-	Returns:
-		tuple: (added_docs, modified_docs, deleted_paths) - Liste di documenti
-			   aggiunti, modificati e percorsi di file eliminati
-	"""
+    Returns:
+        tuple: (added_docs, modified_docs, deleted_paths) - Liste di documenti
+               aggiunti, modificati e percorsi di file eliminati
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import ProjectFile
+
 	# Determina la directory del progetto
 	project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
 
@@ -699,21 +672,24 @@ def scan_project_directory(project):
 
 def register_project_document(project, file_path, filename=None):
 	"""
-	Registra un documento di progetto nel database o aggiorna lo stato se già esiste.
+    Registra un documento di progetto nel database o aggiorna lo stato se già esiste.
 
-	Verifica se un documento di progetto esiste, calcola l'hash e altri metadati,
-	e lo aggiorna se è cambiato, oppure crea un nuovo record. Imposta is_embedded
-	a False per forzare la reindicizzazione se il documento è cambiato.
+    Verifica se un documento di progetto esiste, calcola l'hash e altri metadati,
+    e lo aggiorna se è cambiato, oppure crea un nuovo record. Imposta is_embedded
+    a False per forzare la reindicizzazione se il documento è cambiato.
 
-	Args:
-		project: Oggetto Project
-		file_path: Percorso completo del file
-		filename: Nome del file (opzionale, se diverso dal basename del percorso)
+    Args:
+        project: Oggetto Project
+        file_path: Percorso completo del file
+        filename: Nome del file (opzionale, se diverso dal basename del percorso)
 
-	Returns:
-		tuple: (ProjectFile, bool) - Il documento registrato e un flag che indica
-			   se il documento è stato creato o modificato
-	"""
+    Returns:
+        tuple: (ProjectFile, bool) - Il documento registrato e un flag che indica
+               se il documento è stato creato o modificato
+    """
+	# Importa qui per evitare l'importazione circolare
+	from profiles.models import ProjectFile
+
 	# Verifica che il file esista
 	if not os.path.exists(file_path):
 		logger.warning(f"File non trovato: {file_path} per il progetto {project.id}")

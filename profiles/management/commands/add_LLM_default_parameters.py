@@ -1,7 +1,7 @@
 # management/commands/initialize_defaults.py
 
 from django.core.management.base import BaseCommand, CommandError
-from profiles.models import LLMProvider, LLMEngine, RagDefaultSettings, RagTemplateType
+from profiles.models import LLMProvider, LLMEngine, RagDefaultSettings, RagTemplateType, DefaultSystemPrompts
 import logging
 
 # Ottieni il logger
@@ -19,6 +19,10 @@ class Command(BaseCommand):
 			self.ensure_llm_engines()
 			self.ensure_rag_template_types()
 			self.ensure_rag_default_settings()
+			self.ensure_default_system_prompts()  # Aggiunta questa funzione
+
+			# Migrazione dei prompt esistenti (se necessario)
+			self.migrate_existing_prompts()  # Aggiunta questa funzione
 
 			self.stdout.write(self.style.SUCCESS('✅ Valori predefiniti inizializzati con successo'))
 		except Exception as e:
@@ -172,3 +176,162 @@ class Command(BaseCommand):
 			)
 		except RagTemplateType.DoesNotExist:
 			logger.error("Template Bilanciato non trovato")
+
+	def ensure_default_system_prompts(self):
+		"""Crea i prompt di sistema predefiniti se non esistono"""
+		prompts = [
+			{
+				"name": "RAG Standard",
+				"description": "Prompt per sistema RAG standard. Bilanciato per la maggior parte dei casi d'uso.",
+				"prompt_text": """Sei un assistente esperto che analizza documenti e note, fornendo risposte dettagliate e complete.
+
+Per rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.
+Se l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.
+
+Il contesto contiene sia documenti che note, insieme ai titoli dei file. Considera tutti questi elementi nelle tue risposte.
+
+Quando rispondi:
+1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili
+2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto
+3. Organizza le informazioni in modo logico e strutturato
+4. Cita fatti specifici e dettagli presenti nei documenti e nelle note
+5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nei vari documenti
+6. Rispondi solo in base alle informazioni contenute nei documenti e nelle note, senza aggiungere conoscenze esterne""",
+				"is_default": True
+			},
+			{
+				"name": "RAG Alta Precisione",
+				"description": "Prompt per sistema RAG con alta precisione. Ideale per documenti tecnici o complessi.",
+				"prompt_text": """Sei un assistente analitico di alta precisione che utilizza documenti e note per fornire risposte estremamente accurate e dettagliate.
+
+IMPORTANTE: Basa la tua risposta ESCLUSIVAMENTE sulle informazioni presenti nel contesto fornito.
+Se non trovi informazioni sufficienti, specifica chiaramente quali aspetti della domanda non possono essere risposti con i documenti disponibili.
+
+Il contesto contiene una collezione di documenti e note con i relativi titoli. Analizza attentamente ogni fonte.
+
+Linee guida per la risposta:
+1. Analizza ogni documento rilevante con estrema attenzione ai dettagli
+2. Cita esplicitamente le fonti specifiche per ogni informazione (es. "Secondo il documento X...")
+3. Evidenzia eventuali discrepanze o contraddizioni tra diverse fonti
+4. Mantieni un tono neutrale e oggettivo, basato sui fatti
+5. Usa una struttura logica che separi chiaramente i diversi aspetti della risposta
+6. Se la domanda menziona un documento specifico, concentrati principalmente su quel documento
+7. Sii preciso nella terminologia e utilizza il linguaggio tecnico presente nei documenti
+8. Non aggiungere interpretazioni o conoscenze che non sono direttamente supportate dai documenti""",
+				"is_default": False
+			},
+			{
+				"name": "RAG Veloce",
+				"description": "Prompt per sistema RAG ottimizzato per la velocità. Ideale per domande semplici o progetti con molti documenti.",
+				"prompt_text": """Sei un assistente efficiente che fornisce risposte concise basate su documenti e note.
+
+Utilizza SOLO le informazioni nel contesto fornito per rispondere alla domanda. Se l'informazione non è disponibile, dillo chiaramente.
+
+Linee guida:
+1. Fornisci risposte brevi e dirette
+2. Concentrati sui punti principali e più rilevanti
+3. Evita dettagli non essenziali per la domanda specifica
+4. Se possibile, riassumi informazioni complesse in punti chiave
+5. Identifica rapidamente i documenti più pertinenti per la domanda
+6. Rispondi solo con informazioni presenti nei documenti forniti""",
+				"is_default": False
+			},
+			{
+				"name": "Coding Assistant",
+				"description": "Prompt per assistente di programmazione. Ideale per progetti di sviluppo software.",
+				"prompt_text": """Sei un assistente di programmazione esperto che aiuta a risolvere problemi di codice, implementare funzionalità e migliorare la qualità del codice.
+
+Quando rispondi:
+1. Fornisci sempre codice funzionante, testabile e ben documentato
+2. Segui le best practice di sviluppo software e del linguaggio specifico
+3. Spiega la logica del tuo approccio e le scelte implementative
+4. Se pertinente, evidenzia potenziali problemi di sicurezza, prestazioni o manutenibilità
+5. Quando possibile, suggerisci test per verificare la correttezza del codice
+6. Adatta lo stile di codifica a quello esistente nei documenti forniti
+
+Se la richiesta non è chiara o mancano informazioni essenziali, chiedi chiarimenti invece di fare troppe supposizioni.""",
+				"is_default": False
+			},
+			{
+				"name": "Assistente Generale",
+				"description": "Prompt per assistente generale. Utile per progetti generici.",
+				"prompt_text": """Sei un assistente AI utile, rispettoso e onesto. Rispondi sempre nel modo più utile possibile.
+
+Quando rispondi:
+1. Rispondi in modo chiaro, conciso e ben strutturato
+2. Sii obiettivo e basati sui fatti quando fornisci informazioni
+3. Se una domanda non è chiara, chiedi cortesemente chiarimenti
+4. Se non conosci la risposta, ammettilo invece di inventare informazioni
+5. Adatta il tuo linguaggio al contesto e al livello di complessità appropriato
+6. Mantieni un tono professionale ma amichevole
+
+Il tuo obiettivo è aiutare l'utente a raggiungere i suoi obiettivi nel modo più efficace possibile.""",
+				"is_default": False
+			}
+		]
+
+		for prompt_data in prompts:
+			# Verifica se esiste già un prompt con lo stesso nome
+			existing = DefaultSystemPrompts.objects.filter(name=prompt_data["name"]).first()
+
+			if existing:
+				# Aggiorna il prompt esistente
+				for key, value in prompt_data.items():
+					setattr(existing, key, value)
+				existing.save()
+				logger.debug(f"Aggiornato prompt di sistema: {existing.name}")
+			else:
+				# Crea un nuovo prompt
+				prompt = DefaultSystemPrompts.objects.create(**prompt_data)
+				logger.debug(f"Creato prompt di sistema: {prompt.name}")
+
+	def migrate_existing_prompts(self):
+		"""
+		Migra i prompt di sistema esistenti alla nuova struttura,
+		verificando e aggiornando le configurazioni ProjectLLMConfig esistenti.
+		"""
+		from profiles.models import Project, ProjectLLMConfiguration
+
+		# Ottieni il prompt di sistema predefinito
+		default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+
+		if not default_prompt:
+			logger.warning("Nessun prompt predefinito trovato, impossibile migrare i prompt esistenti")
+			return
+
+		try:
+			# Per ogni configurazione LLM esistente
+			config_count = 0
+			for config in ProjectLLMConfiguration.objects.all():
+				try:
+					# Verifica se i nuovi campi sono già stati popolati
+					has_default_prompt = hasattr(config,
+												 'default_system_prompt') and config.default_system_prompt is not None
+					has_system_prompt_field = hasattr(config, 'system_prompt')
+					has_system_prompt_override = hasattr(config, 'system_prompt_override')
+
+					if not has_default_prompt:
+						# Se il nuovo campo default_system_prompt non è popolato, imposta il default
+						config.default_system_prompt = default_prompt
+
+					# Gestisci la migrazione dal vecchio campo system_prompt
+					if has_system_prompt_field and not has_system_prompt_override:
+						old_prompt_text = getattr(config, 'system_prompt', '')
+
+						if old_prompt_text:
+							# Se c'è un prompt personalizzato, spostalo nel campo override
+							config.system_prompt_override = old_prompt_text
+							# Imposta il prompt predefinito
+							config.default_system_prompt = default_prompt
+							logger.debug(f"Migrato prompt personalizzato per il progetto {config.project.name}")
+
+					config.save()
+					config_count += 1
+
+				except Exception as e:
+					logger.error(f"Errore nella migrazione del prompt per il progetto {config.project.id}: {e}")
+
+			logger.info(f"Migrati {config_count} prompt di progetto")
+
+		except Exception as e:
+			logger.error(f"Errore generale nella migrazione dei prompt: {e}")

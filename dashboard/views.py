@@ -13,8 +13,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.db.models import Sum
 from django.utils import timezone
+import traceback
+import shutil # cancellazione ricorsiva di directory su FS
 
-# Importazioni dai nuovi moduli RAG
+# Importazioni dai moduli RAG
 from dashboard.rag_document_utils import (
     register_document, compute_file_hash, check_project_index_update_needed,
     scan_user_directory, update_project_index_status, get_cached_embedding,
@@ -23,14 +25,14 @@ from dashboard.rag_document_utils import (
 from dashboard.rag_utils import (
     create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note,
     handle_toggle_note_inclusion, get_answer_from_project, handle_project_file_upload,
-    get_project_engine_settings, get_project_rag_settings
+    get_project_LLM_settings, get_project_RAG_settings
 )
-# Modelli aggiornati
+# Modelli
 from profiles.models import (
     Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource,
     LLMEngine, UserAPIKey, LLMProvider, RagTemplateType, RagDefaultSettings,
-    RAGConfiguration, EmbeddingCacheStats, GlobalEmbeddingCache, ProjectConfiguration,
-    ProjectLLMConfig, ProjectIndexStatus, DefaultSystemPrompts, UserDocument
+    RAGConfiguration, EmbeddingCacheStats, GlobalEmbeddingCache, ProjectRAGConfiguration,
+    ProjectLLMConfiguration, ProjectIndexStatus, DefaultSystemPrompts, UserDocument, UserCustomPrompt
 )
 from .cache_statistics import update_embedding_cache_stats
 from .utils import process_user_files
@@ -45,7 +47,11 @@ def dashboard(request):
     Vista principale della dashboard che mostra una panoramica dei progetti dell'utente,
     statistiche sui documenti, note e conversazioni, e informazioni sulla cache degli embedding.
 
-    Supporta richieste AJAX per aggiornare le statistiche della cache degli embedding senza ricaricare la pagina.
+    Questa vista:
+    1. Raccoglie tutti i progetti dell'utente
+    2. Calcola statistiche sui documenti, note e conversazioni
+    3. Recupera dati sulla cache di embedding
+    4. Supporta l'aggiornamento delle statistiche via AJAX
     """
     logger.debug("---> dashboard")
     if request.user.is_authenticated:
@@ -198,8 +204,13 @@ def upload_document(request):
     """
     Gestisce il caricamento di un singolo documento da parte dell'utente.
 
-    Verifica che il file abbia un'estensione supportata, lo salva nella directory dell'utente,
-    e registra il documento nel database per l'indicizzazione.
+    Questa funzione:
+    1. Verifica che il file abbia un'estensione supportata
+    2. Crea la directory di upload se non esiste
+    3. Salva il file con gestione nomi duplicati
+    4. Registra il documento nel database per l'indicizzazione
+
+    Supporta formati comuni come PDF, DOCX, TXT, CSV, immagini, ecc.
     """
     logger.debug("---> upload_document")
     if request.user.is_authenticated:
@@ -218,7 +229,7 @@ def upload_document(request):
                                       '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif']
 
                 if file_extension not in allowed_extensions:
-                    messages.error(request, f"File type not supported. Allowed types: {', '.join(allowed_extensions)}")
+                    messages.error(request, f"File Non supportati. Tipi file ammessi: {', '.join(allowed_extensions)}")
                     return render(request, 'be/upload_document.html', context)
 
                 # Create the upload directory if it doesn't exist
@@ -228,7 +239,9 @@ def upload_document(request):
                 # Save the file
                 file_path = os.path.join(upload_dir, document.name)
 
-                # Handle file with same name
+                # Controlla se esiste un file con lo stesso nome, se per caso esiste allora aggiungi un suffisso numerico
+                # es. 'pippo.pdf' esiste, carico un altro 'pippo.pdf' questo diventerà 'pippo_1.pdf". Se ce ne sono tanti
+                # ciclerà sino al primo disponibile
                 counter = 1
                 original_name = os.path.splitext(document.name)[0]
                 while os.path.exists(file_path):
@@ -236,7 +249,7 @@ def upload_document(request):
                     file_path = os.path.join(upload_dir, new_name)
                     counter += 1
 
-                # Save the file
+                # Salvo il file (uso i chunck per questioni di ottimizzazione)
                 with open(file_path, 'wb+') as destination:
                     for chunk in document.chunks():
                         destination.write(chunk)
@@ -245,13 +258,13 @@ def upload_document(request):
                 doc, is_new_or_modified = register_document(request.user, file_path)
 
                 # Log the successful upload
-                logger.info(f"Document '{document.name}' uploaded successfully by user {request.user.username}")
-                messages.success(request, f"Document '{document.name}' uploaded successfully.")
+                logger.info(f"Documento '{document.name}' caricato con successo dall'utente {request.user.username}")
+                messages.success(request, f"Documento '{document.name}' caricato con successo")
 
                 # Redirect to the same page to avoid form resubmission
                 return redirect('documents_uploaded')
             else:
-                messages.error(request, "No file was uploaded.")
+                messages.error(request, "File non caricato!")
 
         return render(request, 'be/upload_document.html', context)
     else:
@@ -261,11 +274,17 @@ def upload_document(request):
 
 def upload_folder(request):
     """
-    Gestisce il caricamento di una cartella completa di file.
+	Gestisce il caricamento di una cartella completa di file.
 
-    Mantiene la struttura delle sottocartelle e filtra i file per estensioni supportate.
-    Ogni file valido viene salvato nella directory appropriata e registrato nel database.
-    """
+	Questa funzione:
+	1. Processa più file contemporaneamente come cartella
+	2. Mantiene la struttura delle sottocartelle durante il caricamento
+	3. Filtra automaticamente i file per estensioni supportate
+	4. Registra ogni file valido nel database di documenti
+
+	Permette agli utenti di caricare intere strutture di documenti
+	preservando l'organizzazione originale.
+	"""
     logger.debug("---> upload_folder")
     if request.user.is_authenticated:
         context = {}
@@ -285,39 +304,44 @@ def upload_folder(request):
                 successful_uploads = 0
                 skipped_files = 0
 
-                # Create the user upload directory
+                # Creao la directory user_upload
                 user_upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
                 os.makedirs(user_upload_dir, exist_ok=True)
 
                 # Process each file
                 for uploaded_file in files:
-                    # Get file extension
+                    # Prendo tutte le estensioni dei file
                     file_name = uploaded_file.name
-                    _, file_extension = os.path.splitext(file_name)
+                    _, file_extension = os.path.splitext(file_name)      #prendo l'estensione. _ vuol dire: il primo parametro non mi interessa
 
                     # Check if extension is allowed
                     if file_extension.lower() not in allowed_extensions:
                         logger.debug(
-                            f"Skipping file with unsupported extension: {file_name}, extension: {file_extension}")
+                            f"Esclusi file con estensioni non supportate: {file_name}, extension: {file_extension}")
                         skipped_files += 1
                         continue
 
-                    logger.debug(f"Processing file: {file_name}, extension: {file_extension}")
+                    logger.debug(f"Processamento file: {file_name}, estensione: {file_extension}")
 
                     # Get the relative path from webkitRelativePath
                     # Note: In reality, we need to parse this from the request
                     # For this example, we'll extract from the filename if possible
                     relative_path = uploaded_file.name
 
-                    # Remove the first folder name (the root folder being uploaded)
+                    # Parte che preserva e ricostruisce la struttura della directory con file e sottodirectory
+                    # Tolgo la prima / che è la directory principale
                     path_parts = relative_path.split('/')
                     if len(path_parts) > 1:
-                        # Reconstruct the path without the root folder
+                        # Ricostruscie la struttura delle directory:
+                        # es. abbiamo: CartellaRadice/Sottocartella/Altro/file.txt
+                        # path_parts diventa = ['CartellaRadice', 'Sottocartella', 'Altro', 'file.txt']
+                        # path_parts[1:-1] vuol dire prendo tutto path_parths e escludo il primo elemento
+                        # ricostruisco il path con '/'.join
                         subfolder_path = '/'.join(path_parts[1:-1])
 
                         # Create the subfolder structure if needed
                         if subfolder_path:
-                            subfolder_dir = os.path.join(user_upload_dir, subfolder_path)
+                            subfolder_dir = os.path.join(user_upload_dir, subfolder_path) # unisco i path
                             os.makedirs(subfolder_dir, exist_ok=True)
 
                             # Set the file path to include subfolders
@@ -327,7 +351,7 @@ def upload_folder(request):
                     else:
                         file_path = os.path.join(user_upload_dir, relative_path)
 
-                    # Handle file with same name
+                    # Gestisco i file con gli stessi nomi: i file con lo stesso nome diventano es: file_1.pdf, file_2.pdf
                     counter = 1
                     original_name = os.path.splitext(os.path.basename(file_path))[0]
                     while os.path.exists(file_path):
@@ -341,7 +365,7 @@ def upload_folder(request):
                             for chunk in uploaded_file.chunks():
                                 destination.write(chunk)
 
-                        # Registra il documento nel database
+                        # Registra il documento nel database. Serve per capire se bisogna fare l'hash per un eventuale embedding
                         doc, is_new_or_modified = register_document(request.user, file_path)
 
                         logger.debug(f"Successfully saved file: {file_path}")
@@ -375,8 +399,14 @@ def documents_uploaded(request):
     """
     Visualizza tutti i documenti caricati dall'utente con opzioni di filtro e paginazione.
 
-    Per gli amministratori, mostra i documenti di tutti gli utenti. Supporta la ricerca
-    di documenti per nome e la paginazione dei risultati.
+    Questa funzione:
+    1. Recupera tutti i documenti dell'utente (o di tutti gli utenti per gli admin)
+    2. Implementa funzionalità di ricerca per nome documento
+    3. Aggiunge paginazione per gestire grandi quantità di documenti
+    4. Fornisce informazioni sui metadati di ogni documento
+
+    Fornisce una visualizzazione organizzata di tutti i documenti disponibili per l'utente,
+    con interfaccia differenziata per utenti normali e amministratori.
     """
     logger.debug("---> documents_uploaded")
     if request.user.is_authenticated:
@@ -450,11 +480,17 @@ def documents_uploaded(request):
 
 def download_document(request, document_id):
     """
-    Permette di scaricare un documento specifico.
+	Permette di scaricare un documento specifico.
 
-    Verifica che l'utente abbia accesso al documento e imposta le intestazioni
-    HTTP appropriate per il download.
-    """
+	Questa funzione:
+	1. Verifica che l'utente abbia accesso al documento richiesto
+	2. Determina il content-type appropriato per il file
+	3. Configura la risposta HTTP per il download del file
+	4. Restituisce il contenuto del file con le intestazioni appropriate
+
+	Garantisce che gli utenti possano accedere solo ai propri documenti
+	e che i file vengano scaricati correttamente con il tipo MIME appropriato.
+	"""
     logger.debug(f"---> download_document: {document_id}")
     if request.user.is_authenticated:
         # Directory where user documents are stored
@@ -463,12 +499,13 @@ def download_document(request, document_id):
 
         # Check if file exists
         if os.path.exists(file_path) and os.path.isfile(file_path):
-            # Determine content type based on file extension
+            # Cerca di capire che tipo di file e' a partire dal content type (es. .pdf --> application/pdf), se non riesce
+            # allora restituisce un tipo generico application/octet-stream
             content_type, _ = mimetypes.guess_type(file_path)
             if content_type is None:
                 content_type = 'application/octet-stream'
 
-            # Open file for reading
+            # Apro il file e direttamente creo una risposta HTTP con il file stesso con il suo content type.
             with open(file_path, 'rb') as file:
                 response = HttpResponse(file.read(), content_type=content_type)
                 # Set content disposition for download
@@ -484,11 +521,17 @@ def download_document(request, document_id):
 
 def delete_document(request, document_id):
     """
-    Elimina un documento dall'archivio dell'utente.
+	Elimina un documento dall'archivio dell'utente.
 
-    Rimuove sia il file fisico che il record dal database dopo aver verificato
-    che l'utente abbia accesso al documento.
-    """
+	Questa funzione:
+	1. Verifica che l'utente sia proprietario del documento
+	2. Rimuove il record del documento dal database
+	3. Elimina il file fisico dal filesystem
+	4. Fornisce feedback all'utente sull'esito dell'operazione
+
+	Garantisce che solo il proprietario possa eliminare un documento
+	e che sia il file fisico che i metadati vengano rimossi.
+	"""
     logger.debug(f"---> delete_document: {document_id}")
     if request.user.is_authenticated:
         if request.method == 'POST':
@@ -526,15 +569,71 @@ def delete_document(request, document_id):
 
 def new_project(request):
     """
-    Crea un nuovo progetto con la possibilità di caricare file iniziali.
+	Crea un nuovo progetto con opzioni di configurazione completa.
 
-    Il progetto creato sarà associato all'utente corrente. Se vengono caricati file,
-    questi saranno elaborati e aggiunti al progetto, mantenendo la struttura delle cartelle se presente.
-    Dopo la creazione, l'utente viene reindirizzato alla pagina del progetto.
-    """
+	Questa funzione:
+	1. Verifica che l'utente abbia configurato almeno una chiave API LLM
+	2. Permette la selezione del motore LLM da utilizzare
+	3. Consente il caricamento di file iniziali per il progetto
+	4. Configura parametri LLM come temperatura, max_tokens, ecc.
+	5. Permette la scelta del prompt di sistema o personalizzato
+
+	Punto centrale per l'inizializzazione di nuovi progetti RAG, garantendo
+	che tutte le configurazioni necessarie siano impostate prima della creazione.
+	"""
     logger.debug("---> new_project")
     if request.user.is_authenticated:
-        context = {}
+
+        # Prendo tutte le api_keys dell'utente
+        api_keys = UserAPIKey.objects.filter(user=request.user)
+        has_api_keys = api_keys.exists()
+
+        # Prepara dati per template
+        context = {
+            'has_api_keys': has_api_keys,
+        }
+
+        # Se l'utente ha delle chiavi API, prepara i dati per la selezione dei motori LLM
+        if has_api_keys:
+            # Ottieni i provider LLM per i quali l'utente ha chiavi API
+            #provider_ids = api_keys.values_list('provider_id', flat=True)
+
+            # Prendo tutti gli id dei Provider LLM associati alla chiave
+            provider_ids = []
+            for key in api_keys:
+                provider_ids.append(key.provider_id)
+
+            # Prendo tutti i provider attivi per quella chiave
+            available_providers = []
+            for provider in LLMProvider.objects.all():
+                # verifico se il provider è presente nella lista dei provider associati alla chave ed è contemporaneamente attivo
+                if provider.id in provider_ids and provider.is_active:
+                    available_providers.append(provider)
+
+
+            #available_providers = LLMProvider.objects.filter(id__in=provider_ids, is_active=True)
+
+            # crea la lista di tutti gli engine LLM con i parametri relativi di configurazione
+            provider_data = []
+            for provider in available_providers:
+                engines = LLMEngine.objects.filter(provider=provider, is_active=True).order_by('-is_default')
+                provider_data.append({
+                    'id': provider.id,
+                    'name': provider.name,
+                    'logo': provider.logo,
+                    'engines': engines
+                })
+
+            # Ottieni i prompt di sistema predefiniti
+            system_prompts = DefaultSystemPrompts.objects.all().order_by('-is_default')
+
+            # Aggiungi dati al contesto
+            context.update({
+                'available_providers': provider_data,
+                'system_prompts': system_prompts,
+            })
+
+
         if request.method == 'POST':
             project_name = request.POST.get('project_name')
             description = request.POST.get('description')
@@ -544,10 +643,16 @@ def new_project(request):
             folder_files = request.FILES.getlist('folder') or request.FILES.getlist('folder[]')
 
             if not project_name:
-                messages.error(request, "Project name is required.")
+                messages.error(request, "Il nome del progetto è obbligatorio.")
                 return render(request, 'be/new_project.html', context)
 
-            logger.info(f"Creating new project '{project_name}' for user {request.user.username}")
+
+            # Verifica presenza delle chiavi API
+            if not has_api_keys:
+                messages.error(request, "Devi configurare almeno una chiave API prima di creare un progetto.")
+                return render(request, 'be/new_project.html', context)
+
+            logger.info(f"Creazione nuovo progetto '{project_name}' per l'utente {request.user.username}")
 
             try:
                 # Crea un nuovo progetto
@@ -557,31 +662,94 @@ def new_project(request):
                     description=description
                 )
                 project.save()
-                logger.info(f"Project created with ID: {project.id}")
+                logger.info(f"Progetto creato con ID: {project.id}")
 
-                # Gestisci eventuali file caricati
+                # Ottieni o crea la configurazione LLM del progetto (creata automaticamente dal segnale post_save)
+                llm_config = ProjectLLMConfiguration.objects.get(project=project)
+
+                # Se sono stati inviati parametri LLM, configurali
+                if request.POST.get('engine_id') and api_keys.exists():
+                    engine_id = request.POST.get('engine_id')
+                    temperature = float(request.POST.get('temperature', 0.7))
+                    max_tokens = int(request.POST.get('max_tokens', 4096))
+                    timeout = int(request.POST.get('timeout', 60))
+
+                    # Tipo di prompt (default o custom)
+                    prompt_type = request.POST.get('prompt_type', 'default')
+
+                    try:
+                        # Imposta il motore LLM
+                        engine = LLMEngine.objects.get(id=engine_id)
+                        llm_config.engine = engine
+                        llm_config.temperature = temperature
+                        llm_config.max_tokens = max_tokens
+                        llm_config.timeout = timeout
+
+                        # Gestione del prompt di sistema
+                        if prompt_type == 'default':
+
+                            # Prompt predefinito selezionato
+                            default_prompt_id = request.POST.get('default_prompt_id')
+                            if default_prompt_id:
+                                default_prompt = DefaultSystemPrompts.objects.get(id=default_prompt_id)
+                                llm_config.default_system_prompt = default_prompt
+                                llm_config.use_custom_prompt = False
+                                llm_config.system_prompt_override = ""
+
+                        else:
+                            # Prompt personalizzato
+                            system_prompt = request.POST.get('system_prompt', '')
+                            llm_config.system_prompt_override = system_prompt
+                            llm_config.use_custom_prompt = True
+
+                        llm_config.save()
+                        logger.info(f"Configurazione LLM salvata per il progetto {project.id} con motore {engine.name}")
+                    except LLMEngine.DoesNotExist:
+                        logger.warning(f"Motore con ID {engine_id} non trovato, uso predefinito")
+                    except DefaultSystemPrompts.DoesNotExist:
+                        logger.warning(f"Prompt predefinito con ID {default_prompt_id} non trovato, uso predefinito")
+
+
+
+                # Carica e Gestisci eventuali file caricati dall'utente
                 if files:
                     # Crea directory del progetto
                     project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id), str(project.id))
                     os.makedirs(project_dir, exist_ok=True)
 
                     for file in files:
-                        # Usa la funzione ottimizzata per il caricamento dei file
+                        # Usa la funzione per il caricamento dei file in modo da informare anche l'indice vettoriale
                         handle_project_file_upload(project, file, project_dir)
 
-                    logger.info(f"Added {len(files)} files to project '{project_name}'")
+                    logger.info(f"Aggiunti {len(files)} file al progetto '{project_name}'")
 
-                # Gestisci eventuale cartella caricata
+
+
+                # Carica e gestisci eventuali directory caricata dall'utente
                 if folder_files:
                     # Crea directory del progetto
                     project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id), str(project.id))
                     os.makedirs(project_dir, exist_ok=True)
 
                     for file in folder_files:
-                        # Gestisci il percorso relativo per la cartella
-                        relative_path = file.name
-                        if hasattr(file, 'webkitRelativePath') and file.webkitRelativePath:
-                            relative_path = file.webkitRelativePath
+                        # Gestisci il percorso relativo per la cartella. Quando un utente carica una cartella tramite browser:
+                        # Il browser fornisce automaticamente la proprietà webkitRelativePath, che contiene il percorso
+                        # completo relativo alla cartella radice caricata. Potrebbe non esserci sempre però
+                        # Es. file.name avremmo pippo.txt. Invece con file.webkitRelativePath avremmo /usr/local/pippo.txt"
+
+                        # relative_path = file.name
+                        # if hasattr(file, 'webkitRelativePath') and file.webkitRelativePath:
+                        #     relative_path = file.webkitRelativePath
+
+                        # Riscritto semplice
+                        try:
+                            if file.webkitRelativePath:
+                                relative_path = file.webkitRelativePath
+                            else:
+                                relative_path = file.name
+                        except AttributeError:
+                            relative_path = file.name
+
 
                         path_parts = relative_path.split('/')
                         if len(path_parts) > 1:
@@ -593,55 +761,66 @@ def new_project(request):
                         else:
                             file_path = os.path.join(project_dir, path_parts[-1])
 
-                        # Usa la funzione ottimizzata per il caricamento dei file
+                        # Usa la funzione per il caricamento dei file e aggiorna l'indice vettoriale
                         handle_project_file_upload(project, file, project_dir, file_path)
 
-                    logger.info(f"Added folder with {len(folder_files)} files to project '{project_name}'")
+                    logger.info(f"Aggiunta cartella con {len(folder_files)} file al progetto '{project_name}'")
 
-                messages.success(request, f"Project '{project_name}' created successfully.")
+                messages.success(request, f"Progetto '{project_name}' creato con successo.")
 
                 # Reindirizza alla vista project con l'ID come parametro
                 return redirect(reverse('project', kwargs={'project_id': project.id}))
 
             except Exception as e:
-                logger.error(f"Error creating project: {str(e)}")
-                import traceback
+                logger.error(f"Errore nella creazione del progetto: {str(e)}")
+                # Faccio vedere tutto l'errore sulla console (utilissimo questo ai fini dei log)
                 logger.error(traceback.format_exc())
-                messages.error(request, f"Error creating project: {str(e)}")
+                messages.error(request, f"Errore nella creazione del progetto: {str(e)}")
                 return render(request, 'be/new_project.html', context)
 
         # Renderizza la pagina di creazione progetto
         return render(request, 'be/new_project.html', context)
     else:
-        logger.warning("User not Authenticated!")
+        logger.warning("Utente non autenticato!")
         return redirect('login')
 
 
 def projects_list(request):
     """
-    Visualizza l'elenco di tutti i progetti dell'utente corrente.
+    Visualizza l'elenco di tutti i progetti dell'utente con opzioni di gestione.
 
-    Permette anche di eliminare progetti, rimuovendo sia i dati dal database
-    che i file fisici associati al progetto.
+    Questa funzione:
+    1. Recupera e visualizza tutti i progetti dell'utente
+    2. Permette la cancellazione di progetti esistenti
+    3. Gestisce la pulizia dei file e dei dati associati al progetto eliminato
+    4. Fornisce feedback all'utente sulle operazioni eseguite
+
+    Serve come punto centrale per la navigazione tra progetti
+    e la gestione del loro ciclo di vita.
     """
+
+
     logger.debug("---> projects_list")
     if request.user.is_authenticated:
+
         # Ottieni i progetti dell'utente
         projects = Project.objects.filter(user=request.user).order_by('-created_at')
 
         # Gestisci l'eliminazione del progetto
         if request.method == 'POST' and request.POST.get('action') == 'delete_project':
             project_id = request.POST.get('project_id')
-            project = get_object_or_404(Project, id=project_id, user=request.user)
 
+            # recupero il progetto
+            project = get_object_or_404(Project, id=project_id, user=request.user)
             logger.info(f"Deleting project '{project.name}' (ID: {project.id}) for user {request.user.username}")
 
             # Elimina i file associati al progetto
+            # Prendo il percorso del progetto
             project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id), str(project.id))
+
+            # Elimino file e sottodirectory del progetto (compreso db vettoriale) da FS
             if os.path.exists(project_dir):
-                # Elimina i file fisici e l'indice vettoriale all'interno della directory del progetto
-                import shutil
-                shutil.rmtree(project_dir)
+                shutil.rmtree(project_dir)   # rm -RF directory
                 logger.info(f"Deleted project directory and vector index for project {project.id}")
 
             # Elimina il progetto dal database
@@ -660,11 +839,17 @@ def projects_list(request):
 
 def project_details(request, project_id):
     """
-    Visualizza i dettagli analitici di un progetto, inclusi grafici di interazione
-    e informazioni sui costi.
+	Visualizza i dettagli analitici di un progetto con metriche e statistiche.
 
-    Mostra statistiche sull'utilizzo del progetto e sulle interazioni con il RAG.
-    """
+	Questa funzione:
+	1. Mostra informazioni dettagliate su un progetto specifico
+	2. Visualizza statistiche di utilizzo e interazione
+	3. Presenta grafici di attività per giorni della settimana
+	4. Mostra informazioni sui costi stimati dell'utilizzo
+
+	Utile per analizzare l'andamento e l'utilizzo di un progetto nel tempo,
+	fornendo una vista sulle metriche chiave.
+	"""
     logger.debug(f"---> project_details: {project_id}")
     if request.user.is_authenticated:
         try:
@@ -710,20 +895,24 @@ def project_details(request, project_id):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+#################################################### SINO A QUI CONTROLLATO ################################
+
 
 
 def project(request, project_id=None):
     """
-    Vista principale di un progetto che mostra file, note e conversazioni.
+	Vista principale per la gestione completa di un progetto.
 
-    Gestisce varie operazioni:
-    - Salvataggio delle note generali del progetto
-    - Elaborazione di domande RAG
-    - Aggiunta/modifica/eliminazione di file e note
-    - Gestione delle conversazioni con il modello AI
+	Questa funzione multi-purpose:
+	1. Visualizza file, note e conversazioni del progetto
+	2. Gestisce domande RAG e mostra risposte con fonti
+	3. Permette operazioni su file e note (aggiunta, modifica, eliminazione)
+	4. Gestisce diverse visualizzazioni (tab) dello stesso progetto
+	5. Supporta richieste AJAX per operazioni asincrone
 
-    La vista supporta richieste AJAX per operazioni asincrone.
-    """
+	Hub centrale per tutte le operazioni relative a un singolo progetto,
+	con supporto per diverse modalità di interazione.
+	"""
     logger.debug(f"---> project: {project_id}")
     if request.user.is_authenticated:
         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
@@ -1177,7 +1366,7 @@ def project(request, project_id=None):
             # Al context aggiungo i dati che descrivono il tipo di RAG usato
             try:
                 # Ottieni le impostazioni RAG del progetto
-                project_config, created = ProjectConfiguration.objects.get_or_create(project=project)
+                project_config, created = ProjectRAGConfiguration.objects.get_or_create(project=project)
 
                 # Determina i valori effettivi (personalizzati o ereditati dal preset)
                 rag_values = {
@@ -1223,7 +1412,7 @@ def project(request, project_id=None):
 
             # Ottieni anche informazioni sul motore LLM utilizzato
             try:
-                project_llm_config, llm_created = ProjectLLMConfig.objects.get_or_create(project=project)
+                project_llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(project=project)
                 engine = project_llm_config.engine
 
                 # Aggiungi informazioni sul motore al context
@@ -1245,57 +1434,20 @@ def project(request, project_id=None):
         return redirect('login')
 
 
-def serve_project_file(request, file_id):
-    """
-    Serve un file di progetto con le intestazioni HTTP appropriate.
-
-    Permette di visualizzare il file nel browser o scaricarlo a seconda del parametro 'download'.
-    Verifica che l'utente abbia accesso al file e imposta il content-type corretto.
-    """
-    # Ottieni il file dal database
-    project_file = get_object_or_404(ProjectFile, id=file_id)
-
-    # Verifica che l'utente abbia accesso al file
-    if project_file.project.user != request.user:
-        raise Http404("File non trovato")
-
-    # Verifica che il file esista effettivamente
-    if not os.path.exists(project_file.file_path):
-        raise Http404("File non trovato")
-
-    # Ottieni il content type
-    content_type, _ = mimetypes.guess_type(project_file.file_path)
-    if content_type is None:
-        # Content types per file Excel
-        if project_file.file_path.endswith('.xlsx'):
-            content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        elif project_file.file_path.endswith('.xls'):
-            content_type = 'application/vnd.ms-excel'
-        else:
-            content_type = 'application/octet-stream'
-
-    # Apri il file in modalità binaria
-    with open(project_file.file_path, 'rb') as f:
-        response = HttpResponse(f.read(), content_type=content_type)
-
-    # Imposta intestazioni per permettere l'embedding (utile per PDF e HTML)
-    response['Content-Disposition'] = f'inline; filename="{project_file.filename}"'
-    response['X-Frame-Options'] = 'SAMEORIGIN'
-
-    # Se è specificato il parametro download, imposta content-disposition come attachment
-    if request.GET.get('download'):
-        response['Content-Disposition'] = f'attachment; filename="{project_file.filename}"'
-
-    return response
-
 
 def project_config(request, project_id):
     """
-    Vista per modificare la configurazione specifica di un progetto.
+	Gestisce la configurazione dettagliata di un progetto.
 
-    Permette di configurare sia le impostazioni LLM che le opzioni RAG per un singolo progetto.
-    Supporta il reset alle impostazioni utente e diverse operazioni di salvataggio.
-    """
+	Questa funzione:
+	1. Permette di modificare le impostazioni LLM e RAG specifiche del progetto
+	2. Gestisce il reset alle impostazioni predefinite dell'utente
+	3. Visualizza quali impostazioni sono personalizzate vs. quelle ereditate
+	4. Supporta aggiornamenti via AJAX per feedback immediato
+
+	Fornisce un'interfaccia completa per la personalizzazione dei parametri
+	del progetto con opzioni avanzate per utenti esperti.
+	"""
     logger.debug(f"---> project_config: {project_id}")
     if request.user.is_authenticated:
         try:
@@ -1303,10 +1455,10 @@ def project_config(request, project_id):
             project = get_object_or_404(Project, id=project_id, user=request.user)
 
             # Ottieni o crea la configurazione del progetto
-            project_config, project_conf_created = ProjectConfiguration.objects.get_or_create(project=project)
+            project_config, project_conf_created = ProjectRAGConfiguration.objects.get_or_create(project=project)
 
             # Ottieni o crea la configurazione LLM del progetto
-            llm_config, llm_created = ProjectLLMConfig.objects.get_or_create(project=project)
+            llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(project=project)
 
             # Prepara il contesto iniziale
             context = {
@@ -1528,7 +1680,7 @@ def project_config(request, project_id):
                         user_rag_config = RAGConfiguration.objects.get(user=request.user)
 
                         # Ottieni le impostazioni del motore LLM predefinite per l'utente
-                        engine_settings = get_project_engine_settings(None)
+                        engine_settings = get_project_LLM_settings(None)
 
                         # Aggiorna la configurazione LLM del progetto
                         if engine_settings['engine']:
@@ -1623,7 +1775,7 @@ def project_config(request, project_id):
             if llm_config.temperature is not None: context['customized_llm_values']['temperature'] = True
             if llm_config.max_tokens is not None: context['customized_llm_values']['max_tokens'] = True
             if llm_config.timeout is not None: context['customized_llm_values']['timeout'] = True
-            if llm_config.system_prompt is not None: context['customized_llm_values']['system_prompt'] = True
+            if llm_config.system_prompt_override: context['customized_llm_values']['system_prompt'] = True
 
             return render(request, 'be/project_config.html', context)
 
@@ -1635,13 +1787,71 @@ def project_config(request, project_id):
         return redirect('login')
 
 
+
+def serve_project_file(request, file_id):
+    """
+	Serve un file di progetto all'utente per visualizzazione o download.
+
+	Questa funzione:
+	1. Verifica che l'utente abbia accesso al file richiesto
+	2. Determina il tipo di contenuto (MIME) appropriato
+	3. Configura le intestazioni HTTP per visualizzazione o download
+	4. Restituisce il contenuto binario del file
+
+	Gestisce diversi tipi di file inclusi PDF, documenti Office, immagini, ecc.
+	La modalità di visualizzazione può essere modificata tramite il parametro '?download'.
+	"""
+    # Ottieni il file dal database
+    project_file = get_object_or_404(ProjectFile, id=file_id)
+
+    # Verifica che l'utente abbia accesso al file
+    if project_file.project.user != request.user:
+        raise Http404("File non trovato")
+
+    # Verifica che il file esista effettivamente
+    if not os.path.exists(project_file.file_path):
+        raise Http404("File non trovato")
+
+    # Ottieni il content type
+    content_type, _ = mimetypes.guess_type(project_file.file_path)
+    if content_type is None:
+        # Content types per file Excel
+        if project_file.file_path.endswith('.xlsx'):
+            content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        elif project_file.file_path.endswith('.xls'):
+            content_type = 'application/vnd.ms-excel'
+        else:
+            content_type = 'application/octet-stream'
+
+    # Apri il file in modalità binaria
+    with open(project_file.file_path, 'rb') as f:
+        response = HttpResponse(f.read(), content_type=content_type)
+
+    # Imposta intestazioni per permettere l'embedding (utile per PDF e HTML)
+    response['Content-Disposition'] = f'inline; filename="{project_file.filename}"'
+    response['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # Se è specificato il parametro download, imposta content-disposition come attachment
+    if request.GET.get('download'):
+        response['Content-Disposition'] = f'attachment; filename="{project_file.filename}"'
+
+    return response
+
+
+
 def user_profile(request):
     """
-    Vista per visualizzare e modificare il profilo utente con gestione completa delle immagini.
+	Gestisce la visualizzazione e la modifica del profilo utente.
 
-    Permette di aggiornare informazioni personali, immagine del profilo,
-    e altre preferenze utente.
-    """
+	Questa funzione:
+	1. Mostra i dettagli del profilo dell'utente (nome, email, immagine, ecc.)
+	2. Permette l'aggiornamento delle informazioni personali
+	3. Gestisce il caricamento e l'eliminazione dell'immagine del profilo
+	4. Sincronizza l'email del profilo con quella dell'utente principale
+
+	Consente agli utenti di personalizzare il proprio profilo e gestire
+	i dati personali all'interno dell'applicazione.
+	"""
     logger.debug("---> user_profile")
     if request.user.is_authenticated:
         profile = request.user.profile
@@ -1700,13 +1910,20 @@ def user_profile(request):
         return redirect('login')
 
 
+
 def ia_engine(request):
     """
-    Vista per la configurazione dei provider LLM e le relative chiavi API.
+	Gestisce la configurazione dei motori di intelligenza artificiale.
 
-    Permette di gestire le chiavi API per vari provider LLM come OpenAI, Anthropic, Google, ecc.
-    Supporta la visualizzazione dei motori disponibili per ciascun provider.
-    """
+	Questa funzione:
+	1. Visualizza e gestisce le chiavi API per vari provider (OpenAI, Claude, ecc.)
+	2. Permette la selezione e configurazione dei motori LLM disponibili
+	3. Verifica la validità delle chiavi API inserite
+	4. Supporta aggiornamenti via AJAX per feedback immediato
+
+	Punto centrale per la configurazione dei motori LLM che verranno utilizzati
+	nei progetti per le operazioni RAG.
+	"""
     logger.debug("---> ia_engine")
     if request.user.is_authenticated:
         # Ottieni i provider LLM disponibili
@@ -1722,18 +1939,86 @@ def ia_engine(request):
             provider_engines[provider.id] = LLMEngine.objects.filter(provider=provider, is_active=True).order_by(
                 '-is_default')
 
+        # Prepara un dizionario con le chiavi API decifrate
+        decrypted_api_keys = {}
+        for provider_id, key_obj in api_keys_dict.items():
+            decrypted_api_keys[provider_id] = key_obj.get_api_key()  # Usa il metodo get_api_key() che decifra la chiave
+
         # Prepara il contesto con i valori esistenti
         context = {
             'providers': providers,
             'provider_engines': provider_engines,
             'api_keys': api_keys_dict,
+            'decrypted_api_keys': decrypted_api_keys,
         }
+
+        for provider in providers:
+            # Salva l'ID del provider come variabile nel contesto
+            provider_id_var = f"{provider.name.lower()}_provider_id"
+            context[provider_id_var] = provider.id
+
+            # Salva la chiave API direttamente come variabile nel contesto
+            if provider.id in api_keys_dict:
+                api_key_var = f"{provider.name.lower()}_api_key"
+                context[api_key_var] = api_keys_dict[provider.id].api_key
 
         # Gestione della richiesta AJAX
         if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             action = request.POST.get('action', '')
 
-            if action == 'save_api_key':
+            # Gestione dell'azione select_engine
+            if action == 'select_engine':
+                try:
+                    engine = request.POST.get('engine')
+                    model_version = request.POST.get('model_version')
+
+                    if not engine:
+                        return JsonResponse({'success': False, 'message': 'Tipo di motore non specificato'})
+
+                    logger.debug(f"Selezione motore: {engine}, versione: {model_version}")
+
+                    # Trova il provider corretto
+                    provider = None
+                    if engine == 'openai':
+                        provider = LLMProvider.objects.filter(name__icontains='openai').first()
+                    elif engine == 'anthropic' or engine == 'claude':
+                        provider = LLMProvider.objects.filter(
+                            name__icontains='anthropic').first() or LLMProvider.objects.filter(
+                            name__icontains='claude').first()
+                    elif engine == 'gemini' or engine == 'google':
+                        provider = LLMProvider.objects.filter(
+                            name__icontains='google').first() or LLMProvider.objects.filter(
+                            name__icontains='gemini').first()
+                    elif engine == 'deepseek':
+                        provider = LLMProvider.objects.filter(name__icontains='deepseek').first()
+
+                    engine_model = None
+                    if provider:
+                        if model_version:
+                            engine_model = LLMEngine.objects.filter(provider=provider, model_id=model_version).first()
+
+                        if not engine_model:
+                            engine_model = LLMEngine.objects.filter(provider=provider, is_default=True).first()
+
+                    # Memorizza la selezione nella sessione
+                    request.session['selected_engine'] = engine
+                    if engine_model:
+                        request.session['selected_model'] = engine_model.model_id
+                        return JsonResponse({
+                            'success': True,
+                            'message': f'Motore {engine_model.name} selezionato con successo'
+                        })
+                    else:
+                        return JsonResponse({
+                            'success': True,
+                            'message': f'Motore {engine} selezionato con successo'
+                        })
+
+                except Exception as e:
+                    logger.error(f"Errore nella selezione del motore: {str(e)}")
+                    return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+            elif action == 'save_api_key':
                 # Salva una chiave API per un provider
                 try:
                     provider_id = request.POST.get('provider_id')
@@ -1807,11 +2092,17 @@ def ia_engine(request):
 
 def rag_settings(request):
     """
-    Vista per la configurazione dettagliata dei parametri RAG (Retrieval Augmented Generation).
+	Gestisce le impostazioni RAG (Retrieval Augmented Generation) globali dell'utente.
 
-    Permette di selezionare preset predefiniti o configurare manualmente i parametri RAG
-    come chunking, ricerca e impostazioni avanzate.
-    """
+	Questa funzione:
+	1. Permette di selezionare preset RAG predefiniti (bilanciato, alta precisione, ecc.)
+	2. Consente la personalizzazione dei parametri di chunking, ricerca e comportamento AI
+	3. Mostra quali parametri sono stati personalizzati rispetto ai preset
+	4. Salva configurazioni dell'utente che verranno ereditate dai nuovi progetti
+
+	Centrale per definire il comportamento predefinito del sistema RAG
+	che verrà applicato a tutti i progetti dell'utente.
+	"""
     logger.debug("---> rag_settings")
     if request.user.is_authenticated:
         # Ottieni i template types
@@ -1956,10 +2247,18 @@ def rag_settings(request):
 
 def billing_settings(request):
     """
-    Vista per la gestione delle impostazioni di fatturazione.
+	Visualizza le impostazioni di fatturazione e l'utilizzo del servizio.
 
-    Visualizza informazioni sugli abbonamenti, utilizzo corrente e fatture.
-    """
+	Questa è una funzione semplificata che serve come placeholder per una futura
+	implementazione completa della gestione della fatturazione. Attualmente
+	offre solo una pagina base senza funzionalità reali.
+
+	In future implementazioni, questa funzione potrebbe gestire:
+	- Abbonamenti degli utenti
+	- Visualizzazione dell'utilizzo corrente
+	- Storia delle fatture
+	- Aggiornamento dei metodi di pagamento
+	"""
     logger.debug("---> billing_settings")
     if request.user.is_authenticated:
         context = {}
@@ -1971,15 +2270,24 @@ def billing_settings(request):
 
 def verify_api_key(api_type, api_key):
     """
-    Verifica che una chiave API sia valida facendo una richiesta di test.
+	Verifica che una chiave API sia valida facendo una richiesta di test.
 
-    Args:
-        api_type: Tipo di API ('openai', 'claude', 'deepseek', 'gemini', ecc.)
-        api_key: Chiave API da verificare
+	Questa funzione:
+	1. Identifica il tipo di provider API (OpenAI, Claude, DeepSeek, ecc.)
+	2. Effettua una richiesta di test minima per verificare la validità
+	3. Gestisce errori specifici per ogni provider
+	4. Fornisce messaggi di errore chiari in caso di problemi
 
-    Returns:
-        tuple: (is_valid, error_message)
-    """
+	Cruciale per garantire che le chiavi API fornite dagli utenti siano valide
+	prima di usarle nei progetti.
+
+	Args:
+		api_type: Tipo di API ('openai', 'claude', 'deepseek', 'gemini', ecc.)
+		api_key: Chiave API da verificare
+
+	Returns:
+		tuple: (is_valid, error_message)
+	"""
     try:
         if api_type == 'openai':
             # Verifica la chiave API con una richiesta semplice
@@ -2043,3 +2351,5 @@ def verify_api_key(api_type, api_key):
 
         # Messaggi generici
         return False, f"Errore nella verifica: {str(e)}"
+
+

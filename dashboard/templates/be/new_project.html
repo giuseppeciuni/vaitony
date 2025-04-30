@@ -65,7 +65,110 @@
         color: #0d6efd;
     }
 
-    /* Nuovi stili per la visualizzazione paginata dei file */
+    /* Nuovi stili per le impostazioni LLM */
+    .llm-settings-card {
+        border-left: 4px solid #198754;
+        background-color: #f8f9fa;
+        padding: 20px;
+        transition: all 0.3s ease;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        margin-bottom: 20px;
+    }
+
+    .llm-settings-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .engine-option {
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .engine-option:hover, .engine-option.active {
+        border-color: #198754;
+        background-color: rgba(25, 135, 84, 0.05);
+    }
+
+    .engine-option.active i {
+        color: #198754;
+    }
+
+    .provider-logo {
+        max-height: 30px;
+        max-width: 100px;
+    }
+
+    .prompt-option {
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .prompt-option:hover, .prompt-option.active {
+        border-color: #198754;
+        background-color: rgba(25, 135, 84, 0.05);
+    }
+
+    .prompt-option.active i {
+        color: #198754;
+    }
+
+    .no-api-keys-card {
+        border-left: 4px solid #dc3545;
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        margin-bottom: 20px;
+    }
+
+    /* Accordion personalizzato */
+    .custom-accordion-button {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 1rem;
+        font-size: 1rem;
+        color: #212529;
+        text-align: left;
+        background-color: #f8f9fa;
+        border: 0;
+        border-radius: 0.25rem;
+        overflow-anchor: none;
+        transition: all 0.2s ease;
+    }
+
+    .custom-accordion-button:not(.collapsed) {
+        color: #0c63e4;
+        background-color: #e7f1ff;
+    }
+
+    .custom-accordion-button:not(.collapsed)::after {
+        transform: rotate(180deg);
+    }
+
+    .custom-accordion-button::after {
+        flex-shrink: 0;
+        width: 1.25rem;
+        height: 1.25rem;
+        margin-left: auto;
+        content: "";
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23212529'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-size: 1.25rem;
+        transition: transform 0.2s ease-in-out;
+    }
+
+    /* Stili per la visualizzazione paginata dei file */
     .files-preview {
         max-height: 400px;
         overflow-y: auto;
@@ -243,13 +346,13 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-6">
-                <h3 class="mb-0">New Project</h3>
+                <h3 class="mb-0">Nuovo Progetto</h3>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'projects_list' %}">Projects</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">New Project</li>
+                    <li class="breadcrumb-item"><a href="{% url 'projects_list' %}">Progetti</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Nuovo Progetto</li>
                 </ol>
             </div>
         </div>
@@ -272,53 +375,245 @@
 
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-primary text-white">
-                <h3 class="card-title mb-0"><i class="bi bi-plus-square me-2"></i> Create a new project</h3>
+                <h3 class="card-title mb-0"><i class="bi bi-plus-square me-2"></i> Crea un nuovo progetto</h3>
             </div>
             <div class="card-body">
                 <form action="{% url 'new_project' %}" method="post" enctype="multipart/form-data" id="new-project-form">
                     {% csrf_token %}
 
-                    <!-- Project Details -->
+                    <!-- Dettagli Progetto -->
                     <div class="project-card mb-4">
-                        <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>Project Information</h5>
+                        <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>Informazioni Progetto</h5>
                         <div class="mb-3">
-                            <label for="project-name" class="form-label">Project Name <span class="text-danger">*</span></label>
+                            <label for="project-name" class="form-label">Nome Progetto <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="project-name" name="project_name" required>
-                            <div class="form-text">Choose a clear and descriptive name for your project</div>
+                            <div class="form-text">Scegli un nome chiaro e descrittivo per il tuo progetto</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="project-description" class="form-label">Project Description</label>
+                            <label for="project-description" class="form-label">Descrizione Progetto</label>
                             <textarea class="form-control" id="project-description" name="description" rows="3"></textarea>
-                            <div class="form-text">Brief description of what this project is about (optional)</div>
+                            <div class="form-text">Breve descrizione di cosa riguarda questo progetto (opzionale)</div>
                         </div>
                     </div>
 
-                    <!-- Upload Options -->
-                    <h5 class="mb-3"><i class="bi bi-file-earmark me-2"></i>Project Files (Optional)</h5>
+                    <!-- Impostazioni LLM -->
+                    {% if has_api_keys %}
+                    <div class="llm-settings-card mb-4">
+                        <h5 class="mb-3"><i class="bi bi-robot me-2"></i>Impostazioni Motore IA</h5>
+
+                        <div class="accordion" id="llmSettingsAccordion">
+                            <!-- Selezione Motore -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingEngineSelection">
+                                    <button class="custom-accordion-button" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#collapseEngineSelection" aria-expanded="true"
+                                            aria-controls="collapseEngineSelection">
+                                        <i class="bi bi-cpu me-2"></i> Selezione Motore IA
+                                    </button>
+                                </h2>
+                                <div id="collapseEngineSelection" class="accordion-collapse collapse show"
+                                    aria-labelledby="headingEngineSelection" data-bs-parent="#llmSettingsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <p class="text-muted">Seleziona il motore IA per questo progetto in base alle chiavi API disponibili.</p>
+
+                                            <div class="row">
+                                                {% for provider in available_providers %}
+                                                <div class="col-12 mb-3">
+                                                    <h6 class="border-bottom pb-2">
+                                                        {% if provider.logo %}
+                                                        <img src="{{ provider.logo.url }}" alt="{{ provider.name }}" class="provider-logo me-2">
+                                                        {% else %}
+                                                        <i class="bi bi-braces-asterisk me-2"></i>
+                                                        {% endif %}
+                                                        {{ provider.name }}
+                                                    </h6>
+
+                                                    {% for engine in provider.engines %}
+                                                    <div class="engine-option {% if engine.is_default %}active{% endif %}" data-engine-id="{{ engine.id }}">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input engine-radio" type="radio"
+                                                                name="engine_id" id="engine{{ engine.id }}"
+                                                                value="{{ engine.id }}"
+                                                                {% if engine.is_default %}checked{% endif %}
+                                                                data-temperature="{{ engine.default_temperature }}"
+                                                                data-max-tokens="{{ engine.default_max_tokens }}"
+                                                                data-timeout="{{ engine.default_timeout }}">
+                                                            <label class="form-check-label d-flex justify-content-between align-items-center" for="engine{{ engine.id }}">
+                                                                <span>
+                                                                    <strong>{{ engine.name }}</strong>
+                                                                    <p class="text-muted mb-0 small">{{ engine.description }}</p>
+                                                                </span>
+                                                                {% if engine.supports_vision %}
+                                                                <span class="badge bg-info">Vision</span>
+                                                                {% endif %}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Parametri Motore -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingEngineParams">
+                                    <button class="custom-accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#collapseEngineParams" aria-expanded="false"
+                                            aria-controls="collapseEngineParams">
+                                        <i class="bi bi-sliders me-2"></i> Parametri del Modello
+                                    </button>
+                                </h2>
+                                <div id="collapseEngineParams" class="accordion-collapse collapse"
+                                    aria-labelledby="headingEngineParams" data-bs-parent="#llmSettingsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="temperature" class="form-label">Temperatura</label>
+                                                <input type="range" class="form-range" min="0" max="1" step="0.1"
+                                                    id="temperature" name="temperature" value="0.7">
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="small text-muted">Più preciso</span>
+                                                    <span class="small fw-bold" id="temperature-value">0.7</span>
+                                                    <span class="small text-muted">Più creativo</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="col-md-6 mb-3">
+                                                <label for="max-tokens" class="form-label">Lunghezza Massima Output</label>
+                                                <select class="form-select" id="max-tokens" name="max_tokens">
+                                                    <option value="1024">Breve (1.024 token)</option>
+                                                    <option value="2048">Medio (2.048 token)</option>
+                                                    <option value="4096" selected>Standard (4.096 token)</option>
+                                                    <option value="8192">Lungo (8.192 token)</option>
+                                                    <option value="16384">Molto Lungo (16.384 token)</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-md-6 mb-3">
+                                                <label for="timeout" class="form-label">Timeout Richiesta (secondi)</label>
+                                                <input type="number" class="form-control" id="timeout" name="timeout"
+                                                    value="60" min="10" max="300">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Prompt di Sistema -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingPromptSelection">
+                                    <button class="custom-accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#collapsePromptSelection" aria-expanded="false"
+                                            aria-controls="collapsePromptSelection">
+                                        <i class="bi bi-chat-square-text me-2"></i> Prompt di Sistema
+                                    </button>
+                                </h2>
+                                <div id="collapsePromptSelection" class="accordion-collapse collapse"
+                                    aria-labelledby="headingPromptSelection" data-bs-parent="#llmSettingsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <p class="text-muted">Scegli un prompt di sistema per l'IA o crea il tuo prompt personalizzato.</p>
+
+                                            <div class="row mb-3">
+                                                <div class="col-12">
+                                                    <div class="form-check form-check-inline">
+                                                        <input class="form-check-input" type="radio" name="prompt_type"
+                                                            id="defaultPrompt" value="default" checked>
+                                                        <label class="form-check-label" for="defaultPrompt">
+                                                            Usa prompt predefinito
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check form-check-inline">
+                                                        <input class="form-check-input" type="radio" name="prompt_type"
+                                                            id="customPrompt" value="custom">
+                                                        <label class="form-check-label" for="customPrompt">
+                                                            Crea prompt personalizzato
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div id="defaultPromptSection">
+                                                <label class="form-label">Seleziona un Prompt di Sistema Predefinito</label>
+                                                <div class="row">
+                                                    {% for prompt in system_prompts %}
+                                                    <div class="col-12">
+                                                        <div class="prompt-option {% if prompt.is_default %}active{% endif %}" data-prompt-id="{{ prompt.id }}">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input default-prompt-radio" type="radio"
+                                                                    name="default_prompt_id" id="prompt{{ prompt.id }}"
+                                                                    value="{{ prompt.id }}"
+                                                                    {% if prompt.is_default %}checked{% endif %}>
+                                                                <label class="form-check-label" for="prompt{{ prompt.id }}">
+                                                                    <strong>{{ prompt.name }}</strong>
+                                                                    <p class="text-muted mb-0 small">{{ prompt.description }}</p>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+
+                                            <div id="customPromptSection" class="mt-3 d-none">
+                                                <label for="system-prompt" class="form-label">Prompt di Sistema Personalizzato</label>
+                                                <textarea class="form-control" id="system-prompt" name="system_prompt"
+                                                    rows="5" placeholder="Inserisci qui il tuo prompt di sistema personalizzato..."></textarea>
+                                                <div class="form-text">
+                                                    Definisci istruzioni specifiche su come l'IA dovrebbe rispondere.
+                                                    Questo sovrascriverà il prompt di sistema predefinito.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <!-- Messaggio Nessuna Chiave API -->
+                    <div class="no-api-keys-card mb-4">
+                        <h5 class="mb-3 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Nessuna Chiave API Configurata</h5>
+                        <p>
+                            Non hai configurato nessuna chiave API per i provider LLM. Per creare un progetto,
+                            devi configurare almeno una chiave API.
+                        </p>
+                        <a href="{% url 'ia_engine' %}" class="btn btn-primary">
+                            <i class="bi bi-key me-2"></i>Configura Chiavi API
+                        </a>
+                    </div>
+                    {% endif %}
+<!-- Opzioni di Caricamento -->
+                    <h5 class="mb-3"><i class="bi bi-file-earmark me-2"></i>File di Progetto (Opzionale)</h5>
                     <div class="mb-4">
                         <ul class="nav nav-tabs" id="uploadTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button"
                                     role="tab" aria-controls="files" aria-selected="true">
-                                    <i class="bi bi-file-earmark me-1"></i>Upload Files
+                                    <i class="bi bi-file-earmark me-1"></i>Carica File
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="folder-tab" data-bs-toggle="tab" data-bs-target="#folder" type="button"
                                     role="tab" aria-controls="folder" aria-selected="false">
-                                    <i class="bi bi-folder me-1"></i>Upload Folder
+                                    <i class="bi bi-folder me-1"></i>Carica Cartella
                                 </button>
                             </li>
                         </ul>
 
                         <div class="tab-content" id="uploadTabsContent">
-                            <!-- Files Tab -->
+                            <!-- Tab File -->
                             <div class="tab-pane fade show active" id="files" role="tabpanel" aria-labelledby="files-tab">
                                 <div class="drop-zone" id="file-drop-zone">
                                     <span class="drop-zone__prompt">
                                         <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
-                                        Drop files here or click to select
+                                        Trascina i file qui o clicca per selezionare
                                     </span>
                                     <input type="file" name="files" class="drop-zone__input" id="file-input" multiple
                                         accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
@@ -326,36 +621,36 @@
 
                                 <div class="files-preview d-none" id="files-preview">
                                     <div class="file-actions-header">
-                                        <h6 class="mb-0"><i class="bi bi-files me-2"></i><span id="file-count-badge">0</span> files selected</h6>
+                                        <h6 class="mb-0"><i class="bi bi-files me-2"></i><span id="file-count-badge">0</span> file selezionati</h6>
                                         <button type="button" class="btn btn-sm btn-outline-danger" id="clear-files-btn">
-                                            <i class="bi bi-trash me-1"></i>Clear All
+                                            <i class="bi bi-trash me-1"></i>Cancella Tutto
                                         </button>
                                     </div>
 
                                     <div class="page-status d-none" id="file-pagination-status">
-                                        Showing <span id="file-start-range">1</span>-<span id="file-end-range">10</span> of <span id="file-total">0</span> files
+                                        Mostrando <span id="file-start-range">1</span>-<span id="file-end-range">10</span> di <span id="file-total">0</span> file
                                     </div>
 
                                     <div id="file-list-container">
-                                        <!-- Files will be populated here by JavaScript -->
+                                        <!-- I file saranno popolati qui da JavaScript -->
                                     </div>
 
                                     <div class="pagination-container mt-3" id="file-pagination">
-                                        <nav aria-label="File pagination">
+                                        <nav aria-label="Paginazione file">
                                             <ul class="pagination pagination-sm">
-                                                <!-- Pagination will be populated by JavaScript -->
+                                                <!-- La paginazione sarà popolata da JavaScript -->
                                             </ul>
                                         </nav>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Folder Tab -->
+                            <!-- Tab Cartella -->
                             <div class="tab-pane fade" id="folder" role="tabpanel" aria-labelledby="folder-tab">
                                 <div class="drop-zone" id="folder-drop-zone">
                                     <span class="drop-zone__prompt">
                                         <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
-                                        Drop folder here or click to select
+                                        Trascina la cartella qui o clicca per selezionare
                                     </span>
                                     <input type="file" name="folder" class="drop-zone__input" id="folder-input" webkitdirectory directory multiple
                                         accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
@@ -365,44 +660,44 @@
                                     <div class="file-actions-header">
                                         <h6 class="mb-0">
                                             <i class="bi bi-folder2-open me-2 folder-icon"></i>
-                                            <span id="folder-name-display">Folder</span>
+                                            <span id="folder-name-display">Cartella</span>
                                             <span class="badge bg-primary ms-2 file-count-badge" id="folder-file-count-badge">0</span>
                                         </h6>
                                         <button type="button" class="btn btn-sm btn-outline-danger" id="clear-folder-btn">
-                                            <i class="bi bi-trash me-1"></i>Clear All
+                                            <i class="bi bi-trash me-1"></i>Cancella Tutto
                                         </button>
                                     </div>
 
                                     <div class="folder-structure mb-3" id="folder-structure">
-                                        <!-- Folder structure will be shown here -->
+                                        <!-- La struttura della cartella sarà mostrata qui -->
                                     </div>
 
                                     <div class="page-status d-none" id="folder-pagination-status">
-                                        Showing <span id="folder-start-range">1</span>-<span id="folder-end-range">10</span> of <span id="folder-total">0</span> files
+                                        Mostrando <span id="folder-start-range">1</span>-<span id="folder-end-range">10</span> di <span id="folder-total">0</span> file
                                     </div>
 
                                     <div id="folder-list-container">
-                                        <!-- Files will be populated here by JavaScript -->
+                                        <!-- I file saranno popolati qui da JavaScript -->
                                     </div>
 
                                     <div class="pagination-container mt-3" id="folder-pagination">
-                                        <nav aria-label="Folder files pagination">
+                                        <nav aria-label="Paginazione file cartella">
                                             <ul class="pagination pagination-sm">
-                                                <!-- Pagination will be populated by JavaScript -->
+                                                <!-- La paginazione sarà popolata da JavaScript -->
                                             </ul>
                                         </nav>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+</div>
                     </div>
 
                     <div class="d-flex justify-content-between">
                         <a href="{% url 'projects_list' %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left me-2"></i>Cancel
+                            <i class="bi bi-arrow-left me-2"></i>Annulla
                         </a>
-                        <button type="submit" class="btn btn-primary" id="create-btn" disabled>
-                            <i class="bi bi-plus-square me-2"></i>Create Project
+                        <button type="submit" class="btn btn-primary" id="create-btn" {% if not has_api_keys %}disabled{% endif %}>
+                            <i class="bi bi-plus-square me-2"></i>Crea Progetto
                         </button>
                     </div>
                 </form>
@@ -411,13 +706,13 @@
     </div>
 </div>
 
-<!-- Loading Spinner Overlay -->
+<!-- Overlay Spinner di Caricamento -->
 <div class="spinner-overlay" id="spinner-overlay">
     <div class="spinner-container">
         <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-            <span class="visually-hidden">Loading...</span>
+            <span class="visually-hidden">Caricamento...</span>
         </div>
-        <div class="spinner-text" id="spinner-text">Creating project...</div>
+        <div class="spinner-text" id="spinner-text">Creazione del progetto in corso...</div>
     </div>
 </div>
 {% endblock %}
@@ -425,14 +720,14 @@
 {% block extra_js %}
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // Form elements
+        // Elementi del form
         const projectNameInput = document.getElementById("project-name");
         const createButton = document.getElementById("create-btn");
         const newProjectForm = document.getElementById("new-project-form");
         const spinnerOverlay = document.getElementById("spinner-overlay");
         const spinnerText = document.getElementById("spinner-text");
 
-        // File upload elements
+        // Elementi per l'upload dei file
         const fileDropZone = document.getElementById("file-drop-zone");
         const fileInput = document.getElementById("file-input");
         const filesPreview = document.getElementById("files-preview");
@@ -445,7 +740,7 @@
         const fileTotal = document.getElementById("file-total");
         const filePagination = document.getElementById("file-pagination");
 
-        // Folder upload elements
+        // Elementi per l'upload delle cartelle
         const folderDropZone = document.getElementById("folder-drop-zone");
         const folderInput = document.getElementById("folder-input");
         const folderPreview = document.getElementById("folder-preview");
@@ -460,15 +755,36 @@
         const folderTotal = document.getElementById("folder-total");
         const folderPagination = document.getElementById("folder-pagination");
 
-        // Tab elements
+        // Elementi dei tab
         const uploadTabs = document.getElementById("uploadTabs");
         const filesTab = document.getElementById("files-tab");
         const folderTab = document.getElementById("folder-tab");
 
-        // Track current tab
+        // Impostazioni del motore LLM
+        {% if has_api_keys %}
+        const temperatureInput = document.getElementById("temperature");
+        const temperatureValue = document.getElementById("temperature-value");
+        const maxTokensSelect = document.getElementById("max-tokens");
+        const timeoutInput = document.getElementById("timeout");
+        const engineRadios = document.querySelectorAll(".engine-radio");
+        const engineOptions = document.querySelectorAll(".engine-option");
+
+        const defaultPromptRadio = document.getElementById("defaultPrompt");
+        const customPromptRadio = document.getElementById("customPrompt");
+        const defaultPromptSection = document.getElementById("defaultPromptSection");
+        const customPromptSection = document.getElementById("customPromptSection");
+        const defaultPromptRadios = document.querySelectorAll(".default-prompt-radio");
+        const promptOptions = document.querySelectorAll(".prompt-option");
+        const systemPromptTextarea = document.getElementById("system-prompt");
+        {% endif %}
+
+        // Traccia tab corrente
         let activeTab = "files";
 
-        // Pagination state
+        // Stato chiavi API - assegnato dal template Django
+        const hasAPIKeys = {% if has_api_keys %}true{% else %}false{% endif %};
+
+        // Stato paginazione
         const paginationState = {
             files: {
                 items: [],
@@ -482,61 +798,68 @@
             }
         };
 
-        // Valid file extensions
+        // Estensioni file valide
         const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
 
-        // Check if form can be submitted
+        // Verifica se il form può essere inviato
         function checkFormValidity() {
             const projectName = projectNameInput.value.trim();
-            // Enable button only if project name exists
-            createButton.disabled = !projectName;
+            // Abilita il pulsante solo se esiste un nome progetto e l'utente ha chiavi API
+            createButton.disabled = !projectName || !hasAPIKeys;
         }
 
-        // Project name input listener
+        // Listener per l'input del nome progetto
         projectNameInput.addEventListener("input", checkFormValidity);
 
-        // Form submit event
+        // Evento di invio del form
         newProjectForm.addEventListener("submit", function(e) {
-            // Verify form is valid
+            // Verifica che il form sia valido
             if (!projectNameInput.value.trim()) {
                 e.preventDefault();
-                alert("Please enter a project name");
+                alert("Inserisci un nome per il progetto");
                 return false;
             }
 
-            // Show loading spinner
-            spinnerOverlay.classList.add("visible");
-            spinnerText.textContent = "Creating project...";
+            // Verifica che l'utente abbia chiavi API
+            if (!hasAPIKeys) {
+                e.preventDefault();
+                alert("Devi configurare almeno una chiave API prima di creare un progetto");
+                return false;
+            }
 
-            // IMPORTANT: Before submitting, remove disabled attribute
-            // from inputs that are not active at this moment
+            // Mostra lo spinner di caricamento
+            spinnerOverlay.classList.add("visible");
+            spinnerText.textContent = "Creazione del progetto in corso...";
+
+            // IMPORTANTE: Prima di inviare, rimuovi l'attributo disabled
+            // dagli input che non sono attivi in questo momento
             if (activeTab === "files") {
-                // If we're uploading individual files, make sure folder input is not disabled
+                // Se stiamo caricando file individuali, assicurati che l'input cartella non sia disabilitato
                 if (folderInput.disabled) {
                     folderInput.disabled = false;
-                    // But make sure it's empty
+                    // Ma assicurati che sia vuoto
                     folderInput.value = "";
                 }
             } else {
-                // If we're uploading a folder, make sure file input is not disabled
+                // Se stiamo caricando una cartella, assicurati che l'input file non sia disabilitato
                 if (fileInput.disabled) {
                     fileInput.disabled = false;
-                    // But make sure it's empty
+                    // Ma assicurati che sia vuoto
                     fileInput.value = "";
                 }
             }
 
-            // Continue with submission
+            // Continua con l'invio
             return true;
         });
 
-        // Setup drag and drop for files
+        // Configurazione drag and drop per i file
         setupDropZone(fileDropZone, fileInput, handleFiles);
 
-        // Setup drag and drop for folder
+        // Configurazione drag and drop per le cartelle
         setupDropZone(folderDropZone, folderInput, handleFolder);
 
-        // Tab change listener
+        // Listener per il cambio di tab
         filesTab.addEventListener("click", function() {
             activeTab = "files";
         });
@@ -545,21 +868,21 @@
             activeTab = "folder";
         });
 
-        // Clear files button
+        // Pulsante per cancellare i file
         clearFilesBtn.addEventListener("click", function() {
             fileInput.value = "";
             filesPreview.classList.add("d-none");
             fileListContainer.innerHTML = "";
             fileDropZone.querySelector(".drop-zone__prompt").innerHTML = `
                 <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
-                Drop files here or click to select
+                Trascina i file qui o clicca per selezionare
             `;
             paginationState.files.items = [];
             paginationState.files.currentPage = 1;
             updateFilePagination();
         });
 
-        // Clear folder button
+        // Pulsante per cancellare la cartella
         clearFolderBtn.addEventListener("click", function() {
             folderInput.value = "";
             folderPreview.classList.add("d-none");
@@ -567,14 +890,14 @@
             folderStructure.innerHTML = "";
             folderDropZone.querySelector(".drop-zone__prompt").innerHTML = `
                 <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
-                Drop folder here or click to select
+                Trascina la cartella qui o clicca per selezionare
             `;
             paginationState.folder.items = [];
             paginationState.folder.currentPage = 1;
             updateFolderPagination();
         });
 
-        // Setup drop zone
+        // Configurazione drop zone
         function setupDropZone(dropZoneElement, inputElement, handleFunction) {
             dropZoneElement.addEventListener("click", () => {
                 inputElement.click();
@@ -608,30 +931,30 @@
             });
         }
 
-        // Handle individual files upload
+        // Gestione del caricamento dei file individuali
         function handleFiles(files) {
             if (files.length === 0) {
                 filesPreview.classList.add("d-none");
                 return;
             }
 
-            // Reset the pagination state
+            // Resetta lo stato della paginazione
             paginationState.files.items = [];
             paginationState.files.currentPage = 1;
 
-            // Process all files
+            // Processa tutti i file
             let validCount = 0;
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
-                // Check if this is a valid file type
+                // Verifica se è un tipo di file valido
                 const isValid = validExtensions.includes(fileExtension);
 
                 if (isValid) {
                     validCount++;
-                    // Add to pagination items
+                    // Aggiungi agli elementi della paginazione
                     paginationState.files.items.push({
                         file: file,
                         extension: fileExtension
@@ -640,57 +963,57 @@
             }
 
             if (validCount > 0) {
-                // Update drop zone visually
+                // Aggiorna visivamente la drop zone
                 const prompt = fileDropZone.querySelector(".drop-zone__prompt");
                 if (prompt) {
                     prompt.innerHTML = `
                         <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
-                        <span>${validCount} files selected</span>
-                        <p class="small text-muted mt-2">Click to change selection</p>
+                        <span>${validCount} file selezionati</span>
+                        <p class="small text-muted mt-2">Clicca per cambiare selezione</p>
                     `;
                 }
 
-                // Update count badge
+                // Aggiorna il badge del conteggio
                 fileCountBadge.textContent = validCount;
 
-                // Show files preview
+                // Mostra l'anteprima dei file
                 filesPreview.classList.remove("d-none");
 
-                // Update pagination
+                // Aggiorna la paginazione
                 updateFilePagination();
             }
 
-            // Always check form validity
+            // Verifica sempre la validità del form
             checkFormValidity();
         }
 
-        // Handle folder upload
+        // Gestione del caricamento delle cartelle
         function handleFolder(files) {
             if (files.length === 0) {
                 folderPreview.classList.add("d-none");
                 return;
             }
 
-            // Reset the pagination state
+            // Resetta lo stato della paginazione
             paginationState.folder.items = [];
             paginationState.folder.currentPage = 1;
 
-            // Get the root folder name from the first file's path
+            // Ottieni il nome della cartella radice dal percorso del primo file
             const firstFilePath = files[0].webkitRelativePath;
             const rootFolder = firstFilePath.split('/')[0];
             folderNameDisplay.textContent = rootFolder;
 
-            // Count valid files
+            // Conta i file validi
             let validCount = 0;
             let folderStructureMap = {};
 
-            // Process all files
+            // Processa tutti i file
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
                 const relativePath = file.webkitRelativePath;
 
-                // Build folder structure
+                // Costruisci la struttura della cartella
                 const pathParts = relativePath.split('/');
                 let currentPath = '';
                 let currentMap = folderStructureMap;
@@ -709,7 +1032,7 @@
                     currentMap = currentMap[part];
                 }
 
-                // Add file to the last folder
+                // Aggiungi il file all'ultima cartella
                 if (validExtensions.includes(fileExtension)) {
                     currentMap.__files.push({
                         name: pathParts[pathParts.length - 1],
@@ -719,7 +1042,7 @@
                     });
 
                     validCount++;
-                    // Add to pagination items
+                    // Aggiungi agli elementi della paginazione
                     paginationState.folder.items.push({
                         file: file,
                         extension: fileExtension,
@@ -729,41 +1052,41 @@
             }
 
             if (validCount > 0) {
-                // Update drop zone visually
+                // Aggiorna visivamente la drop zone
                 const prompt = folderDropZone.querySelector(".drop-zone__prompt");
                 if (prompt) {
                     prompt.innerHTML = `
                         <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
-                        <span>Folder "${rootFolder}" selected</span>
-                        <p class="small text-muted mt-2">Click to change selection</p>
+                        <span>Cartella "${rootFolder}" selezionata</span>
+                        <p class="small text-muted mt-2">Clicca per cambiare selezione</p>
                     `;
                 }
 
-                // Update count badge
+                // Aggiorna il badge del conteggio
                 folderFileCountBadge.textContent = validCount;
 
-                // Build folder structure HTML
+                // Costruisci l'HTML della struttura della cartella
                 folderStructure.innerHTML = buildFolderStructureHTML(folderStructureMap, rootFolder);
 
-                // Show folder preview
+                // Mostra l'anteprima della cartella
                 folderPreview.classList.remove("d-none");
 
-                // Update pagination
+                // Aggiorna la paginazione
                 updateFolderPagination();
             }
 
-            // Always check form validity
+            // Verifica sempre la validità del form
             checkFormValidity();
         }
 
-        // Build HTML for folder structure
+        // Costruisci l'HTML per la struttura della cartella
         function buildFolderStructureHTML(structureMap, rootFolder) {
             let html = `<div class="folder-path"><i class="bi bi-folder me-2 folder-icon"></i>${rootFolder}/</div>`;
 
-            // Get top level folders
+            // Ottieni le cartelle di primo livello
             const rootMap = structureMap[rootFolder];
             if (rootMap) {
-                // Get folders excluding special keys
+                // Ottieni le cartelle escludendo le chiavi speciali
                 const folders = Object.keys(rootMap).filter(key => !key.startsWith('__'));
 
                 if (folders.length > 0) {
@@ -776,13 +1099,13 @@
             return html;
         }
 
-        // Update file pagination
+        // Aggiorna la paginazione dei file
         function updateFilePagination() {
             const { items, currentPage, itemsPerPage } = paginationState.files;
             const totalItems = items.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-            // Skip pagination if no items
+            // Salta la paginazione se non ci sono elementi
             if (totalItems === 0) {
                 fileListContainer.innerHTML = '';
                 filePagination.innerHTML = '';
@@ -790,39 +1113,39 @@
                 return;
             }
 
-            // Show pagination status
+            // Mostra lo stato della paginazione
             filePaginationStatus.classList.remove('d-none');
 
-            // Calculate start and end item indices
+            // Calcola gli indici di inizio e fine degli elementi
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
-            // Update pagination status text
+            // Aggiorna il testo dello stato della paginazione
             fileStartRange.textContent = startIndex + 1;
             fileEndRange.textContent = endIndex;
             fileTotal.textContent = totalItems;
 
-            // Clear current list
+            // Cancella l'elenco corrente
             fileListContainer.innerHTML = '';
 
-            // Add files for current page
+            // Aggiungi i file per la pagina corrente
             for (let i = startIndex; i < endIndex; i++) {
                 const item = items[i];
                 const itemElement = createFileItemElement(item.file, item.extension);
                 fileListContainer.appendChild(itemElement);
             }
 
-            // Generate pagination controls
+            // Genera i controlli di paginazione
             generatePaginationControls('files', totalPages, currentPage);
         }
 
-        // Update folder pagination
+        // Aggiorna la paginazione della cartella
         function updateFolderPagination() {
             const { items, currentPage, itemsPerPage } = paginationState.folder;
             const totalItems = items.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-            // Skip pagination if no items
+            // Salta la paginazione se non ci sono elementi
             if (totalItems === 0) {
                 folderListContainer.innerHTML = '';
                 folderPagination.innerHTML = '';
@@ -830,63 +1153,63 @@
                 return;
             }
 
-            // Show pagination status
+            // Mostra lo stato della paginazione
             folderPaginationStatus.classList.remove('d-none');
 
-            // Calculate start and end item indices
+            // Calcola gli indici di inizio e fine degli elementi
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
-            // Update pagination status text
+            // Aggiorna il testo dello stato della paginazione
             folderStartRange.textContent = startIndex + 1;
             folderEndRange.textContent = endIndex;
             folderTotal.textContent = totalItems;
 
-            // Clear current list
+            // Cancella l'elenco corrente
             folderListContainer.innerHTML = '';
 
-            // Add files for current page
+            // Aggiungi i file per la pagina corrente
             for (let i = startIndex; i < endIndex; i++) {
                 const item = items[i];
                 const itemElement = createFileItemElement(item.file, item.extension, item.path);
                 folderListContainer.appendChild(itemElement);
             }
 
-            // Generate pagination controls
+            // Genera i controlli di paginazione
             generatePaginationControls('folder', totalPages, currentPage);
         }
 
-        // Generate pagination controls
+        // Genera i controlli di paginazione
         function generatePaginationControls(type, totalPages, currentPage) {
             const paginationElement = type === 'files' ? filePagination.querySelector('ul') : folderPagination.querySelector('ul');
             paginationElement.innerHTML = '';
 
-            // Skip pagination for single page
+            // Salta la paginazione per una sola pagina
             if (totalPages <= 1) {
                 return;
             }
 
-            // Previous button
+            // Pulsante precedente
             const prevItem = document.createElement('li');
             prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
             prevItem.innerHTML = `
-                <button class="page-link" data-page="prev" aria-label="Previous">
+                <button class="page-link" data-page="prev" aria-label="Precedente">
                     <span aria-hidden="true">&laquo;</span>
                 </button>
             `;
             paginationElement.appendChild(prevItem);
 
-            // Page buttons
+            // Pulsanti pagine
             const maxVisiblePages = 5;
             let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
             let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-            // Adjust if at the edges
+            // Aggiusta se siamo ai bordi
             if (endPage - startPage + 1 < maxVisiblePages) {
                 startPage = Math.max(1, endPage - maxVisiblePages + 1);
             }
 
-            // First page button if needed
+            // Pulsante prima pagina se necessario
             if (startPage > 1) {
                 const firstItem = document.createElement('li');
                 firstItem.className = 'page-item';
@@ -895,7 +1218,7 @@
                 `;
                 paginationElement.appendChild(firstItem);
 
-                // Ellipsis if needed
+                // Puntini di sospensione se necessario
                 if (startPage > 2) {
                     const ellipsisItem = document.createElement('li');
                     ellipsisItem.className = 'page-item disabled';
@@ -906,7 +1229,7 @@
                 }
             }
 
-            // Page numbers
+            // Numeri di pagina
             for (let i = startPage; i <= endPage; i++) {
                 const pageItem = document.createElement('li');
                 pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
@@ -916,9 +1239,9 @@
                 paginationElement.appendChild(pageItem);
             }
 
-            // Last page button if needed
+            // Pulsante ultima pagina se necessario
             if (endPage < totalPages) {
-                // Ellipsis if needed
+                // Puntini di sospensione se necessario
                 if (endPage < totalPages - 1) {
                     const ellipsisItem = document.createElement('li');
                     ellipsisItem.className = 'page-item disabled';
@@ -936,17 +1259,17 @@
                 paginationElement.appendChild(lastItem);
             }
 
-            // Next button
+            // Pulsante successivo
             const nextItem = document.createElement('li');
             nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
             nextItem.innerHTML = `
-                <button class="page-link" data-page="next" aria-label="Next">
+                <button class="page-link" data-page="next" aria-label="Successivo">
                     <span aria-hidden="true">&raquo;</span>
                 </button>
             `;
             paginationElement.appendChild(nextItem);
 
-            // Add event listeners to pagination buttons
+            // Aggiungi event listener ai pulsanti di paginazione
             paginationElement.querySelectorAll('.page-link').forEach(button => {
                 button.addEventListener('click', function() {
                     const pageData = this.getAttribute('data-page');
@@ -973,25 +1296,25 @@
             });
         }
 
-        // Create a file item element
+        // Crea un elemento di file
         function createFileItemElement(file, fileExtension, filePath = null) {
-            // Format file size
+            // Formatta la dimensione del file
             const fileSizeKB = Math.round(file.size / 1024);
             const fileSizeDisplay = fileSizeKB < 1024
                 ? fileSizeKB + " KB"
                 : (fileSizeKB / 1024).toFixed(2) + " MB";
 
-            // Get icon class based on file extension
+            // Ottieni la classe dell'icona in base all'estensione del file
             let iconClass = getFileIconClass(fileExtension);
 
-            // Create file item element
+            // Crea l'elemento del file
             const fileItem = document.createElement("div");
             fileItem.className = "file-item animate-fade";
 
-            // Display name based on path or just filename
+            // Visualizza il nome in base al percorso o solo al nome del file
             const displayName = filePath || file.name;
 
-            // Set file item content
+            // Imposta il contenuto dell'elemento file
             fileItem.innerHTML = `
                 <div class="file-info">
                     <i class="bi ${iconClass} file-icon"></i>
@@ -999,54 +1322,54 @@
                     <span class="file-size">${fileSizeDisplay}</span>
                 </div>
                 <div class="file-actions">
-                    <button type="button" class="remove-file-btn" title="Remove file">
+                    <button type="button" class="remove-file-btn" title="Rimuovi file">
                         <i class="bi bi-x-circle"></i>
                     </button>
                 </div>
             `;
 
-            // Add event listener for remove button
+            // Aggiungi event listener per il pulsante di rimozione
             const removeButton = fileItem.querySelector('.remove-file-btn');
             removeButton.addEventListener('click', function() {
                 const isFolder = filePath !== null;
                 const stateKey = isFolder ? 'folder' : 'files';
                 const items = paginationState[stateKey].items;
 
-                // Find the index of the file to remove
+                // Trova l'indice del file da rimuovere
                 const itemIndex = items.findIndex(item =>
                     (isFolder && item.path === filePath) ||
                     (!isFolder && item.file.name === file.name)
                 );
 
                 if (itemIndex !== -1) {
-                    // Remove the file from the items array
+                    // Rimuovi il file dall'array degli elementi
                     items.splice(itemIndex, 1);
 
-                    // Update the file count
+                    // Aggiorna il conteggio dei file
                     const countBadge = isFolder ? folderFileCountBadge : fileCountBadge;
                     countBadge.textContent = items.length;
 
-                    // Update pagination
+                    // Aggiorna la paginazione
                     if (isFolder) {
                         updateFolderPagination();
 
-                        // Hide folder preview if no files left
+                        // Nascondi l'anteprima della cartella se non ci sono più file
                         if (items.length === 0) {
                             folderPreview.classList.add('d-none');
                             folderDropZone.querySelector(".drop-zone__prompt").innerHTML = `
                                 <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
-                                Drop folder here or click to select
+                                Trascina la cartella qui o clicca per selezionare
                             `;
                         }
                     } else {
                         updateFilePagination();
 
-                        // Hide files preview if no files left
+                        // Nascondi l'anteprima dei file se non ci sono più file
                         if (items.length === 0) {
                             filesPreview.classList.add('d-none');
                             fileDropZone.querySelector(".drop-zone__prompt").innerHTML = `
                                 <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
-                                Drop files here or click to select
+                                Trascina i file qui o clicca per selezionare
                             `;
                         }
                     }
@@ -1056,7 +1379,7 @@
             return fileItem;
         }
 
-        // Get file icon class based on extension
+        // Ottieni la classe dell'icona in base all'estensione
         function getFileIconClass(fileExtension) {
             if (fileExtension === ".pdf") {
                 return "bi-file-earmark-pdf";
@@ -1076,7 +1399,84 @@
             return "bi-file-earmark";
         }
 
-        // Initialize form state
+        // Inizializza le impostazioni del motore LLM
+        {% if has_api_keys %}
+        function initLLMEngineSettings() {
+            // Slider temperatura
+            temperatureInput.addEventListener("input", function() {
+                temperatureValue.textContent = this.value;
+            });
+
+            // Selezione del motore
+            engineRadios.forEach(radio => {
+                radio.addEventListener("change", function() {
+                    // Evidenzia il motore selezionato
+                    engineOptions.forEach(option => {
+                        option.classList.remove("active");
+                    });
+                    this.closest(".engine-option").classList.add("active");
+
+                    // Aggiorna i parametri con i valori predefiniti del motore selezionato
+                    temperatureInput.value = this.dataset.temperature;
+                    temperatureValue.textContent = this.dataset.temperature;
+
+                    // Trova l'opzione corretta da selezionare per i token massimi
+                    const maxTokens = parseInt(this.dataset.maxTokens);
+                    for (let option of maxTokensSelect.options) {
+                        if (parseInt(option.value) >= maxTokens) {
+                            option.selected = true;
+                            break;
+                        }
+                    }
+
+                    timeoutInput.value = this.dataset.timeout;
+                });
+            });
+
+            // Selezione del tipo di prompt
+            defaultPromptRadio.addEventListener("change", function() {
+                if (this.checked) {
+                    defaultPromptSection.classList.remove("d-none");
+                    customPromptSection.classList.add("d-none");
+                    // Abilita i radio dei prompt predefiniti
+                    defaultPromptRadios.forEach(radio => {
+                        radio.disabled = false;
+                    });
+                    // Disabilita il textarea del prompt personalizzato
+                    systemPromptTextarea.disabled = true;
+                }
+            });
+
+            customPromptRadio.addEventListener("change", function() {
+                if (this.checked) {
+                    defaultPromptSection.classList.add("d-none");
+                    customPromptSection.classList.remove("d-none");
+                    // Disabilita i radio dei prompt predefiniti
+                    defaultPromptRadios.forEach(radio => {
+                        radio.disabled = true;
+                    });
+                    // Abilita il textarea del prompt personalizzato
+                    systemPromptTextarea.disabled = false;
+                }
+            });
+
+            // Selezione prompt predefinito
+            defaultPromptRadios.forEach(radio => {
+                radio.addEventListener("change", function() {
+                    // Evidenzia il prompt selezionato
+                    promptOptions.forEach(option => {
+                        option.classList.remove("active");
+                    });
+                    this.closest(".prompt-option").classList.add("active");
+                });
+            });
+        }
+
+        // Inizializza le impostazioni LLM al caricamento della pagina
+        initLLMEngineSettings();
+        {% endif %}
+
+        // Inizializza lo stato del form
         checkFormValidity();
     });
 </script>

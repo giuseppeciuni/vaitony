@@ -107,9 +107,51 @@
     .form-range::-ms-thumb {
         background: #0d6efd;
     }
+
+    .api-key-status-success {
+        color: #28a745;
+    }
+
+    .api-key-status-warning {
+        color: #ffc107;
+    }
+
+    .api-key-status-danger {
+        color: #dc3545;
+    }
+
+    .engine-section {
+        display: none;
+    }
+
+    .engine-section.active {
+        display: block;
+    }
+
+    .empty-state {
+        padding: 3rem;
+        text-align: center;
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        color: #6c757d;
+        margin-bottom: 1rem;
+    }
+
+    .api-key-card {
+        transition: all 0.2s;
+    }
+
+    .api-key-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.1);
+    }
 </style>
 {% endblock %}
-
 
 
 {% block content %}
@@ -131,7 +173,7 @@
 </div>
 
 <div class="container-fluid">
-    <!-- Inserisci qui l'alert -->
+    <!-- Alert info -->
     <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
         <div class="d-flex">
             <div class="flex-shrink-0">
@@ -139,296 +181,528 @@
             </div>
             <div>
                 <h4 class="alert-heading">Configurazione API Keys</h4>
-                <p>Questa pagina ti permette di configurare le chiavi API per i diversi motori di intelligenza artificiale.</p>
-                <p class="mb-0"><strong>Nota:</strong> Le API keys personali sono sempre crittografate per proteggere la tua sicurezza. Assicurati che le chiavi siano corrette per evitare errori di autenticazione.</p>
+                <p>Prima di poter utilizzare un motore di intelligenza artificiale, devi configurare le relative chiavi API personali.</p>
+                <p class="mb-0"><strong>Nota:</strong> Le API keys personali sono sempre crittografate per proteggere la tua sicurezza. L'interfaccia mostrerà solo i modelli per cui hai configurato una chiave API valida.</p>
             </div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Chiudi"></button>
     </div>
-    <!-- General Information Card -->
+
+    <!-- API Keys Configuration -->
     <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Configurazione API Keys</h5>
+            <span class="badge bg-info" id="api-keys-count">
+                <i class="bi bi-key"></i> <span id="active-keys-count">0</span> chiavi configurate
+            </span>
+        </div>
         <div class="card-body">
-            <h5 class="card-title">Selezione Motore IA</h5>
-            <p>Seleziona il modello di intelligenza artificiale da utilizzare per interagire con i tuoi documenti. Ogni modello ha caratteristiche e costi diversi.</p>
-            <div class="alert alert-info d-flex align-items-center" role="alert">
-                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-                <div>
-                    La scelta del motore IA influisce sulla qualità delle risposte, sui tempi di elaborazione e sui costi associati. Le modifiche verranno applicate a tutte le nuove interazioni.
+            <div class="alert alert-warning mb-4">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Per utilizzare i modelli di intelligenza artificiale, devi inserire almeno una chiave API valida. Solo i modelli corrispondenti alle chiavi inserite saranno disponibili per la selezione.
+            </div>
+
+            <div class="row row-cols-1 row-cols-md-2 g-4 mb-3">
+                <!-- OpenAI API Key Card -->
+                <div class="col">
+                    <div class="card h-100 api-key-card">
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/openai.svg' %}" alt="OpenAI Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">OpenAI API Key</h5>
+                                </div>
+                                <span class="badge api-key-status api-key-status-warning" id="openai-status">
+                                    <i class="bi bi-dash-circle"></i> Non configurata
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">Consente l'accesso ai modelli GPT come GPT-4o, GPT-4, GPT-3.5 e altri. Ideali per compiti generali di comprensione e generazione di testo.</p>
+
+                            <form id="openai-api-form" method="post" action="{% url 'ia_engine' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_api_key">
+                                <input type="hidden" name="provider_id" value="{{ openai_provider_id|default:'1' }}">
+
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="openai-api-key" name="api_key"
+                                               placeholder="sk-..." value="{{ decrypted_api_keys.1|default:'' }}">
+                                        <button class="btn btn-outline-secondary toggle-password" type="button"
+                                                data-target="openai-api-key">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Formato: sk-... (Inizia con "sk-" seguito da caratteri alfanumerici)</div>
+                                </div>
+
+                                <div class="d-flex justify-content-between">
+                                    <a href="https://platform.openai.com/account/api-keys" target="_blank"
+                                       class="btn btn-outline-info btn-sm">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i> Ottieni chiave
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-save me-1"></i> Salva
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claude API Key Card -->
+                <div class="col">
+                    <div class="card h-100 api-key-card">
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/claude.png' %}" alt="Claude Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">Anthropic API Key</h5>
+                                </div>
+                                <span class="badge api-key-status api-key-status-warning" id="claude-status">
+                                    <i class="bi bi-dash-circle"></i> Non configurata
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">Consente l'accesso ai modelli Claude di Anthropic, noti per la loro precisione, ragionamento e comprensione delle sfumature.</p>
+
+                            <form id="claude-api-form" method="post" action="{% url 'ia_engine' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_api_key">
+                                <input type="hidden" name="provider_id" value="{{ decrypted_api_keys.2|default:'' }}">
+
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="claude-api-key" name="api_key"
+                                               placeholder="sk-ant-..." value="{{ api_keys.claude_provider_id.api_key|default:'' }}">
+                                        <button class="btn btn-outline-secondary toggle-password" type="button"
+                                                data-target="claude-api-key">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Formato: sk-ant-... (Inizia con "sk-ant-" seguito da caratteri alfanumerici)</div>
+                                </div>
+
+                                <div class="d-flex justify-content-between">
+                                    <a href="https://console.anthropic.com/account/keys" target="_blank"
+                                       class="btn btn-outline-info btn-sm">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i> Ottieni chiave
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-save me-1"></i> Salva
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gemini API Key Card -->
+                <div class="col">
+                    <div class="card h-100 api-key-card">
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/gemini.svg' %}" alt="Gemini Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">Google Gemini API Key</h5>
+                                </div>
+                                <span class="badge api-key-status api-key-status-warning" id="gemini-status">
+                                    <i class="bi bi-dash-circle"></i> Non configurata
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">Consente l'accesso ai modelli Gemini di Google, versatili e con buon equilibrio tra costo e prestazioni per attività generali.</p>
+
+                            <form id="gemini-api-form" method="post" action="{% url 'ia_engine' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_api_key">
+                                <input type="hidden" name="provider_id" value="{{ decrypted_api_keys.3|default:'' }}">
+
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="gemini-api-key" name="api_key"
+                                               placeholder="AIza..." value="{{ api_keys.gemini_provider_id.api_key|default:'' }}">
+                                        <button class="btn btn-outline-secondary toggle-password" type="button"
+                                                data-target="gemini-api-key">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Formato: AIza... (Inizia con "AIza" seguito da caratteri alfanumerici)</div>
+                                </div>
+
+                                <div class="d-flex justify-content-between">
+                                    <a href="https://ai.google.dev/" target="_blank"
+                                       class="btn btn-outline-info btn-sm">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i> Ottieni chiave
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-save me-1"></i> Salva
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DeepSeek API Key Card -->
+                <div class="col">
+                    <div class="card h-100 api-key-card">
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/deepseek.svg' %}" alt="DeepSeek Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">DeepSeek API Key</h5>
+                                </div>
+                                <span class="badge api-key-status api-key-status-warning" id="deepseek-status">
+                                    <i class="bi bi-dash-circle"></i> Non configurata
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">Consente l'accesso ai modelli DeepSeek, particolarmente efficienti per analisi di codice e documentazione tecnica a costi contenuti.</p>
+
+                            <form id="deepseek-api-form" method="post" action="{% url 'ia_engine' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_api_key">
+                                <input type="hidden" name="provider_id" value="{{ decrypted_api_keys.4|default:'' }}">
+
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="deepseek-api-key" name="api_key"
+                                               placeholder="sk-..." value="{{ api_keys.deepseek_provider_id.api_key|default:'' }}">
+                                        <button class="btn btn-outline-secondary toggle-password" type="button"
+                                                data-target="deepseek-api-key">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Formato: sk-... (Inizia con "sk-" seguito da caratteri alfanumerici)</div>
+                                </div>
+
+                                <div class="d-flex justify-content-between">
+                                    <a href="https://platform.deepseek.com/" target="_blank"
+                                       class="btn btn-outline-info btn-sm">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i> Ottieni chiave
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-save me-1"></i> Salva
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validate API Keys button -->
+            <div class="text-center mt-4">
+                <button id="validate-all-keys" class="btn btn-outline-primary">
+                    <i class="bi bi-shield-check me-1"></i> Verifica tutte le chiavi API
+                </button>
+            </div>
+        </div>
+    </div>
+<!-- Engine Selection Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Selezione Motore IA</h5>
+        </div>
+        <div class="card-body">
+            <p>Seleziona il modello di intelligenza artificiale da utilizzare per interagire con i tuoi documenti. Saranno visibili solo i motori per cui hai configurato una chiave API valida.</p>
+
+            <!-- Stato vuoto (nessuna chiave configurata) -->
+            <div id="empty-engines-state" class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <h4>Nessun motore disponibile</h4>
+                <p class="text-muted">Configura almeno una chiave API valida per visualizzare i motori di intelligenza artificiale disponibili.</p>
+                <a href="#" class="btn btn-primary" onclick="document.querySelector('.card-header').scrollIntoView({behavior: 'smooth'}); return false;">
+                    <i class="bi bi-key me-1"></i> Configura chiavi API
+                </a>
+            </div>
+
+            <!-- Engine Cards Container - Visibile solo se ci sono chiavi configurate -->
+            <div id="engine-cards-container" class="row row-cols-1 row-cols-md-3 g-4 mb-4" style="display: none;">
+                <!-- OpenAI Card - Visibile solo se la chiave è configurata -->
+                <div class="col engine-section" id="openai-engine-section">
+                    <div class="card h-100 engine-card {% if selected_engine == 'openai' %}selected{% endif %}" id="openai-card">
+                        <div class="selected-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="engine-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/openai.svg' %}" alt="OpenAI Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">ChatGPT <span id="openai-model-display">4o</span></h5>
+                                </div>
+                                <span class="badge bg-success">Consigliato</span>
+                            </div>
+                        </div>
+                        <div class="engine-body">
+                            <p class="card-text">Il modello OpenAI GPT-4o è uno dei più potenti e versatili, con una vasta conoscenza e ottime capacità di comprensione del contesto.</p>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-lightning me-2 text-warning"></i>
+                                    <span class="fw-medium">Velocità:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-brightness-high me-2 text-primary"></i>
+                                    <span class="fw-medium">Precisione:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-half text-primary"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-currency-euro me-2 text-success"></i>
+                                    <span class="fw-medium">Costo:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="engine-footer">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-medium">Stato: <span class="{% if selected_engine == 'openai' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'openai' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                                <button class="btn btn-sm {% if selected_engine == 'openai' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="openai">{% if selected_engine == 'openai' %}Selezionato{% else %}Seleziona{% endif %}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claude Card - Visibile solo se la chiave è configurata -->
+                <div class="col engine-section" id="claude-engine-section">
+                     <div class="card h-100 engine-card {% if selected_engine == 'claude' %}selected{% endif %}" id="claude-card">
+                        <div class="selected-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="engine-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/claude.png' %}" alt="Anthropic Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">Claude 3.7 Sonnet</h5>
+                                </div>
+                                <span class="badge bg-info">Alta precisione</span>
+                            </div>
+                        </div>
+                        <div class="engine-body">
+                            <p class="card-text">Claude 3.7 Sonnet di Anthropic è noto per la sua precisione e ragionamento strutturato, con un'ottima capacità di seguire istruzioni.</p>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-lightning me-2 text-warning"></i>
+                                    <span class="fw-medium">Velocità:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-brightness-high me-2 text-primary"></i>
+                                    <span class="fw-medium">Precisione:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-currency-euro me-2 text-success"></i>
+                                    <span class="fw-medium">Costo:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="engine-footer">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-medium">Stato: <span class="{% if selected_engine == 'claude' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'claude' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                                <button class="btn btn-sm {% if selected_engine == 'claude' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="claude">{% if selected_engine == 'claude' %}Selezionato{% else %}Seleziona{% endif %}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DeepSeek Card - Visibile solo se la chiave è configurata -->
+<div class="col engine-section" id="deepseek-engine-section">
+                     <div class="card h-100 engine-card {% if selected_engine == 'deepseek' %}selected{% endif %}" id="deepseek-card">
+                        <div class="selected-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="engine-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/deepseek.svg' %}" alt="DeepSeek Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">DeepSeek Coder</h5>
+                                </div>
+                                <span class="badge bg-warning">Economico</span>
+                            </div>
+                        </div>
+                        <div class="engine-body">
+                            <p class="card-text">DeepSeek Coder è specializzato nell'analisi e comprensione del codice, ma funziona bene anche per l'analisi di documenti tecnici.</p>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-lightning me-2 text-warning"></i>
+                                    <span class="fw-medium">Velocità:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-brightness-high me-2 text-primary"></i>
+                                    <span class="fw-medium">Precisione:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-currency-euro me-2 text-success"></i>
+                                    <span class="fw-medium">Costo:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="engine-footer">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-medium">Stato: <span class="{% if selected_engine == 'deepseek' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'deepseek' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                                <button class="btn btn-sm {% if selected_engine == 'deepseek' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="deepseek">{% if selected_engine == 'deepseek' %}Selezionato{% else %}Seleziona{% endif %}</button>
+                            </div>
+                        </div>
+                     </div>
+                </div>
+
+                <!-- Gemini Card - Visibile solo se la chiave è configurata -->
+                <div class="col engine-section" id="gemini-engine-section">
+                    <div class="card h-100 engine-card {% if selected_engine == 'gemini' %}selected{% endif %}" id="gemini-card">
+                        <div class="selected-badge">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="engine-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'dist/assets/img/gemini.svg' %}" alt="Gemini Logo" class="engine-logo me-2">
+                                    <h5 class="mb-0">Gemini 1.5 Pro</h5>
+                                </div>
+                                <span class="badge bg-primary">Versatile</span>
+                            </div>
+                        </div>
+                        <div class="engine-body">
+                            <p class="card-text">Gemini di Google è un modello multimodale avanzato, ottimo per analisi complesse, codice, creatività e compiti generali.</p>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-lightning me-2 text-warning"></i>
+                                    <span class="fw-medium">Velocità:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-brightness-high me-2 text-primary"></i>
+                                    <span class="fw-medium">Precisione:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-fill text-primary"></i>
+                                        <i class="bi bi-star-half text-primary"></i>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-currency-euro me-2 text-success"></i>
+                                    <span class="fw-medium">Costo:</span>
+                                    <div class="ms-2">
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star-fill text-success"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                        <i class="bi bi-star text-muted"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="engine-footer">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-medium">Stato: <span class="{% if selected_engine == 'gemini' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'gemini' %}Attivo{% else %}Inattivo{% endif %}</span></span>
+                                <button class="btn btn-sm {% if selected_engine == 'gemini' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="gemini">{% if selected_engine == 'gemini' %}Selezionato{% else %}Seleziona{% endif %}</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Engine Selection Cards -->
-    <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
-        <!-- OpenAI Card -->
-        <div class="col">
-            <div class="card h-100 engine-card {% if selected_engine == 'openai' %}selected{% endif %}" id="openai-card">
-                <div class="selected-badge">
-                    <i class="bi bi-check-lg"></i>
-                </div>
-                <div class="engine-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/openai.svg' %}" alt="OpenAI Logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg'" class="engine-logo me-2">
-                            <h5 class="mb-0">ChatGPT <span id="openai-model-display">4o</span></h5>
-                        </div>
-                        <span class="badge bg-success">Consigliato</span>
-                    </div>
-                </div>
-                <div class="engine-body">
-                    <p class="card-text">Il modello OpenAI GPT-4o è uno dei più potenti e versatili, con una vasta conoscenza e ottime capacità di comprensione del contesto.</p>
-
-                    <div class="mb-3">
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-lightning me-2 text-warning"></i>
-                            <span class="fw-medium">Velocità:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-brightness-high me-2 text-primary"></i>
-                            <span class="fw-medium">Precisione:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-half text-primary"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-currency-euro me-2 text-success"></i>
-                            <span class="fw-medium">Costo:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="engine-footer">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'openai' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'openai' %}Attivo{% else %}Inattivo{% endif %}</span></span>
-                        <button class="btn btn-sm {% if selected_engine == 'openai' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="openai">{% if selected_engine == 'openai' %}Selezionato{% else %}Seleziona{% endif %}</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Claude Card -->
-        <div class="col">
-             <div class="card h-100 engine-card {% if selected_engine == 'claude' %}selected{% endif %}" id="claude-card">
-                <div class="selected-badge">
-                    <i class="bi bi-check-lg"></i>
-                </div>
-                <div class="engine-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/claude.png' %}" alt="Anthropic Logo" class="engine-logo me-2">
-                            <h5 class="mb-0">Claude 3.7 Sonnet</h5>
-                        </div>
-                        <span class="badge bg-info">Alta precisione</span>
-                    </div>
-                </div>
-                <div class="engine-body">
-                    <p class="card-text">Claude 3.7 Sonnet di Anthropic è noto per la sua precisione e ragionamento strutturato, con un'ottima capacità di seguire istruzioni.</p>
-
-                    <div class="mb-3">
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-lightning me-2 text-warning"></i>
-                            <span class="fw-medium">Velocità:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-brightness-high me-2 text-primary"></i>
-                            <span class="fw-medium">Precisione:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-currency-euro me-2 text-success"></i>
-                            <span class="fw-medium">Costo:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="engine-footer">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'claude' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'claude' %}Attivo{% else %}Inattivo{% endif %}</span></span>
-                        <button class="btn btn-sm {% if selected_engine == 'claude' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="claude">{% if selected_engine == 'claude' %}Selezionato{% else %}Seleziona{% endif %}</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- DeepSeek Card -->
-        <div class="col">
-             <div class="card h-100 engine-card {% if selected_engine == 'deepseek' %}selected{% endif %}" id="deepseek-card">
-                <div class="selected-badge">
-                    <i class="bi bi-check-lg"></i>
-                </div>
-                <div class="engine-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/deepseek.svg' %}" alt="DeepSeek Logo" class="engine-logo me-2">
-                            <h5 class="mb-0">DeepSeek Coder</h5>
-                        </div>
-                        <span class="badge bg-warning">Economico</span>
-                    </div>
-                </div>
-                <div class="engine-body">
-                    <p class="card-text">DeepSeek Coder è specializzato nell'analisi e comprensione del codice, ma funziona bene anche per l'analisi di documenti tecnici.</p>
-
-                    <div class="mb-3">
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-lightning me-2 text-warning"></i>
-                            <span class="fw-medium">Velocità:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-brightness-high me-2 text-primary"></i>
-                            <span class="fw-medium">Precisione:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-currency-euro me-2 text-success"></i>
-                            <span class="fw-medium">Costo:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="engine-footer">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'deepseek' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'deepseek' %}Attivo{% else %}Inattivo{% endif %}</span></span>
-                        <button class="btn btn-sm {% if selected_engine == 'deepseek' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="deepseek">{% if selected_engine == 'deepseek' %}Selezionato{% else %}Seleziona{% endif %}</button>
-                    </div>
-                </div>
-             </div>
-        </div>
-
-        <!-- Gemini Card -->
-        <div class="col">
-            <div class="card h-100 engine-card {% if selected_engine == 'gemini' %}selected{% endif %}" id="gemini-card">
-                <div class="selected-badge">
-                    <i class="bi bi-check-lg"></i>
-                </div>
-                <div class="engine-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <img src="{% static 'dist/assets/img/gemini.svg' %}" alt="Gemini Logo" class="engine-logo me-2">
-                            <h5 class="mb-0">Gemini 1.5 Pro</h5>
-                        </div>
-                        <span class="badge bg-primary">Versatile</span>
-                    </div>
-                </div>
-                <div class="engine-body">
-                    <p class="card-text">Gemini di Google è un modello multimodale avanzato, ottimo per analisi complesse, codice, creatività e compiti generali.</p>
-
-                    <div class="mb-3">
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-lightning me-2 text-warning"></i>
-                            <span class="fw-medium">Velocità:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star-fill text-warning"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center mb-1">
-                            <i class="bi bi-brightness-high me-2 text-primary"></i>
-                            <span class="fw-medium">Precisione:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-fill text-primary"></i>
-                                <i class="bi bi-star-half text-primary"></i>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-currency-euro me-2 text-success"></i>
-                            <span class="fw-medium">Costo:</span>
-                            <div class="ms-2">
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star-fill text-success"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                                <i class="bi bi-star text-muted"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="engine-footer">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-medium">Stato: <span class="{% if selected_engine == 'gemini' %}text-success{% else %}text-secondary{% endif %}">{% if selected_engine == 'gemini' %}Attivo{% else %}Inattivo{% endif %}</span></span>
-                        <button class="btn btn-sm {% if selected_engine == 'gemini' %}btn-primary{% else %}btn-outline-primary{% endif %} select-engine" data-engine="gemini">{% if selected_engine == 'gemini' %}Selezionato{% else %}Seleziona{% endif %}</button>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- Parameters Configuration Panel -->
+<!-- Parameters Configuration Panel -->
     <div class="card mb-4">
         <div class="card-header">
             <h5 class="card-title mb-0">Configurazione Parametri</h5>
         </div>
         <div class="card-body">
+            <!-- Stato vuoto (nessun motore selezionato) -->
+            <div id="empty-config-state" class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="bi bi-sliders"></i>
+                </div>
+                <h4>Nessun motore selezionato</h4>
+                <p class="text-muted">Seleziona un motore di intelligenza artificiale per configurarne i parametri.</p>
+            </div>
+
             <!-- OpenAI Config Panel -->
             <div id="openai-config" class="config-panel {% if selected_engine == 'openai' %}active{% endif %}">
                 <form id="openai-form" method="post" action="{% url 'ia_engine' %}">
@@ -440,7 +714,7 @@
                         <div class="col-md-3">
                             <label for="gpt-temperature" class="param-label">Temperatura</label>
                             <div class="d-flex align-items-center mt-2">
-                                <input type="range" class="form-range flex-grow-1 me-2" id="gpt-temperature" min="0" max="2" step="0.1" value="0.7">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="gpt-temperature" name="temperature" min="0" max="2" step="0.1" value="0.7">
                                 <span id="gpt-temperature-value" class="badge bg-primary">0.7</span>
                             </div>
                         </div>
@@ -454,13 +728,21 @@
                                 <span class="badge bg-secondary me-2">0.7 = Bilanciato</span>
                                 <span class="badge bg-secondary">2.0 = Creativo</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Esempi:</strong></p>
+                                <ul class="small">
+                                    <li><strong>0.0:</strong> "La capitale dell'Italia è Roma. È stata fondata nel 753 a.C."</li>
+                                    <li><strong>0.7:</strong> "Roma, capitale dell'Italia, è una città dalle profonde radici storiche che risalgono alla sua leggendaria fondazione nel 753 a.C."</li>
+                                    <li><strong>1.5:</strong> "L'eterna città di Roma, cuore pulsante dell'Italia, emerge maestosa dal lontano 753 a.C., intrecciando la sua anima millenaria con la vivacità di una capitale moderna."</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="gpt_max_tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="gpt_max_tokens" name="gpt_max_tokens" value="{{ gpt_max_tokens|default:4096 }}" min="100" max="8192" step="1">
+                            <input type="number" class="form-control" id="gpt_max_tokens" name="max_tokens" value="{{ gpt_max_tokens|default:4096 }}" min="100" max="8192" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -472,13 +754,21 @@
                                 <span class="badge bg-secondary me-2">Standard: 4096</span>
                                 <span class="badge bg-secondary">Max: 8192</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Esempi di lunghezza:</strong></p>
+                                <ul class="small">
+                                    <li><strong>500 token:</strong> ≈ 375 parole (un paragrafo dettagliato)</li>
+                                    <li><strong>2000 token:</strong> ≈ 1500 parole (un breve articolo)</li>
+                                    <li><strong>4096 token:</strong> ≈ 3000 parole (un saggio completo)</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="gpt_timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="gpt_timeout" name="gpt_timeout" value="{{ gpt_timeout|default:60 }}" min="10" max="300" step="1">
+                            <input type="number" class="form-control" id="gpt_timeout" name="timeout" value="{{ gpt_timeout|default:60 }}" min="10" max="300" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -490,13 +780,17 @@
                                 <span class="badge bg-secondary me-2">Standard: 60s</span>
                                 <span class="badge bg-secondary">Max: 300s</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Quando aumentare:</strong> Per analisi di documenti molto lunghi o domande che richiedono ragionamenti complessi.</p>
+                                <p class="param-help mb-0"><strong>Quando diminuire:</strong> Per risposte rapide a domande semplici o in contesti che richiedono interazioni veloci.</p>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-3">
                             <label for="gpt_model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="gpt_model" name="gpt_model">
+                            <select class="form-select" id="gpt_model" name="model">
                                 <option value="gpt-4o" {% if gpt_model == 'gpt-4o' %}selected{% endif %}>GPT-4o (ultima versione)</option>
                                 <option value="gpt-4-turbo" {% if gpt_model == 'gpt-4-turbo' %}selected{% endif %}>GPT-4 Turbo</option>
                                 <option value="gpt-3.5-turbo" {% if gpt_model == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo (economico)</option>
@@ -511,6 +805,34 @@
                                 <span class="badge bg-success me-2">GPT-4o: Prestazioni migliori</span>
                                 <span class="badge bg-info me-2">GPT-4 Turbo: Bilanciato</span>
                                 <span class="badge bg-warning">GPT-3.5: Economico</span>
+                            </div>
+                            <div class="mt-2">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Modello</th>
+                                            <th>Ideale per</th>
+                                            <th>Differenze principali</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>GPT-4o</strong></td>
+                                            <td>Analisi complesse, ragionamento avanzato</td>
+                                            <td>Migliore comprensione, multimodale, più recente</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>GPT-4 Turbo</strong></td>
+                                            <td>Buon compromesso costo/prestazioni</td>
+                                            <td>Buona qualità, conoscenze aggiornate</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>GPT-3.5 Turbo</strong></td>
+                                            <td>Attività semplici, test, bozze</td>
+                                            <td>Veloce, economico, meno preciso</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -533,7 +855,7 @@
                         <div class="col-md-3">
                             <label for="claude-temperature" class="param-label">Temperatura</label>
                             <div class="d-flex align-items-center mt-2">
-                                <input type="range" class="form-range flex-grow-1 me-2" id="claude-temperature" min="0" max="1" step="0.01" value="0.5">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="claude-temperature" name="temperature" min="0" max="1" step="0.01" value="0.5">
                                 <span id="claude-temperature-value" class="badge bg-primary">0.5</span>
                             </div>
                         </div>
@@ -547,13 +869,21 @@
                                 <span class="badge bg-secondary me-2">0.5 = Bilanciato</span>
                                 <span class="badge bg-secondary">1.0 = Creativo</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Esempi:</strong></p>
+                                <ul class="small">
+                                    <li><strong>0.0:</strong> "L'acqua bolle a 100 gradi Celsius a livello del mare. Questo è un fatto scientifico ben stabilito."</li>
+                                    <li><strong>0.5:</strong> "A livello del mare, l'acqua bolle a 100°C. Questo punto di ebollizione varia con l'altitudine e la pressione atmosferica."</li>
+                                    <li><strong>1.0:</strong> "Il danzare delle molecole d'acqua raggiunge il suo culmine a 100°C, quando il liquido si trasforma in vapore, liberandosi dai vincoli che lo tenevano in uno stato coeso."</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="claude_max_tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="claude_max_tokens" name="claude_max_tokens" value="{{ claude_max_tokens|default:4096 }}" min="100" max="10000" step="1">
+                            <input type="number" class="form-control" id="claude_max_tokens" name="max_tokens" value="{{ claude_max_tokens|default:4096 }}" min="100" max="10000" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -565,13 +895,21 @@
                                 <span class="badge bg-secondary me-2">Standard: 4096</span>
                                 <span class="badge bg-secondary">Max: 10000</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Casi d'uso per diversi limiti:</strong></p>
+                                <ul class="small">
+                                    <li><strong>1000-2000:</strong> Risposte concise, riassunti, analisi brevi</li>
+                                    <li><strong>4000-6000:</strong> Analisi approfondite, spiegazioni dettagliate</li>
+                                    <li><strong>8000-10000:</strong> Report completi, documentazione estesa, analisi di documenti lunghi</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="claude_timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="claude_timeout" name="claude_timeout" value="{{ claude_timeout|default:90 }}" min="10" max="300" step="1">
+                            <input type="number" class="form-control" id="claude_timeout" name="timeout" value="{{ claude_timeout|default:90 }}" min="10" max="300" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -583,13 +921,19 @@
                                 <span class="badge bg-secondary me-2">Standard: 90s</span>
                                 <span class="badge bg-secondary">Max: 300s</span>
                             </div>
+                            <div class="mt-2">
+                                <div class="alert alert-info py-2 px-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Consiglio:</strong> Per risposte lunghe o complesse, considera di impostare un timeout di almeno 120 secondi. Claude tende a elaborare più approfonditamente le risposte rispetto ad altri modelli.
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-3">
                             <label for="claude_model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="claude_model" name="claude_model">
+                            <select class="form-select" id="claude_model" name="model">
                                 <option value="claude-3-7-sonnet" {% if claude_model == 'claude-3-7-sonnet' %}selected{% endif %}>Claude 3.7 Sonnet</option>
                                 <option value="claude-3-opus" {% if claude_model == 'claude-3-opus' %}selected{% endif %}>Claude 3 Opus (più potente)</option>
                                 <option value="claude-3-haiku" {% if claude_model == 'claude-3-haiku' %}selected{% endif %}>Claude 3 Haiku (più veloce)</option>
@@ -605,6 +949,34 @@
                                 <span class="badge bg-info me-2">Sonnet: Bilanciato</span>
                                 <span class="badge bg-warning">Haiku: Veloce ed economico</span>
                             </div>
+                            <div class="mt-2">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Modello</th>
+                                            <th>Contesto</th>
+                                            <th>Punti di forza</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Claude 3 Opus</strong></td>
+                                            <td>200K token</td>
+                                            <td>Ragionamento complesso, analisi approfondita, massima precisione</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Claude 3.7 Sonnet</strong></td>
+                                            <td>100K token</td>
+                                            <td>Ottimo bilanciamento tra prestazioni e costo, buona comprensione</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Claude 3 Haiku</strong></td>
+                                            <td>48K token</td>
+                                            <td>Risposte rapide, più economico, adatto per attività semplici</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
@@ -615,8 +987,7 @@
                     </div>
                 </form>
             </div>
-
-            <!-- DeepSeek Config Panel -->
+<!-- DeepSeek Config Panel -->
             <div id="deepseek-config" class="config-panel {% if selected_engine == 'deepseek' %}active{% endif %}">
                 <form id="deepseek-form" method="post" action="{% url 'ia_engine' %}">
                     {% csrf_token %}
@@ -626,7 +997,7 @@
                         <div class="col-md-3">
                             <label for="deepseek-temperature" class="param-label">Temperatura</label>
                             <div class="d-flex align-items-center mt-2">
-                                <input type="range" class="form-range flex-grow-1 me-2" id="deepseek-temperature" min="0" max="1.5" step="0.1" value="0.4">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="deepseek-temperature" name="temperature" min="0" max="1.5" step="0.1" value="0.4">
                                 <span id="deepseek-temperature-value" class="badge bg-primary">0.4</span>
                             </div>
                         </div>
@@ -640,13 +1011,21 @@
                                 <span class="badge bg-secondary me-2">0.4 = Bilanciato</span>
                                 <span class="badge bg-secondary">1.5 = Creativo</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Esempi di risposte con diverse temperature:</strong></p>
+                                <ul class="small">
+                                    <li><strong>0.1:</strong> Risposta tecnica concisa e precisa, ideale per codice e debugging</li>
+                                    <li><strong>0.4:</strong> Buon equilibrio tra precisione e dettaglio nella spiegazione</li>
+                                    <li><strong>1.0+:</strong> Risposte più discorsive che possono esplorare soluzioni alternative</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="deepseek_max_tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="deepseek_max_tokens" name="deepseek_max_tokens" value="{{ deepseek_max_tokens|default:2048 }}" min="100" max="4096" step="1">
+                            <input type="number" class="form-control" id="deepseek_max_tokens" name="max_tokens" value="{{ deepseek_max_tokens|default:2048 }}" min="100" max="4096" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -658,13 +1037,19 @@
                                 <span class="badge bg-secondary me-2">Standard: 2048</span>
                                 <span class="badge bg-secondary">Max: 4096</span>
                             </div>
+                            <div class="mt-2">
+                                <div class="alert alert-warning py-2 px-3">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    <strong>Nota:</strong> Valori più alti di 2048 possono ridurre l'efficienza del modello DeepSeek. Per output più lunghi, considera di utilizzare GPT o Claude.
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="deepseek_timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="deepseek_timeout" name="deepseek_timeout" value="{{ deepseek_timeout|default:30 }}" min="5" max="180" step="1">
+                            <input type="number" class="form-control" id="deepseek_timeout" name="timeout" value="{{ deepseek_timeout|default:30 }}" min="5" max="180" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -676,13 +1061,21 @@
                                 <span class="badge bg-secondary me-2">Standard: 30s</span>
                                 <span class="badge bg-secondary">Max: 180s</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Consigli sul timeout:</strong></p>
+                                <ul class="small">
+                                    <li>Per analisi di snippet di codice: 10-20 secondi</li>
+                                    <li>Per revisione di codice e documentazione: 30-60 secondi</li>
+                                    <li>Per analisi approfondite o generazione di codice complesso: 60-120 secondi</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-3">
                             <label for="deepseek_model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="deepseek_model" name="deepseek_model">
+                            <select class="form-select" id="deepseek_model" name="model">
                                 <option value="deepseek-coder" {% if deepseek_model == 'deepseek-coder' %}selected{% endif %}>DeepSeek Coder</option>
                                 <option value="deepseek-chat" {% if deepseek_model == 'deepseek-chat' %}selected{% endif %}>DeepSeek Chat</option>
                                 <option value="deepseek-lite" {% if deepseek_model == 'deepseek-lite' %}selected{% endif %}>DeepSeek Lite (veloce)</option>
@@ -697,6 +1090,34 @@
                                 <span class="badge bg-success me-2">Coder: Ottimo per documenti tecnici</span>
                                 <span class="badge bg-info me-2">Chat: Versatile</span>
                                 <span class="badge bg-warning">Lite: Veloce ed economico</span>
+                            </div>
+                            <div class="mt-2">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Modello</th>
+                                            <th>Ideale per</th>
+                                            <th>Caratteristiche</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>DeepSeek Coder</strong></td>
+                                            <td>Analisi/scrittura codice, documentazione tecnica</td>
+                                            <td>Comprende 50+ linguaggi, ottimo per debugging</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>DeepSeek Chat</strong></td>
+                                            <td>Analisi generale, conversazioni miste</td>
+                                            <td>Buon bilanciamento tra capacità tecniche e generali</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>DeepSeek Lite</strong></td>
+                                            <td>Risposte rapide, progetti con budget limitato</td>
+                                            <td>Ottimizzato per efficienza e velocità</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -719,7 +1140,7 @@
                         <div class="col-md-3">
                             <label for="gemini-temperature" class="param-label">Temperatura</label>
                             <div class="d-flex align-items-center mt-2">
-                                <input type="range" class="form-range flex-grow-1 me-2" id="gemini-temperature" min="0" max="1" step="0.1" value="0.7">
+                                <input type="range" class="form-range flex-grow-1 me-2" id="gemini-temperature" name="temperature" min="0" max="1" step="0.1" value="0.7">
                                 <span id="gemini-temperature-value" class="badge bg-primary">0.7</span>
                             </div>
                         </div>
@@ -733,13 +1154,21 @@
                                 <span class="badge bg-secondary me-2">0.7 = Bilanciato</span>
                                 <span class="badge bg-secondary">1.0 = Creativo</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Esempi di utilizzo:</strong></p>
+                                <ul class="small">
+                                    <li><strong>Bassa temperatura (0.1-0.3):</strong> Analisi di dati, risposta a domande fattuali, estrazione di informazioni da documenti</li>
+                                    <li><strong>Media temperatura (0.4-0.7):</strong> Riassunti, spiegazioni, traduzioni, risposta generale alle domande</li>
+                                    <li><strong>Alta temperatura (0.8-1.0):</strong> Generazione di idee, brainstorming, scrittura creativa, esplorazione di concetti</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="gemini_max_tokens" class="param-label">Limite Tokens</label>
-                            <input type="number" class="form-control" id="gemini_max_tokens" name="gemini_max_tokens" value="{{ gemini_max_tokens|default:8192 }}" min="100" max="32768" step="1">
+                            <input type="number" class="form-control" id="gemini_max_tokens" name="max_tokens" value="{{ gemini_max_tokens|default:8192 }}" min="100" max="32768" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -751,13 +1180,20 @@
                                 <span class="badge bg-secondary me-2">Standard: 8192</span>
                                 <span class="badge bg-secondary">Max: 32768</span>
                             </div>
+                            <div class="mt-2">
+                                <div class="alert alert-info py-2 px-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Gemini eccelle nell'analisi di documenti lunghi, ma tenere presente che risposte molto lunghe (>10.000 token) possono richiedere più tempo di elaborazione.
+                                </div>
+                                <p class="param-help mb-0"><strong>Riferimento:</strong> 8192 token equivalgono a circa 25-30 pagine di testo standard.</p>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row param-row align-items-center">
                         <div class="col-md-3">
                             <label for="gemini_timeout" class="param-label">Timeout (secondi)</label>
-                            <input type="number" class="form-control" id="gemini_timeout" name="gemini_timeout" value="{{ gemini_timeout|default:60 }}" min="10" max="300" step="1">
+                            <input type="number" class="form-control" id="gemini_timeout" name="timeout" value="{{ gemini_timeout|default:60 }}" min="10" max="300" step="1">
                         </div>
                         <div class="col-md-9">
                             <p class="param-help mb-0">
@@ -769,13 +1205,21 @@
                                 <span class="badge bg-secondary me-2">Standard: 60s</span>
                                 <span class="badge bg-secondary">Max: 300s</span>
                             </div>
+                            <div class="mt-2">
+                                <p class="param-help mb-0"><strong>Considerazioni sul timeout:</strong></p>
+                                <ul class="small">
+                                    <li>Il modello Gemini 1.5 Pro con dimensioni di risposta elevate può richiedere fino a 120-180 secondi</li>
+                                    <li>Gemini 1.5 Flash risponde generalmente entro 30-60 secondi, anche per task complessi</li>
+                                    <li>Aumentare il timeout in caso di errori di tempo scaduto durante l'analisi di documenti complessi</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-3">
                             <label for="gemini_model" class="param-label">Versione modello</label>
-                            <select class="form-select" id="gemini_model" name="gemini_model">
+                            <select class="form-select" id="gemini_model" name="model">
                                 <option value="gemini-1.5-pro" {% if gemini_model == 'gemini-1.5-pro' %}selected{% endif %}>Gemini 1.5 Pro</option>
                                 <option value="gemini-1.5-flash" {% if gemini_model == 'gemini-1.5-flash' %}selected{% endif %}>Gemini 1.5 Flash (veloce)</option>
                                 <option value="gemini-1.0-pro" {% if gemini_model == 'gemini-1.0-pro' %}selected{% endif %}>Gemini 1.0 Pro (economico)</option>
@@ -790,6 +1234,34 @@
                                 <span class="badge bg-success me-2">1.5 Pro: Massima qualità e lunghezza</span>
                                 <span class="badge bg-info me-2">1.5 Flash: Veloce ed efficiente</span>
                                 <span class="badge bg-warning">1.0 Pro: Più economico</span>
+                            </div>
+                            <div class="mt-2">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Modello</th>
+                                            <th>Contesto</th>
+                                            <th>Punti di forza</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Gemini 1.5 Pro</strong></td>
+                                            <td>1M token</td>
+                                            <td>Contesto ultra lungo, multimodale, comprensione avanzata</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Gemini 1.5 Flash</strong></td>
+                                            <td>128K token</td>
+                                            <td>Ottimo bilanciamento tra velocità e qualità</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Gemini 1.0 Pro</strong></td>
+                                            <td>32K token</td>
+                                            <td>Soluzione economica per attività standard</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -809,149 +1281,408 @@
             </button>
         </div>
     </div>
-
-    <!-- API Keys Configuration -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="card-title mb-0">Configurazione API Keys</h5>
-        </div>
-        <div class="card-body">
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle-fill me-2"></i>
-                Puoi scegliere di utilizzare il credito disponibile sulla piattaforma o inserire le tue chiavi API personali.
-            </div>
-
-            <form id="api-keys-form" method="post" action="{% url 'ia_engine' %}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="save_api_keys">
-                <div class="mb-4">
-                    <h6 class="border-bottom pb-2">Modalità di utilizzo</h6>
-                    <div class="form-check form-check-inline mt-2">
-                        <input class="form-check-input" type="radio" name="api_mode" id="use-platform-credit" value="platform" {% if api_mode == 'platform' %}checked{% endif %}>
-                        <label class="form-check-label" for="use-platform-credit">
-                            Usa credito piattaforma <span class="badge bg-success ms-1">€ 5.50 disponibili</span>
-                        </label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="api_mode" id="use-personal-keys" value="personal" {% if api_mode == 'personal' %}checked{% endif %}>
-                        <label class="form-check-label" for="use-personal-keys">
-                            Usa chiavi API personali
-                        </label>
-                    </div>
-                </div>
-
-                <div id="personal-keys-section" {% if api_mode != 'personal' %}style="display: none;"{% endif %}>
-                    <h6 class="border-bottom pb-2">Chiavi API personali</h6>
-                    <div class="row mb-3">
-                        <div class="col-md-3">
-                            <label for="openai-api-key" class="form-label">OpenAI API Key</label>
-                        </div>
-                        <div class="col-md-9">
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="openai-api-key" placeholder="sk-..." value="{{ openai_api_key|default:'' }}">
-                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="openai-api-key">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <a href="https://platform.openai.com/account/api-keys" target="_blank" class="btn btn-outline-info">
-                                    <i class="bi bi-question-circle me-1"></i> Ottieni
-                                </a>
-                            </div>
-                            <div class="form-text">Chiave API per accedere ai modelli di OpenAI come GPT-4o.</div>
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-3">
-                            <label for="claude-api-key" class="form-label">Anthropic API Key</label>
-                        </div>
-                        <div class="col-md-9">
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="claude-api-key" placeholder="sk-ant-..." value="{{ claude_api_key|default:'' }}">
-                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="claude-api-key">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <a href="https://console.anthropic.com/account/keys" target="_blank" class="btn btn-outline-info">
-                                    <i class="bi bi-question-circle me-1"></i> Ottieni
-                                </a>
-                            </div>
-                            <div class="form-text">Chiave API per accedere ai modelli Claude di Anthropic.</div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-3">
-                            <label for="deepseek-api-key" class="form-label">DeepSeek API Key</label>
-                        </div>
-                        <div class="col-md-9">
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="deepseek-api-key" placeholder="sk-..." value="{{ deepseek_api_key|default:'' }}">
-                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="deepseek-api-key">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <a href="https://platform.deepseek.com/" target="_blank" class="btn btn-outline-info">
-                                    <i class="bi bi-question-circle me-1"></i> Ottieni
-                                </a>
-                            </div>
-                            <div class="form-text">Chiave API per accedere ai modelli DeepSeek.</div>
-                        </div>
-                    </div>
-
-                    <div class="row mt-3">
-                        <div class="col-md-3">
-                            <label for="gemini-api-key" class="form-label">Google Gemini API Key</label>
-                        </div>
-                        <div class="col-md-9">
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="gemini-api-key" placeholder="AIza..." value="{{ gemini_api_key|default:'' }}">
-                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="gemini-api-key">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <a href="https://ai.google.dev/" target="_blank" class="btn btn-outline-info">
-                                    <i class="bi bi-question-circle me-1"></i> Ottieni
-                                </a>
-                            </div>
-                            <div class="form-text">Chiave API per accedere ai modelli Gemini di Google AI.</div>
-                        </div>
-                    </div>
-
-                </div>
-            </form>
-        </div>
-        <div class="card-footer">
-            <button class="btn btn-primary" type="submit" form="api-keys-form">
-                <i class="bi bi-key me-1"></i> Salva configurazione
-            </button>
-        </div>
-    </div>
-
     <!-- Usage Information -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5 class="card-title mb-0">Informazioni sull'Utilizzo</h5>
+            <h5 class="card-title mb-0">Guida Dettagliata ai Parametri</h5>
         </div>
         <div class="card-body">
-            <div class="alert alert-info">
-                <h6 class="alert-heading"><i class="bi bi-info-circle-fill me-2"></i>Guida ai parametri</h6>
-                <hr>
-                <p class="mb-2"><strong>Temperatura:</strong> Controlla la casualità e creatività delle risposte.</p>
-                <ul class="mb-3">
-                    <li><strong>Valori bassi (0-0.3):</strong> Risposte più precise, coerenti e deterministiche. Ideale per domande fattuali, analisi di documenti, riassunti e compiti che richiedono accuratezza.</li>
-                    <li><strong>Valori medi (0.4-0.7):</strong> Bilanciamento tra precisione e creatività. Adatto per la maggior parte delle interazioni.</li>
-                    <li><strong>Valori alti (0.8-2.0):</strong> Risposte più creative, varie ed imprevedibili. Ideale per brainstorming, generazione di idee e contenuti creativi.</li>
-                </ul>
+            <div class="accordion" id="parametersGuide">
+                <!-- Temperatura -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingTemperature">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTemperature" aria-expanded="true" aria-controls="collapseTemperature">
+                            <i class="bi bi-thermometer-half me-2"></i> Temperatura
+                        </button>
+                    </h2>
+                    <div id="collapseTemperature" class="accordion-collapse collapse show" aria-labelledby="headingTemperature" data-bs-parent="#parametersGuide">
+                        <div class="accordion-body">
+                            <h6 class="fw-bold">Definizione:</h6>
+                            <p>La temperatura controlla il grado di casualità nelle risposte dell'IA. Tecnicamente, influenza la distribuzione di probabilità durante la selezione del token successivo.</p>
 
-                <p class="mb-2"><strong>Limite Tokens:</strong> Imposta la lunghezza massima della risposta.</p>
-                <ul class="mb-3">
-                    <li>Un token equivale a circa 4 caratteri o 3/4 di una parola in italiano.</li>
-                    <li>Aumentare questo valore permette risposte più lunghe e dettagliate, ma aumenta anche i costi di elaborazione.</li>
-                    <li>Limiti troppo bassi potrebbero portare a risposte incomplete.</li>
-                </ul>
+                            <h6 class="fw-bold">Come funziona:</h6>
+                            <ul>
+                                <li><strong>Temperatura bassa (0.0-0.3):</strong> Il modello seleziona quasi sempre i token con la probabilità più alta, producendo risposte più deterministiche e ripetibili.</li>
+                                <li><strong>Temperatura media (0.4-0.7):</strong> Il modello introduce una certa variabilità nella selezione dei token, bilanciando prevedibilità e creatività.</li>
+                                <li><strong>Temperatura alta (0.8-2.0):</strong> Il modello considera con maggiore probabilità anche token meno probabili, producendo output più casuali e creativi.</li>
+                            </ul>
 
-                <p class="mb-2"><strong>Timeout:</strong> Tempo massimo di attesa per una risposta dall'API.</p>
-                <ul class="mb-0">
-                    <li>Un valore più alto è utile per domande complesse che richiedono più tempo di elaborazione.</li>
-                    <li>Tuttavia, timeout troppo lunghi potrebbero peggiorare l'esperienza utente in caso di problemi di connessione.</li>
-                </ul>
+                            <h6 class="fw-bold">Esempi pratici:</h6>
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <span class="fw-bold">Domanda: "Scrivi una breve descrizione dell'Italia."</span>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-light">Temperatura: 0.1</div>
+                                                <div class="card-body">
+                                                    <p class="card-text">L'Italia è un paese situato nell'Europa meridionale con una popolazione di circa 60 milioni di abitanti. La sua capitale è Roma. L'Italia è conosciuta per la sua ricca storia, arte, cucina e cultura.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-light">Temperatura: 0.7</div>
+                                                <div class="card-body">
+                                                    <p class="card-text">L'Italia, penisola a forma di stivale che si estende nel Mediterraneo, è culla di una civiltà millenaria. Dalla maestosa Roma alle canali di Venezia, il paese incanta con la sua arte rinascimentale, l'opera lirica e una cucina che ha conquistato il mondo intero.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-light">Temperatura: 1.5</div>
+                                                <div class="card-body">
+                                                    <p class="card-text">L'Italia: un mosaico di passioni dove il tempo danza tra antichi ruderi e caffè animati. Lo stivale mediterraneo vibra di vita, con melodie di Verdi che si fondono col profumo di basilico e il rombo di Vespe sui ciottoli di piazze senza tempo. Una sinfonia per i sensi che seduce dal primo assaggio.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="fw-bold">Quando usare valori specifici:</h6>
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Impostazione</th>
+                                        <th>Valore Temperatura</th>
+                                        <th>Ideale per</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Massima precisione</td>
+                                        <td>0.0 - 0.2</td>
+                                        <td>Domande fattuali, analisi di documenti tecnici, riassunti oggettivi</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Uso generale</td>
+                                        <td>0.3 - 0.7</td>
+                                        <td>La maggior parte delle conversazioni, spiegazioni, traduzioni</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Creatività</td>
+                                        <td>0.8 - 1.2</td>
+                                        <td>Scrittura creativa, brainstorming, generazione di idee</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Alta variabilità</td>
+                                        <td>1.3 - 2.0</td>
+                                        <td>Poesia sperimentale, esplorazione di idee non convenzionali</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Limite Token -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingTokens">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTokens" aria-expanded="false" aria-controls="collapseTokens">
+                            <i class="bi bi-text-paragraph me-2"></i> Limite Token
+                        </button>
+                    </h2>
+                    <div id="collapseTokens" class="accordion-collapse collapse" aria-labelledby="headingTokens" data-bs-parent="#parametersGuide">
+                        <div class="accordion-body">
+                            <h6 class="fw-bold">Definizione:</h6>
+                            <p>Il limite di token stabilisce la lunghezza massima della risposta che il modello può generare. I token sono unità di testo che corrispondono approssimativamente a 4 caratteri o 3/4 di una parola in italiano.</p>
+
+                            <h6 class="fw-bold">Esempi di lunghezza in token:</h6>
+                            <ul>
+                                <li><strong>500 token:</strong> ≈ 375 parole (circa 1-2 pagine di testo)</li>
+                                <li><strong>1.000 token:</strong> ≈ 750 parole (circa 3 pagine di testo)</li>
+                                <li><strong>2.000 token:</strong> ≈ 1.500 parole (circa 6 pagine di testo)</li>
+                                <li><strong>4.000 token:</strong> ≈ 3.000 parole (circa 12 pagine di testo)</li>
+                                <li><strong>8.000 token:</strong> ≈ 6.000 parole (circa 24 pagine di testo)</li>
+                            </ul>
+
+                            <h6 class="fw-bold">Considerazioni importanti:</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">Vantaggi di limiti più alti</div>
+                                        <div class="card-body">
+                                            <ul class="mb-0">
+                                                <li>Risposte più complete e dettagliate</li>
+                                                <li>Possibilità di generare testi lunghi in un'unica risposta</li>
+                                                <li>Migliore gestione di compiti complessi</li>
+                                                <li>Più spazio per esempi ed elaborazioni</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">Svantaggi di limiti più alti</div>
+                                        <div class="card-body">
+                                            <ul class="mb-0">
+                                                <li>Tempi di risposta più lunghi</li>
+                                                <li>Costi più elevati (la maggior parte dei provider addebitano per token)</li>
+                                                <li>Possibile divagazione nelle risposte molto lunghe</li>
+                                                <li>Maggiore consumo di memoria nel browser</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="fw-bold">Guida alla selezione del limite di token:</h6>
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Scenario</th>
+                                        <th>Limite consigliato</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Risposte brevi, chiarimenti</td>
+                                        <td>500-1.000</td>
+                                        <td>Economico e veloce per domande semplici</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Spiegazioni standard, riassunti</td>
+                                        <td>1.000-2.000</td>
+                                        <td>Buon equilibrio tra dettaglio e concisione</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Analisi approfondite, tutorial</td>
+                                        <td>2.000-4.000</td>
+                                        <td>Adatto per la maggior parte dei contenuti dettagliati</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Report completi, documenti lunghi</td>
+                                        <td>4.000-8.000</td>
+                                        <td>Per contenuti estesi che richiedono molti dettagli</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Analisi di documenti complessi</td>
+                                        <td>8.000+</td>
+                                        <td>Solo per Gemini 1.5 Pro o Claude 3 Opus che gestiscono bene risposte molto lunghe</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="alert alert-info mt-3">
+                                <i class="bi bi-info-circle-fill me-2"></i>
+                                <strong>Consiglio:</strong> È generalmente più efficace impostare un limite di token ragionevole e, se necessario, fare domande di follow-up piuttosto che impostare limiti molto alti per ogni risposta.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeout -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingTimeout">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTimeout" aria-expanded="false" aria-controls="collapseTimeout">
+                            <i class="bi bi-hourglass-split me-2"></i> Timeout
+                        </button>
+                    </h2>
+                    <div id="collapseTimeout" class="accordion-collapse collapse" aria-labelledby="headingTimeout" data-bs-parent="#parametersGuide">
+                        <div class="accordion-body">
+                            <h6 class="fw-bold">Definizione:</h6>
+                            <p>Il timeout definisce il tempo massimo, in secondi, che il sistema attenderà una risposta dall'API del modello di intelligenza artificiale prima di interrompere la richiesta.</p>
+
+                            <h6 class="fw-bold">Perché è importante:</h6>
+                            <p>Un timeout adeguato garantisce che:</p>
+                            <ul>
+                                <li>Il sistema non rimanga bloccato in attesa indefinita</li>
+                                <li>L'utente riceva un messaggio di errore appropriato in caso di problemi</li>
+                                <li>Il modello abbia tempo sufficiente per elaborare richieste complesse</li>
+                            </ul>
+
+                            <h6 class="fw-bold">Confronto tempi di risposta tra modelli:</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Modello</th>
+                                            <th>Risposta breve<br><small>(500-1000 token)</small></th>
+                                            <th>Risposta media<br><small>(2000-4000 token)</small></th>
+                                            <th>Risposta lunga<br><small>(4000+ token)</small></th>
+                                            <th>Timeout consigliato</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>GPT-3.5 Turbo</td>
+                                            <td>5-10s</td>
+                                            <td>15-30s</td>
+                                            <td>30-60s</td>
+                                            <td>60s</td>
+                                        </tr>
+                                        <tr>
+                                            <td>GPT-4o</td>
+                                            <td>10-15s</td>
+                                            <td>20-40s</td>
+                                            <td>40-80s</td>
+                                            <td>90s</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Claude 3.7 Sonnet</td>
+                                            <td>10-20s</td>
+                                            <td>30-60s</td>
+                                            <td>60-120s</td>
+                                            <td>120s</td>
+                                        </tr>
+                                        <tr>
+                                            <td>DeepSeek Coder</td>
+                                            <td>3-8s</td>
+                                            <td>10-20s</td>
+                                            <td>20-40s</td>
+                                            <td>40s</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Gemini 1.5 Pro</td>
+                                            <td>8-15s</td>
+                                            <td>20-40s</td>
+                                            <td>40-120s</td>
+                                            <td>120s</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h6 class="fw-bold mt-3">Fattori che influenzano il tempo di risposta:</h6>
+                            <ul>
+                                <li><strong>Complessità della domanda:</strong> Domande che richiedono ragionamento o sintesi di molte informazioni richiedono più tempo</li>
+                                <li><strong>Lunghezza della risposta:</strong> Risposte più lunghe richiedono più tempo per essere generate</li>
+                                <li><strong>Carico dei server:</strong> Nei momenti di picco, le risposte possono richiedere più tempo</li>
+                                <li><strong>Modello utilizzato:</strong> Modelli più avanzati possono richiedere più tempo per elaborare</li>
+                                <li><strong>Temperatura:</strong> Temperature più alte possono aumentare leggermente il tempo di risposta</li>
+                            </ul>
+
+                            <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                <strong>Nota:</strong> Se ricevi frequentemente errori di timeout, prova ad aumentare il valore. Tuttavia, timeout molto lunghi (>3 minuti) potrebbero indicare problemi con la richiesta stessa o con l'API.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modelli -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingModels">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseModels" aria-expanded="false" aria-controls="collapseModels">
+                            <i class="bi bi-robot me-2"></i> Scelta del Modello
+                        </button>
+                    </h2>
+                    <div id="collapseModels" class="accordion-collapse collapse" aria-labelledby="headingModels" data-bs-parent="#parametersGuide">
+                        <div class="accordion-body">
+                            <h6 class="fw-bold">Guida alla scelta del modello giusto:</h6>
+                            <p>Ogni provider offre diversi modelli con caratteristiche specifiche. Ecco come scegliere quello più adatto alle tue esigenze:</p>
+
+                            <h6 class="fw-bold mt-3">Confronto tra provider:</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Provider</th>
+                                            <th>Punti di forza</th>
+                                            <th>Limitazioni</th>
+                                            <th>Ideale per</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>OpenAI</strong></td>
+                                            <td>Versatilità, bilanciamento, ampia conoscenza generale</td>
+                                            <td>Costi più elevati per i modelli più recenti</td>
+                                            <td>Uso generale, compiti creativi, analisi varie</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Claude</strong></td>
+                                            <td>Eccellente ragionamento, precisione, comprensione di testi lunghi</td>
+                                            <td>Meno creativo in alcuni contesti</td>
+                                            <td>Analisi approfondite, riassunti di documenti, ragionamento complesso</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>DeepSeek</strong></td>
+                                            <td>Efficiente, veloce, economico, ottimo per codice</td>
+                                            <td>Contesto più limitato, meno preciso per conoscenza generale</td>
+                                            <td>Analisi e generazione di codice, documentazione tecnica</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Gemini</strong></td>
+                                            <td>Contesto molto lungo, multimodale, buon bilanciamento costo/qualità</td>
+                                            <td>Prestazioni variabili su compiti specializzati</td>
+                                            <td>Analisi di documenti lunghi, generazione di testi estesi</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h6 class="fw-bold mt-4">Casi d'uso specifici:</h6>
+                            <div class="row row-cols-1 row-cols-md-2 g-4 mb-3">
+                                <div class="col">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-light">Analisi di documenti tecnici</div>
+                                        <div class="card-body">
+                                            <p class="fw-medium mb-1">Scelta consigliata:</p>
+                                            <ol class="mb-1">
+                                                <li>Claude 3 Opus (per documenti molto lunghi)</li>
+                                                <li>GPT-4o (per analisi approfondita)</li>
+                                                <li>DeepSeek Coder (per documentazione principalmente tecnica)</li>
+                                            </ol>
+                                            <p class="small text-muted mb-0">Motivazione: I modelli Claude eccellono nell'analisi di testi lunghi, mentre GPT-4o offre un'ottima comprensione tecnica.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-light">Generazione di contenuti creativi</div>
+                                        <div class="card-body">
+                                            <p class="fw-medium mb-1">Scelta consigliata:</p>
+                                            <ol class="mb-1">
+                                                <li>GPT-4o (alta temperatura)</li>
+                                                <li>Gemini 1.5 Pro</li>
+                                                <li>Claude 3.7 Sonnet</li>
+                                            </ol>
+                                            <p class="small text-muted mb-0">Motivazione: I modelli OpenAI tendono ad eccellere in compiti creativi, soprattutto con temperature più elevate.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-light">Analisi di codice e debugging</div>
+                                        <div class="card-body">
+                                            <p class="fw-medium mb-1">Scelta consigliata:</p>
+                                            <ol class="mb-1">
+                                                <li>DeepSeek Coder</li>
+                                                <li>GPT-4o</li>
+                                                <li>Gemini 1.5 Pro</li>
+                                            </ol>
+                                            <p class="small text-muted mb-0">Motivazione: DeepSeek Coder è specializzato per codice, mentre GPT-4o ha eccellenti capacità di comprensione e debug di codice.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-light">Uso a basso costo</div>
+                                        <div class="card-body">
+                                            <p class="fw-medium mb-1">Scelta consigliata:</p>
+                                            <ol class="mb-1">
+                                                <li>DeepSeek Lite</li>
+                                                <li>GPT-3.5 Turbo</li>
+                                                <li>Gemini 1.0 Pro</li>
+                                            </ol>
+                                            <p class="small text-muted mb-0">Motivazione: Questi modelli offrono il miglior rapporto qualità/prezzo per compiti quotidiani che non richiedono capacità avanzate.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mt-3">
+                                <i class="bi bi-lightbulb-fill me-2"></i>
+                                <strong>Consiglio:</strong> Sperimenta con diversi modelli per gli stessi compiti per determinare quale funziona meglio per le tue esigenze specifiche. Le prestazioni possono variare notevolmente in base al tipo di contenuto, lingua e complessità.
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -962,266 +1693,562 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inizializza lo stato del modello visualizzato (per OpenAI)
-        const updateModelDisplay = () => {
-            const modelSelect = document.getElementById('gpt_model');
-            const modelDisplay = document.getElementById('openai-model-display');
-
-            if (modelSelect && modelDisplay) {
-                const selectedOption = modelSelect.options[modelSelect.selectedIndex];
-                let displayText = '';
-
-                if (selectedOption.value === 'gpt-4o') {
-                    displayText = '4o';
-                } else if (selectedOption.value === 'gpt-4-turbo') {
-                    displayText = '4 Turbo';
-                } else if (selectedOption.value === 'gpt-3.5-turbo') {
-                    displayText = '3.5 Turbo';
-                } else {
-                    displayText = selectedOption.value.replace('gpt-', '');
-                }
-
-                modelDisplay.textContent = displayText;
-            }
+document.addEventListener('DOMContentLoaded', function() {
+    function checkInitialApiKeys() {
+        // Aggiorna il contatore di chiavi iniziali
+        const providerIds = {
+            'openai': '{{ openai_provider_id|default:"1" }}',
+            'claude': '{{ claude_provider_id|default:"2" }}',
+            'deepseek': '{{ deepseek_provider_id|default:"3" }}',
+            'gemini': '{{ gemini_provider_id|default:"4" }}'
         };
 
-        // Inizializza la visualizzazione del modello corrente
-        updateModelDisplay();
+        for (const provider in providerIds) {
+            const statusElement = document.getElementById(`${provider}-status`);
+            const apiKeyValue = '{{ api_keys.openai_provider_id.api_key|default:"" }}'.replace(/enc_/g, '');
 
-        // Aggiorna la visualizzazione quando il modello cambia
-        document.getElementById('gpt_model').addEventListener('change', updateModelDisplay);
+            if (apiKeyValue && apiKeyValue.trim() !== '') {
+                statusElement.innerHTML = '<i class="bi bi-check-circle"></i> Configurata';
+                statusElement.className = 'badge api-key-status api-key-status-success';
+            }
+        }
 
-        // Engine selection
-        const engineCards = document.querySelectorAll('.engine-card');
+        // Chiama updateApiKeyStatus per aggiornare tutti gli stati
+        updateApiKeyStatus();
+    }
+
+    // Chiama questa funzione all'avvio
+    checkInitialApiKeys();
+
+    // Conteggio chiavi API attive e gestione visibilità motori
+    function updateApiKeyStatus() {
+        // Inizializza contatore
+        let activeKeysCount = 0;
+        let hasOpenAI = false;
+        let hasClaude = false;
+        let hasDeepSeek = false;
+        let hasGemini = false;
+
+        // Verifica OpenAI
+        const openaiKey = document.getElementById('openai-api-key').value;
+        const openaiStatus = document.getElementById('openai-status');
+        if (openaiKey && openaiKey.trim().startsWith('sk-')) {
+            openaiStatus.innerHTML = '<i class="bi bi-check-circle"></i> Configurata';
+            openaiStatus.className = 'badge api-key-status api-key-status-success';
+            activeKeysCount++;
+            hasOpenAI = true;
+        } else if (openaiKey && openaiKey.trim() !== '') {
+            openaiStatus.innerHTML = '<i class="bi bi-exclamation-circle"></i> Formato non valido';
+            openaiStatus.className = 'badge api-key-status api-key-status-danger';
+        }
+
+        // Verifica Claude
+        const claudeKey = document.getElementById('claude-api-key').value;
+        const claudeStatus = document.getElementById('claude-status');
+        if (claudeKey && claudeKey.trim().startsWith('sk-ant-')) {
+            claudeStatus.innerHTML = '<i class="bi bi-check-circle"></i> Configurata';
+            claudeStatus.className = 'badge api-key-status api-key-status-success';
+            activeKeysCount++;
+            hasClaude = true;
+        } else if (claudeKey && claudeKey.trim() !== '') {
+            claudeStatus.innerHTML = '<i class="bi bi-exclamation-circle"></i> Formato non valido';
+            claudeStatus.className = 'badge api-key-status api-key-status-danger';
+        }
+
+        // Verifica DeepSeek
+        const deepseekKey = document.getElementById('deepseek-api-key').value;
+        const deepseekStatus = document.getElementById('deepseek-status');
+        if (deepseekKey && deepseekKey.trim().startsWith('sk-')) {
+            deepseekStatus.innerHTML = '<i class="bi bi-check-circle"></i> Configurata';
+            deepseekStatus.className = 'badge api-key-status api-key-status-success';
+            activeKeysCount++;
+            hasDeepSeek = true;
+        } else if (deepseekKey && deepseekKey.trim() !== '') {
+            deepseekStatus.innerHTML = '<i class="bi bi-exclamation-circle"></i> Formato non valido';
+            deepseekStatus.className = 'badge api-key-status api-key-status-danger';
+        }
+
+        // Verifica Gemini
+        const geminiKey = document.getElementById('gemini-api-key').value;
+        const geminiStatus = document.getElementById('gemini-status');
+        if (geminiKey && geminiKey.trim().startsWith('AIza')) {
+            geminiStatus.innerHTML = '<i class="bi bi-check-circle"></i> Configurata';
+            geminiStatus.className = 'badge api-key-status api-key-status-success';
+            activeKeysCount++;
+            hasGemini = true;
+        } else if (geminiKey && geminiKey.trim() !== '') {
+            geminiStatus.innerHTML = '<i class="bi bi-exclamation-circle"></i> Formato non valido';
+            geminiStatus.className = 'badge api-key-status api-key-status-danger';
+        }
+
+        // Aggiorna contatore chiavi
+        document.getElementById('active-keys-count').textContent = activeKeysCount;
+
+        // Mostra/nascondi sezioni motori in base alle chiavi presenti
+        const engineContainer = document.getElementById('engine-cards-container');
+        const emptyState = document.getElementById('empty-engines-state');
+
+        // Sezioni motori
+        const openaiSection = document.getElementById('openai-engine-section');
+        const claudeSection = document.getElementById('claude-engine-section');
+        const deepseekSection = document.getElementById('deepseek-engine-section');
+        const geminiSection = document.getElementById('gemini-engine-section');
+
+        // Mostra/nascondi in base alle chiavi
+        if (activeKeysCount > 0) {
+            engineContainer.style.display = 'flex';
+            emptyState.style.display = 'none';
+
+            // Imposta visibilità per ciascun motore
+            openaiSection.style.display = hasOpenAI ? 'block' : 'none';
+            claudeSection.style.display = hasClaude ? 'block' : 'none';
+            deepseekSection.style.display = hasDeepSeek ? 'block' : 'none';
+            geminiSection.style.display = hasGemini ? 'block' : 'none';
+        } else {
+            engineContainer.style.display = 'none';
+            emptyState.style.display = 'block';
+        }
+
+        // Gestisci la visualizzazione dei pannelli di configurazione
+        const emptyConfigState = document.getElementById('empty-config-state');
         const configPanels = document.querySelectorAll('.config-panel');
 
-        // Add event listeners to engine selection buttons
-        document.querySelectorAll('.select-engine').forEach(button => {
-            button.addEventListener('click', function() {
-                const engine = this.getAttribute('data-engine');
+        // Verifica se c'è almeno un pannello di configurazione attivo
+        let hasActivePanel = false;
+        configPanels.forEach(panel => {
+            if (panel.classList.contains('active')) {
+                hasActivePanel = true;
 
-                // Update UI for selected engine
-                engineCards.forEach(card => {
-                    card.classList.remove('selected');
-                });
-                document.getElementById(`${engine}-card`).classList.add('selected');
-
-                // Update button styles
-                document.querySelectorAll('.select-engine').forEach(btn => {
-                    if (btn.getAttribute('data-engine') === engine) {
-                        btn.classList.remove('btn-outline-primary');
-                        btn.classList.add('btn-primary');
-                        btn.textContent = 'Selezionato';
-                    } else {
-                        btn.classList.remove('btn-primary');
-                        btn.classList.add('btn-outline-primary');
-                        btn.textContent = 'Seleziona';
-                    }
-                });
-
-                // Show corresponding config panel
-                configPanels.forEach(panel => {
+                // Verifica se il panel attivo corrisponde a un motore con chiave valida
+                const engineType = panel.id.split('-')[0];
+                if ((engineType === 'openai' && !hasOpenAI) ||
+                    (engineType === 'claude' && !hasClaude) ||
+                    (engineType === 'deepseek' && !hasDeepSeek) ||
+                    (engineType === 'gemini' && !hasGemini)) {
                     panel.classList.remove('active');
-                });
-                document.getElementById(`${engine}-config`).classList.add('active');
-
-                // Update status indicators
-                engineCards.forEach(card => {
-                    const statusSpan = card.querySelector('.fw-medium span');
-                    if (card.classList.contains('selected')) {
-                        statusSpan.textContent = 'Attivo';
-                        statusSpan.className = 'text-success';
-                    } else {
-                        statusSpan.textContent = 'Inattivo';
-                        statusSpan.className = 'text-secondary';
-                    }
-                });
-
-                // Salva la selezione del motore via AJAX
-                // Aggiungi questo nuovo codice
-                const formData = new FormData();
-                formData.append('action', 'select_engine');
-                formData.append('engine', engine);
-                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-
-                fetch('{% url "ia_engine" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast('Motore selezionato: ' + engine, 'success');
-                    } else {
-                        showToast('Errore nella selezione del motore', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Errore di comunicazione', 'danger');
-                });
-            });
+                    hasActivePanel = false;
+                }
+            }
         });
 
-        // Range sliders value display
-        const updateRangeValue = (inputId, valueId) => {
-            const input = document.getElementById(inputId);
-            const valueDisplay = document.getElementById(valueId);
+        // Mostra/nascondi lo stato vuoto
+        emptyConfigState.style.display = hasActivePanel ? 'none' : 'block';
+    }
 
+    // Inizializza lo stato del modello visualizzato (per OpenAI)
+    const updateModelDisplay = () => {
+        const modelSelect = document.getElementById('gpt_model');
+        const modelDisplay = document.getElementById('openai-model-display');
+
+        if (modelSelect && modelDisplay) {
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            let displayText = '';
+
+            if (selectedOption.value === 'gpt-4o') {
+                displayText = '4o';
+            } else if (selectedOption.value === 'gpt-4-turbo') {
+                displayText = '4 Turbo';
+            } else if (selectedOption.value === 'gpt-3.5-turbo') {
+                displayText = '3.5 Turbo';
+            } else {
+                displayText = selectedOption.value.replace('gpt-', '');
+            }
+
+            modelDisplay.textContent = displayText;
+        }
+    };
+
+    // Inizializza la visualizzazione del modello corrente
+    updateModelDisplay();
+
+    // Aggiorna la visualizzazione quando il modello cambia
+    const gptModelSelect = document.getElementById('gpt_model');
+    if (gptModelSelect) {
+        gptModelSelect.addEventListener('change', updateModelDisplay);
+    }
+
+    // Engine selection
+    const engineCards = document.querySelectorAll('.engine-card');
+    const configPanels = document.querySelectorAll('.config-panel');
+
+    // Add event listeners to engine selection buttons
+    document.querySelectorAll('.select-engine').forEach(button => {
+        button.addEventListener('click', function() {
+            // Controlla se abbiamo una chiave per questo motore
+            const engine = this.getAttribute('data-engine');
+
+            // Verifica chiave valida prima di procedere
+            let engineHasKey = false;
+            if (engine === 'openai' && document.getElementById('openai-status').classList.contains('api-key-status-success')) {
+                engineHasKey = true;
+            } else if (engine === 'claude' && document.getElementById('claude-status').classList.contains('api-key-status-success')) {
+                engineHasKey = true;
+            } else if (engine === 'deepseek' && document.getElementById('deepseek-status').classList.contains('api-key-status-success')) {
+                engineHasKey = true;
+            } else if (engine === 'gemini' && document.getElementById('gemini-status').classList.contains('api-key-status-success')) {
+                engineHasKey = true;
+            }
+
+            if (!engineHasKey) {
+                showToast(`Impossibile selezionare ${engine}: chiave API mancante o non valida`, 'warning');
+                return;
+            }
+
+            // Ottieni la versione del modello selezionato
+            const modelSelect = document.querySelector(`#${engine}_model`);
+            const modelVersion = modelSelect ? modelSelect.value : '';
+
+            // Update UI for selected engine
+            engineCards.forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.getElementById(`${engine}-card`).classList.add('selected');
+
+            // Update button styles
+            document.querySelectorAll('.select-engine').forEach(btn => {
+                if (btn.getAttribute('data-engine') === engine) {
+                    btn.classList.remove('btn-outline-primary');
+                    btn.classList.add('btn-primary');
+                    btn.textContent = 'Selezionato';
+                } else {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline-primary');
+                    btn.textContent = 'Seleziona';
+                }
+            });
+
+            // Show corresponding config panel
+            configPanels.forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.getElementById(`${engine}-config`).classList.add('active');
+
+            // Nascondi lo stato vuoto della configurazione
+            document.getElementById('empty-config-state').style.display = 'none';
+
+            // Update status indicators
+            engineCards.forEach(card => {
+                const statusSpan = card.querySelector('.fw-medium span');
+                if (card.classList.contains('selected')) {
+                    statusSpan.textContent = 'Attivo';
+                    statusSpan.className = 'text-success';
+                } else {
+                    statusSpan.textContent = 'Inattivo';
+                    statusSpan.className = 'text-secondary';
+                }
+            });
+
+            // Salva la selezione del motore via AJAX
+            const formData = new FormData();
+            formData.append('action', 'select_engine');
+            formData.append('engine', engine);
+            formData.append('model_version', modelVersion);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+            fetch('{% url "ia_engine" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Motore selezionato: ' + engine, 'success');
+                } else {
+                    showToast('Errore nella selezione del motore: ' + (data.message || 'Errore sconosciuto'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Errore di comunicazione', 'danger');
+            });
+        });
+    });
+
+    // Range sliders value display
+    const updateRangeValue = (inputId, valueId) => {
+        const input = document.getElementById(inputId);
+        const valueDisplay = document.getElementById(valueId);
+
+        if (input && valueDisplay) {
             input.addEventListener('input', function() {
                 valueDisplay.textContent = this.value;
             });
-        };
-
-        updateRangeValue('gpt-temperature', 'gpt-temperature-value');
-        updateRangeValue('claude-temperature', 'claude-temperature-value');
-        updateRangeValue('deepseek-temperature', 'deepseek-temperature-value');
-        updateRangeValue('gemini-temperature', 'gemini-temperature-value');
-
-        // Toggle password visibility
-        document.querySelectorAll('.toggle-password').forEach(button => {
-            button.addEventListener('click', function() {
-                const targetId = this.getAttribute('data-target');
-                const input = document.getElementById(targetId);
-                const icon = this.querySelector('i');
-
-                if (input.type === 'password') {
-                    input.type = 'text';
-                    icon.classList.remove('bi-eye');
-                    icon.classList.add('bi-eye-slash');
-                } else {
-                    input.type = 'password';
-                    icon.classList.remove('bi-eye-slash');
-                    icon.classList.add('bi-eye');
-                }
-            });
-        });
-
-        // Reset to defaults
-        document.getElementById('reset-defaults-btn').addEventListener('click', function() {
-            const activeEngine = document.querySelector('.config-panel.active').id.split('-')[0];
-
-            switch(activeEngine) {
-                case 'openai':
-                    document.getElementById('gpt-temperature').value = '0.7';
-                    document.getElementById('gpt-temperature-value').textContent = '0.7';
-                    document.getElementById('gpt_max_tokens').value = '4096';
-                    document.getElementById('gpt_timeout').value = '60';
-                    document.getElementById('gpt_model').value = 'gpt-3.5-turbo';
-                    updateModelDisplay(); // Aggiorna la visualizzazione del modello
-                    break;
-                case 'claude':
-                    document.getElementById('claude-temperature').value = '0.5';
-                    document.getElementById('claude-temperature-value').textContent = '0.5';
-                    document.getElementById('claude_max_tokens').value = '4096';
-                    document.getElementById('claude_timeout').value = '90';
-                    document.getElementById('claude_model').value = 'claude-3-7-sonnet';
-                    break;
-                case 'deepseek':
-                    document.getElementById('deepseek-temperature').value = '0.4';
-                    document.getElementById('deepseek-temperature-value').textContent = '0.4';
-                    document.getElementById('deepseek_max_tokens').value = '2048';
-                    document.getElementById('deepseek_timeout').value = '30';
-                    document.getElementById('deepseek_model').value = 'deepseek-coder';
-                    break;
-                case 'gemini':
-                    document.getElementById('gemini-temperature').value = '0.7';
-                    document.getElementById('gemini-temperature-value').textContent = '0.7';
-                    document.getElementById('gemini_max_tokens').value = '8192';
-                    document.getElementById('gemini_timeout').value = '60';
-                    document.getElementById('gemini_model').value = 'gemini-1.5-pro';
-                    break;
-            }
-
-            // Show success toast
-            showToast('Valori ripristinati con successo', 'success');
-        });
-
-        // Sostituiamo l'handler con il form submit standard
-        document.getElementById('api-keys-form').addEventListener('submit', function(e) {
-            // Mostra stato di caricamento nel pulsante
-            const submitBtn = this.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
-            }
-        });
-
-        // Gestione delle opzioni API key
-        document.querySelectorAll('input[name="api_mode"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const personalKeysSection = document.getElementById('personal-keys-section');
-                if (this.value === 'personal') {
-                    personalKeysSection.style.display = 'block';
-                } else {
-                    personalKeysSection.style.display = 'none';
-                }
-            });
-        });
-
-        // Toast function
-        function showToast(message, type = 'info') {
-            // Create toast container if it doesn't exist
-            let toastContainer = document.querySelector('.toast-container');
-            if (!toastContainer) {
-                toastContainer = document.createElement('div');
-                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-                document.body.appendChild(toastContainer);
-            }
-
-            // Create toast element
-            const toastEl = document.createElement('div');
-            toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
-            toastEl.setAttribute('role', 'alert');
-            toastEl.setAttribute('aria-live', 'assertive');
-            toastEl.setAttribute('aria-atomic', 'true');
-
-            toastEl.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">
-                        ${message}
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Chiudi"></button>
-                </div>
-            `;
-
-            // Add to container
-            toastContainer.appendChild(toastEl);
-
-            // Initialize and show toast
-            const toast = new bootstrap.Toast(toastEl, {
-                autohide: true,
-                delay: 3000
-            });
-            toast.show();
-
-            // Remove from DOM after hidden
-            toastEl.addEventListener('hidden.bs.toast', function() {
-                toastEl.remove();
-            });
         }
+    };
 
-        // Fix per il problema dello spinner del browser
-        setTimeout(function() {
-            if (document.readyState !== 'complete') {
-                document.readyState = 'complete';
-                window.dispatchEvent(new Event('load'));
+    updateRangeValue('gpt-temperature', 'gpt-temperature-value');
+    updateRangeValue('claude-temperature', 'claude-temperature-value');
+    updateRangeValue('deepseek-temperature', 'deepseek-temperature-value');
+    updateRangeValue('gemini-temperature', 'gemini-temperature-value');
+
+    // Toggle password visibility
+    document.querySelectorAll('.toggle-password').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            const icon = this.querySelector('i');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('bi-eye');
+                icon.classList.add('bi-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('bi-eye-slash');
+                icon.classList.add('bi-eye');
             }
-        }, 3000); // Timeout di sicurezza dopo 3 secondi
-
-        // Verifica lo stato della pagina quando il browser cambia URL
-        window.addEventListener('hashchange', function() {
-            setTimeout(function() {
-                if (document.readyState !== 'complete') {
-                    document.readyState = 'complete';
-                    window.dispatchEvent(new Event('load'));
-                }
-            }, 500);
         });
     });
+
+    // Reset to defaults
+    document.getElementById('reset-defaults-btn').addEventListener('click', function() {
+        const activeEngine = document.querySelector('.config-panel.active')?.id.split('-')[0];
+
+        if (!activeEngine) {
+            showToast("Nessun motore selezionato", "warning");
+            return;
+        }
+
+        switch(activeEngine) {
+            case 'openai':
+                document.getElementById('gpt-temperature').value = '0.7';
+                document.getElementById('gpt-temperature-value').textContent = '0.7';
+                document.getElementById('gpt_max_tokens').value = '4096';
+                document.getElementById('gpt_timeout').value = '60';
+                document.getElementById('gpt_model').value = 'gpt-3.5-turbo';
+                updateModelDisplay(); // Aggiorna la visualizzazione del modello
+                break;
+            case 'claude':
+                document.getElementById('claude-temperature').value = '0.5';
+                document.getElementById('claude-temperature-value').textContent = '0.5';
+                document.getElementById('claude_max_tokens').value = '4096';
+                document.getElementById('claude_timeout').value = '90';
+                document.getElementById('claude_model').value = 'claude-3-7-sonnet';
+                break;
+            case 'deepseek':
+                document.getElementById('deepseek-temperature').value = '0.4';
+                document.getElementById('deepseek-temperature-value').textContent = '0.4';
+                document.getElementById('deepseek_max_tokens').value = '2048';
+                document.getElementById('deepseek_timeout').value = '30';
+                document.getElementById('deepseek_model').value = 'deepseek-coder';
+                break;
+            case 'gemini':
+                document.getElementById('gemini-temperature').value = '0.7';
+                document.getElementById('gemini-temperature-value').textContent = '0.7';
+                document.getElementById('gemini_max_tokens').value = '8192';
+                document.getElementById('gemini_timeout').value = '60';
+                document.getElementById('gemini_model').value = 'gemini-1.5-pro';
+                break;
+        }
+
+        // Show success toast
+        showToast('Valori ripristinati con successo', 'success');
+    });
+
+    // Aggiungi listener per input delle chiavi API
+    document.querySelectorAll('input[type="password"]').forEach(input => {
+        input.addEventListener('input', function() {
+            updateApiKeyStatus();
+        });
+    });
+// Gestisci i form di invio delle API key
+    document.querySelectorAll('#openai-api-form, #claude-api-form, #deepseek-api-form, #gemini-api-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Ottieni i dati del form
+            const formData = new FormData(this);
+
+            // Verifica che la chiave API sia stata fornita
+            const apiKey = formData.get('api_key');
+            if (!apiKey || apiKey.trim() === '') {
+                showToast('Per favore inserisci una chiave API valida', 'warning');
+                return;
+            }
+
+            // Verifica formato in base al provider
+            const providerId = formData.get('provider_id');
+            let isValid = true;
+            let providerName = '';
+
+            // Determina il provider dal form id
+            if (this.id === 'openai-api-form') {
+                isValid = apiKey.trim().startsWith('sk-');
+                providerName = 'OpenAI';
+            } else if (this.id === 'claude-api-form') {
+                isValid = apiKey.trim().startsWith('sk-ant-');
+                providerName = 'Claude';
+            } else if (this.id === 'deepseek-api-form') {
+                isValid = apiKey.trim().startsWith('sk-');
+                providerName = 'DeepSeek';
+            } else if (this.id === 'gemini-api-form') {
+                isValid = apiKey.trim().startsWith('AIza');
+                providerName = 'Gemini';
+            }
+
+            if (!isValid) {
+                showToast(`Formato chiave ${providerName} non valido. Verifica e riprova.`, 'warning');
+                return;
+            }
+
+            // Mostra stato di caricamento
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvataggio...';
+
+            // Invia AJAX
+            fetch('{% url "ia_engine" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Ripristina bottone
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+
+                if (data.success) {
+                    showToast(data.message || `Chiave API ${providerName} salvata con successo`, 'success');
+                    updateApiKeyStatus();
+                } else {
+                    showToast(data.message || `Errore nel salvare la chiave API ${providerName}`, 'danger');
+                }
+            })
+            .catch(error => {
+                // Ripristina bottone
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+
+                console.error('Error:', error);
+                showToast(`Errore di comunicazione durante il salvataggio della chiave ${providerName}`, 'danger');
+            });
+        });
+    });
+
+    // Gestione verifica di tutte le chiavi
+    document.getElementById('validate-all-keys').addEventListener('click', function() {
+        // Mostra stato caricamento
+        const btn = this;
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Verifico le chiavi...';
+
+        // Crea FormData con tutte le chiavi da validare
+        const formData = new FormData();
+        formData.append('action', 'validate_all_keys');
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        // Aggiungi le chiavi presenti
+        ['openai', 'claude', 'deepseek', 'gemini'].forEach(provider => {
+            const input = document.getElementById(`${provider}-api-key`);
+            if (input && input.value.trim() !== '') {
+                formData.append(`${provider}_key`, input.value.trim());
+            }
+        });
+
+        // Invia richiesta
+        fetch('{% url "ia_engine" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Ripristina bottone
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+
+            if (data.success) {
+                // Aggiorna gli stati delle chiavi
+                if (data.results) {
+                    let validCount = 0;
+                    let totalCount = 0;
+
+                    for (const [provider, result] of Object.entries(data.results)) {
+                        totalCount++;
+                        if (result.valid) {
+                            validCount++;
+                            document.getElementById(`${provider}-status`).innerHTML = '<i class="bi bi-check-circle"></i> Verificata';
+                            document.getElementById(`${provider}-status`).className = 'badge api-key-status api-key-status-success';
+                        } else {
+                            document.getElementById(`${provider}-status`).innerHTML = '<i class="bi bi-x-circle"></i> Non valida';
+                            document.getElementById(`${provider}-status`).className = 'badge api-key-status api-key-status-danger';
+                        }
+                    }
+
+                    showToast(`Verifica completata: ${validCount}/${totalCount} chiavi valide`, validCount === totalCount ? 'success' : 'warning');
+                } else {
+                    showToast('Verifica completata', 'success');
+                }
+
+                updateApiKeyStatus();
+            } else {
+                showToast(data.message || 'Errore durante la verifica delle chiavi', 'danger');
+            }
+        })
+        .catch(error => {
+            // Ripristina bottone
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+
+            console.error('Error:', error);
+            showToast('Errore di comunicazione durante la verifica delle chiavi', 'danger');
+        });
+    });
+
+    // Toast function
+    function showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+
+        // Create toast element
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+
+        toastEl.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Chiudi"></button>
+            </div>
+        `;
+
+        // Add to container
+        toastContainer.appendChild(toastEl);
+
+        // Initialize and show toast
+        const toast = new bootstrap.Toast(toastEl, {
+            autohide: true,
+            delay: 3000
+        });
+        toast.show();
+
+        // Remove from DOM after hidden
+        toastEl.addEventListener('hidden.bs.toast', function() {
+            toastEl.remove();
+        });
+    }
+
+    // Esegui la verifica iniziale dello stato delle chiavi API
+    updateApiKeyStatus();
+});
 </script>
 {% endblock %}

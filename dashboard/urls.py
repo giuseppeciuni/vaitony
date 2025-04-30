@@ -33,6 +33,7 @@ urlpatterns = [
     path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
     path('project/<int:project_id>/config/', views.project_config, name='project_config'),
 
+
     # Nuove URL per le impostazioni
     path('settings/ia-engine/', views.ia_engine, name='ia_engine'),
     path('settings/rag/', views.rag_settings, name='rag_settings'),
@@ -41,4 +42,5 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    #urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

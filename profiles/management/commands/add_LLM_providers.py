@@ -1,7 +1,7 @@
 # management/commands/initialize_llm_providers.py
 
 from django.core.management.base import BaseCommand, CommandError
-from profiles.models import LLMProvider, LLMEngine, DefaultSystemPrompts
+from profiles.models import LLMProvider, LLMEngine, DefaultSystemPrompts, UserCustomPrompt
 import logging
 
 # Get logger
@@ -24,6 +24,10 @@ class Command(BaseCommand):
 			# Creazione dei prompt di sistema predefiniti
 			self.stdout.write('Creazione dei prompt di sistema predefiniti...')
 			create_default_system_prompts()
+
+			# Migrazione dei prompt esistenti (se necessario)
+			self.stdout.write('Migrazione dei prompt esistenti...')
+			migrate_existing_prompts()
 
 			self.stdout.write(
 				self.style.SUCCESS('Provider, motori LLM e prompt predefiniti inizializzati con successo'))
@@ -399,3 +403,46 @@ Il tuo obiettivo è aiutare l'utente a raggiungere i suoi obiettivi nel modo pi�
 			# Crea un nuovo prompt
 			prompt = DefaultSystemPrompts.objects.create(**prompt_data)
 			logger.debug(f"Creato prompt di sistema: {prompt.name}")
+
+
+def migrate_existing_prompts():
+	"""
+	Migra i prompt di sistema esistenti alla nuova struttura,
+	verificando e aggiornando le configurazioni ProjectLLMConfig esistenti.
+	"""
+	from profiles.models import Project, ProjectLLMConfig
+
+	# Ottieni il prompt di sistema predefinito
+	default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+
+	if not default_prompt:
+		logger.warning("Nessun prompt predefinito trovato, impossibile migrare i prompt esistenti")
+		return
+
+	# Per ogni configurazione LLM esistente
+	for config in ProjectLLMConfig.objects.all():
+		try:
+			# Verifica se i nuovi campi sono già stati popolati
+			has_default_prompt = hasattr(config, 'default_system_prompt') and config.default_system_prompt is not None
+			has_system_prompt_field = hasattr(config, 'system_prompt')
+			has_system_prompt_override = hasattr(config, 'system_prompt_override')
+
+			if not has_default_prompt:
+				# Se il nuovo campo default_system_prompt non è popolato, imposta il default
+				config.default_system_prompt = default_prompt
+
+			# Gestisci la migrazione dal vecchio campo system_prompt
+			if has_system_prompt_field and not has_system_prompt_override:
+				old_prompt_text = getattr(config, 'system_prompt', '')
+
+				if old_prompt_text:
+					# Se c'è un prompt personalizzato, spostalo nel campo override
+					config.system_prompt_override = old_prompt_text
+					# Imposta il prompt predefinito
+					config.default_system_prompt = default_prompt
+					logger.debug(f"Migrato prompt personalizzato per il progetto {config.project.name}")
+
+			config.save()
+
+		except Exception as e:
+			logger.error(f"Errore nella migrazione del prompt per il progetto {config.project.id}: {e}")

@@ -1480,8 +1480,3 @@ def log_rag_query(sender, instance, created, **kwargs):
 
         except UserSubscription.DoesNotExist:
             pass
-
-
-
-
-

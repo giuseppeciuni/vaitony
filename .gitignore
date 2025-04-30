@@ -183,3 +183,11 @@ cython_debug/
 
 # Other
 *.csv
+
+# .gitignore
+media/
+**/embedding_cache/
+*.env
+.env
+
+

@@ -215,6 +215,7 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
         # Carica l'embedding dalla cache
         from langchain_community.embeddings import OpenAIEmbeddings
         from langchain_community.vectorstores import FAISS
+        from profiles.models import ProjectFile
 
         # Inizializza l'oggetto embeddings con la chiave API appropriata
         embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key_for_embedding(project.user))
@@ -227,6 +228,20 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
         cached_vectordb.save_local(project_index_path)
         logger.info(f"Embedding copiato dalla cache all'indice del progetto {project.id}")
 
+        # Verifica che i file di origine siano inclusi nell'indice
+        try:
+            # Trova il file nel progetto per cui stiamo usando la cache
+            file_hash = cache_info['cache_id']
+            file = ProjectFile.objects.filter(project=project, file_hash=file_hash).first()
+
+            if file:
+                logger.info(f"Verificato che il file {file.filename} con hash {file_hash} è incluso nell'indice")
+            else:
+                logger.warning(
+                    f"File con hash {file_hash} non trovato nel progetto, potrebbe causare problemi di ricerca")
+        except Exception as verify_err:
+            logger.warning(f"Errore nella verifica dei file inclusi nell'indice: {str(verify_err)}")
+
         # Aggiorna lo stato dell'indice del progetto nel database
         update_project_index_status(project)
 
@@ -234,7 +249,6 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
     except Exception as e:
         logger.error(f"Errore nella copia dell'embedding dalla cache globale al progetto {project.id}: {str(e)}")
         return False
-
 
 def check_project_index_update_needed(project):
     """

@@ -2,7 +2,7 @@
 
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
-from profiles.models import RagTemplateType, RagDefaultSettings, Project, ProjectLLMConfig, DefaultSystemPrompts, \
+from profiles.models import RagTemplateType, RagDefaultSettings, Project, ProjectLLMConfiguration, DefaultSystemPrompts, \
 	UserCustomPrompt
 import logging
 
@@ -52,6 +52,19 @@ class Command(BaseCommand):
 			{
 				"name": "Personalizzato",
 				"description": "Configurazione personalizzata dall'utente."
+			},
+			# Nuovi tipi di template aggiunti
+			{
+				"name": "Massima Precisione",
+				"description": "Configurazione ottimizzata per la massima precisione e accuratezza delle risposte, ideale per documenti scientifici, legali o tecnici."
+			},
+			{
+				"name": "Massima Velocità",
+				"description": "Configurazione ottimizzata per la massima velocità di risposta, ideale per chat in tempo reale o risposta istantanea."
+			},
+			{
+				"name": "Contesto Esteso",
+				"description": "Configurazione ottimizzata per catturare relazioni complesse e fornire ampio contesto nelle risposte."
 			}
 		]
 
@@ -118,11 +131,63 @@ Linee guida:
 5. Identifica rapidamente i documenti più pertinenti per la domanda
 6. Rispondi solo con informazioni presenti nei documenti forniti"""
 
+		# Prompt per i nuovi template
+		max_precise_prompt_text = """Sei un assistente di altissima precisione analitica, progettato per fornire risposte estremamente accurate e rigorose.
+
+MASSIMA PRECISIONE: Utilizza ESCLUSIVAMENTE le informazioni presenti nei documenti forniti, con assoluta fedeltà ai contenuti originali.
+Non aggiungere interpretazioni personali, non generalizzare e non utilizzare conoscenze esterne.
+
+Linee guida stringenti:
+1. Analizza meticolosamente ogni dettaglio nei documenti con attenzione scientifica
+2. Cita sempre la fonte specifica per ogni informazione, incluso il documento e la sezione precisa
+3. Utilizza esattamente la stessa terminologia presente nei documenti, mantenendo il linguaggio tecnico originale
+4. Se esistono discrepanze tra fonti, evidenziale chiaramente senza tentare di risolverle
+5. Se una domanda non può essere risposta con i documenti disponibili, rifiuta esplicitamente di rispondere
+6. Per informazioni numeriche e dati, riporta esattamente i valori presenti nei documenti
+7. Mantieni un tono oggettivo, neutrale e distaccato che privilegia l'accuratezza sopra ogni cosa
+
+Il tuo obiettivo è fornire l'informazione più precisa possibile, anche se questo significa una risposta più breve o limitata."""
+
+		max_speed_prompt_text = """Sei un assistente ultra-rapido progettato per offrire risposte istantanee basate sui documenti.
+
+MASSIMA VELOCITÀ: Fornisci risposte immediate, concise ed essenziali utilizzando solo le informazioni più rilevanti.
+
+Linee guida per velocità:
+1. Rispondi con la massima brevità possibile, in genere 1-3 frasi
+2. Vai direttamente al punto, eliminando qualsiasi dettaglio non essenziale
+3. Identifica e riporta solo l'informazione principale che risponde alla domanda
+4. Utilizza un linguaggio semplice e diretto
+5. Evita spiegazioni elaborate, esempi o contesto non richiesto
+6. Non includere citazioni dettagliate o riferimenti agli specifici documenti
+7. Per domande complesse, fornisci solo i punti principali in forma di elenco breve
+
+L'efficienza è la tua priorità assoluta. Sii diretto, immediato e risolutivo."""
+
+		ext_context_prompt_text = """Sei un assistente specializzato nell'analisi di relazioni complesse tra informazioni distribuite in documenti diversi.
+
+CONTESTO ESTESO: La tua forza è identificare connessioni, pattern e relazioni tra concetti anche distanti tra loro nei documenti.
+
+Linee guida per contesto ampio:
+1. Cerca attivamente collegamenti tra informazioni distribuite in documenti diversi
+2. Identifica temi ricorrenti, concetti correlati e pattern che emergono dall'intero corpus
+3. Offri una visione d'insieme che sintetizzi più fonti quando possibile
+4. Evidenzia le relazioni causa-effetto, cronologiche o concettuali tra diverse informazioni
+5. Quando appropriato, metti in relazione dettagli specifici con il quadro generale
+6. Usa un tono riflessivo che aiuta a comprendere il contesto più ampio
+7. Incorpora prospettive diverse presenti nei documenti per una comprensione più ricca
+
+Il tuo obiettivo è fornire non solo risposte basate sui documenti, ma anche aiutare a comprendere come le diverse informazioni si colleghino tra loro in un contesto più ampio."""
+
 		# Ottieni i tipi di template
 		try:
 			balanced_type = RagTemplateType.objects.get(name="Bilanciato")
 			precise_type = RagTemplateType.objects.get(name="Alta Precisione")
 			fast_type = RagTemplateType.objects.get(name="Velocità")
+
+			# Ottieni i nuovi tipi di template
+			max_precise_type = RagTemplateType.objects.get(name="Massima Precisione")
+			max_speed_type = RagTemplateType.objects.get(name="Massima Velocità")
+			ext_context_type = RagTemplateType.objects.get(name="Contesto Esteso")
 		except RagTemplateType.DoesNotExist as e:
 			logger.error(f"Tipo di template non trovato: {e}")
 			raise Exception("Tipi di template necessari non trovati. Esegui prima create_template_types.")
@@ -218,6 +283,114 @@ Linee guida:
 				"equal_notes_weight": True,
 				"strict_context": False,
 				"is_default": False
+			},
+
+			# MASSIMA PRECISIONE (nuovo)
+			{
+				"name": "Massima Precisione Standard",
+				"description": "Ottimizzato per garantire risposte estremamente accurate a scapito della velocità. Utilizza chunk piccoli e top-k elevato per massimizzare la precisione delle informazioni recuperate.",
+				"template_type": max_precise_type,
+				"chunk_size": 300,
+				"chunk_overlap": 100,
+				"similarity_top_k": 10,
+				"mmr_lambda": 0.9,
+				"similarity_threshold": 0.85,
+				"retriever_type": "similarity_score_threshold",
+				"system_prompt": max_precise_prompt_text,
+				"auto_citation": True,
+				"prioritize_filenames": True,
+				"equal_notes_weight": False,
+				"strict_context": True,
+				"is_default": True
+			},
+			{
+				"name": "Massima Precisione Scientifica",
+				"description": "Configurazione specifica per documenti scientifici e accademici. Massimizza l'accuratezza e il rigore nelle citazioni.",
+				"template_type": max_precise_type,
+				"chunk_size": 250,
+				"chunk_overlap": 150,
+				"similarity_top_k": 12,
+				"mmr_lambda": 0.95,
+				"similarity_threshold": 0.9,
+				"retriever_type": "similarity_score_threshold",
+				"system_prompt": max_precise_prompt_text,
+				"auto_citation": True,
+				"prioritize_filenames": True,
+				"equal_notes_weight": False,
+				"strict_context": True,
+				"is_default": False
+			},
+
+			# MASSIMA VELOCITÀ (nuovo)
+			{
+				"name": "Massima Velocità Standard",
+				"description": "Configurazione ottimizzata per tempi di risposta rapidi. Utilizza chunk più grandi e limita il numero di risultati per garantire l'elaborazione più veloce possibile.",
+				"template_type": max_speed_type,
+				"chunk_size": 800,
+				"chunk_overlap": 20,
+				"similarity_top_k": 3,
+				"mmr_lambda": 1.0,
+				"similarity_threshold": 0.6,
+				"retriever_type": "similarity",
+				"system_prompt": max_speed_prompt_text,
+				"auto_citation": False,
+				"prioritize_filenames": True,
+				"equal_notes_weight": True,
+				"strict_context": False,
+				"is_default": True
+			},
+			{
+				"name": "Massima Velocità Chat",
+				"description": "Configurazione per chat in tempo reale con risposte istantanee. Minimizza l'overhead di elaborazione a favore della rapidità.",
+				"template_type": max_speed_type,
+				"chunk_size": 1000,
+				"chunk_overlap": 10,
+				"similarity_top_k": 2,
+				"mmr_lambda": 1.0,
+				"similarity_threshold": 0.5,
+				"retriever_type": "similarity",
+				"system_prompt": max_speed_prompt_text,
+				"auto_citation": False,
+				"prioritize_filenames": False,
+				"equal_notes_weight": True,
+				"strict_context": False,
+				"is_default": False
+			},
+
+			# CONTESTO ESTESO (nuovo)
+			{
+				"name": "Contesto Esteso Standard",
+				"description": "Ideale per documenti complessi o risposte che richiedono ampio contesto. Utilizza un grande numero di risultati con alta sovrapposizione per catturare relazioni complesse tra le informazioni.",
+				"template_type": ext_context_type,
+				"chunk_size": 600,
+				"chunk_overlap": 150,
+				"similarity_top_k": 12,
+				"mmr_lambda": 0.5,
+				"similarity_threshold": 0.5,
+				"retriever_type": "mmr",
+				"system_prompt": ext_context_prompt_text,
+				"auto_citation": True,
+				"prioritize_filenames": False,
+				"equal_notes_weight": True,
+				"strict_context": False,
+				"is_default": True
+			},
+			{
+				"name": "Contesto Esteso per Ricerca",
+				"description": "Configurazione ideale per ricerca esplorativa e connessioni tra concetti. Massimizza la diversità delle informazioni recuperate.",
+				"template_type": ext_context_type,
+				"chunk_size": 500,
+				"chunk_overlap": 200,
+				"similarity_top_k": 15,
+				"mmr_lambda": 0.3,
+				"similarity_threshold": 0.4,
+				"retriever_type": "mmr",
+				"system_prompt": ext_context_prompt_text,
+				"auto_citation": True,
+				"prioritize_filenames": False,
+				"equal_notes_weight": True,
+				"strict_context": False,
+				"is_default": False
 			}
 		]
 
@@ -258,7 +431,7 @@ Linee guida:
 		for project in Project.objects.all():
 			try:
 				# Cerca o crea la configurazione LLM del progetto
-				config, created = ProjectLLMConfig.objects.get_or_create(project=project)
+				config, created = ProjectLLMConfiguration.objects.get_or_create(project=project)
 
 				# Se è stata appena creata o non ha un prompt predefinito assegnato
 				if created or not hasattr(config, 'default_system_prompt') or config.default_system_prompt is None:

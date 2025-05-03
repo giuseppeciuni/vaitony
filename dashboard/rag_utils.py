@@ -704,13 +704,46 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 # Rimuovi il primo file dalla lista perché l'abbiamo già usato
                 cached_files.pop(0)
 
-            # Aggiorna i documenti con l'indice dalla cache
+            # Carica i documenti dalla cache e aggiungili all'indice
             for cached_file in cached_files:
-                doc_model = cached_file['doc_model']
-                doc_model.is_embedded = True
-                doc_model.last_indexed_at = timezone.now()
-                doc_model.save(update_fields=['is_embedded', 'last_indexed_at'])
-                logger.info(f"Documento {doc_model.filename} marcato come embedded (usando cache)")
+                try:
+                    doc_model = cached_file['doc_model']
+
+                    # Carica il documento per ottenere il contenuto da aggiungere all'indice
+                    langchain_docs = load_document(doc_model.file_path)
+
+                    if langchain_docs:
+                        # Aggiungi metadati
+                        for doc in langchain_docs:
+                            doc.metadata['filename'] = doc_model.filename
+                            doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
+                            doc.metadata['source'] = doc_model.file_path
+
+                        # Ottieni impostazioni RAG per chunking
+                        rag_settings = get_project_RAG_settings(project)
+                        chunk_size = rag_settings['chunk_size']
+                        chunk_overlap = rag_settings['chunk_overlap']
+
+                        # Dividi documenti in chunk con parametri appropriati
+                        splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                        split_docs = splitter.split_documents(langchain_docs)
+                        split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
+
+                        # Aggiungi i documenti all'indice
+                        if split_docs:
+                            if vectordb:
+                                vectordb.add_documents(split_docs)
+                                logger.info(f"Aggiunti {len(split_docs)} chunk da {doc_model.filename} all'indice")
+
+                    # Marca il documento come incorporato
+                    doc_model.is_embedded = True
+                    doc_model.last_indexed_at = timezone.now()
+                    doc_model.save(update_fields=['is_embedded', 'last_indexed_at'])
+                    logger.info(f"Documento {doc_model.filename} elaborato e marcato come embedded")
+
+                except Exception as e:
+                    logger.error(f"Errore nell'elaborazione del documento {cached_file['doc_model'].filename}: {str(e)}")
+
 
         # Salva indice e aggiorna stato
         if vectordb:

@@ -1,349 +1,339 @@
 {% extends 'be/base.html' %}
+{% load custom_filter %}
 {% load static %}
 
 {% block extra_css %}
 <style>
-    .drop-zone {
-        max-width: 100%;
-        height: 200px;
-        padding: 25px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
+    /* Stili generali */
+    .main-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .create-project-card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        border-radius: 0.75rem;
+        overflow: hidden;
+    }
+
+    .card-header {
+        background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+        color: white;
+        padding: 1.5rem;
+        border: none;
+    }
+
+    .card-header h4 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    /* Sezione base del progetto */
+    .basic-info-section {
+        background: #ffffff;
+        padding: 2rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .form-label {
         font-weight: 500;
-        font-size: 20px;
-        cursor: pointer;
-        color: #cccccc;
-        border: 4px dashed #0d6efd;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        transition: all 0.3s ease;
+        color: #212529;
+        margin-bottom: 0.5rem;
     }
 
-    .drop-zone--over {
-        border-style: solid;
-        background-color: rgba(13, 110, 253, 0.1);
+    .form-control {
+        border-radius: 0.5rem;
+        border: 1px solid #ced4da;
+        padding: 0.6rem 1rem;
     }
 
-    .drop-zone__input {
-        display: none;
+    .form-control:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
     }
 
-    .project-card {
+    /* Sezioni avanzate */
+    .advanced-section {
+        background: #f8f9fa;
+        padding: 2rem;
+    }
+
+    .advanced-hint {
+        background: #e8f0fe;
         border-left: 4px solid #0d6efd;
-        background-color: #f8f9fa;
-        padding: 20px;
-        transition: all 0.3s ease;
+        padding: 1rem 1.5rem;
         border-radius: 0.5rem;
-        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        margin-bottom: 1.5rem;
     }
 
-    .project-card:hover {
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    }
-
-    .tab-content {
-        padding-top: 20px;
-    }
-
-    .upload-option {
-        padding: 15px;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        margin-bottom: 15px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .upload-option:hover, .upload-option.active {
-        border-color: #0d6efd;
-        background-color: rgba(13, 110, 253, 0.05);
-    }
-
-    .upload-option.active i {
-        color: #0d6efd;
-    }
-
-    /* Nuovi stili per le impostazioni LLM */
-    .llm-settings-card {
-        border-left: 4px solid #198754;
-        background-color: #f8f9fa;
-        padding: 20px;
-        transition: all 0.3s ease;
-        border-radius: 0.5rem;
-        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
-        margin-bottom: 20px;
-    }
-
-    .llm-settings-card:hover {
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    }
-
-    .engine-option {
-        padding: 15px;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        margin-bottom: 10px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .engine-option:hover, .engine-option.active {
-        border-color: #198754;
-        background-color: rgba(25, 135, 84, 0.05);
-    }
-
-    .engine-option.active i {
-        color: #198754;
-    }
-
-    .provider-logo {
-        max-height: 30px;
-        max-width: 100px;
-    }
-
-    .prompt-option {
-        padding: 15px;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        margin-bottom: 10px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .prompt-option:hover, .prompt-option.active {
-        border-color: #198754;
-        background-color: rgba(25, 135, 84, 0.05);
-    }
-
-    .prompt-option.active i {
-        color: #198754;
-    }
-
-    .no-api-keys-card {
-        border-left: 4px solid #dc3545;
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 0.5rem;
-        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
-        margin-bottom: 20px;
+    .advanced-hint p {
+        margin: 0;
+        color: #1967d2;
     }
 
     /* Accordion personalizzato */
-    .custom-accordion-button {
-        position: relative;
-        display: flex;
-        align-items: center;
-        width: 100%;
-        padding: 1rem;
-        font-size: 1rem;
+    .custom-accordion {
+        background: #ffffff;
+        border-radius: 0.5rem;
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+    }
+
+    .accordion-header {
+        background: #f8f9fa;
+        border: none;
+        padding: 0;
+    }
+
+    .accordion-button {
+        background: #f8f9fa;
         color: #212529;
-        text-align: left;
-        background-color: #f8f9fa;
-        border: 0;
-        border-radius: 0.25rem;
-        overflow-anchor: none;
-        transition: all 0.2s ease;
+        font-weight: 500;
+        padding: 1rem 1.5rem;
+        border: none;
+        box-shadow: none;
     }
 
-    .custom-accordion-button:not(.collapsed) {
-        color: #0c63e4;
-        background-color: #e7f1ff;
-    }
-
-    .custom-accordion-button:not(.collapsed)::after {
-        transform: rotate(180deg);
-    }
-
-    .custom-accordion-button::after {
-        flex-shrink: 0;
-        width: 1.25rem;
-        height: 1.25rem;
-        margin-left: auto;
-        content: "";
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23212529'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
-        background-repeat: no-repeat;
-        background-size: 1.25rem;
-        transition: transform 0.2s ease-in-out;
-    }
-
-    /* Stili per la visualizzazione paginata dei file */
-    .files-preview {
-        max-height: 400px;
-        overflow-y: auto;
-        margin-top: 15px;
-        padding: 10px;
-        border-radius: 5px;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-    }
-
-    .file-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px;
-        border-bottom: 1px solid #e9ecef;
-        background-color: white;
-        border-radius: 5px;
-        margin-bottom: 8px;
-        transition: all 0.2s ease;
-    }
-
-    .file-item:hover {
-        background-color: #f8f9fa;
-        transform: translateY(-2px);
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-    }
-
-    .file-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .file-icon {
-        margin-right: 10px;
+    .accordion-button:not(.collapsed) {
+        background: #e9ecef;
         color: #0d6efd;
     }
 
-    .file-item .file-actions {
-        display: flex;
-        align-items: center;
+    .accordion-button::after {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23212529'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
     }
 
-    .file-item .file-actions button {
-        background: none;
-        border: none;
-        color: #dc3545;
-        cursor: pointer;
-        transition: all 0.2s ease;
+    .accordion-button:not(.collapsed)::after {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230d6efd'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
     }
 
-    .file-item .file-actions button:hover {
-        color: #b02a37;
-        transform: scale(1.1);
+    .accordion-body {
+        padding: 1.5rem;
     }
 
-    .file-item .file-info {
-        display: flex;
-        align-items: center;
-        flex: 1;
+    /* Provider e Engine */
+    .provider-list {
+        max-height: 400px;
+        overflow-y: auto;
     }
 
-    .file-item .file-name {
-        font-weight: 500;
-        color: #212529;
-        flex: 1;
-        margin-right: 10px;
-        white-space: nowrap;
+    .provider-item {
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
         overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 400px;
     }
 
-    .file-item .file-size {
+    .provider-header {
+        padding: 1rem;
+        background: #ffffff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .provider-header:hover {
+        background: #f8f9fa;
+    }
+
+    .provider-header.active {
+        background: #e8f0fe;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .provider-name {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+    }
+
+    .provider-icon {
+        font-size: 1.25rem;
+    }
+
+    .engine-list {
+        background: #f8f9fa;
+        padding: 0.5rem;
+        display: none;
+    }
+
+    .engine-item {
+        padding: 0.75rem 1rem;
+        border-radius: 0.375rem;
+        margin-bottom: 0.5rem;
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        cursor: pointer;
+    }
+
+    .engine-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .engine-item:hover {
+        border-color: #0d6efd;
+        background: #f8f9fa;
+    }
+
+    .engine-item.selected {
+        border-color: #0d6efd;
+        background: #e8f0fe;
+    }
+
+    /* RAG Presets */
+    .rag-info {
+        background: #e8f0fe;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .rag-presets {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    .preset-card {
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .preset-card:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+
+    .preset-card.selected {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .preset-header {
+        padding: 1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .preset-body {
+        padding: 1rem;
+        background: #ffffff;
+    }
+
+    .preset-specs {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
         font-size: 0.875rem;
         color: #6c757d;
-        white-space: nowrap;
-        padding: 0.25em 0.65em;
-        border-radius: 0.25rem;
-        background-color: #e9ecef;
+        margin-top: 0.5rem;
     }
 
-    .pagination-container {
-        display: flex;
-        justify-content: center;
-        margin-top: 15px;
+    /* Colori preset RAG */
+    .preset-balanced .preset-header {
+        background: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
     }
 
-    .page-status {
-        margin-bottom: 10px;
-        text-align: center;
-        color: #6c757d;
+    .preset-high-precision .preset-header {
+        background: rgba(25, 135, 84, 0.1);
+        color: #198754;
     }
 
-    .file-actions-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-
-    .animate-fade {
-        animation: fadeIn 0.3s ease-in-out;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .folder-path {
-        margin-bottom: 5px;
-        font-family: monospace;
-        padding: 5px 10px;
-        background-color: #e9ecef;
-        border-radius: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .folder-structure {
-        margin-bottom: 15px;
-    }
-
-    .folder-icon {
+    .preset-speed .preset-header {
+        background: rgba(255, 193, 7, 0.1);
         color: #ffc107;
     }
 
-    .file-count-badge {
-        position: relative;
-        top: -1px;
+    .preset-max-precision .preset-header {
+        background: rgba(13, 202, 240, 0.1);
+        color: #0dcaf0;
     }
 
-    /* Loading spinner overlay */
+    .preset-max-speed .preset-header {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .preset-extended-context .preset-header {
+        background: rgba(111, 66, 193, 0.1);
+        color: #6f42c1;
+    }
+
+    /* Footer */
+    .card-footer {
+        background: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+        padding: 1.5rem 2rem;
+    }
+
+    /* Alert per mancanza API */
+    .no-api-alert {
+        background: #f8d7da;
+        border: 1px solid #f5c2c7;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        color: #842029;
+    }
+
+    /* Loading spinner */
     .spinner-overlay {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background: rgba(0, 0, 0, 0.5);
         display: flex;
-        justify-content: center;
         align-items: center;
+        justify-content: center;
         z-index: 9999;
-        visibility: hidden;
         opacity: 0;
-        transition: all 0.2s ease;
+        visibility: hidden;
+        transition: all 0.3s;
     }
 
-    .spinner-overlay.visible {
-        visibility: visible;
+    .spinner-overlay.show {
         opacity: 1;
+        visibility: visible;
     }
 
-    .spinner-container {
-        background-color: white;
-        padding: 30px;
-        border-radius: 10px;
+    .spinner-box {
+        background: #ffffff;
+        padding: 2rem;
+        border-radius: 0.5rem;
         text-align: center;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
     }
 
-    .spinner-text {
-        margin-top: 15px;
-        color: #0d6efd;
+    /* Utilities */
+    .text-muted-sm {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .badge-default {
+        background: #0d6efd;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
         font-weight: 500;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-{# INIZIO NAVIGAZIONE SOTTONAVBAR #}
 <div class="app-content-header">
-    <div class="container-fluid">
+    <div class="container-fluid px-2">
         <div class="row">
             <div class="col-sm-6">
                 <h3 class="mb-0">Nuovo Progetto</h3>
@@ -352,1132 +342,595 @@
                 <ol class="breadcrumb float-sm-end">
                     <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'projects_list' %}">Progetti</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Nuovo Progetto</li>
+                    <li class="breadcrumb-item active">Nuovo Progetto</li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
-{# FINE NAVIGAZIONE SOTTONAVBAR #}
 
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        {% if messages %}
-        <div class="messages mb-4">
-            {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
+<div class="main-container px-3 py-4">
+    {% if messages %}
+    <div class="messages mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
-        {% endif %}
-
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-primary text-white">
-                <h3 class="card-title mb-0"><i class="bi bi-plus-square me-2"></i> Crea un nuovo progetto</h3>
-            </div>
-            <div class="card-body">
-                <form action="{% url 'new_project' %}" method="post" enctype="multipart/form-data" id="new-project-form">
-                    {% csrf_token %}
-
-                    <!-- Dettagli Progetto -->
-                    <div class="project-card mb-4">
-                        <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>Informazioni Progetto</h5>
-                        <div class="mb-3">
-                            <label for="project-name" class="form-label">Nome Progetto <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="project-name" name="project_name" required>
-                            <div class="form-text">Scegli un nome chiaro e descrittivo per il tuo progetto</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="project-description" class="form-label">Descrizione Progetto</label>
-                            <textarea class="form-control" id="project-description" name="description" rows="3"></textarea>
-                            <div class="form-text">Breve descrizione di cosa riguarda questo progetto (opzionale)</div>
-                        </div>
-                    </div>
-
-                    <!-- Impostazioni LLM -->
-                    {% if has_api_keys %}
-                    <div class="llm-settings-card mb-4">
-                        <h5 class="mb-3"><i class="bi bi-robot me-2"></i>Impostazioni Motore IA</h5>
-
-                        <div class="accordion" id="llmSettingsAccordion">
-                            <!-- Selezione Motore -->
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingEngineSelection">
-                                    <button class="custom-accordion-button" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#collapseEngineSelection" aria-expanded="true"
-                                            aria-controls="collapseEngineSelection">
-                                        <i class="bi bi-cpu me-2"></i> Selezione Motore IA
-                                    </button>
-                                </h2>
-                                <div id="collapseEngineSelection" class="accordion-collapse collapse show"
-                                    aria-labelledby="headingEngineSelection" data-bs-parent="#llmSettingsAccordion">
-                                    <div class="accordion-body">
-                                        <div class="mb-3">
-                                            <p class="text-muted">Seleziona il motore IA per questo progetto in base alle chiavi API disponibili.</p>
-
-                                            <div class="row">
-                                                {% for provider in available_providers %}
-                                                <div class="col-12 mb-3">
-                                                    <h6 class="border-bottom pb-2">
-                                                        {% if provider.logo %}
-                                                        <img src="{{ provider.logo.url }}" alt="{{ provider.name }}" class="provider-logo me-2">
-                                                        {% else %}
-                                                        <i class="bi bi-braces-asterisk me-2"></i>
-                                                        {% endif %}
-                                                        {{ provider.name }}
-                                                    </h6>
-
-                                                    {% for engine in provider.engines %}
-                                                    <div class="engine-option {% if engine.is_default %}active{% endif %}" data-engine-id="{{ engine.id }}">
-                                                        <div class="form-check">
-                                                            <input class="form-check-input engine-radio" type="radio"
-                                                                name="engine_id" id="engine{{ engine.id }}"
-                                                                value="{{ engine.id }}"
-                                                                {% if engine.is_default %}checked{% endif %}
-                                                                data-temperature="{{ engine.default_temperature }}"
-                                                                data-max-tokens="{{ engine.default_max_tokens }}"
-                                                                data-timeout="{{ engine.default_timeout }}">
-                                                            <label class="form-check-label d-flex justify-content-between align-items-center" for="engine{{ engine.id }}">
-                                                                <span>
-                                                                    <strong>{{ engine.name }}</strong>
-                                                                    <p class="text-muted mb-0 small">{{ engine.description }}</p>
-                                                                </span>
-                                                                {% if engine.supports_vision %}
-                                                                <span class="badge bg-info">Vision</span>
-                                                                {% endif %}
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    {% endfor %}
-                                                </div>
-                                                {% endfor %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Parametri Motore -->
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingEngineParams">
-                                    <button class="custom-accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#collapseEngineParams" aria-expanded="false"
-                                            aria-controls="collapseEngineParams">
-                                        <i class="bi bi-sliders me-2"></i> Parametri del Modello
-                                    </button>
-                                </h2>
-                                <div id="collapseEngineParams" class="accordion-collapse collapse"
-                                    aria-labelledby="headingEngineParams" data-bs-parent="#llmSettingsAccordion">
-                                    <div class="accordion-body">
-                                        <div class="row">
-                                            <div class="col-md-6 mb-3">
-                                                <label for="temperature" class="form-label">Temperatura</label>
-                                                <input type="range" class="form-range" min="0" max="1" step="0.1"
-                                                    id="temperature" name="temperature" value="0.7">
-                                                <div class="d-flex justify-content-between">
-                                                    <span class="small text-muted">Più preciso</span>
-                                                    <span class="small fw-bold" id="temperature-value">0.7</span>
-                                                    <span class="small text-muted">Più creativo</span>
-                                                </div>
-                                            </div>
-
-                                            <div class="col-md-6 mb-3">
-                                                <label for="max-tokens" class="form-label">Lunghezza Massima Output</label>
-                                                <select class="form-select" id="max-tokens" name="max_tokens">
-                                                    <option value="1024">Breve (1.024 token)</option>
-                                                    <option value="2048">Medio (2.048 token)</option>
-                                                    <option value="4096" selected>Standard (4.096 token)</option>
-                                                    <option value="8192">Lungo (8.192 token)</option>
-                                                    <option value="16384">Molto Lungo (16.384 token)</option>
-                                                </select>
-                                            </div>
-
-                                            <div class="col-md-6 mb-3">
-                                                <label for="timeout" class="form-label">Timeout Richiesta (secondi)</label>
-                                                <input type="number" class="form-control" id="timeout" name="timeout"
-                                                    value="60" min="10" max="300">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Prompt di Sistema -->
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingPromptSelection">
-                                    <button class="custom-accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#collapsePromptSelection" aria-expanded="false"
-                                            aria-controls="collapsePromptSelection">
-                                        <i class="bi bi-chat-square-text me-2"></i> Prompt di Sistema
-                                    </button>
-                                </h2>
-                                <div id="collapsePromptSelection" class="accordion-collapse collapse"
-                                    aria-labelledby="headingPromptSelection" data-bs-parent="#llmSettingsAccordion">
-                                    <div class="accordion-body">
-                                        <div class="mb-3">
-                                            <p class="text-muted">Scegli un prompt di sistema per l'IA o crea il tuo prompt personalizzato.</p>
-
-                                            <div class="row mb-3">
-                                                <div class="col-12">
-                                                    <div class="form-check form-check-inline">
-                                                        <input class="form-check-input" type="radio" name="prompt_type"
-                                                            id="defaultPrompt" value="default" checked>
-                                                        <label class="form-check-label" for="defaultPrompt">
-                                                            Usa prompt predefinito
-                                                        </label>
-                                                    </div>
-                                                    <div class="form-check form-check-inline">
-                                                        <input class="form-check-input" type="radio" name="prompt_type"
-                                                            id="customPrompt" value="custom">
-                                                        <label class="form-check-label" for="customPrompt">
-                                                            Crea prompt personalizzato
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div id="defaultPromptSection">
-                                                <label class="form-label">Seleziona un Prompt di Sistema Predefinito</label>
-                                                <div class="row">
-                                                    {% for prompt in system_prompts %}
-                                                    <div class="col-12">
-                                                        <div class="prompt-option {% if prompt.is_default %}active{% endif %}" data-prompt-id="{{ prompt.id }}">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input default-prompt-radio" type="radio"
-                                                                    name="default_prompt_id" id="prompt{{ prompt.id }}"
-                                                                    value="{{ prompt.id }}"
-                                                                    {% if prompt.is_default %}checked{% endif %}>
-                                                                <label class="form-check-label" for="prompt{{ prompt.id }}">
-                                                                    <strong>{{ prompt.name }}</strong>
-                                                                    <p class="text-muted mb-0 small">{{ prompt.description }}</p>
-                                                                </label>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    {% endfor %}
-                                                </div>
-                                            </div>
-
-                                            <div id="customPromptSection" class="mt-3 d-none">
-                                                <label for="system-prompt" class="form-label">Prompt di Sistema Personalizzato</label>
-                                                <textarea class="form-control" id="system-prompt" name="system_prompt"
-                                                    rows="5" placeholder="Inserisci qui il tuo prompt di sistema personalizzato..."></textarea>
-                                                <div class="form-text">
-                                                    Definisci istruzioni specifiche su come l'IA dovrebbe rispondere.
-                                                    Questo sovrascriverà il prompt di sistema predefinito.
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% else %}
-                    <!-- Messaggio Nessuna Chiave API -->
-                    <div class="no-api-keys-card mb-4">
-                        <h5 class="mb-3 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Nessuna Chiave API Configurata</h5>
-                        <p>
-                            Non hai configurato nessuna chiave API per i provider LLM. Per creare un progetto,
-                            devi configurare almeno una chiave API.
-                        </p>
-                        <a href="{% url 'ia_engine' %}" class="btn btn-primary">
-                            <i class="bi bi-key me-2"></i>Configura Chiavi API
-                        </a>
-                    </div>
-                    {% endif %}
-<!-- Opzioni di Caricamento -->
-                    <h5 class="mb-3"><i class="bi bi-file-earmark me-2"></i>File di Progetto (Opzionale)</h5>
-                    <div class="mb-4">
-                        <ul class="nav nav-tabs" id="uploadTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button"
-                                    role="tab" aria-controls="files" aria-selected="true">
-                                    <i class="bi bi-file-earmark me-1"></i>Carica File
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="folder-tab" data-bs-toggle="tab" data-bs-target="#folder" type="button"
-                                    role="tab" aria-controls="folder" aria-selected="false">
-                                    <i class="bi bi-folder me-1"></i>Carica Cartella
-                                </button>
-                            </li>
-                        </ul>
-
-                        <div class="tab-content" id="uploadTabsContent">
-                            <!-- Tab File -->
-                            <div class="tab-pane fade show active" id="files" role="tabpanel" aria-labelledby="files-tab">
-                                <div class="drop-zone" id="file-drop-zone">
-                                    <span class="drop-zone__prompt">
-                                        <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
-                                        Trascina i file qui o clicca per selezionare
-                                    </span>
-                                    <input type="file" name="files" class="drop-zone__input" id="file-input" multiple
-                                        accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
-                                </div>
-
-                                <div class="files-preview d-none" id="files-preview">
-                                    <div class="file-actions-header">
-                                        <h6 class="mb-0"><i class="bi bi-files me-2"></i><span id="file-count-badge">0</span> file selezionati</h6>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" id="clear-files-btn">
-                                            <i class="bi bi-trash me-1"></i>Cancella Tutto
-                                        </button>
-                                    </div>
-
-                                    <div class="page-status d-none" id="file-pagination-status">
-                                        Mostrando <span id="file-start-range">1</span>-<span id="file-end-range">10</span> di <span id="file-total">0</span> file
-                                    </div>
-
-                                    <div id="file-list-container">
-                                        <!-- I file saranno popolati qui da JavaScript -->
-                                    </div>
-
-                                    <div class="pagination-container mt-3" id="file-pagination">
-                                        <nav aria-label="Paginazione file">
-                                            <ul class="pagination pagination-sm">
-                                                <!-- La paginazione sarà popolata da JavaScript -->
-                                            </ul>
-                                        </nav>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Tab Cartella -->
-                            <div class="tab-pane fade" id="folder" role="tabpanel" aria-labelledby="folder-tab">
-                                <div class="drop-zone" id="folder-drop-zone">
-                                    <span class="drop-zone__prompt">
-                                        <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
-                                        Trascina la cartella qui o clicca per selezionare
-                                    </span>
-                                    <input type="file" name="folder" class="drop-zone__input" id="folder-input" webkitdirectory directory multiple
-                                        accept=".pdf,.docx,.doc,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif">
-                                </div>
-
-                                <div class="files-preview d-none" id="folder-preview">
-                                    <div class="file-actions-header">
-                                        <h6 class="mb-0">
-                                            <i class="bi bi-folder2-open me-2 folder-icon"></i>
-                                            <span id="folder-name-display">Cartella</span>
-                                            <span class="badge bg-primary ms-2 file-count-badge" id="folder-file-count-badge">0</span>
-                                        </h6>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" id="clear-folder-btn">
-                                            <i class="bi bi-trash me-1"></i>Cancella Tutto
-                                        </button>
-                                    </div>
-
-                                    <div class="folder-structure mb-3" id="folder-structure">
-                                        <!-- La struttura della cartella sarà mostrata qui -->
-                                    </div>
-
-                                    <div class="page-status d-none" id="folder-pagination-status">
-                                        Mostrando <span id="folder-start-range">1</span>-<span id="folder-end-range">10</span> di <span id="folder-total">0</span> file
-                                    </div>
-
-                                    <div id="folder-list-container">
-                                        <!-- I file saranno popolati qui da JavaScript -->
-                                    </div>
-
-                                    <div class="pagination-container mt-3" id="folder-pagination">
-                                        <nav aria-label="Paginazione file cartella">
-                                            <ul class="pagination pagination-sm">
-                                                <!-- La paginazione sarà popolata da JavaScript -->
-                                            </ul>
-                                        </nav>
-                                    </div>
-                                </div>
-                            </div>
-</div>
-                    </div>
-
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'projects_list' %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left me-2"></i>Annulla
-                        </a>
-                        <button type="submit" class="btn btn-primary" id="create-btn" {% if not has_api_keys %}disabled{% endif %}>
-                            <i class="bi bi-plus-square me-2"></i>Crea Progetto
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+        {% endfor %}
     </div>
+    {% endif %}
+
+    <form action="{% url 'new_project' %}" method="post" id="new-project-form">
+        {% csrf_token %}
+
+        <div class="card create-project-card">
+            <div class="card-header">
+                <h4><i class="bi bi-plus-square me-2"></i>Crea un nuovo progetto</h4>
+            </div>
+
+            <div class="basic-info-section">
+                <div class="mb-4">
+                    <label for="project-name" class="form-label">
+                        Nome Progetto <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="project-name"
+                           name="project_name" required
+                           placeholder="Es. Analisi documentale 2024">
+                    <div class="form-text">
+                        Scegli un nome chiaro e descrittivo per il tuo progetto
+                    </div>
+                </div>
+
+                <div class="mb-0">
+                    <label for="project-description" class="form-label">
+                        Descrizione Progetto
+                    </label>
+                    <textarea class="form-control" id="project-description"
+                              name="description" rows="3"
+                              placeholder="Descrivi brevemente lo scopo del progetto"></textarea>
+                    <div class="form-text">
+                        Una breve descrizione aiuta a ricordare lo scopo del progetto (opzionale)
+                    </div>
+                </div>
+            </div>
+
+            {% if has_api_keys %}
+            <div class="advanced-section">
+                <div class="advanced-hint">
+                    <p>
+                        <i class="bi bi-info-circle me-2"></i>
+                        Le impostazioni predefinite sono ottimali per la maggior parte dei casi.
+                        Modifica solo se hai esigenze specifiche.
+                    </p>
+                </div>
+
+                <div class="accordion" id="advancedSettingsAccordion">
+                    <!-- Motore IA -->
+                    <div class="accordion-item custom-accordion mb-3">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#collapseEngine">
+                                <i class="bi bi-cpu me-2"></i>
+                                Motore IA
+                                <span class="ms-2 text-muted-sm" id="selected-engine-display">
+                                    (Default: {{ default_engine_name|default:"Auto" }})
+                                </span>
+                            </button>
+                        </h2>
+                        <div id="collapseEngine" class="accordion-collapse collapse"
+                             data-bs-parent="#advancedSettingsAccordion">
+                            <div class="accordion-body">
+                                <p class="text-muted mb-3">
+                                    Seleziona il motore IA che desideri utilizzare per questo progetto.
+                                </p>
+
+                                <div class="provider-list">
+                                    {% for provider in available_providers %}
+                                    <div class="provider-item">
+                                        <div class="provider-header" onclick="toggleProvider({{ provider.id }})">
+                                            <input type="radio" name="provider" value="{{ provider.id }}"
+                                                   id="provider-{{ provider.id }}"
+                                                   {% if provider.has_default_engine %}checked{% endif %}>
+                                            <div class="provider-name">
+                                                {% if provider.logo %}
+                                                <img src="{{ provider.logo.url }}" alt="{{ provider.name }}"
+                                                     style="height: 24px;">
+                                                {% else %}
+                                                <i class="bi bi-cpu provider-icon"></i>
+                                                {% endif %}
+                                                {{ provider.name }}
+                                                {% if provider.has_default_engine %}
+                                                <span class="badge-default">Default</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="engine-list" id="engines-{{ provider.id }}">
+                                            {% for engine in provider.engines %}
+                                            <div class="engine-item {% if engine.is_default %}selected{% endif %}"
+                                                 onclick="selectEngine({{ engine.id }}, '{{ engine.name }}')">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio"
+                                                           name="engine_id" value="{{ engine.id }}"
+                                                           id="engine-{{ engine.id }}"
+                                                           {% if engine.is_default %}checked{% endif %}>
+                                                    <label class="form-check-label" for="engine-{{ engine.id }}">
+                                                        <strong>{{ engine.name }}</strong>
+                                                        {% if engine.supports_vision %}
+                                                        <span class="badge bg-info ms-2">Vision</span>
+                                                        {% endif %}
+                                                        <p class="text-muted mb-0 small">{{ engine.description }}</p>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configurazione RAG -->
+                    <div class="accordion-item custom-accordion">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#collapseRAG">
+                                <i class="bi bi-search me-2"></i>
+                                Configurazione RAG
+                                <span class="ms-2 text-muted-sm" id="selected-rag-display">
+                                    (Default: Bilanciato)
+                                </span>
+                            </button>
+                        </h2>
+                        <div id="collapseRAG" class="accordion-collapse collapse"
+                             data-bs-parent="#advancedSettingsAccordion">
+                            <div class="accordion-body">
+                                <div class="rag-info">
+                                    <h6><i class="bi bi-info-circle me-2"></i>Cos'è il RAG?</h6>
+                                    <p class="mb-0">
+                                        Il <strong>Retrieval Augmented Generation (RAG)</strong> è una tecnologia
+                                        che migliora le risposte dell'IA combinando la generazione di testo con
+                                        il recupero di informazioni dai tuoi documenti. Questo aumenta l'accuratezza
+                                        e la pertinenza delle risposte.
+                                    </p>
+                                </div>
+
+                                <div class="rag-presets">
+                                    <!-- Preset Bilanciato -->
+                                    <div class="preset-card preset-balanced selected" id="preset-balanced">
+                                        <div class="preset-header">
+                                            Bilanciato
+                                            <span class="badge-default">Default</span>
+                                        </div>
+                                        <div class="preset-body">
+                                            <p class="small mb-2">Configurazione equilibrata per la maggior parte dei casi d'uso.</p>
+                                            <div class="preset-specs">
+                                                <div>Chunk: 500</div>
+                                                <div>Overlap: 50</div>
+                                                <div>Top K: 6</div>
+                                                <div>Similarità: 0.7</div>
+                                            </div>
+                                            <input type="radio" name="rag_preset" value="balanced" checked hidden>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preset Alta Precisione -->
+                                    <div class="preset-card preset-high-precision" id="preset-high-precision">
+                                        <div class="preset-header">
+                                            Alta Precisione
+                                        </div>
+                                        <div class="preset-body">
+                                            <p class="small mb-2">Ottimizzato per documenti tecnici e risposte precise.</p>
+                                            <div class="preset-specs">
+                                                <div>Chunk: 400</div>
+                                                <div>Overlap: 80</div>
+                                                <div>Top K: 8</div>
+                                                <div>Similarità: 0.8</div>
+                                            </div>
+                                            <input type="radio" name="rag_preset" value="high_precision" hidden>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preset Velocità -->
+                                    <div class="preset-card preset-speed" id="preset-speed">
+                                        <div class="preset-header">
+                                            Velocità
+                                        </div>
+                                        <div class="preset-body">
+                                            <p class="small mb-2">Per risposte rapide con buona precisione.</p>
+                                            <div class="preset-specs">
+                                                <div>Chunk: 700</div>
+                                                <div>Overlap: 30</div>
+                                                <div>Top K: 4</div>
+                                                <div>Similarità: 0.6</div>
+                                            </div>
+                                            <input type="radio" name="rag_preset" value="speed" hidden>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preset Massima Precisione -->
+                                    <div class="preset-card preset-max-precision" id="preset-max-precision">
+                                        <div class="preset-header">
+                                            Massima Precisione
+                                        </div>
+                                        <div class="preset-body">
+                                            <p class="small mb-2">Per massima accuratezza e dettaglio nelle risposte.</p>
+                                            <div class="preset-specs">
+                                                <div>Chunk: 300</div>
+                                                <div>Overlap: 100</div>
+                                                <div>Top K: 10</div>
+                                                <div>Similarità: 0.85</div>
+                                            </div>
+                                            <input type="radio" name="rag_preset" value="max_precision" hidden>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preset Massima Velocità -->
+                                    <div class="preset-card preset-max-speed" id="preset-max-speed">
+                                        <div class="preset-header">
+                                            Massima Velocità
+                                        </div>
+                                        <div class="preset-body">
+                                            <p class="small mb-2">Configurazione per risposte estremamente rapide.</p>
+                                            <div class="preset-specs">
+                                                <div>Chunk: 800</div>
+                                                <div>Overlap: 20</div>
+                                                <div>Top K: 3</div>
+                                                <div>Similarità: 0.6</div>
+                                            </div>
+                                            <input type="radio" name="rag_preset" value="max_speed" hidden>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preset Contesto Esteso -->
+                                    <div class="preset-card preset-extended-context" id="preset-extended-context">
+                                        <div class="preset-header">
+                                            Contesto Esteso
+                                        </div>
+                                        <div class="preset-body">
+                                            <p class="small mb-2">Per connessioni ampie tra documenti diversi.</p>
+                                            <div class="preset-specs">
+                                                <div>Chunk: 600</div>
+                                                <div>Overlap: 150</div>
+                                                <div>Top K: 12</div>
+                                                <div>Similarità: 0.5</div>
+                                            </div>
+                                            <input type="radio" name="rag_preset" value="extended_context" hidden>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4">
+                                    <button type="button" class="btn btn-sm btn-outline-primary"
+                                            data-bs-toggle="collapse" data-bs-target="#ragGuide">
+                                        <i class="bi bi-question-circle me-1"></i>Guida alla scelta
+                                    </button>
+
+                                    <div class="collapse mt-3" id="ragGuide">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6>Come scegliere la configurazione RAG giusta?</h6>
+                                                <table class="table table-sm mt-3">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Configurazione</th>
+                                                            <th>Quando usarla</th>
+                                                            <th>Esempi di documenti</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td>Bilanciato</td>
+                                                            <td>Uso generale</td>
+                                                            <td>Documenti misti, report</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Alta Precisione</td>
+                                                            <td>Accuratezza prioritaria</td>
+                                                            <td>Manuali tecnici, normative</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Velocità</td>
+                                                            <td>Risposte rapide</td>
+                                                            <td>Testi semplici, chat</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Massima Precisione</td>
+                                                            <td>Ogni dettaglio conta</td>
+                                                            <td>Contratti, ricerca scientifica</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Massima Velocità</td>
+                                                            <td>Velocità critica</td>
+                                                            <td>Documenti brevi, FAQ</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Contesto Esteso</td>
+                                                            <td>Collegamenti complessi</td>
+                                                            <td>Ricerche, analisi cross-documento</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="advanced-section">
+                <div class="no-api-alert">
+                    <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Nessuna Chiave API Configurata</h5>
+                    <p class="mb-3">
+                        Per creare un progetto, devi prima configurare almeno una chiave API per un provider LLM.
+                    </p>
+                    <a href="{% url 'ia_engine' %}" class="btn btn-primary">
+                        <i class="bi bi-key me-2"></i>Configura Chiavi API
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card-footer">
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'projects_list' %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Annulla
+                    </a>
+                    <button type="submit" class="btn btn-primary" id="create-btn"
+                            {% if not has_api_keys %}disabled{% endif %}>
+                        <i class="bi bi-plus-circle me-2"></i>Crea Progetto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
 </div>
 
-<!-- Overlay Spinner di Caricamento -->
-<div class="spinner-overlay" id="spinner-overlay">
-    <div class="spinner-container">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-            <span class="visually-hidden">Caricamento...</span>
-        </div>
-        <div class="spinner-text" id="spinner-text">Creazione del progetto in corso...</div>
+<!-- Loading Spinner -->
+<div class="spinner-overlay" id="loading-overlay">
+    <div class="spinner-box">
+        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+        <div>Creazione del progetto in corso...</div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // Elementi del form
-        const projectNameInput = document.getElementById("project-name");
-        const createButton = document.getElementById("create-btn");
-        const newProjectForm = document.getElementById("new-project-form");
-        const spinnerOverlay = document.getElementById("spinner-overlay");
-        const spinnerText = document.getElementById("spinner-text");
+class ProjectCreator {
+    constructor() {
+        // Elementi DOM principali
+        this.form = document.getElementById('new-project-form');
+        this.projectNameInput = document.getElementById('project-name');
+        this.createBtn = document.getElementById('create-btn');
+        this.loadingOverlay = document.getElementById('loading-overlay');
 
-        // Elementi per l'upload dei file
-        const fileDropZone = document.getElementById("file-drop-zone");
-        const fileInput = document.getElementById("file-input");
-        const filesPreview = document.getElementById("files-preview");
-        const fileListContainer = document.getElementById("file-list-container");
-        const clearFilesBtn = document.getElementById("clear-files-btn");
-        const fileCountBadge = document.getElementById("file-count-badge");
-        const filePaginationStatus = document.getElementById("file-pagination-status");
-        const fileStartRange = document.getElementById("file-start-range");
-        const fileEndRange = document.getElementById("file-end-range");
-        const fileTotal = document.getElementById("file-total");
-        const filePagination = document.getElementById("file-pagination");
+        // Stato iniziale
+        this.hasApiKeys = {% if has_api_keys %}true{% else %}false{% endif %};
 
-        // Elementi per l'upload delle cartelle
-        const folderDropZone = document.getElementById("folder-drop-zone");
-        const folderInput = document.getElementById("folder-input");
-        const folderPreview = document.getElementById("folder-preview");
-        const folderListContainer = document.getElementById("folder-list-container");
-        const clearFolderBtn = document.getElementById("clear-folder-btn");
-        const folderNameDisplay = document.getElementById("folder-name-display");
-        const folderFileCountBadge = document.getElementById("folder-file-count-badge");
-        const folderStructure = document.getElementById("folder-structure");
-        const folderPaginationStatus = document.getElementById("folder-pagination-status");
-        const folderStartRange = document.getElementById("folder-start-range");
-        const folderEndRange = document.getElementById("folder-end-range");
-        const folderTotal = document.getElementById("folder-total");
-        const folderPagination = document.getElementById("folder-pagination");
+        // Inizializza i gestori eventi
+        this.initializeEventListeners();
+        this.initializeUIState();
+    }
 
-        // Elementi dei tab
-        const uploadTabs = document.getElementById("uploadTabs");
-        const filesTab = document.getElementById("files-tab");
-        const folderTab = document.getElementById("folder-tab");
+    initializeEventListeners() {
+        // Evento input nome progetto
+        this.projectNameInput.addEventListener('input', () => this.validateForm());
 
-        // Impostazioni del motore LLM
-        {% if has_api_keys %}
-        const temperatureInput = document.getElementById("temperature");
-        const temperatureValue = document.getElementById("temperature-value");
-        const maxTokensSelect = document.getElementById("max-tokens");
-        const timeoutInput = document.getElementById("timeout");
-        const engineRadios = document.querySelectorAll(".engine-radio");
-        const engineOptions = document.querySelectorAll(".engine-option");
+        // Evento submit form
+        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
-        const defaultPromptRadio = document.getElementById("defaultPrompt");
-        const customPromptRadio = document.getElementById("customPrompt");
-        const defaultPromptSection = document.getElementById("defaultPromptSection");
-        const customPromptSection = document.getElementById("customPromptSection");
-        const defaultPromptRadios = document.querySelectorAll(".default-prompt-radio");
-        const promptOptions = document.querySelectorAll(".prompt-option");
-        const systemPromptTextarea = document.getElementById("system-prompt");
-        {% endif %}
-
-        // Traccia tab corrente
-        let activeTab = "files";
-
-        // Stato chiavi API - assegnato dal template Django
-        const hasAPIKeys = {% if has_api_keys %}true{% else %}false{% endif %};
-
-        // Stato paginazione
-        const paginationState = {
-            files: {
-                items: [],
-                currentPage: 1,
-                itemsPerPage: 10
-            },
-            folder: {
-                items: [],
-                currentPage: 1,
-                itemsPerPage: 10
-            }
-        };
-
-        // Estensioni file valide
-        const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif'];
-
-        // Verifica se il form può essere inviato
-        function checkFormValidity() {
-            const projectName = projectNameInput.value.trim();
-            // Abilita il pulsante solo se esiste un nome progetto e l'utente ha chiavi API
-            createButton.disabled = !projectName || !hasAPIKeys;
-        }
-
-        // Listener per l'input del nome progetto
-        projectNameInput.addEventListener("input", checkFormValidity);
-
-        // Evento di invio del form
-        newProjectForm.addEventListener("submit", function(e) {
-            // Verifica che il form sia valido
-            if (!projectNameInput.value.trim()) {
-                e.preventDefault();
-                alert("Inserisci un nome per il progetto");
-                return false;
-            }
-
-            // Verifica che l'utente abbia chiavi API
-            if (!hasAPIKeys) {
-                e.preventDefault();
-                alert("Devi configurare almeno una chiave API prima di creare un progetto");
-                return false;
-            }
-
-            // Mostra lo spinner di caricamento
-            spinnerOverlay.classList.add("visible");
-            spinnerText.textContent = "Creazione del progetto in corso...";
-
-            // IMPORTANTE: Prima di inviare, rimuovi l'attributo disabled
-            // dagli input che non sono attivi in questo momento
-            if (activeTab === "files") {
-                // Se stiamo caricando file individuali, assicurati che l'input cartella non sia disabilitato
-                if (folderInput.disabled) {
-                    folderInput.disabled = false;
-                    // Ma assicurati che sia vuoto
-                    folderInput.value = "";
-                }
-            } else {
-                // Se stiamo caricando una cartella, assicurati che l'input file non sia disabilitato
-                if (fileInput.disabled) {
-                    fileInput.disabled = false;
-                    // Ma assicurati che sia vuoto
-                    fileInput.value = "";
-                }
-            }
-
-            // Continua con l'invio
-            return true;
+        // Eventi per provider e engine
+        document.querySelectorAll('.provider-header').forEach(header => {
+            header.addEventListener('click', (e) => this.handleProviderClick(e));
         });
 
-        // Configurazione drag and drop per i file
-        setupDropZone(fileDropZone, fileInput, handleFiles);
-
-        // Configurazione drag and drop per le cartelle
-        setupDropZone(folderDropZone, folderInput, handleFolder);
-
-        // Listener per il cambio di tab
-        filesTab.addEventListener("click", function() {
-            activeTab = "files";
+        document.querySelectorAll('.engine-item').forEach(item => {
+            item.addEventListener('click', (e) => this.handleEngineClick(e));
         });
 
-        folderTab.addEventListener("click", function() {
-            activeTab = "folder";
+        // Eventi per preset RAG
+        document.querySelectorAll('.preset-card').forEach(card => {
+            card.addEventListener('click', (e) => this.handlePresetClick(e));
         });
 
-        // Pulsante per cancellare i file
-        clearFilesBtn.addEventListener("click", function() {
-            fileInput.value = "";
-            filesPreview.classList.add("d-none");
-            fileListContainer.innerHTML = "";
-            fileDropZone.querySelector(".drop-zone__prompt").innerHTML = `
-                <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
-                Trascina i file qui o clicca per selezionare
-            `;
-            paginationState.files.items = [];
-            paginationState.files.currentPage = 1;
-            updateFilePagination();
+        // Gestione accordion
+        const accordionButtons = document.querySelectorAll('.accordion-button');
+        accordionButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Bootstrap gestisce già l'apertura/chiusura
+                // Aggiorniamo solo il testo dei pulsanti se necessario
+                setTimeout(() => this.updateAccordionDisplay(), 300);
+            });
+        });
+    }
+
+    initializeUIState() {
+        // Valida il form iniziale
+        this.validateForm();
+
+        // Imposta lo stato iniziale dell'interfaccia
+        this.setupInitialProviders();
+        this.setupInitialEngine();
+        this.setupInitialRAG();
+    }
+
+    setupInitialProviders() {
+        // Trova il provider di default selezionato
+        const defaultProvider = document.querySelector('input[name="provider"]:checked');
+        if (defaultProvider) {
+            const providerId = defaultProvider.value;
+            const providerHeader = defaultProvider.closest('.provider-header');
+            const engineList = document.getElementById(`engines-${providerId}`);
+
+            // Apri il provider di default
+            if (providerHeader && engineList) {
+                providerHeader.classList.add('active');
+                engineList.style.display = 'block';
+            }
+        }
+    }
+
+    setupInitialEngine() {
+        // Trova l'engine selezionato di default
+        const selectedEngine = document.querySelector('input[name="engine_id"]:checked');
+        if (selectedEngine) {
+            const engineItem = selectedEngine.closest('.engine-item');
+            const engineName = engineItem.querySelector('strong').textContent;
+
+            // Aggiorna il display
+            this.updateEngineDisplay(engineName);
+        }
+    }
+
+    setupInitialRAG() {
+        // Il preset di default è già selezionato nel HTML
+        const selectedPreset = document.querySelector('.preset-card.selected');
+        if (selectedPreset) {
+            const presetName = selectedPreset.querySelector('.preset-header').firstChild.textContent.trim();
+            this.updateRAGDisplay(presetName);
+        }
+    }
+
+    validateForm() {
+        const projectName = this.projectNameInput.value.trim();
+        const isValid = projectName.length > 0 && this.hasApiKeys;
+
+        this.createBtn.disabled = !isValid;
+        return isValid;
+    }
+
+    handleFormSubmit(e) {
+        if (!this.validateForm()) {
+            e.preventDefault();
+            alert('Per favore, inserisci un nome per il progetto.');
+            return false;
+        }
+
+        // Mostra l'overlay di caricamento
+        this.loadingOverlay.classList.add('show');
+
+        // Il form continua con il submit normale
+        return true;
+    }
+
+    handleProviderClick(e) {
+        const header = e.currentTarget;
+        const providerId = header.querySelector('input[type="radio"]').value;
+        const engineList = document.getElementById(`engines-${providerId}`);
+
+        // Chiudi tutti gli altri provider
+        document.querySelectorAll('.provider-header').forEach(h => {
+            if (h !== header) {
+                h.classList.remove('active');
+                const otherId = h.querySelector('input[type="radio"]').value;
+                const otherEngineList = document.getElementById(`engines-${otherId}`);
+                if (otherEngineList) {
+                    otherEngineList.style.display = 'none';
+                }
+            }
         });
 
-        // Pulsante per cancellare la cartella
-        clearFolderBtn.addEventListener("click", function() {
-            folderInput.value = "";
-            folderPreview.classList.add("d-none");
-            folderListContainer.innerHTML = "";
-            folderStructure.innerHTML = "";
-            folderDropZone.querySelector(".drop-zone__prompt").innerHTML = `
-                <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
-                Trascina la cartella qui o clicca per selezionare
-            `;
-            paginationState.folder.items = [];
-            paginationState.folder.currentPage = 1;
-            updateFolderPagination();
+        // Toggle del provider corrente
+        if (header.classList.contains('active')) {
+            header.classList.remove('active');
+            engineList.style.display = 'none';
+        } else {
+            header.classList.add('active');
+            engineList.style.display = 'block';
+            // Seleziona automaticamente il radio button del provider
+            header.querySelector('input[type="radio"]').checked = true;
+        }
+    }
+
+    handleEngineClick(e) {
+        const engineItem = e.currentTarget;
+        const engineRadio = engineItem.querySelector('input[type="radio"]');
+        const engineName = engineItem.querySelector('strong').textContent;
+
+        // Seleziona l'engine
+        engineRadio.checked = true;
+
+        // Rimuovi la classe selected da tutti gli altri engine
+        document.querySelectorAll('.engine-item').forEach(item => {
+            item.classList.remove('selected');
         });
 
-        // Configurazione drop zone
-        function setupDropZone(dropZoneElement, inputElement, handleFunction) {
-            dropZoneElement.addEventListener("click", () => {
-                inputElement.click();
-            });
+        // Aggiungi la classe selected all'engine corrente
+        engineItem.classList.add('selected');
 
-            inputElement.addEventListener("change", () => {
-                if (inputElement.files.length) {
-                    handleFunction(inputElement.files);
-                }
-            });
+        // Aggiorna il display
+        this.updateEngineDisplay(engineName);
+    }
 
-            dropZoneElement.addEventListener("dragover", (e) => {
-                e.preventDefault();
-                dropZoneElement.classList.add("drop-zone--over");
-            });
+    handlePresetClick(e) {
+        const presetCard = e.currentTarget;
+        const presetRadio = presetCard.querySelector('input[type="radio"]');
+        const presetName = presetCard.querySelector('.preset-header').firstChild.textContent.trim();
 
-            ["dragleave", "dragend"].forEach((type) => {
-                dropZoneElement.addEventListener(type, () => {
-                    dropZoneElement.classList.remove("drop-zone--over");
-                });
-            });
+        // Seleziona il preset
+        presetRadio.checked = true;
 
-            dropZoneElement.addEventListener("drop", (e) => {
-                e.preventDefault();
-                dropZoneElement.classList.remove("drop-zone--over");
+        // Rimuovi la classe selected da tutti gli altri preset
+        document.querySelectorAll('.preset-card').forEach(card => {
+            card.classList.remove('selected');
+        });
 
-                if (e.dataTransfer.files.length) {
-                    inputElement.files = e.dataTransfer.files;
-                    handleFunction(e.dataTransfer.files);
-                }
-            });
+        // Aggiungi la classe selected al preset corrente
+        presetCard.classList.add('selected');
+
+        // Aggiorna il display
+        this.updateRAGDisplay(presetName);
+    }
+
+    updateEngineDisplay(engineName) {
+        const display = document.getElementById('selected-engine-display');
+        if (display) {
+            display.textContent = `(Selezionato: ${engineName})`;
+        }
+    }
+
+    updateRAGDisplay(ragName) {
+        const display = document.getElementById('selected-rag-display');
+        if (display) {
+            display.textContent = `(Selezionato: ${ragName})`;
+        }
+    }
+
+    updateAccordionDisplay() {
+        // Aggiorna i display degli accordion se necessario
+        const engineAccordion = document.querySelector('[data-bs-target="#collapseEngine"]');
+        const ragAccordion = document.querySelector('[data-bs-target="#collapseRAG"]');
+
+        if (engineAccordion.classList.contains('collapsed')) {
+            // Accordion chiuso, mostra il valore selezionato
+            const selectedEngine = document.querySelector('input[name="engine_id"]:checked');
+            if (selectedEngine) {
+                const engineName = selectedEngine.closest('.engine-item').querySelector('strong').textContent;
+                this.updateEngineDisplay(engineName);
+            }
         }
 
-        // Gestione del caricamento dei file individuali
-        function handleFiles(files) {
-            if (files.length === 0) {
-                filesPreview.classList.add("d-none");
-                return;
+        if (ragAccordion.classList.contains('collapsed')) {
+            // Accordion chiuso, mostra il valore selezionato
+            const selectedPreset = document.querySelector('input[name="rag_preset"]:checked');
+            if (selectedPreset) {
+                const presetCard = selectedPreset.closest('.preset-card');
+                const presetName = presetCard.querySelector('.preset-header').firstChild.textContent.trim();
+                this.updateRAGDisplay(presetName);
             }
-
-            // Resetta lo stato della paginazione
-            paginationState.files.items = [];
-            paginationState.files.currentPage = 1;
-
-            // Processa tutti i file
-            let validCount = 0;
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-
-                // Verifica se è un tipo di file valido
-                const isValid = validExtensions.includes(fileExtension);
-
-                if (isValid) {
-                    validCount++;
-                    // Aggiungi agli elementi della paginazione
-                    paginationState.files.items.push({
-                        file: file,
-                        extension: fileExtension
-                    });
-                }
-            }
-
-            if (validCount > 0) {
-                // Aggiorna visivamente la drop zone
-                const prompt = fileDropZone.querySelector(".drop-zone__prompt");
-                if (prompt) {
-                    prompt.innerHTML = `
-                        <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
-                        <span>${validCount} file selezionati</span>
-                        <p class="small text-muted mt-2">Clicca per cambiare selezione</p>
-                    `;
-                }
-
-                // Aggiorna il badge del conteggio
-                fileCountBadge.textContent = validCount;
-
-                // Mostra l'anteprima dei file
-                filesPreview.classList.remove("d-none");
-
-                // Aggiorna la paginazione
-                updateFilePagination();
-            }
-
-            // Verifica sempre la validità del form
-            checkFormValidity();
         }
-
-        // Gestione del caricamento delle cartelle
-        function handleFolder(files) {
-            if (files.length === 0) {
-                folderPreview.classList.add("d-none");
-                return;
-            }
-
-            // Resetta lo stato della paginazione
-            paginationState.folder.items = [];
-            paginationState.folder.currentPage = 1;
-
-            // Ottieni il nome della cartella radice dal percorso del primo file
-            const firstFilePath = files[0].webkitRelativePath;
-            const rootFolder = firstFilePath.split('/')[0];
-            folderNameDisplay.textContent = rootFolder;
-
-            // Conta i file validi
-            let validCount = 0;
-            let folderStructureMap = {};
-
-            // Processa tutti i file
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-                const relativePath = file.webkitRelativePath;
-
-                // Costruisci la struttura della cartella
-                const pathParts = relativePath.split('/');
-                let currentPath = '';
-                let currentMap = folderStructureMap;
-
-                for (let j = 0; j < pathParts.length - 1; j++) {
-                    const part = pathParts[j];
-                    currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-                    if (!currentMap[part]) {
-                        currentMap[part] = {
-                            __files: [],
-                            __path: currentPath
-                        };
-                    }
-
-                    currentMap = currentMap[part];
-                }
-
-                // Aggiungi il file all'ultima cartella
-                if (validExtensions.includes(fileExtension)) {
-                    currentMap.__files.push({
-                        name: pathParts[pathParts.length - 1],
-                        extension: fileExtension,
-                        file: file,
-                        path: relativePath
-                    });
-
-                    validCount++;
-                    // Aggiungi agli elementi della paginazione
-                    paginationState.folder.items.push({
-                        file: file,
-                        extension: fileExtension,
-                        path: relativePath
-                    });
-                }
-            }
-
-            if (validCount > 0) {
-                // Aggiorna visivamente la drop zone
-                const prompt = folderDropZone.querySelector(".drop-zone__prompt");
-                if (prompt) {
-                    prompt.innerHTML = `
-                        <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
-                        <span>Cartella "${rootFolder}" selezionata</span>
-                        <p class="small text-muted mt-2">Clicca per cambiare selezione</p>
-                    `;
-                }
-
-                // Aggiorna il badge del conteggio
-                folderFileCountBadge.textContent = validCount;
-
-                // Costruisci l'HTML della struttura della cartella
-                folderStructure.innerHTML = buildFolderStructureHTML(folderStructureMap, rootFolder);
-
-                // Mostra l'anteprima della cartella
-                folderPreview.classList.remove("d-none");
-
-                // Aggiorna la paginazione
-                updateFolderPagination();
-            }
-
-            // Verifica sempre la validità del form
-            checkFormValidity();
-        }
-
-        // Costruisci l'HTML per la struttura della cartella
-        function buildFolderStructureHTML(structureMap, rootFolder) {
-            let html = `<div class="folder-path"><i class="bi bi-folder me-2 folder-icon"></i>${rootFolder}/</div>`;
-
-            // Ottieni le cartelle di primo livello
-            const rootMap = structureMap[rootFolder];
-            if (rootMap) {
-                // Ottieni le cartelle escludendo le chiavi speciali
-                const folders = Object.keys(rootMap).filter(key => !key.startsWith('__'));
-
-                if (folders.length > 0) {
-                    for (const folder of folders) {
-                        html += `<div class="folder-path ms-3"><i class="bi bi-folder me-2 folder-icon"></i>${folder}/</div>`;
-                    }
-                }
-            }
-
-            return html;
-        }
-
-        // Aggiorna la paginazione dei file
-        function updateFilePagination() {
-            const { items, currentPage, itemsPerPage } = paginationState.files;
-            const totalItems = items.length;
-            const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-            // Salta la paginazione se non ci sono elementi
-            if (totalItems === 0) {
-                fileListContainer.innerHTML = '';
-                filePagination.innerHTML = '';
-                filePaginationStatus.classList.add('d-none');
-                return;
-            }
-
-            // Mostra lo stato della paginazione
-            filePaginationStatus.classList.remove('d-none');
-
-            // Calcola gli indici di inizio e fine degli elementi
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-
-            // Aggiorna il testo dello stato della paginazione
-            fileStartRange.textContent = startIndex + 1;
-            fileEndRange.textContent = endIndex;
-            fileTotal.textContent = totalItems;
-
-            // Cancella l'elenco corrente
-            fileListContainer.innerHTML = '';
-
-            // Aggiungi i file per la pagina corrente
-            for (let i = startIndex; i < endIndex; i++) {
-                const item = items[i];
-                const itemElement = createFileItemElement(item.file, item.extension);
-                fileListContainer.appendChild(itemElement);
-            }
-
-            // Genera i controlli di paginazione
-            generatePaginationControls('files', totalPages, currentPage);
-        }
-
-        // Aggiorna la paginazione della cartella
-        function updateFolderPagination() {
-            const { items, currentPage, itemsPerPage } = paginationState.folder;
-            const totalItems = items.length;
-            const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-            // Salta la paginazione se non ci sono elementi
-            if (totalItems === 0) {
-                folderListContainer.innerHTML = '';
-                folderPagination.innerHTML = '';
-                folderPaginationStatus.classList.add('d-none');
-                return;
-            }
-
-            // Mostra lo stato della paginazione
-            folderPaginationStatus.classList.remove('d-none');
-
-            // Calcola gli indici di inizio e fine degli elementi
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-
-            // Aggiorna il testo dello stato della paginazione
-            folderStartRange.textContent = startIndex + 1;
-            folderEndRange.textContent = endIndex;
-            folderTotal.textContent = totalItems;
-
-            // Cancella l'elenco corrente
-            folderListContainer.innerHTML = '';
-
-            // Aggiungi i file per la pagina corrente
-            for (let i = startIndex; i < endIndex; i++) {
-                const item = items[i];
-                const itemElement = createFileItemElement(item.file, item.extension, item.path);
-                folderListContainer.appendChild(itemElement);
-            }
-
-            // Genera i controlli di paginazione
-            generatePaginationControls('folder', totalPages, currentPage);
-        }
-
-        // Genera i controlli di paginazione
-        function generatePaginationControls(type, totalPages, currentPage) {
-            const paginationElement = type === 'files' ? filePagination.querySelector('ul') : folderPagination.querySelector('ul');
-            paginationElement.innerHTML = '';
-
-            // Salta la paginazione per una sola pagina
-            if (totalPages <= 1) {
-                return;
-            }
-
-            // Pulsante precedente
-            const prevItem = document.createElement('li');
-            prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-            prevItem.innerHTML = `
-                <button class="page-link" data-page="prev" aria-label="Precedente">
-                    <span aria-hidden="true">&laquo;</span>
-                </button>
-            `;
-            paginationElement.appendChild(prevItem);
-
-            // Pulsanti pagine
-            const maxVisiblePages = 5;
-            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-            // Aggiusta se siamo ai bordi
-            if (endPage - startPage + 1 < maxVisiblePages) {
-                startPage = Math.max(1, endPage - maxVisiblePages + 1);
-            }
-
-            // Pulsante prima pagina se necessario
-            if (startPage > 1) {
-                const firstItem = document.createElement('li');
-                firstItem.className = 'page-item';
-                firstItem.innerHTML = `
-                    <button class="page-link" data-page="1">1</button>
-                `;
-                paginationElement.appendChild(firstItem);
-
-                // Puntini di sospensione se necessario
-                if (startPage > 2) {
-                    const ellipsisItem = document.createElement('li');
-                    ellipsisItem.className = 'page-item disabled';
-                    ellipsisItem.innerHTML = `
-                        <button class="page-link">...</button>
-                    `;
-                    paginationElement.appendChild(ellipsisItem);
-                }
-            }
-
-            // Numeri di pagina
-            for (let i = startPage; i <= endPage; i++) {
-                const pageItem = document.createElement('li');
-                pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
-                pageItem.innerHTML = `
-                    <button class="page-link" data-page="${i}">${i}</button>
-                `;
-                paginationElement.appendChild(pageItem);
-            }
-
-            // Pulsante ultima pagina se necessario
-            if (endPage < totalPages) {
-                // Puntini di sospensione se necessario
-                if (endPage < totalPages - 1) {
-                    const ellipsisItem = document.createElement('li');
-                    ellipsisItem.className = 'page-item disabled';
-                    ellipsisItem.innerHTML = `
-                        <button class="page-link">...</button>
-                    `;
-                    paginationElement.appendChild(ellipsisItem);
-                }
-
-                const lastItem = document.createElement('li');
-                lastItem.className = 'page-item';
-                lastItem.innerHTML = `
-                    <button class="page-link" data-page="${totalPages}">${totalPages}</button>
-                `;
-                paginationElement.appendChild(lastItem);
-            }
-
-            // Pulsante successivo
-            const nextItem = document.createElement('li');
-            nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-            nextItem.innerHTML = `
-                <button class="page-link" data-page="next" aria-label="Successivo">
-                    <span aria-hidden="true">&raquo;</span>
-                </button>
-            `;
-            paginationElement.appendChild(nextItem);
-
-            // Aggiungi event listener ai pulsanti di paginazione
-            paginationElement.querySelectorAll('.page-link').forEach(button => {
-                button.addEventListener('click', function() {
-                    const pageData = this.getAttribute('data-page');
-                    let newPage = currentPage;
-
-                    if (pageData === 'prev') {
-                        newPage = Math.max(1, currentPage - 1);
-                    } else if (pageData === 'next') {
-                        newPage = Math.min(totalPages, currentPage + 1);
-                    } else {
-                        newPage = parseInt(pageData);
-                    }
-
-                    if (newPage !== currentPage) {
-                        if (type === 'files') {
-                            paginationState.files.currentPage = newPage;
-                            updateFilePagination();
-                        } else {
-                            paginationState.folder.currentPage = newPage;
-                            updateFolderPagination();
-                        }
-                    }
-                });
-            });
-        }
-
-        // Crea un elemento di file
-        function createFileItemElement(file, fileExtension, filePath = null) {
-            // Formatta la dimensione del file
-            const fileSizeKB = Math.round(file.size / 1024);
-            const fileSizeDisplay = fileSizeKB < 1024
-                ? fileSizeKB + " KB"
-                : (fileSizeKB / 1024).toFixed(2) + " MB";
-
-            // Ottieni la classe dell'icona in base all'estensione del file
-            let iconClass = getFileIconClass(fileExtension);
-
-            // Crea l'elemento del file
-            const fileItem = document.createElement("div");
-            fileItem.className = "file-item animate-fade";
-
-            // Visualizza il nome in base al percorso o solo al nome del file
-            const displayName = filePath || file.name;
-
-            // Imposta il contenuto dell'elemento file
-            fileItem.innerHTML = `
-                <div class="file-info">
-                    <i class="bi ${iconClass} file-icon"></i>
-                    <span class="file-name" title="${displayName}">${displayName}</span>
-                    <span class="file-size">${fileSizeDisplay}</span>
-                </div>
-                <div class="file-actions">
-                    <button type="button" class="remove-file-btn" title="Rimuovi file">
-                        <i class="bi bi-x-circle"></i>
-                    </button>
-                </div>
-            `;
-
-            // Aggiungi event listener per il pulsante di rimozione
-            const removeButton = fileItem.querySelector('.remove-file-btn');
-            removeButton.addEventListener('click', function() {
-                const isFolder = filePath !== null;
-                const stateKey = isFolder ? 'folder' : 'files';
-                const items = paginationState[stateKey].items;
-
-                // Trova l'indice del file da rimuovere
-                const itemIndex = items.findIndex(item =>
-                    (isFolder && item.path === filePath) ||
-                    (!isFolder && item.file.name === file.name)
-                );
-
-                if (itemIndex !== -1) {
-                    // Rimuovi il file dall'array degli elementi
-                    items.splice(itemIndex, 1);
-
-                    // Aggiorna il conteggio dei file
-                    const countBadge = isFolder ? folderFileCountBadge : fileCountBadge;
-                    countBadge.textContent = items.length;
-
-                    // Aggiorna la paginazione
-                    if (isFolder) {
-                        updateFolderPagination();
-
-                        // Nascondi l'anteprima della cartella se non ci sono più file
-                        if (items.length === 0) {
-                            folderPreview.classList.add('d-none');
-                            folderDropZone.querySelector(".drop-zone__prompt").innerHTML = `
-                                <i class="bi bi-folder-plus fs-1 d-block mb-2"></i>
-                                Trascina la cartella qui o clicca per selezionare
-                            `;
-                        }
-                    } else {
-                        updateFilePagination();
-
-                        // Nascondi l'anteprima dei file se non ci sono più file
-                        if (items.length === 0) {
-                            filesPreview.classList.add('d-none');
-                            fileDropZone.querySelector(".drop-zone__prompt").innerHTML = `
-                                <i class="bi bi-file-earmark-plus fs-1 d-block mb-2"></i>
-                                Trascina i file qui o clicca per selezionare
-                            `;
-                        }
-                    }
-                }
-            });
-
-            return fileItem;
-        }
-
-        // Ottieni la classe dell'icona in base all'estensione
-        function getFileIconClass(fileExtension) {
-            if (fileExtension === ".pdf") {
-                return "bi-file-earmark-pdf";
-            } else if ([".doc", ".docx"].includes(fileExtension)) {
-                return "bi-file-earmark-word";
-            } else if ([".xls", ".xlsx"].includes(fileExtension)) {
-                return "bi-file-earmark-excel";
-            } else if ([".ppt", ".pptx"].includes(fileExtension)) {
-                return "bi-file-earmark-slides";
-            } else if ([".jpg", ".jpeg", ".png", ".gif"].includes(fileExtension)) {
-                return "bi-file-earmark-image";
-            } else if (fileExtension === ".txt") {
-                return "bi-file-earmark-text";
-            } else if (fileExtension === ".csv") {
-                return "bi-file-earmark-spreadsheet";
-            }
-            return "bi-file-earmark";
-        }
-
-        // Inizializza le impostazioni del motore LLM
-        {% if has_api_keys %}
-        function initLLMEngineSettings() {
-            // Slider temperatura
-            temperatureInput.addEventListener("input", function() {
-                temperatureValue.textContent = this.value;
-            });
-
-            // Selezione del motore
-            engineRadios.forEach(radio => {
-                radio.addEventListener("change", function() {
-                    // Evidenzia il motore selezionato
-                    engineOptions.forEach(option => {
-                        option.classList.remove("active");
-                    });
-                    this.closest(".engine-option").classList.add("active");
-
-                    // Aggiorna i parametri con i valori predefiniti del motore selezionato
-                    temperatureInput.value = this.dataset.temperature;
-                    temperatureValue.textContent = this.dataset.temperature;
-
-                    // Trova l'opzione corretta da selezionare per i token massimi
-                    const maxTokens = parseInt(this.dataset.maxTokens);
-                    for (let option of maxTokensSelect.options) {
-                        if (parseInt(option.value) >= maxTokens) {
-                            option.selected = true;
-                            break;
-                        }
-                    }
-
-                    timeoutInput.value = this.dataset.timeout;
-                });
-            });
-
-            // Selezione del tipo di prompt
-            defaultPromptRadio.addEventListener("change", function() {
-                if (this.checked) {
-                    defaultPromptSection.classList.remove("d-none");
-                    customPromptSection.classList.add("d-none");
-                    // Abilita i radio dei prompt predefiniti
-                    defaultPromptRadios.forEach(radio => {
-                        radio.disabled = false;
-                    });
-                    // Disabilita il textarea del prompt personalizzato
-                    systemPromptTextarea.disabled = true;
-                }
-            });
-
-            customPromptRadio.addEventListener("change", function() {
-                if (this.checked) {
-                    defaultPromptSection.classList.add("d-none");
-                    customPromptSection.classList.remove("d-none");
-                    // Disabilita i radio dei prompt predefiniti
-                    defaultPromptRadios.forEach(radio => {
-                        radio.disabled = true;
-                    });
-                    // Abilita il textarea del prompt personalizzato
-                    systemPromptTextarea.disabled = false;
-                }
-            });
-
-            // Selezione prompt predefinito
-            defaultPromptRadios.forEach(radio => {
-                radio.addEventListener("change", function() {
-                    // Evidenzia il prompt selezionato
-                    promptOptions.forEach(option => {
-                        option.classList.remove("active");
-                    });
-                    this.closest(".prompt-option").classList.add("active");
-                });
-            });
-        }
-
-        // Inizializza le impostazioni LLM al caricamento della pagina
-        initLLMEngineSettings();
-        {% endif %}
-
-        // Inizializza lo stato del form
-        checkFormValidity();
-    });
+    }
+}
+
+// Inizializza quando il DOM è pronto
+document.addEventListener('DOMContentLoaded', function() {
+    const projectCreator = new ProjectCreator();
+});
 </script>
 {% endblock %}

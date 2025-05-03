@@ -91,6 +91,59 @@
     .preset-body {
         padding: 1.25rem;
     }
+
+    .feature-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
+        display: inline-block;
+    }
+
+    .parameter-highlight {
+        background-color: rgba(13, 110, 253, 0.1);
+        border-left: 3px solid #0d6efd;
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+        border-radius: 0 0.25rem 0.25rem 0;
+    }
+
+    .tooltip-icon {
+        cursor: help;
+        color: #6c757d;
+    }
+
+    .preset-card .tag {
+        display: inline-block;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        margin-top: 0.5rem;
+        margin-right: 0.3rem;
+        border-radius: 0.25rem;
+        background-color: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+    }
+
+    .parameter-comparison {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .parameter-comparison table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .parameter-comparison th,
+    .parameter-comparison td {
+        padding: 0.5rem;
+        border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .parameter-comparison th {
+        background-color: rgba(13, 110, 253, 0.05);
+    }
 </style>
 {% endblock %}
 
@@ -196,6 +249,29 @@
                                             <span>{{ preset.similarity_threshold }}</span>
                                         </div>
                                     </div>
+
+                                    <!-- Tags per indicare punti di forza -->
+                                    <div>
+                                        {% if preset.name == "Bilanciato" %}
+                                            <span class="tag"><i class="bi bi-check-circle-fill me-1"></i>Uso generico</span>
+                                            <span class="tag"><i class="bi bi-arrow-repeat me-1"></i>Versatile</span>
+                                        {% elif preset.name == "Alta Precisione" %}
+                                            <span class="tag"><i class="bi bi-bullseye me-1"></i>Precisione</span>
+                                            <span class="tag"><i class="bi bi-file-text me-1"></i>Tecnico</span>
+                                        {% elif preset.name == "Velocità" %}
+                                            <span class="tag"><i class="bi bi-lightning-fill me-1"></i>Rapido</span>
+                                            <span class="tag"><i class="bi bi-speedometer2 me-1"></i>Efficiente</span>
+                                        {% elif preset.name == "Massima Precisione" %}
+                                            <span class="tag"><i class="bi bi-shield-check me-1"></i>Accurato</span>
+                                            <span class="tag"><i class="bi bi-search me-1"></i>Dettagliato</span>
+                                        {% elif preset.name == "Massima Velocità" %}
+                                            <span class="tag"><i class="bi bi-rocket-takeoff me-1"></i>Rapidissimo</span>
+                                            <span class="tag"><i class="bi bi-hourglass-split me-1"></i>Minimo ritardo</span>
+                                        {% elif preset.name == "Contesto Esteso" %}
+                                            <span class="tag"><i class="bi bi-bounding-box me-1"></i>Ampio contesto</span>
+                                            <span class="tag"><i class="bi bi-diagram-3 me-1"></i>Relazionale</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <div class="card-footer bg-transparent text-center">
                                     <form method="post" class="select-preset-form">
@@ -222,7 +298,6 @@
             </div>
         </div>
     </div>
-
     <!-- Parameters Configuration -->
     <div class="card mb-4">
         <div class="card-header">
@@ -249,6 +324,14 @@
                             <i class="bi bi-info-circle me-1"></i>
                             Determina la lunghezza di ciascun frammento di testo in caratteri. Valori più piccoli creano più frammenti dettagliati ma aumentano il tempo di elaborazione.
                         </p>
+                        <div class="parameter-highlight">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Guida alla scelta:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>Chunk piccoli (100-300):</strong> Massima precisione nelle risposte, ideali per documenti tecnici o quando è essenziale la precisione delle citazioni</li>
+                                <li><strong>Chunk medi (400-600):</strong> Buon equilibrio tra precisione e contesto, adatti alla maggior parte dei documenti</li>
+                                <li><strong>Chunk grandi (700-1000):</strong> Risposte più rapide e più contesto generale, ideali per documenti narrativi o quando la velocità è prioritaria</li>
+                            </ul>
+                        </div>
                         <div class="mt-2">
                             <span class="badge bg-info me-2">Documenti brevi: 300-400</span>
                             <span class="badge bg-success me-2">Bilanciato: 500</span>
@@ -273,6 +356,14 @@
                             <i class="bi bi-info-circle me-1"></i>
                             Controlla quanti caratteri si sovrappongono tra chunk adiacenti. Una maggiore sovrapposizione aiuta a mantenere il contesto ma aumenta il numero di chunk.
                         </p>
+                        <div class="parameter-highlight">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Guida alla scelta:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>Sovrapposizione minima (0-30):</strong> Massimizza la velocità di risposta, ma può perdere connessioni tra concetti a cavallo tra chunk</li>
+                                <li><strong>Sovrapposizione media (40-80):</strong> Mantiene il contesto tra chunk adiacenti senza impattare eccessivamente le prestazioni</li>
+                                <li><strong>Sovrapposizione alta (100-200):</strong> Garantisce la continuità delle informazioni tra chunk, essenziale per documenti con concetti complessi o riferimenti che si estendono su più frasi</li>
+                            </ul>
+                        </div>
                         <div class="mt-2">
                             <span class="badge bg-warning me-2">Minima: 0-20</span>
                             <span class="badge bg-success me-2">Standard: 50</span>
@@ -297,6 +388,14 @@
                             <i class="bi bi-info-circle me-1"></i>
                             Numero di frammenti di testo più rilevanti da utilizzare per generare la risposta. Valori più alti includono più contesto ma possono diluire la rilevanza.
                         </p>
+                        <div class="parameter-highlight">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Guida alla scelta:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>Pochi risultati (2-4):</strong> Risposte più mirate e veloci, ideali per domande specifiche o quando la precisione è fondamentale</li>
+                                <li><strong>Risultati medi (5-8):</strong> Buon equilibrio tra precisione e contesto, adatto alla maggior parte delle query</li>
+                                <li><strong>Molti risultati (9-15):</strong> Massimo contesto e connessioni tra informazioni, ideale per domande complesse o che richiedono sintesi di molte informazioni</li>
+                            </ul>
+                        </div>
                         <div class="mt-2">
                             <span class="badge bg-warning me-2">Minimo: 2-3</span>
                             <span class="badge bg-success me-2">Standard: 4-6</span>
@@ -321,6 +420,14 @@
                             <i class="bi bi-info-circle me-1"></i>
                             Controlla il bilanciamento tra rilevanza e diversità dei risultati. Valori più alti (verso 1) favoriscono la rilevanza, valori più bassi (verso 0) favoriscono la diversità.
                         </p>
+                        <div class="parameter-highlight">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Guida alla scelta:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>Verso la diversità (0.3-0.5):</strong> Garantisce varietà di informazioni e prospettive, utile per domande esplorative o che richiedono una visione ampia</li>
+                                <li><strong>Bilanciato (0.6-0.8):</strong> Equilibrio ottimale tra rilevanza e diversità per la maggior parte delle applicazioni</li>
+                                <li><strong>Verso la rilevanza (0.85-1.0):</strong> Massimizza la pertinenza dei risultati, ideale per domande specifiche o tecniche dove la precisione è fondamentale</li>
+                            </ul>
+                        </div>
                         <div class="mt-2">
                             <span class="badge bg-info me-2">Diversità: 0.3-0.5</span>
                             <span class="badge bg-success me-2">Bilanciato: 0.7</span>
@@ -345,6 +452,14 @@
                             <i class="bi bi-info-circle me-1"></i>
                             Imposta la soglia minima di rilevanza per includere un frammento nelle risposte. Valori più alti sono più selettivi, solo i frammenti più rilevanti vengono inclusi.
                         </p>
+                        <div class="parameter-highlight">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Guida alla scelta:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>Soglia bassa (0.4-0.6):</strong> Inclusiva, recupera anche informazioni marginalmente correlate, utile quando si cerca un contesto ampio</li>
+                                <li><strong>Soglia media (0.65-0.75):</strong> Bilancia precisione e copertura, adatta alla maggior parte dei casi d'uso</li>
+                                <li><strong>Soglia alta (0.8-0.95):</strong> Estremamente selettiva, include solo le informazioni più pertinenti, ideale per risposte precise e mirate</li>
+                            </ul>
+                        </div>
                         <div class="mt-2">
                             <span class="badge bg-warning me-2">Bassa: 0.4-0.5</span>
                             <span class="badge bg-success me-2">Media: 0.7</span>
@@ -368,6 +483,14 @@
                             <i class="bi bi-info-circle me-1"></i>
                             Definisce la strategia di ricerca utilizzata per trovare i frammenti di testo più rilevanti.
                         </p>
+                        <div class="parameter-highlight">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Guida alla scelta:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>MMR:</strong> Bilancia rilevanza e diversità delle informazioni, ideale per domande complesse che richiedono prospettive diverse</li>
+                                <li><strong>Similarity Search:</strong> Seleziona solo i documenti più simili, massimizzando la velocità e la precisione per domande specifiche</li>
+                                <li><strong>Similarity with Threshold:</strong> Applica una soglia minima di similitudine, ideale per filtrare rigidamente ciò che è rilevante</li>
+                            </ul>
+                        </div>
                         <div class="mt-2">
                             <span class="badge bg-success me-2">MMR: Bilancia rilevanza e diversità</span>
                             <span class="badge bg-primary me-2">Similarity: Solo i più rilevanti</span>
@@ -414,6 +537,15 @@
                         <div class="form-text">
                             Istruzioni di base che guidano l'IA nell'elaborazione dei documenti e nella generazione di risposte.
                         </div>
+                        <div class="parameter-highlight mt-2">
+                            <strong><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Suggerimenti per il prompt:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li>Specifica il tono desiderato (formale, conversazionale, tecnico, ecc.)</li>
+                                <li>Definisci la lunghezza ideale delle risposte (concisa, dettagliata, ecc.)</li>
+                                <li>Indica come gestire incertezze o informazioni mancanti</li>
+                                <li>Specifica eventuali formati particolari per le risposte (elenchi puntati, passaggi numerati, ecc.)</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="row mb-3">
@@ -425,6 +557,9 @@
                                 </label>
                             </div>
                             <p class="form-text">Includi riferimenti alle fonti nelle risposte (es. documenti o note specifiche)</p>
+                            <div class="parameter-highlight mt-2">
+                                <small>Attivando questa opzione, le risposte includeranno riferimenti ai documenti e alle pagine specifiche da cui provengono le informazioni, aumentando la tracciabilità e l'affidabilità delle risposte.</small>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
@@ -435,6 +570,9 @@
                                 </label>
                             </div>
                             <p class="form-text">Dai priorità ai documenti con nomi menzionati nella domanda</p>
+                            <div class="parameter-highlight mt-2">
+                                <small>Consente all'IA di dare maggior peso ai documenti i cui nomi sono esplicitamente menzionati nella domanda, facilitando l'estrazione di informazioni da file specifici quando richiesto.</small>
+                            </div>
                         </div>
                     </div>
 
@@ -447,6 +585,9 @@
                                 </label>
                             </div>
                             <p class="form-text">Tratta note e documenti con uguale importanza nelle risposte</p>
+                            <div class="parameter-highlight mt-2">
+                                <small>Quando attivato, le note del progetto vengono considerate con la stessa rilevanza dei documenti caricati. Disattivandolo, i documenti avranno priorità rispetto alle note.</small>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
@@ -457,6 +598,9 @@
                                 </label>
                             </div>
                             <p class="form-text">Risposte basate SOLO sui documenti (rifiuta di rispondere se mancano informazioni)</p>
+                            <div class="parameter-highlight mt-2">
+                                <small>In modalità rigorosa, l'IA risponderà esclusivamente con informazioni contenute nei documenti, rifiutandosi di rispondere quando non trova dati sufficienti. Utile per applicazioni dove l'accuratezza è critica.</small>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -481,27 +625,192 @@
 
                 <p class="mb-2"><strong>Per documenti tecnici o molto specifici:</strong></p>
                 <ul class="mb-3">
-                    <li>Riduci la dimensione dei chunk (300-400 caratteri)</li>
-                    <li>Aumenta la sovrapposizione dei chunk (80-100 caratteri)</li>
-                    <li>Imposta una soglia di similarità più alta (0.7-0.8)</li>
-                    <li>Usa un valore lambda MMR più alto (0.8-0.9) per favorire la rilevanza</li>
+                    <li>Riduci la dimensione dei chunk (300-400 caratteri) per garantire precisione nelle estrazioni</li>
+                    <li>Aumenta la sovrapposizione dei chunk (80-100 caratteri) per non perdere informazioni tra chunk adiacenti</li>
+                    <li>Imposta una soglia di similarità più alta (0.7-0.8) per includere solo i frammenti più pertinenti</li>
+                    <li>Usa un valore lambda MMR più alto (0.8-0.9) per favorire la rilevanza e la precisione tecnica</li>
+                    <li>Attiva la modalità rigorosa e la citazione automatica per massimizzare l'accuratezza e la tracciabilità</li>
                 </ul>
 
                 <p class="mb-2"><strong>Per documenti narrativi o meno strutturati:</strong></p>
                 <ul class="mb-3">
-                    <li>Aumenta la dimensione dei chunk (700-900 caratteri)</li>
-                    <li>Mantieni una sovrapposizione media (50-70 caratteri)</li>
-                    <li>Abbassa leggermente la soglia di similarità (0.5-0.6)</li>
-                    <li>Usa un valore lambda MMR più basso (0.5-0.7) per favorire la diversità</li>
+                    <li>Aumenta la dimensione dei chunk (700-900 caratteri) per catturare meglio il flusso narrativo</li>
+                    <li>Mantieni una sovrapposizione media (50-70 caratteri) per collegare concetti tra i chunk</li>
+                    <li>Abbassa leggermente la soglia di similarità (0.5-0.6) per includere contesti più ampi</li>
+                    <li>Usa un valore lambda MMR più basso (0.5-0.7) per favorire la diversità e ricchezza delle risposte</li>
+                    <li>Disattiva la modalità rigorosa per consentire risposte più creative e contestualizzate</li>
                 </ul>
 
                 <p class="mb-2"><strong>Per progetti con molti documenti:</strong></p>
-                <ul class="mb-0">
-                    <li>Aumenta il numero di risultati Top K (8-12)</li>
-                    <li>Usa MMR con un valore lambda medio (0.5-0.7)</li>
+                <ul class="mb-3">
+                    <li>Aumenta il numero di risultati Top K (8-12) per coprire più fonti diverse</li>
+                    <li>Usa MMR con un valore lambda medio (0.5-0.7) per bilanciare rilevanza e varietà</li>
                     <li>Imposta una soglia di similarità più alta (0.6-0.7) per filtrare risultati meno rilevanti</li>
                     <li>Considera chunk più grandi (600-800 caratteri) per ridurre il numero totale di frammenti</li>
+                    <li>Attiva la priorità dei nomi file per facilitare le ricerche mirate in collezioni ampie</li>
                 </ul>
+
+                <p class="mb-2"><strong>Per massima precisione delle risposte:</strong></p>
+                <ul class="mb-3">
+                    <li>Utilizza chunk molto piccoli (250-350 caratteri) per granularità fine e risposte precise</li>
+                    <li>Imposta una sovrapposizione elevata (100-150 caratteri) per non perdere informazioni tra i chunk</li>
+                    <li>Aumenta il numero di risultati Top K (10-15) per avere più contesto disponibile</li>
+                    <li>Configura una soglia di similarità molto alta (0.8-0.9) per escludere testo irrilevante</li>
+                    <li>Usa retriever di tipo "similarity_score_threshold" con lambda MMR vicino a 1.0</li>
+                    <li>Attiva la modalità rigorosa e la citazione automatica per il massimo rigore nelle risposte</li>
+                </ul>
+
+                <p class="mb-2"><strong>Per risposte più rapide:</strong></p>
+                <ul class="mb-3">
+                    <li>Configura chunk più grandi (800-1000 caratteri) per ridurre il numero totale di frammenti</li>
+                    <li>Riduci al minimo la sovrapposizione (10-30 caratteri) per diminuire il volume di dati</li>
+                    <li>Limita il numero di risultati Top K (2-4) per velocizzare l'elaborazione</li>
+                    <li>Usa una soglia di similarità più bassa (0.5-0.6) per essere meno restrittivi</li>
+                    <li>Seleziona il retriever di tipo "similarity" per la ricerca più veloce</li>
+                    <li>Disattiva funzionalità aggiuntive come la citazione automatica per ridurre l'overhead</li>
+                </ul>
+
+                <p class="mb-2"><strong>Per contesto esteso e relazioni complesse:</strong></p>
+                <ul class="mb-0">
+                    <li>Configura chunk di dimensione media (500-700 caratteri) per bilanciare dettaglio e contesto</li>
+                    <li>Usa una sovrapposizione molto elevata (120-200 caratteri) per mantenere connessioni tra chunk</li>
+                    <li>Imposta un numero molto alto di risultati Top K (10-15) per catturare più informazioni correlate</li>
+                    <li>Abbassa leggermente la soglia di similarità (0.4-0.6) per includere contesto periferico ma rilevante</li>
+                    <li>Utilizza un valore lambda MMR basso (0.3-0.5) per massimizzare la diversità delle informazioni</li>
+                    <li>Disattiva la modalità rigorosa per permettere all'IA di fare più connessioni e integrazioni</li>
+                </ul>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="parameter-comparison mt-4">
+                <h6 class="mb-3">Tabella comparativa delle configurazioni preimpostate</h6>
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Configurazione</th>
+                            <th>Dimensione Chunk</th>
+                            <th>Sovrapposizione</th>
+                            <th>Top K</th>
+                            <th>Soglia Similarità</th>
+                            <th>Lambda MMR</th>
+                            <th>Caso d'uso ideale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge bg-primary">Bilanciato</span></td>
+                            <td>500</td>
+                            <td>50</td>
+                            <td>6</td>
+                            <td>0.7</td>
+                            <td>0.7</td>
+                            <td>Uso generale, documenti di media complessità</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-info">Alta Precisione</span></td>
+                            <td>400</td>
+                            <td>80</td>
+                            <td>8</td>
+                            <td>0.8</td>
+                            <td>0.8</td>
+                            <td>Documenti tecnici, risposte accurate</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-success">Velocità</span></td>
+                            <td>700</td>
+                            <td>30</td>
+                            <td>4</td>
+                            <td>0.6</td>
+                            <td>0.9</td>
+                            <td>Risposta rapida, documenti semplici</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-warning">Massima Precisione</span></td>
+                            <td>300</td>
+                            <td>100</td>
+                            <td>10</td>
+                            <td>0.85</td>
+                            <td>0.9</td>
+                            <td>Documenti scientifici, legal, alta accuratezza</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-secondary">Massima Velocità</span></td>
+                            <td>800</td>
+                            <td>20</td>
+                            <td>3</td>
+                            <td>0.6</td>
+                            <td>1.0</td>
+                            <td>Chat in tempo reale, risposta istantanea</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-danger">Contesto Esteso</span></td>
+                            <td>600</td>
+                            <td>150</td>
+                            <td>12</td>
+                            <td>0.5</td>
+                            <td>0.5</td>
+                            <td>Ricerca esplorativa, sintesi di argomenti complessi</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Impact Analysis -->
+            <div class="mt-4">
+                <h6 class="mb-3">Impatto dei parametri sulla qualità delle risposte</h6>
+                <div class="row row-cols-1 row-cols-md-3 g-4">
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="bi bi-check-circle me-2 text-success"></i>Precisione</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">Parametri che aumentano la precisione delle risposte:</p>
+                                <ul>
+                                    <li>Chunk più piccoli (↓)</li>
+                                    <li>Sovrapposizione maggiore (↑)</li>
+                                    <li>Soglia di similarità alta (↑)</li>
+                                    <li>MMR verso la rilevanza (λ → 1)</li>
+                                    <li>Modalità rigorosa (attiva)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="bi bi-lightning me-2 text-warning"></i>Velocità</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">Parametri che aumentano la velocità di risposta:</p>
+                                <ul>
+                                    <li>Chunk più grandi (↑)</li>
+                                    <li>Sovrapposizione minima (↓)</li>
+                                    <li>Meno risultati Top K (↓)</li>
+                                    <li>Retriever "similarity"</li>
+                                    <li>Citazione automatica (disattiva)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="bi bi-diagram-3 me-2 text-primary"></i>Contesto</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">Parametri che migliorano il contesto e le relazioni:</p>
+                                <ul>
+                                    <li>Più risultati Top K (↑)</li>
+                                    <li>Sovrapposizione maggiore (↑)</li>
+                                    <li>Soglia di similarità moderata</li>
+                                    <li>MMR verso la diversità (λ → 0)</li>
+                                    <li>Modalità rigorosa (disattiva)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

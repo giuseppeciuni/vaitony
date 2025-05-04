@@ -8,18 +8,16 @@ from datetime import timedelta, datetime
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.models import User
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Count, Q
 from django.db.models import Sum
-from django.http import HttpResponse, Http404, JsonResponse
+from django.db.models.functions import TruncDate
+from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 
 # Importazioni dai moduli RAG
-from dashboard.rag_document_utils import (
-    compute_file_hash
-)
 from dashboard.rag_utils import (
     create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note,
     handle_toggle_note_inclusion, get_answer_from_project, handle_project_file_upload
@@ -32,7 +30,6 @@ from profiles.models import (
     ProjectLLMConfiguration, ProjectIndexStatus, DefaultSystemPrompts,
 )
 from .cache_statistics import update_embedding_cache_stats
-from .utils import process_user_files
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -42,16 +39,11 @@ def dashboard(request):
     """
     Vista principale della dashboard che mostra una panoramica dei progetti dell'utente,
     statistiche sui documenti, note e conversazioni, e informazioni sulla cache degli embedding.
-
-    Questa vista:
-    1. Raccoglie tutti i progetti dell'utente
-    2. Calcola statistiche sui documenti, note e conversazioni
-    3. Recupera dati sulla cache di embedding
-    4. Supporta l'aggiornamento delle statistiche via AJAX
     """
     logger.debug("---> dashboard")
+
     if request.user.is_authenticated:
-        # Controlla se è una richiesta di aggiornamento delle statistiche della cache
+        # Gestione richieste AJAX per aggiornamento cache
         if request.GET.get('update_cache_stats') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             try:
                 stats = update_embedding_cache_stats()
@@ -65,107 +57,60 @@ def dashboard(request):
 
         # Conta i documenti totali in tutti i progetti
         documents_count = ProjectFile.objects.filter(project__user=request.user).count()
-
-        # Conta le note totali
         notes_count = ProjectNote.objects.filter(project__user=request.user).count()
-
-        # Conta le conversazioni totali
         conversations_count = ProjectConversation.objects.filter(project__user=request.user).count()
 
-        # Calcola il numero di progetti attivi (con almeno un file o una nota)
+        # Calcola il numero di progetti attivi
         active_projects = Project.objects.filter(
             user=request.user
         ).filter(
-            files__isnull=False
+            Q(files__isnull=False) | Q(project_notes__isnull=False)
         ).distinct().count()
 
-        # Calcola il numero totale di attività (documenti + note + conversazioni)
+        # Totale attività
         total_activities = documents_count + notes_count + conversations_count
 
-        # Ottieni le conversazioni recenti
-        recent_conversations = ProjectConversation.objects.filter(
-            project__user=request.user
-        ).order_by('-created_at')[:5]
+        # Calcola crescita rispetto al mese scorso
+        month_ago = timezone.now() - timedelta(days=30)
 
-        # Ottieni le note recenti
-        recent_notes = ProjectNote.objects.filter(
-            project__user=request.user
-        ).order_by('-created_at')[:5]
+        projects_last_month = Project.objects.filter(
+            user=request.user,
+            created_at__lt=month_ago
+        ).count()
+        projects_growth = calculate_growth(projects.count(), projects_last_month)
 
-        # Ottieni i file recenti
-        recent_files = ProjectFile.objects.filter(
-            project__user=request.user
-        ).order_by('-uploaded_at')[:5]
+        documents_last_month = ProjectFile.objects.filter(
+            project__user=request.user,
+            uploaded_at__lt=month_ago
+        ).count()
+        documents_growth = calculate_growth(documents_count, documents_last_month)
 
-        # Raccoglie i tipi di documento per il grafico a ciambella
-        document_types = {}
-        for doc in ProjectFile.objects.filter(project__user=request.user):
-            doc_type = doc.file_type.upper() if doc.file_type else 'ALTRO'
-            document_types[doc_type] = document_types.get(doc_type, 0) + 1
+        notes_last_month = ProjectNote.objects.filter(
+            project__user=request.user,
+            created_at__lt=month_ago
+        ).count()
+        notes_growth = calculate_growth(notes_count, notes_last_month)
 
-        document_types_values = list(document_types.values())
-        document_types_labels = list(document_types.keys())
+        conversations_last_month = ProjectConversation.objects.filter(
+            project__user=request.user,
+            created_at__lt=month_ago
+        ).count()
+        conversations_growth = calculate_growth(conversations_count, conversations_last_month)
 
-        # Statistiche sulla cache degli embedding
-        # Inizializza con valori predefiniti per evitare errori nel template
-        total_cache_stats = {
-            'count': 0,
-            'usage': 1,  # Utilizziamo 1 come valore predefinito per evitare divisioni per zero
-            'reuses': 0
-        }
+        # Dati per il grafico attività
+        seven_days_ago = timezone.now() - timedelta(days=7)
 
-        # Ottieni le statistiche più recenti
-        latest_stats = EmbeddingCacheStats.objects.first()
+        # Prepara dati per i grafici
+        activity_data = prepare_activity_data(request.user, seven_days_ago)
 
-        # Se non ci sono statistiche, calcolale ora
-        if not latest_stats:
-            try:
-                latest_stats = update_embedding_cache_stats()
-            except Exception as e:
-                logger.error(f"Errore nell'aggiornamento delle statistiche: {str(e)}")
-                latest_stats = None
+        # Dati per il grafico documenti
+        document_types = prepare_document_types_data(request.user)
 
-        # Ottieni dati per i grafici storici (ultimi 7 giorni)
-        seven_days_ago = timezone.now().date() - timedelta(days=7)
-        historical_stats = EmbeddingCacheStats.objects.filter(date__gte=seven_days_ago).order_by('date')
+        # Prepara le attività recenti
+        recent_activities = prepare_recent_activities(request.user)
 
-        # Crea dati per i grafici
-        dates = [stat.date.strftime('%d/%m') for stat in historical_stats]
-        embeddings_count = [stat.total_embeddings for stat in historical_stats]
-        reuse_count = [stat.reuse_count for stat in historical_stats]
-        savings = [round(stat.estimated_savings, 2) for stat in historical_stats]
-
-        # Se non ci sono dati storici, usa dei dati di esempio
-        if not dates:
-            dates = [(timezone.now().date() - timedelta(days=i)).strftime('%d/%m') for i in range(7, 0, -1)]
-            embeddings_count = [0] * 7
-            reuse_count = [0] * 7
-            savings = [0.0] * 7
-
-        # Distribuzione per tipo di file nella cache
-        cache_file_types = {}
-        if latest_stats:
-            cache_file_types = {
-                'PDF': latest_stats.pdf_count,
-                'DOCX': latest_stats.docx_count,
-                'TXT': latest_stats.txt_count,
-                'CSV': latest_stats.csv_count,
-                'ALTRO': latest_stats.other_count
-            }
-        cache_file_types_values = list(cache_file_types.values())
-        cache_file_types_labels = list(cache_file_types.keys())
-
-        # Ottieni le statistiche totali direttamente dal database
-        cache_count = GlobalEmbeddingCache.objects.count()
-        if cache_count > 0:
-            cache_sum = GlobalEmbeddingCache.objects.aggregate(
-                total_usage=Sum('usage_count')
-            )
-            total_cache_stats = {
-                'count': cache_count,
-                'usage': cache_sum['total_usage'] or 1,  # Utilizziamo 1 come minimo per evitare divisioni per zero
-                'reuses': (cache_sum['total_usage'] or 0) - cache_count if cache_sum['total_usage'] else 0
-            }
+        # Statistiche cache
+        cache_stats = prepare_cache_stats()
 
         context = {
             'projects': projects,
@@ -174,26 +119,236 @@ def dashboard(request):
             'conversations_count': conversations_count,
             'active_projects': active_projects,
             'total_activities': total_activities,
-            'recent_conversations': recent_conversations,
-            'recent_notes': recent_notes,
-            'recent_files': recent_files,
-            'document_types_values': document_types_values,
-            'document_types_labels': document_types_labels,
-            # Statistiche sulla cache
-            'cache_stats': latest_stats,
-            'cache_dates': dates,
-            'cache_embeddings_count': embeddings_count,
-            'cache_reuse_count': reuse_count,
-            'cache_savings': savings,
-            'cache_file_types_values': cache_file_types_values,
-            'cache_file_types_labels': cache_file_types_labels,
-            'total_cache_stats': total_cache_stats
+            'projects_growth': projects_growth,
+            'documents_growth': documents_growth,
+            'notes_growth': notes_growth,
+            'conversations_growth': conversations_growth,
+            'recent_activities': recent_activities,
+            'activity_dates': activity_data['dates'],
+            'activity_files': activity_data['files'],
+            'activity_notes': activity_data['notes'],
+            'activity_conversations': activity_data['conversations'],
+            'document_types_values': document_types['values'],
+            'document_types_labels': document_types['labels'],
+            'cache_stats': cache_stats['stats'],
+            'total_cache_stats': cache_stats['total_stats'],
         }
 
         return render(request, 'be/dashboard.html', context)
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+
+
+def calculate_growth(current, previous):
+    """Calcola la percentuale di crescita"""
+    if previous == 0:
+        return 100 if current > 0 else 0
+    return int(((current - previous) / previous) * 100)
+
+
+def prepare_activity_data(user, since_date):
+    """Prepara i dati per il grafico attività"""
+    dates = [(timezone.now() - timedelta(days=i)).date() for i in range(6, -1, -1)]
+
+    # Query per attività giornaliere
+    daily_files = (
+        ProjectFile.objects.filter(
+            project__user=user,
+            uploaded_at__gte=since_date
+        )
+        .annotate(date=TruncDate('uploaded_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+
+    daily_notes = (
+        ProjectNote.objects.filter(
+            project__user=user,
+            created_at__gte=since_date
+        )
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+
+    daily_conversations = (
+        ProjectConversation.objects.filter(
+            project__user=user,
+            created_at__gte=since_date
+        )
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+
+    # Organizza i dati per date
+    activity_data = {date: {'files': 0, 'notes': 0, 'conversations': 0} for date in dates}
+
+    for item in daily_files:
+        if item['date'] in activity_data:
+            activity_data[item['date']]['files'] = item['count']
+
+    for item in daily_notes:
+        if item['date'] in activity_data:
+            activity_data[item['date']]['notes'] = item['count']
+
+    for item in daily_conversations:
+        if item['date'] in activity_data:
+            activity_data[item['date']]['conversations'] = item['count']
+
+    return {
+        'dates': [date.strftime('%d/%m') for date in dates],
+        'files': [activity_data[date]['files'] for date in dates],
+        'notes': [activity_data[date]['notes'] for date in dates],
+        'conversations': [activity_data[date]['conversations'] for date in dates],
+    }
+
+
+def prepare_document_types_data(user):
+    """Prepara i dati per il grafico tipologie documenti"""
+    document_types = {}
+    for doc in ProjectFile.objects.filter(project__user=user):
+        doc_type = doc.file_type.upper() if doc.file_type else 'ALTRO'
+        document_types[doc_type] = document_types.get(doc_type, 0) + 1
+
+    return {
+        'values': list(document_types.values()),
+        'labels': list(document_types.keys()),
+    }
+
+
+def prepare_recent_activities(user, limit=5):
+    """Prepara le attività recenti per la timeline"""
+    activities = []
+
+    # Conversazioni recenti
+    recent_conversations = ProjectConversation.objects.filter(
+        project__user=user
+    ).select_related('project').order_by('-created_at')[:limit]
+
+    for conv in recent_conversations:
+        activities.append({
+            'type': 'question',
+            'project_name': conv.project.name,
+            'description': conv.question,
+            'created_at': conv.created_at,
+        })
+
+    # Note recenti
+    recent_notes = ProjectNote.objects.filter(
+        project__user=user
+    ).select_related('project').order_by('-created_at')[:limit]
+
+    for note in recent_notes:
+        activities.append({
+            'type': 'note',
+            'project_name': note.project.name,
+            'description': note.content,
+            'created_at': note.created_at,
+        })
+
+    # File recenti
+    recent_files = ProjectFile.objects.filter(
+        project__user=user
+    ).select_related('project').order_by('-uploaded_at')[:limit]
+
+    for file in recent_files:
+        activities.append({
+            'type': 'file',
+            'project_name': file.project.name,
+            'description': f"Caricato file: {file.filename}",
+            'created_at': file.uploaded_at,
+        })
+
+    # Ordina per data e prendi i più recenti
+    activities.sort(key=lambda x: x['created_at'], reverse=True)
+    return activities[:limit]
+
+
+def prepare_cache_stats():
+    """Prepara le statistiche della cache"""
+    # Ottieni le statistiche più recenti
+    latest_stats = EmbeddingCacheStats.objects.order_by('-date').first()
+
+    # Se non ci sono statistiche, calcolale
+    if not latest_stats:
+        try:
+            latest_stats = update_embedding_cache_stats()
+        except Exception as e:
+            logger.error(f"Errore nell'aggiornamento delle statistiche: {str(e)}")
+            latest_stats = None
+
+    # Statistiche totali dalla cache
+    cache_count = GlobalEmbeddingCache.objects.count()
+    cache_sum = GlobalEmbeddingCache.objects.aggregate(
+        total_usage=Sum('usage_count')
+    )
+
+    total_usage = cache_sum['total_usage'] or 0
+    reuses = max(0, total_usage - cache_count) if total_usage else 0
+
+    # Calcola hit rate
+    hit_rate = (reuses / total_usage * 100) if total_usage > 0 else 0
+
+    # Calcola risparmio medio per riutilizzo
+    avg_saving_per_reuse = 0.0001  # Default
+    if latest_stats and reuses > 0:
+        avg_saving_per_reuse = latest_stats.estimated_savings / reuses
+
+    return {
+        'stats': {
+            'estimated_savings': latest_stats.estimated_savings if latest_stats else 0,
+            'size_in_mb': latest_stats.size_in_mb if latest_stats else 0,
+            'max_reuses': latest_stats.max_reuses if latest_stats else 0,
+            'hit_rate': hit_rate,
+            'avg_saving_per_reuse': avg_saving_per_reuse,
+        },
+        'total_stats': {
+            'count': cache_count,
+            'usage': total_usage,
+            'reuses': reuses,
+        }
+    }
+
+
+def execute_management_command(request):
+    """
+    Esegue un comando di gestione Django in modo sicuro tramite API.
+    """
+    # Verifica l'autenticazione manualmente
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Autenticazione richiesta'})
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            command = data.get('command')
+            args = data.get('args', [])
+
+            # Lista dei comandi permessi per sicurezza
+            allowed_commands = [
+                'manage_embedding_cache',
+                'clear_embedding_cache',
+                'report_cache_usage',
+                'update_cache_stats'
+            ]
+
+            if command not in allowed_commands:
+                return JsonResponse({'success': False, 'message': 'Comando non permesso'})
+
+            # Esegui il comando
+            call_command(command, *args)
+
+            return JsonResponse({'success': True, 'message': 'Comando eseguito con successo'})
+        except Exception as e:
+            logger.error(f"Errore nell'esecuzione del comando {command}: {str(e)}")
+            return JsonResponse({'success': False, 'message': str(e)})
+
+    return JsonResponse({'success': False, 'message': 'Metodo non permesso'})
 
 
 # views.py

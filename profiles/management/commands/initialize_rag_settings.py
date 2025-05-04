@@ -2,8 +2,14 @@
 
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
-from profiles.models import RagTemplateType, RagDefaultSettings, Project, ProjectLLMConfiguration, DefaultSystemPrompts, \
-	UserCustomPrompt
+from profiles.models import (
+	RagTemplateType,
+	RagDefaultSettings,
+	Project,
+	ProjectLLMConfiguration,
+	DefaultSystemPrompts,
+	ProjectRAGConfiguration
+)
 import logging
 
 # Get logger
@@ -415,10 +421,10 @@ Il tuo obiettivo è fornire non solo risposte basate sui documenti, ma anche aiu
 
 	def update_project_configs(self):
 		"""
-		Aggiorna le configurazioni dei progetti esistenti per supportare
-		i prompt personalizzabili. Assicura che ogni progetto abbia un
-		prompt di sistema predefinito associato.
-		"""
+        Aggiorna le configurazioni dei progetti esistenti per supportare
+        i prompt personalizzabili. Assicura che ogni progetto abbia un
+        prompt di sistema predefinito associato.
+        """
 		# Ottieni il prompt di sistema predefinito
 		default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
 
@@ -426,25 +432,37 @@ Il tuo obiettivo è fornire non solo risposte basate sui documenti, ma anche aiu
 			logger.warning("Nessun prompt predefinito trovato per l'aggiornamento delle configurazioni")
 			return
 
+		# Ottieni la configurazione RAG predefinita
+		default_rag_settings = RagDefaultSettings.objects.filter(is_default=True).first()
+
 		# Per ogni progetto esistente
 		projects_updated = 0
 		for project in Project.objects.all():
 			try:
-				# Cerca o crea la configurazione LLM del progetto
+				# Aggiorna configurazione LLM
 				config, created = ProjectLLMConfiguration.objects.get_or_create(project=project)
 
-				# Se è stata appena creata o non ha un prompt predefinito assegnato
-				if created or not hasattr(config, 'default_system_prompt') or config.default_system_prompt is None:
-					# Imposta il prompt predefinito
+				if created or config.default_system_prompt is None:
 					config.default_system_prompt = default_prompt
 
-					# Se c'è un valore nel campo system_prompt, spostalo in system_prompt_override
-					if hasattr(config, 'system_prompt') and getattr(config, 'system_prompt', ''):
-						config.system_prompt_override = getattr(config, 'system_prompt', '')
+					# Se c'è un valore nel vecchio campo system_prompt che esiste ancora
+					if hasattr(config, 'system_prompt') and config.system_prompt:
+						config.custom_prompt_text = config.system_prompt
+						config.use_custom_prompt = True
+						# Pulisci il vecchio campo se esiste ancora
+						config.system_prompt = None
 
 					config.save()
 					projects_updated += 1
-					logger.debug(f"Aggiornata configurazione per il progetto: {project.name}")
+					logger.debug(f"Aggiornata configurazione LLM per il progetto: {project.name}")
+
+				# Aggiorna configurazione RAG
+				rag_config, rag_created = ProjectRAGConfiguration.objects.get_or_create(project=project)
+
+				if rag_created and default_rag_settings:
+					rag_config.rag_preset = default_rag_settings
+					rag_config.save()
+					logger.debug(f"Aggiornata configurazione RAG per il progetto: {project.name}")
 
 			except Exception as e:
 				logger.error(f"Errore nell'aggiornamento della configurazione per il progetto {project.id}: {e}")

@@ -1,12 +1,13 @@
 # management/commands/manage_embedding_cache.py
 
 from django.core.management.base import BaseCommand, CommandError
-from profiles.models import GlobalEmbeddingCache
+from profiles.models import GlobalEmbeddingCache, EmbeddingCacheStats
 import os
 import logging
 from django.conf import settings
-from datetime import timedelta
+from datetime import timedelta, date
 from django.utils import timezone
+from django.db import transaction
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -42,6 +43,11 @@ class Command(BaseCommand):
 			action='store_true',
 			help='Ripara le incongruenze tra database e file system'
 		)
+		parser.add_argument(
+			'--update-stats',
+			action='store_true',
+			help='Aggiorna le statistiche della cache nel database'
+		)
 
 	def handle(self, *args, **options):
 		try:
@@ -62,8 +68,12 @@ class Command(BaseCommand):
 			if options['fix']:
 				self.fix_inconsistencies()
 
+			# Aggiorna le statistiche
+			if options['update_stats']:
+				self.update_cache_statistics()
+
 			# Se nessun comando è stato specificato, mostra le statistiche
-			if not any([options['stats'], options['clean'], options['prune'], options['fix']]):
+			if not any([options['stats'], options['clean'], options['prune'], options['fix'], options['update_stats']]):
 				self.show_stats()
 
 			self.stdout.write(self.style.SUCCESS('Operazione completata con successo'))
@@ -122,12 +132,22 @@ class Command(BaseCommand):
 		self.stdout.write(f"Dimensione media file: {self.format_size(stats['avg_size'] or 0)}")
 		self.stdout.write(f"File più piccolo: {self.format_size(stats['min_size'] or 0)}")
 		self.stdout.write(f"File più grande: {self.format_size(stats['max_size'] or 0)}")
-		self.stdout.write(f"Utilizzi medi per cache: {stats['avg_usage']:.2f}")
+		self.stdout.write(f"Utilizzi medi per cache: {stats['avg_usage']:.2f}" if stats[
+			'avg_usage'] else "Utilizzi medi per cache: 0")
 		self.stdout.write(f"Utilizzi massimi: {stats['max_usage']}")
 
 		self.stdout.write(self.style.SUCCESS("\nDistribuzione per tipo di file:"))
 		for ft in file_types:
 			self.stdout.write(f"  {ft['file_type']}: {ft['count']} file")
+
+		# Mostra anche le statistiche salvate se disponibili
+		latest_stats = EmbeddingCacheStats.objects.order_by('-date').first()
+		if latest_stats:
+			self.stdout.write(self.style.SUCCESS("\n=== Ultime Statistiche Salvate ==="))
+			self.stdout.write(f"Data: {latest_stats.date}")
+			self.stdout.write(f"Risparmi stimati: ${latest_stats.estimated_savings:.2f}")
+			self.stdout.write(f"Riutilizzi: {latest_stats.reuse_count}")
+			self.stdout.write(f"Massimi riutilizzi di un singolo embedding: {latest_stats.max_reuses}")
 
 	def clean_orphaned_files(self):
 		"""Elimina i file di embedding senza corrispondenza nel database"""
@@ -211,6 +231,89 @@ class Command(BaseCommand):
 				broken_records += 1
 
 		self.stdout.write(self.style.SUCCESS(f"Eliminati {broken_records} record inconsistenti"))
+
+	def update_cache_statistics(self):
+		"""Aggiorna le statistiche della cache nel database"""
+		from django.db.models import Sum, Count, Avg, Max
+
+		today = date.today()
+
+		# Verifica se esistono già statistiche per oggi
+		stats, created = EmbeddingCacheStats.objects.get_or_create(date=today)
+
+		# Raccoglie le statistiche attuali
+		cache_data = GlobalEmbeddingCache.objects.aggregate(
+			total_embeddings=Count('file_hash'),
+			total_size=Sum('file_size'),
+			total_usage=Sum('usage_count'),
+			avg_file_size=Avg('file_size'),
+			max_reuses=Max('usage_count')
+		)
+
+		# Conta per tipo di file
+		file_types = GlobalEmbeddingCache.objects.values('file_type').annotate(
+			count=Count('file_hash')
+		)
+
+		# Aggiorna le statistiche
+		stats.total_embeddings = cache_data['total_embeddings'] or 0
+		stats.total_size = cache_data['total_size'] or 0
+		stats.total_usage = cache_data['total_usage'] or 0
+		stats.avg_file_size = cache_data['avg_file_size'] or 0
+		stats.max_reuses = cache_data['max_reuses'] or 0
+
+		# Calcola i riutilizzi
+		if stats.total_embeddings > 0:
+			stats.reuse_count = max(0, stats.total_usage - stats.total_embeddings)
+		else:
+			stats.reuse_count = 0
+
+		# Aggiorna i conteggi per tipo di file
+		stats.pdf_count = 0
+		stats.docx_count = 0
+		stats.txt_count = 0
+		stats.csv_count = 0
+		stats.other_count = 0
+
+		for ft in file_types:
+			file_type = ft['file_type'].lower()
+			count = ft['count']
+
+			if 'pdf' in file_type:
+				stats.pdf_count += count
+			elif 'docx' in file_type or 'doc' in file_type:
+				stats.docx_count += count
+			elif 'txt' in file_type:
+				stats.txt_count += count
+			elif 'csv' in file_type:
+				stats.csv_count += count
+			else:
+				stats.other_count += count
+
+		# Stima dei risparmi (esempio: $0.0001 per embedding risparmiato)
+		stats.estimated_savings = stats.reuse_count * 0.0001
+
+		stats.save()
+
+		if created:
+			self.stdout.write(self.style.SUCCESS(f"Create nuove statistiche per {today}"))
+		else:
+			self.stdout.write(self.style.SUCCESS(f"Aggiornate statistiche esistenti per {today}"))
+
+		# Mostra le statistiche aggiornate
+		self.stdout.write("\n=== Statistiche Cache Aggiornate ===")
+		self.stdout.write(f"Totale embedding: {stats.total_embeddings}")
+		self.stdout.write(f"Dimensione totale: {self.format_size(stats.total_size)}")
+		self.stdout.write(f"Utilizzi totali: {stats.total_usage}")
+		self.stdout.write(f"Riutilizzi: {stats.reuse_count}")
+		self.stdout.write(f"Risparmi stimati: ${stats.estimated_savings:.2f}")
+		self.stdout.write(f"Massimi riutilizzi: {stats.max_reuses}")
+		self.stdout.write("\nDistribuzione per tipo:")
+		self.stdout.write(f"  PDF: {stats.pdf_count}")
+		self.stdout.write(f"  DOCX: {stats.docx_count}")
+		self.stdout.write(f"  TXT: {stats.txt_count}")
+		self.stdout.write(f"  CSV: {stats.csv_count}")
+		self.stdout.write(f"  Altri: {stats.other_count}")
 
 	def format_size(self, size_bytes):
 		"""Formatta le dimensioni in byte in un formato leggibile"""

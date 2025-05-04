@@ -1,13 +1,12 @@
 Rapporto sull'utilizzo della cache degli embedding
-Periodo: dal 2025-03-24 al 2025-04-23
+Periodo: dal 2025-04-03 al 2025-05-03
 
 Statistiche generali
-Totale entry nella cache,5
-Entry aggiunte nel periodo,5
-Totale utilizzi,30
-Totale riutilizzi,25
+Totale entry nella cache,1
+Entry aggiunte nel periodo,1
+Totale utilizzi,7
+Totale riutilizzi,6
 Stima costi risparmiati,$0.00
 
 Tipo di file,Numero di file,Dimensione totale (MB),Utilizzi totali,Media utilizzi per file
-pdf,4,5.937217712402344,27,6.75
-png,1,0.0018606185913085938,3,3.0
+pdf,1,2.137247085571289,7,7.0

@@ -13,6 +13,15 @@ def get_item(dictionary, key):
 
 
 @register.filter
+def divide(value, arg):
+    try:
+        return float(value) / float(arg)
+    except (ValueError, ZeroDivisionError):
+        return 0
+
+
+
+@register.filter
 def multiply(value, arg):
     """Moltiplica il valore per l'argomento"""
     try:

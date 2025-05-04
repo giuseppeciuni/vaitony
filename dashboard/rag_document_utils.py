@@ -148,9 +148,10 @@ def get_cached_embedding(file_hash, chunk_size=500, chunk_overlap=50):
 def create_embedding_cache(file_hash, embedding_data, file_info):
     """
     Crea una nuova cache degli embedding per un file.
+    Se esiste già, aggiorna i dati esistenti.
 
     Salva l'embedding FAISS su disco nella directory della cache
-    e crea un record nel database per tenere traccia dell'embedding.
+    e crea/aggiorna un record nel database per tenere traccia dell'embedding.
     Questo permette di condividere gli embedding tra progetti diversi
     e offre un risparmio significativo in termini di chiamate API e risorse.
 
@@ -160,7 +161,7 @@ def create_embedding_cache(file_hash, embedding_data, file_info):
         file_info: Dizionario con informazioni sul file (tipo, nome, dimensione)
 
     Returns:
-        GlobalEmbeddingCache: L'oggetto cache creato
+        GlobalEmbeddingCache: L'oggetto cache creato o aggiornato
     """
     # Importa qui per evitare l'importazione circolare
     from profiles.models import GlobalEmbeddingCache
@@ -175,20 +176,36 @@ def create_embedding_cache(file_hash, embedding_data, file_info):
 
     logger.info(f"Embedding salvato nella cache: {embedding_path}")
 
-    # Crea un record nel database per l'embedding
-    cache = GlobalEmbeddingCache.objects.create(
-        file_hash=file_hash,
-        file_type=file_info.get('file_type', ''),
-        original_filename=file_info.get('filename', 'unknown'),
-        embedding_path=embedding_path,
-        chunk_size=file_info.get('chunk_size', 500),
-        chunk_overlap=file_info.get('chunk_overlap', 50),
-        embedding_model=file_info.get('embedding_model', 'OpenAIEmbeddings'),
-        file_size=file_info.get('file_size', 0)
-    )
+    try:
+        # Prova a aggiornare un record esistente
+        cache, created = GlobalEmbeddingCache.objects.update_or_create(
+            file_hash=file_hash,
+            defaults={
+                'file_type': file_info.get('file_type', ''),
+                'original_filename': file_info.get('filename', 'unknown'),
+                'embedding_path': embedding_path,
+                'chunk_size': file_info.get('chunk_size', 500),
+                'chunk_overlap': file_info.get('chunk_overlap', 50),
+                'embedding_model': file_info.get('embedding_model', 'OpenAIEmbeddings'),
+                'file_size': file_info.get('file_size', 0)
+            }
+        )
 
-    logger.info(f"Record embedding creato: {file_info.get('filename', 'unknown')} (hash: {file_hash[:8]}...)")
-    return cache
+        if created:
+            logger.info(f"Record embedding creato: {file_info.get('filename', 'unknown')} (hash: {file_hash[:8]}...)")
+        else:
+            logger.info(f"Record embedding aggiornato: {file_info.get('filename', 'unknown')} (hash: {file_hash[:8]}...)")
+
+        return cache
+
+    except Exception as e:
+        logger.error(f"Errore nel creare/aggiornare il record embedding: {str(e)}")
+        # Se fallisce, prova almeno a recuperare il record esistente
+        try:
+            cache = GlobalEmbeddingCache.objects.get(file_hash=file_hash)
+            return cache
+        except GlobalEmbeddingCache.DoesNotExist:
+            raise e
 
 
 def copy_embedding_to_project_index(project, cache_info, project_index_path):

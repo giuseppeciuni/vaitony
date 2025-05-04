@@ -17,37 +17,7 @@
                     </a>
                 </li>
 
-                <!-- Menu Uploads -->
-<!--                <li class="nav-item {% if 'upload_document' in request.resolver_match.url_name or 'upload_folder' in request.resolver_match.url_name or 'documents_uploaded' in request.resolver_match.url_name %}menu-is-opening menu-open{% endif %}">-->
-<!--                    <a href="#" class="nav-link {% if 'upload_document' in request.resolver_match.url_name or 'upload_folder' in request.resolver_match.url_name or 'documents_uploaded' in request.resolver_match.url_name %}active{% endif %}">-->
-<!--                        <i class="nav-icon bi bi-cloud-upload"></i>-->
-<!--                        <p>-->
-<!--                            Documenti-->
-<!--                            <i class="nav-arrow bi bi-chevron-right"></i>-->
-<!--                        </p>-->
-<!--                    </a>-->
-<!--                    <ul class="nav nav-treeview">-->
-<!--                        <li class="nav-item">-->
-<!--                            <a href="{% url 'documents_uploaded' %}" class="nav-link {% if 'documents_uploaded' in request.resolver_match.url_name %}active{% endif %}">-->
-<!--                                <i class="nav-icon bi bi-files"></i>-->
-<!--                                <p>I miei documenti</p>-->
-<!--                            </a>-->
-<!--                        </li>-->
-<!--                        <li class="nav-item">-->
-<!--                            <a href="{% url 'upload_document' %}" class="nav-link {% if 'upload_document' in request.resolver_match.url_name %}active{% endif %}">-->
-<!--                                <i class="nav-icon bi bi-file-earmark-plus"></i>-->
-<!--                                <p>Carica documento</p>-->
-<!--                            </a>-->
-<!--                        </li>-->
-<!--                        <li class="nav-item">-->
-<!--                            <a href="{% url 'upload_folder' %}" class="nav-link {% if 'upload_folder' in request.resolver_match.url_name %}active{% endif %}">-->
-<!--                                <i class="nav-icon bi bi-folder-plus"></i>-->
-<!--                                <p>Carica cartella</p>-->
-<!--                            </a>-->
-<!--                        </li>-->
-<!--                    </ul>-->
-<!--                </li>-->
-
+                <!-- Progetti -->
                 <li class="nav-item {% if 'project' in request.resolver_match.url_name %}menu-is-opening menu-open{% endif %}">
                     <a href="#" class="nav-link {% if 'project' in request.resolver_match.url_name %}active{% endif %}">
                         <i class="nav-icon bi bi-kanban"></i>
@@ -69,10 +39,18 @@
                                 <p>Lista progetti</p>
                             </a>
                         </li>
+                        {% if 'documents_uploaded' in request.resolver_match.url_name %}
+                        <li class="nav-item">
+                            <a href="{% url 'documents_uploaded' %}" class="nav-link {% if 'documents_uploaded' in request.resolver_match.url_name %}active{% endif %}">
+                                <i class="nav-icon bi bi-files"></i>
+                                <p>Tutti i documenti</p>
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                 </li>
 
-
+                <!-- Impostazioni -->
                 <li class="nav-item {% if 'ia_engine' in request.resolver_match.url_name or 'rag_settings' in request.resolver_match.url_name %}menu-is-opening menu-open{% endif %}">
                     <a href="#" class="nav-link {% if 'ia_engine' in request.resolver_match.url_name or 'rag_settings' in request.resolver_match.url_name %}active{% endif %}">
                         <i class="nav-icon bi bi-gear"></i>

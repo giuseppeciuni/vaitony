@@ -1,18 +1,17 @@
+import base64
+import hashlib
+import logging
 import os
-import shutil
+import traceback
+from cryptography.fernet import Fernet
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.files.base import ContentFile
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
-from cryptography.fernet import Fernet
-import base64
-import hashlib
-from dashboard.rag_utils import create_project_rag_chain
-import logging
 
+logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # MODELLI PER PROFILI E AUTENTICAZIONE
@@ -60,39 +59,6 @@ class Profile(models.Model):
         return self.user.username
 
 
-# ==============================================================================
-# MODELLI PER DOCUMENTI E INDICI
-# ==============================================================================
-
-class UserDocument(models.Model):
-    """
-    Tiene traccia dei documenti caricati dagli utenti a livello globale.
-    Memorizza metadati come nome del file, percorso, tipo, dimensione e hash.
-    Contiene un flag per indicare se il documento è stato incorporato nell'indice vettoriale.
-    """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
-    filename = models.CharField(max_length=255)
-    file_path = models.CharField(max_length=500)
-    file_type = models.CharField(max_length=20)
-    file_size = models.BigIntegerField()
-    file_hash = models.CharField(max_length=64)  # SHA-256 hash
-    is_embedded = models.BooleanField(default=False)
-    last_modified = models.DateTimeField(auto_now=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('user','file_path')  # Significa che non possono esistere due record con la stessa combinazione di user e file_path
-
-    def __str__(self):
-        return f"{self.user.username} - {self.filename}"
-
-    @property
-    def extension(self):
-        """Restituisce l'estensione del file in minuscolo"""
-        _, ext = os.path.splitext(self.filename)   #splitto il nome del file in 2: prima il nome, seconda l'estensione
-        return ext.lower()
-
-
 
 
 # ==============================================================================
@@ -108,7 +74,6 @@ class Project(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -198,9 +163,12 @@ class AnswerSource(models.Model):
     """
     conversation = models.ForeignKey(ProjectConversation, on_delete=models.CASCADE, related_name='sources')
     project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, null=True, related_name='used_in_answers')
+    project_note = models.ForeignKey(ProjectNote, on_delete=models.SET_NULL, null=True, blank=True, related_name='used_in_answers_from_notes')
+
     content = models.TextField()
     page_number = models.IntegerField(null=True, blank=True)
     relevance_score = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Source for {self.conversation.id} from {self.project_file.filename if self.project_file else 'unknown'}"
@@ -301,117 +269,6 @@ class RagDefaultSettings(models.Model):
         super().save(*args, **kwargs)
 
 
-class RAGConfiguration(models.Model):
-    """
-    Memorizza la configurazione RAG personalizzata per ciascun utente.
-    Gli utenti possono selezionare un preset predefinito e/o sovrascrivere
-    singoli parametri per personalizzare il comportamento del sistema RAG.
-    """
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='rag_config')
-    current_settings = models.ForeignKey(
-        RagDefaultSettings,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='user_configs'
-    )
-
-    # Campi per sovrascrivere le impostazioni predefinite (opzionali)
-    chunk_size = models.IntegerField(null=True, blank=True)
-    chunk_overlap = models.IntegerField(null=True, blank=True)
-    similarity_top_k = models.IntegerField(null=True, blank=True)
-    mmr_lambda = models.FloatField(null=True, blank=True)
-    similarity_threshold = models.FloatField(null=True, blank=True)
-    retriever_type = models.CharField(max_length=50, null=True, blank=True)
-    system_prompt = models.TextField(null=True, blank=True)
-    auto_citation = models.BooleanField(null=True, blank=True)
-    prioritize_filenames = models.BooleanField(null=True, blank=True)
-    equal_notes_weight = models.BooleanField(null=True, blank=True)
-    strict_context = models.BooleanField(null=True, blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Configurazione RAG per {self.user.username}"
-
-    # Metodi per recuperare i valori effettivi (dall'utente o dalle impostazioni predefinite)
-    def get_chunk_size(self):
-        if self.chunk_size is not None:
-            return self.chunk_size
-        elif self.current_settings:
-            return self.current_settings.chunk_size
-        return 500  # Valore di fallback
-
-    def get_chunk_overlap(self):
-        if self.chunk_overlap is not None:
-            return self.chunk_overlap
-        elif self.current_settings:
-            return self.current_settings.chunk_overlap
-        return 50
-
-    def get_similarity_top_k(self):
-        if self.similarity_top_k is not None:
-            return self.similarity_top_k
-        elif self.current_settings:
-            return self.current_settings.similarity_top_k
-        return 6
-
-    def get_mmr_lambda(self):
-        if self.mmr_lambda is not None:
-            return self.mmr_lambda
-        elif self.current_settings:
-            return self.current_settings.mmr_lambda
-        return 0.7
-
-    def get_similarity_threshold(self):
-        if self.similarity_threshold is not None:
-            return self.similarity_threshold
-        elif self.current_settings:
-            return self.current_settings.similarity_threshold
-        return 0.7
-
-    def get_retriever_type(self):
-        if self.retriever_type:
-            return self.retriever_type
-        elif self.current_settings:
-            return self.current_settings.retriever_type
-        return 'mmr'
-
-    def get_system_prompt(self):
-        if self.system_prompt:
-            return self.system_prompt
-        elif self.current_settings:
-            return self.current_settings.system_prompt
-        return ""
-
-    def get_auto_citation(self):
-        if self.auto_citation is not None:
-            return self.auto_citation
-        elif self.current_settings:
-            return self.current_settings.auto_citation
-        return True
-
-    def get_prioritize_filenames(self):
-        if self.prioritize_filenames is not None:
-            return self.prioritize_filenames
-        elif self.current_settings:
-            return self.current_settings.prioritize_filenames
-        return True
-
-    def get_equal_notes_weight(self):
-        if self.equal_notes_weight is not None:
-            return self.equal_notes_weight
-        elif self.current_settings:
-            return self.current_settings.equal_notes_weight
-        return True
-
-    def get_strict_context(self):
-        if self.strict_context is not None:
-            return self.strict_context
-        elif self.current_settings:
-            return self.current_settings.strict_context
-        return False
 
 
 # ==============================================================================
@@ -563,28 +420,6 @@ class DefaultSystemPrompts(models.Model):
         super().save(*args, **kwargs)
 
 
-class UserCustomPrompt(models.Model):
-    """
-    Memorizza i prompt personalizzati creati dagli utenti.
-    Ogni utente può creare più prompt personalizzati per diversi scopi
-    e associarli ai propri progetti.
-    """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_prompts')
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True)
-    prompt_text = models.TextField()
-    is_public = models.BooleanField(default=False, help_text=_("Se abilitato, il prompt sarà visibile e utilizzabile da tutti gli utenti"))
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = _("Prompt Personalizzato Utente")
-        verbose_name_plural = _("Prompt Personalizzati Utente")
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.name} - {self.user.username}"
-
 
 class ProjectLLMConfiguration(models.Model):
     """
@@ -602,12 +437,10 @@ class ProjectLLMConfiguration(models.Model):
     # Nuovi campi per gestire i prompt
     default_system_prompt = models.ForeignKey(DefaultSystemPrompts, on_delete=models.SET_NULL,
                                               null=True, blank=True, related_name='projects')
-    custom_prompt = models.ForeignKey(UserCustomPrompt, on_delete=models.SET_NULL,
-                                      null=True, blank=True, related_name='projects')
+    custom_prompt_text =models.TextField(blank=True, help_text=_(
+        "Prompt personalizzato specifico per questo progetto"))
     use_custom_prompt = models.BooleanField(default=False, help_text=_(
         "Se abilitato, usa il prompt personalizzato anziché quello predefinito"))
-    system_prompt_override = models.TextField(blank=True, help_text=_(
-        "Sovrascrive i prompt predefiniti e personalizzati se specificato"))
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -663,15 +496,11 @@ class ProjectLLMConfiguration(models.Model):
     def get_system_prompt(self):
         """
         Restituisce il prompt di sistema effettivo da utilizzare.
-        La priorità è: override manuale > prompt personalizzato > prompt predefinito
+        La priorità è: prompt personalizzato (se abilitato) > prompt predefinito
         """
-        # Se c'è un override manuale, ha la priorità
-        if self.system_prompt_override:
-            return self.system_prompt_override
-
         # Se l'utente ha scelto di usare un prompt personalizzato ed è disponibile
-        if self.use_custom_prompt and self.custom_prompt:
-            return self.custom_prompt.prompt_text
+        if self.use_custom_prompt and self.custom_prompt_text:
+            return self.custom_prompt_text
 
         # Altrimenti, usa il prompt di sistema predefinito se disponibile
         if self.default_system_prompt:
@@ -1282,87 +1111,175 @@ def update_index_on_note_change(sender, instance, created, **kwargs):
 
 
 
-# segnale per associare automaticamente un prompt predefinito ai nuovi progetti
+# segnale per associare automaticamente le configurazioni iniziali ad un progetto definito dall'utente
 @receiver(post_save, sender=Project)
 def create_project_configs(sender, instance, created, **kwargs):
     """
-    Crea le configurazioni iniziali per un nuovo progetto,
-    inclusa la configurazione LLM con un prompt di sistema predefinito.
+    Crea le configurazioni iniziali per un nuovo progetto.
+    Questo include ProjectRAGConfiguration, ProjectLLMConfiguration, e ProjectIndexStatus.
     """
     if created:
-        # Import models only when needed to avoid circular imports
-        # Non importare create_project_rag_chain qui visto che non serve in questo segnale
-        from profiles.models import (
-            ProjectRAGConfiguration, ProjectLLMConfiguration,
-            DefaultSystemPrompts, ProjectIndexStatus
+        # Crea la configurazione RAG del progetto
+        project_rag_config, rag_created = ProjectRAGConfiguration.objects.get_or_create(
+            project=instance
         )
 
-        # Crea la configurazione RAG del progetto
-        ProjectRAGConfiguration.objects.get_or_create(project=instance)
+        # Se è stata appena creata, assegna il preset di default
+        if rag_created:
+            try:
+                # Cerca il preset predefinito
+                default_preset = RagDefaultSettings.objects.filter(is_default=True).first()
+                if not default_preset:
+                    # Se non c'è un preset predefinito, usa il primo "Bilanciato Standard"
+                    default_preset = RagDefaultSettings.objects.filter(name="Bilanciato Standard").first()
 
-        # Ottieni il prompt di sistema predefinito
-        default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+                if default_preset:
+                    project_rag_config.rag_preset = default_preset
+                    project_rag_config.save()
+                    logger.info(f"Assegnato preset di default '{default_preset.name}' al nuovo progetto {instance.id}")
+                else:
+                    logger.warning(f"Nessun preset di default trovato per il progetto {instance.id}")
+            except Exception as e:
+                logger.error(f"Errore nell'assegnazione del preset di default: {str(e)}")
 
         # Crea la configurazione LLM del progetto
-        ProjectLLMConfiguration.objects.create(
-            project=instance,
-            default_system_prompt=default_prompt
+        project_llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(
+            project=instance
         )
 
-        # Crea lo stato dell'indice del progetto
-        ProjectIndexStatus.objects.create(project=instance)
+        # Se è stata appena creata, assegna il prompt di sistema predefinito
+        if llm_created:
+            try:
+                default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+                if default_prompt:
+                    project_llm_config.default_system_prompt = default_prompt
+                    project_llm_config.save()
+                    logger.info(f"Assegnato prompt di default al nuovo progetto {instance.id}")
+            except Exception as e:
+                logger.error(f"Errore nell'assegnazione del prompt di default: {str(e)}")
 
+        # Crea lo stato dell'indice del progetto
+        ProjectIndexStatus.objects.get_or_create(project=instance)
+
+        logger.info(f"Configurazioni create per il nuovo progetto {instance.id}")
 
 
 # ==============================================================================
 # SEGNALI PER LA GESTIONE DEI PROFILI UTENTE
 # ==============================================================================
 
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
+@receiver(post_save, sender=Project)
+def create_project_configs(sender, instance, created, **kwargs):
     """
-   Crea un profilo utente quando viene creato un nuovo utente.
-   Se il profilo non esiste, lo crea e imposta un'immagine predefinita.
-   """
-    from profiles.models import Profile, Profile_type
+    Crea automaticamente tutte le configurazioni necessarie quando viene creato un nuovo progetto.
 
-    # Se l'utente è appena stato creato o non ha ancora un profilo
+    Questo segnale si attiva dopo il salvataggio di un progetto e:
+    1. Crea ProjectRAGConfiguration con preset di default
+    2. Crea ProjectLLMConfiguration con prompt di sistema predefinito
+    3. Crea ProjectIndexStatus per tracciare lo stato dell'indice vettoriale
+
+    Args:
+        sender: La classe del modello (Project)
+        instance: L'istanza del progetto appena salvata
+        created: Boolean che indica se è stata creata (True) o aggiornata (False)
+        **kwargs: Altri argomenti passati dal segnale
+    """
     if created:
-        # Ottieni il tipo di profilo predefinito (assume che esista almeno un tipo)
-        default_type = Profile_type.objects.first()
-        if not default_type:
-            default_type = Profile_type.objects.create(type="NORMAL_USER")
+        logger.info(f"Initializing configurations for new project {instance.id} ({instance.name})")
 
-        # Crea il profilo
-        profile = Profile.objects.create(
-            user=instance,
-            profile_type=default_type
-        )
-
-        # Imposta l'immagine predefinita
         try:
-            # Percorso all'immagine predefinita
-            default_image_path = os.path.join(settings.STATIC_ROOT, 'dist/assets/img/default-150x150.png')
+            # ===== 1. Crea la configurazione RAG del progetto =====
+            logger.debug(f"Creating RAG configuration for project {instance.id}")
 
-            # Se l'immagine predefinita esiste
-            if os.path.exists(default_image_path):
-                # Crea la directory media se non esiste
-                media_dir = os.path.join(settings.MEDIA_ROOT, 'profile_images')
-                os.makedirs(media_dir, exist_ok=True)
+            project_rag_config, rag_created = ProjectRAGConfiguration.objects.get_or_create(
+                project=instance
+            )
 
-                # Copia l'immagine predefinita nella directory media
-                new_image_path = os.path.join(media_dir, f'default_{instance.id}.png')
-                shutil.copy2(default_image_path, new_image_path)
+            if rag_created:
+                logger.debug(f"RAG configuration created for project {instance.id}")
 
-                # Aggiorna il profilo con l'immagine predefinita
-                with open(new_image_path, 'rb') as f:
-                    image_content = ContentFile(f.read())
-                    profile.picture.save(f'default_{instance.id}.png', image_content, save=True)
+                # Assegna il preset RAG di default
+                try:
+                    # Prima cerca un preset marcato come default
+                    default_preset = RagDefaultSettings.objects.filter(is_default=True).first()
+
+                    if not default_preset:
+                        logger.warning("No default RAG preset found, looking for 'Bilanciato Standard'")
+                        # Se non c'è un default, cerca il preset "Bilanciato Standard"
+                        default_preset = RagDefaultSettings.objects.filter(
+                            name="Bilanciato Standard"
+                        ).first()
+
+                    if not default_preset:
+                        logger.warning("'Bilanciato Standard' not found, using first available preset")
+                        # Se non trova neanche quello, prendi il primo disponibile
+                        default_preset = RagDefaultSettings.objects.first()
+
+                    if default_preset:
+                        project_rag_config.rag_preset = default_preset
+                        project_rag_config.save()
+                        logger.info(f"Assigned RAG preset '{default_preset.name}' to project {instance.id}")
+                    else:
+                        logger.error(f"No RAG presets available in database for project {instance.id}")
+
+                except Exception as e:
+                    logger.error(f"Error assigning default RAG preset to project {instance.id}: {str(e)}")
+                    logger.error(traceback.format_exc())
+            else:
+                logger.debug(f"RAG configuration already exists for project {instance.id}")
+
+            # ===== 2. Crea la configurazione LLM del progetto =====
+            logger.debug(f"Creating LLM configuration for project {instance.id}")
+
+            project_llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(
+                project=instance
+            )
+
+            if llm_created:
+                logger.debug(f"LLM configuration created for project {instance.id}")
+
+                # Assegna il prompt di sistema predefinito
+                try:
+                    # Cerca un prompt di sistema marcato come default
+                    default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+
+                    if not default_prompt:
+                        logger.warning("No default system prompt found, using first available")
+                        # Se non c'è un default, prendi il primo disponibile
+                        default_prompt = DefaultSystemPrompts.objects.first()
+
+                    if default_prompt:
+                        project_llm_config.default_system_prompt = default_prompt
+                        project_llm_config.save()
+                        logger.info(f"Assigned default system prompt '{default_prompt.name}' to project {instance.id}")
+                    else:
+                        logger.warning(f"No system prompts available for project {instance.id}")
+
+                except Exception as e:
+                    logger.error(f"Error assigning default system prompt to project {instance.id}: {str(e)}")
+                    logger.error(traceback.format_exc())
+            else:
+                logger.debug(f"LLM configuration already exists for project {instance.id}")
+
+            # ===== 3. Crea lo stato dell'indice del progetto =====
+            logger.debug(f"Creating index status for project {instance.id}")
+
+            index_status, index_created = ProjectIndexStatus.objects.get_or_create(
+                project=instance
+            )
+
+            if index_created:
+                logger.debug(f"Index status created for project {instance.id}")
+            else:
+                logger.debug(f"Index status already exists for project {instance.id}")
+
+            logger.info(f"Successfully initialized all configurations for project {instance.id}")
+
         except Exception as e:
-            # Se c'è un errore, continua senza impostare l'immagine predefinita
-            print(f"Errore nell'impostare l'immagine predefinita: {str(e)}")
-
-
+            logger.error(f"Critical error initializing configurations for project {instance.id}: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Non solleviamo l'eccezione per non interrompere la creazione del progetto
+            # ma logghiamo l'errore per debugging
 
 
 @receiver(post_save, sender=User)

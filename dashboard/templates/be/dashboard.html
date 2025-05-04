@@ -203,8 +203,7 @@
             </div>
         </div>
     </div>
-
-    <div class="row">
+<div class="row">
         <div class="col-lg-8">
             <!-- Attività recenti e grafici -->
             <div class="card mb-4">
@@ -286,7 +285,7 @@
                                     <div class="card-footer bg-transparent pt-0 border-top-0">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <small class="text-muted">Aggiornato: {{ project.updated_at|date:"d M Y" }}</small>
-                                            <a href="{% url 'project_details' project.id %}" class="btn btn-sm btn-primary stretched-link">
+                                            <a href="{% url 'project' project.id %}" class="btn btn-sm btn-primary stretched-link">
                                                 <i class="bi bi-eye me-1"></i>Visualizza
                                             </a>
                                         </div>
@@ -312,8 +311,7 @@
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-4">
+<div class="col-lg-4">
             <!-- Distribuzione documenti -->
             <div class="card mb-4">
                 <div class="card-header border-0">
@@ -356,24 +354,22 @@
                                 <small class="text-muted">{{ note.created_at|date:"d M Y" }}</small>
                             </div>
                             {% empty %}
-                            <div class="activity-item">
-                                <div class="activity-badge file"></div>
-                                <div class="d-flex justify-content-between">
-                                    <h6 class="mb-1 fw-bold">Progetto Analisi Dati</h6>
-                                    <small class="text-muted">10:30</small>
+                                {% for file in recent_files|slice:":4" %}
+                                <div class="activity-item">
+                                    <div class="activity-badge file"></div>
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1 fw-bold">{{ file.project.name }}</h6>
+                                        <small class="text-muted">{{ file.uploaded_at|time:"H:i" }}</small>
+                                    </div>
+                                    <p class="mb-1">Caricato file: {{ file.filename }}</p>
+                                    <small class="text-muted">{{ file.uploaded_at|date:"d M Y" }}</small>
                                 </div>
-                                <p class="mb-1">Aggiunto nuovo documento "Analisi Q2 2025.pdf"</p>
-                                <small class="text-muted">16 Apr 2025</small>
-                            </div>
-                            <div class="activity-item">
-                                <div class="activity-badge note"></div>
-                                <div class="d-flex justify-content-between">
-                                    <h6 class="mb-1 fw-bold">Piano Marketing</h6>
-                                    <small class="text-muted">09:15</small>
+                                {% empty %}
+                                <div class="text-center py-4">
+                                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                                    <p class="text-muted mt-2 mb-0">Nessuna attività recente</p>
                                 </div>
-                                <p class="mb-1">Aggiunta nuova nota "Revisione strategia"</p>
-                                <small class="text-muted">16 Apr 2025</small>
-                            </div>
+                                {% endfor %}
                             {% endfor %}
                         {% endfor %}
                     </div>
@@ -389,92 +385,90 @@
                 <div class="card-header bg-light">
                     <div class="d-flex justify-content-between align-items-center">
                         <h3 class="card-title">
-                            <i class="bi bi-database-check me-2"></i>Cache degli Embedding
+                            <i class="bi bi-piggy-bank-fill me-2"></i>Risparmio con la Cache degli Embedding
                         </h3>
-                        <div>
-                            <button class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-arrow-repeat me-1"></i>Aggiorna statistiche
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-primary" id="update-cache-stats-btn"
+                                    data-bs-toggle="tooltip" title="Aggiorna le statistiche della cache">
+                                <i class="bi bi-arrow-repeat me-1"></i>Aggiorna
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" id="generate-report-btn"
+                                    data-bs-toggle="tooltip" title="Genera report dettagliato sull'utilizzo">
+                                <i class="bi bi-file-earmark-bar-graph me-1"></i>Report
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" id="clean-cache-btn"
+                                    data-bs-toggle="tooltip" title="Rimuovi file orfani e record obsoleti">
+                                <i class="bi bi-trash3 me-1"></i>Pulizia
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" id="clear-cache-btn"
+                                    data-bs-toggle="tooltip" title="Svuota completamente la cache (usa con cautela!)">
+                                <i class="bi bi-x-circle me-1"></i>Svuota tutto
                             </button>
                         </div>
                     </div>
                 </div>
                 <div class="card-body">
-                    <!-- Statistiche generali della cache -->
+                    <!-- Hero Section: Risparmio Totale -->
                     <div class="row mb-4">
-                        <div class="col-md-3">
-                            <div class="card stat-card h-100" style="border-left-color: #8e44ad;">
-                                <div class="card-body">
-                                    <div class="d-flex">
-                                        <div class="flex-grow-1">
-                                            <h5 class="card-title text-muted mb-0">Embedding totali</h5>
-                                            <h2 class="font-weight-bold mb-0">{{ total_cache_stats.count|default:"0" }}</h2>
-                                        </div>
-                                        <div class="align-self-center">
-                                            <i class="bi bi-hdd-stack fs-1 text-purple" style="color: #8e44ad;"></i>
+                        <div class="col-12">
+                            <div class="alert alert-success bg-gradient p-4" role="alert">
+                                <div class="row align-items-center">
+                                    <div class="col-md-2 text-center">
+                                        <i class="bi bi-piggy-bank-fill display-1"></i>
+                                    </div>
+                                    <div class="col-md-10">
+                                        <h2 class="alert-heading mb-2">Hai risparmiato ${{ cache_stats.estimated_savings|floatformat:2 }}!</h2>
+                                        <p class="mb-2">Con {{ total_cache_stats.reuses|default:"0" }} embedding riutilizzati invece di ricalcolati</p>
+                                        <hr>
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <h4>{{ total_cache_stats.reuses|default:"0" }}</h4>
+                                                <small>Chiamate API evitate</small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h4>~{{ total_cache_stats.reuses|multiply:2|default:"0" }}s</h4>
+                                                <small>Tempo risparmiato</small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h4>20x</h4>
+                                                <small>Più veloce con cache</small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h4>${{ cache_stats.estimated_savings|divide:total_cache_stats.reuses|floatformat:4 }}</h4>
+                                                <small>Per embedding</small>
+                                            </div>
                                         </div>
                                     </div>
-                                    <p class="mt-3 mb-0 text-muted">
-                                        {% if cache_stats %}
-                                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ cache_stats.total_embeddings|default:0 }}</span>
-                                        <span class="text-secondary">In cache</span>
-                                        {% else %}
-                                        <span class="text-secondary">Nessuna statistica disponibile</span>
-                                        {% endif %}
-                                    </p>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
+                    <!-- KPI Cards -->
+                    <div class="row mb-4">
                         <div class="col-md-3">
                             <div class="card stat-card h-100" style="border-left-color: #2ecc71;">
                                 <div class="card-body">
-                                    <div class="d-flex">
-                                        <div class="flex-grow-1">
-                                            <h5 class="card-title text-muted mb-0">Riutilizzi</h5>
-                                            <h2 class="font-weight-bold mb-0">{{ total_cache_stats.reuses|default:"0" }}</h2>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="text-muted mb-1">Hit Rate</h6>
+                                            {% with usage=total_cache_stats.usage|default:1 %}
+                                            {% with hit_rate=total_cache_stats.reuses|default:0|divide:usage|multiply:100 %}
+                                            <h2 class="mb-0">{{ hit_rate|floatformat:1 }}%</h2>
+                                            {% endwith %}
+                                            {% endwith %}
                                         </div>
-                                        <div class="align-self-center">
-                                            <i class="bi bi-recycle fs-1" style="color: #2ecc71;"></i>
-                                        </div>
-                                    </div>
-                                    <p class="mt-3 mb-0 text-muted">
-                                        {% if cache_stats %}
-                                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ cache_stats.reuse_count|default:0 }}</span>
-                                        <span class="text-secondary">Totali riutilizzi</span>
-                                        {% else %}
-                                        <span class="text-secondary">Nessuna statistica disponibile</span>
-                                        {% endif %}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="card stat-card h-100" style="border-left-color: #e74c3c;">
-                                <div class="card-body">
-                                    <div class="d-flex">
-                                        <div class="flex-grow-1">
-                                            <h5 class="card-title text-muted mb-0">Dimensione totale</h5>
-                                            <h2 class="font-weight-bold mb-0">
-                                                {% if cache_stats %}
-                                                    {{ cache_stats.size_in_mb|floatformat:2 }} MB
-                                                {% else %}
-                                                    0 MB
-                                                {% endif %}
-                                            </h2>
-                                        </div>
-                                        <div class="align-self-center">
-                                            <i class="bi bi-hdd fs-1" style="color: #e74c3c;"></i>
+                                        <div class="display-4">
+                                            <i class="bi bi-bullseye text-success"></i>
                                         </div>
                                     </div>
-                                    <p class="mt-3 mb-0 text-muted">
-                                        {% if cache_stats %}
-                                        <span class="text-success me-1"><i class="bi bi-info-circle"></i></span>
-                                        <span class="text-secondary">Media: {{ cache_stats.avg_size_in_kb|floatformat:0 }} KB per file</span>
-                                        {% else %}
-                                        <span class="text-secondary">Nessuna statistica disponibile</span>
-                                        {% endif %}
-                                    </p>
+                                    <div class="progress mt-3" style="height: 5px;">
+                                        {% with usage=total_cache_stats.usage|default:1 %}
+                                        {% with hit_rate=total_cache_stats.reuses|default:0|divide:usage|multiply:100 %}
+                                        <div class="progress-bar bg-success" style="width: {{ hit_rate }}%"></div>
+                                        {% endwith %}
+                                        {% endwith %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -482,146 +476,124 @@
                         <div class="col-md-3">
                             <div class="card stat-card h-100" style="border-left-color: #3498db;">
                                 <div class="card-body">
-                                    <div class="d-flex">
-                                        <div class="flex-grow-1">
-                                            <h5 class="card-title text-muted mb-0">Risparmio stimato</h5>
-                                            <h2 class="font-weight-bold mb-0">
-                                                {% if cache_stats %}
-                                                    ${{ cache_stats.estimated_savings|floatformat:2 }}
-                                                {% else %}
-                                                    $0.00
-                                                {% endif %}
-                                            </h2>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="text-muted mb-1">Cache Size</h6>
+                                            <h2 class="mb-0">{{ cache_stats.size_in_mb|floatformat:1 }}MB</h2>
                                         </div>
-                                        <div class="align-self-center">
-                                            <i class="bi bi-currency-dollar fs-1" style="color: #3498db;"></i>
+                                        <div class="display-4">
+                                            <i class="bi bi-hdd-fill text-primary"></i>
                                         </div>
                                     </div>
-                                    <p class="mt-3 mb-0 text-muted">
-                                        {% if cache_stats %}
-                                        <span class="text-success me-1"><i class="bi bi-graph-up-arrow"></i></span>
-                                        <span class="text-secondary">Basato su {{ total_cache_stats.reuses|default:"0" }} riutilizzi</span>
-                                        {% else %}
-                                        <span class="text-secondary">Nessuna statistica disponibile</span>
-                                        {% endif %}
-                                    </p>
+                                    <small class="text-muted">
+                                        {{ total_cache_stats.count|default:"0" }} file totali
+                                    </small>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Grafici della cache -->
-                    <div class="row">
-                        <!-- Grafico storico degli embedding -->
-                        <div class="col-md-8">
-                            <div class="card mb-4">
-                                <div class="card-header border-0 bg-light">
-                                    <h5 class="card-title mb-0">Trend degli Embedding</h5>
-                                </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
                                 <div class="card-body">
-                                    <div id="cache-trend-chart" style="height: 300px;"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Grafico tipi di file nella cache -->
-                        <div class="col-md-4">
-                            <div class="card mb-4">
-                                <div class="card-header border-0 bg-light">
-                                    <h5 class="card-title mb-0">Distribuzione tipi di file</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div id="cache-types-chart" style="height: 300px;"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Efficienza della cache -->
-                    <div class="card">
-                        <div class="card-header border-0 bg-light">
-                            <h5 class="card-title mb-0">Metriche di efficienza della cache</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">Hit rate</h6>
-                                            <div class="progress" style="height: 8px;">
-                                                {% with usage=total_cache_stats.usage|default:1 %}
-                                                {% with hit_rate=total_cache_stats.reuses|default:0|divisibleby:usage|multiply:100 %}
-                                                <div class="progress-bar bg-success" role="progressbar" style="width: {% if hit_rate %}{{ hit_rate }}{% else %}0{% endif %}%;" aria-valuenow="{{ hit_rate }}" aria-valuemin="0" aria-valuemax="100"></div>
-                                                {% endwith %}
-                                                {% endwith %}
-                                            </div>
-                                            <small class="text-muted">{{ total_cache_stats.reuses|default:0 }} riutilizzi su {{ total_cache_stats.usage|default:0 }} richieste totali</small>
-                                        </div>
-                                        <div class="ms-3">
-                                            {% with usage=total_cache_stats.usage|default:1 %}
-                                            {% with hit_rate=total_cache_stats.reuses|default:0|divisibleby:usage|multiply:100 %}
-                                            <span class="h4 mb-0 {% if hit_rate > 50 %}text-success{% else %}text-warning{% endif %}">{{ hit_rate|floatformat:1 }}%</span>
-                                            {% endwith %}
-                                            {% endwith %}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">Media riutilizzi per embedding</h6>
-                                            <div class="progress" style="height: 8px;">
-                                                {% with count=total_cache_stats.count|default:1 %}
-                                                {% with avg_reuses=total_cache_stats.usage|default:1|divisibleby:count %}
-                                                {% with avg_percent=avg_reuses|multiply:10 %}
-                                                <div class="progress-bar bg-info" role="progressbar" style="width: {% if avg_percent > 100 %}100{% else %}{{ avg_percent }}{% endif %}%;" aria-valuenow="{{ avg_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
-                                                {% endwith %}
-                                                {% endwith %}
-                                                {% endwith %}
-                                            </div>
-                                            <small class="text-muted">Numero medio di volte che un embedding viene riutilizzato</small>
-                                        </div>
-                                        <div class="ms-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="text-muted mb-1">Avg. Reuse</h6>
                                             {% with count=total_cache_stats.count|default:1 %}
-                                            {% with avg_reuses=total_cache_stats.usage|default:1|divisibleby:count %}
-                                            <span class="h4 mb-0 text-info">{{ avg_reuses|floatformat:1 }}x</span>
+                                            {% with avg_reuses=total_cache_stats.usage|default:1|divide:count %}
+                                            <h2 class="mb-0">{{ avg_reuses|floatformat:1 }}x</h2>
                                             {% endwith %}
                                             {% endwith %}
                                         </div>
+                                        <div class="display-4">
+                                            <i class="bi bi-recycle text-purple" style="color: #9b59b6;"></i>
+                                        </div>
                                     </div>
+                                    <small class="text-muted">
+                                        Per file cached
+                                    </small>
                                 </div>
                             </div>
+                        </div>
 
-                            <hr>
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="d-flex flex-column">
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Embedding più riutilizzato:</span>
-                                            <span class="fw-bold">{{ cache_stats.max_reuses|default:0 }}x</span>
+                        <div class="col-md-3">
+                            <div class="card stat-card h-100" style="border-left-color: #e74c3c;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="text-muted mb-1">Best Performer</h6>
+                                            <h2 class="mb-0">{{ cache_stats.max_reuses|default:0 }}x</h2>
                                         </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Dimensione media file:</span>
-                                            <span class="fw-bold">{{ cache_stats.avg_size_in_kb|floatformat:0 }} KB</span>
+                                        <div class="display-4">
+                                            <i class="bi bi-trophy-fill text-danger"></i>
                                         </div>
                                     </div>
+                                    <small class="text-muted">
+                                        Most reused embedding
+                                    </small>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex flex-column">
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Risparmio medio per riutilizzo:</span>
-                                            <span class="fw-bold">$0.0001</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Charts Row -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-graph-up text-success me-2"></i>
+                                        Risparmio Cumulativo
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="savings-timeline-chart"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-pie-chart-fill text-primary me-2"></i>
+                                        Risparmio per Tipo File
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="savings-by-type-chart"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cost Comparison -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-bar-chart-fill text-info me-2"></i>
+                                        Confronto Costi: Con Cache vs Senza Cache
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div id="cost-comparison-chart"></div>
                                         </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Dimensione totale risparmiata:</span>
-                                            {% if cache_stats %}
-                                            {% with risparmio=cache_stats.size_in_mb|multiply:cache_stats.reuse_count %}
-                                            <span class="fw-bold">{{ risparmio|floatformat:2 }} MB</span>
-                                            {% endwith %}
-                                            {% else %}
-                                            <span class="fw-bold">0.00 MB</span>
-                                            {% endif %}
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body text-center">
+                                                    <h3>Efficienza</h3>
+                                                    <div class="display-3 text-success my-3">
+                                                        {% with total_calls=total_cache_stats.count|add:total_cache_stats.reuses %}
+                                                        {% with saving_percent=total_cache_stats.reuses|divide:total_calls|multiply:100 %}
+                                                        {{ saving_percent|floatformat:1 }}%
+                                                        {% endwith %}
+                                                        {% endwith %}
+                                                    </div>
+                                                    <p class="mb-0">Costi API evitati</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -629,437 +601,342 @@
                         </div>
                     </div>
 
-
+                    <!-- Future Projections -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-graph-up-arrow text-success me-2"></i>
+                                        Proiezioni Future di Risparmio
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row text-center">
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body">
+                                                    <h6>Prossimo Mese</h6>
+                                                    {% with daily_rate=cache_stats.estimated_savings|divide:30 %}
+                                                    <h3 class="text-success">${{ daily_rate|multiply:30|floatformat:2 }}</h3>
+                                                    {% endwith %}
+                                                    <small class="text-muted">Basato su trend attuale</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body">
+                                                    <h6>Prossimi 6 Mesi</h6>
+                                                    {% with daily_rate=cache_stats.estimated_savings|divide:30 %}
+                                                    <h3 class="text-success">${{ daily_rate|multiply:180|floatformat:2 }}</h3>
+                                                    {% endwith %}
+                                                    <small class="text-muted">Con utilizzo costante</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body">
+                                                    <h6>Prossimo Anno</h6>
+                                                    {% with daily_rate=cache_stats.estimated_savings|divide:30 %}
+                                                    <h3 class="text-success">${{ daily_rate|multiply:365|floatformat:2 }}</h3>
+                                                    {% endwith %}
+                                                    <small class="text-muted">Potenziale annuale</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Modal per Report -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reportModalLabel">Genera Report Cache</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="reportForm">
+                        <div class="mb-3">
+                            <label for="reportType" class="form-label">Tipo di Report</label>
+                            <select class="form-select" id="reportType" name="type">
+                                <option value="summary">Riepilogo</option>
+                                <option value="detailed">Dettagliato</option>
+                                <option value="savings">Risparmi</option>
+                                <option value="trends">Trend</option>
+                                <option value="project-usage">Utilizzo per Progetto</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reportDays" class="form-label">Ultimi giorni</label>
+                            <input type="number" class="form-control" id="reportDays" name="days" value="30" min="1" max="365">
+                        </div>
+                        <div class="mb-3">
+                            <label for="reportFormat" class="form-label">Formato</label>
+                            <select class="form-select" id="reportFormat" name="format">
+                                <option value="csv">CSV</option>
+                                <option value="chart">Grafico</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-primary" id="generateReportBtn">Genera Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
 {% endblock %}
 
-<!-- Additional JS for this specific page -->
 {% block extra_js %}
-    <script>
-        const SELECTOR_SIDEBAR_WRAPPER = ".sidebar-wrapper";
-        const Default = {
-            scrollbarTheme: "os-theme-light",
-            scrollbarAutoHide: "leave",
-            scrollbarClickScroll: true,
-        };
-        document.addEventListener("DOMContentLoaded", function() {
-            const sidebarWrapper = document.querySelector(SELECTOR_SIDEBAR_WRAPPER);
-            if (
-                sidebarWrapper &&
-                typeof OverlayScrollbarsGlobal?.OverlayScrollbars !== "undefined"
-            ) {
-                OverlayScrollbarsGlobal.OverlayScrollbars(sidebarWrapper, {
-                    scrollbars: {
-                        theme: Default.scrollbarTheme,
-                        autoHide: Default.scrollbarAutoHide,
-                        clickScroll: Default.scrollbarClickScroll,
-                    },
-                });
-            }
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inizializza i tooltip
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
 
-            // Gestione selettore periodo
-            document.querySelectorAll('.period-selector').forEach(button => {
-                button.addEventListener('click', function() {
-                    document.querySelectorAll('.period-selector').forEach(btn => {
-                        btn.classList.remove('active');
-                    });
-                    this.classList.add('active');
-                    updateActivityChart(this.getAttribute('data-period'));
-                });
-            });
+    // Gestione pulsanti cache
+    document.getElementById('update-cache-stats-btn').addEventListener('click', function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Aggiornamento...';
+
+        fetch('{% url "dashboard" %}?update_cache_stats=1', {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Errore: ' + data.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Aggiorna';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Errore durante l\'aggiornamento');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Aggiorna';
         });
-    </script> <!--end::OverlayScrollbars Configure--> <!-- OPTIONAL SCRIPTS --> <!-- apexcharts -->
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.min.js" integrity="sha256-+vh8GkaU7C9/wbSLIcwq82tQ2wTf44aOHA8HlBMwRI8=" crossorigin="anonymous"></script>
-    <script>
-        // Grafico attività progetti
-        const activityChartOptions = {
-            series: [
-                {
-                    name: "Documenti",
-                    data: [3, 4, 2, 7, 5, 1, 2],
-                    color: "#0d6efd"
-                },
-                {
-                    name: "Note",
-                    data: [2, 5, 3, 4, 2, 0, 1],
-                    color: "#20c997"
-                },
-                {
-                    name: "Interazioni AI",
-                    data: [5, 3, 8, 6, 4, 2, 3],
-                    color: "#fd7e14"
-                }
-            ],
-            chart: {
-                type: "area",
-                height: 300,
-                toolbar: {
-                    show: false
-                },
-                zoom: {
-                    enabled: false
-                }
+    });
+
+    document.getElementById('clean-cache-btn').addEventListener('click', function() {
+        if (confirm('Questa operazione rimuoverà i file orfani e i record obsoleti. Continuare?')) {
+            // Chiama il comando Django
+            callManagementCommand('manage_embedding_cache', ['--clean']);
+        }
+    });
+
+    document.getElementById('clear-cache-btn').addEventListener('click', function() {
+        if (confirm('ATTENZIONE: Questa operazione cancellerà TUTTA la cache degli embedding. I documenti verranno ri-elaborati alla prossima richiesta. Sei sicuro?')) {
+            callManagementCommand('clear_embedding_cache', ['--force']);
+        }
+    });
+
+    document.getElementById('generate-report-btn').addEventListener('click', function() {
+        var myModal = new bootstrap.Modal(document.getElementById('reportModal'));
+        myModal.show();
+    });
+
+    document.getElementById('generateReportBtn').addEventListener('click', function() {
+        const form = document.getElementById('reportForm');
+        const formData = new FormData(form);
+
+        callManagementCommand('report_cache_usage', [
+            '--type', formData.get('type'),
+            '--last', formData.get('days'),
+            '--format', formData.get('format')
+        ]);
+
+        bootstrap.Modal.getInstance(document.getElementById('reportModal')).hide();
+    });
+
+    // Funzione helper per chiamare i comandi Django
+    function callManagementCommand(command, args) {
+        // Nota: dovrai implementare un endpoint API nel tuo Django per eseguire questi comandi
+        fetch('{% url "execute_management_command" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
             },
-            dataLabels: {
-                enabled: false
-            },
-            stroke: {
-                curve: "smooth",
-                width: 2
-            },
-            grid: {
-                borderColor: "#e7e7e7",
-                row: {
-                    colors: ["#f3f3f3", "transparent"],
-                    opacity: 0.5
-                }
-            },
-            xaxis: {
-                categories: ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"],
-                axisBorder: {
-                    show: false
-                },
-                axisTicks: {
-                    show: false
-                },
-                labels: {
-                    style: {
-                        colors: "#78909c"
-                    }
-                }
-            },
-            yaxis: {
-                labels: {
-                    style: {
-                        colors: "#78909c"
-                    }
-                }
-            },
-            legend: {
-                horizontalAlign: "left",
-                offsetX: 40
-            },
-            fill: {
-                opacity: 0.15,
-                type: "gradient",
-                gradient: {
-                    shade: "light",
-                    type: "vertical",
-                    shadeIntensity: 0.25,
-                    inverseColors: false,
-                    opacityFrom: 0.85,
-                    opacityTo: 0.55
+            body: JSON.stringify({
+                command: command,
+                args: args
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Operazione completata con successo!');
+                location.reload();
+            } else {
+                alert('Errore: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Errore durante l\'operazione');
+        });
+    }
+
+    // Grafici
+    // Savings Timeline Chart
+    var savingsTimelineOptions = {
+        series: [{
+            name: 'Risparmio Cumulativo',
+            data: {{ cache_savings|safe }}
+        }],
+        chart: {
+            type: 'area',
+            height: 350,
+            toolbar: { show: false }
+        },
+        dataLabels: { enabled: false },
+        stroke: { curve: 'smooth', width: 3 },
+        xaxis: {
+            categories: {{ cache_dates|safe }},
+            title: { text: 'Data' }
+        },
+        yaxis: {
+            title: { text: 'Risparmio ($)' },
+            labels: {
+                formatter: function(val) {
+                    return '$' + val.toFixed(2);
                 }
             }
-        };
-
-        const documentChartOptions = {
-            series: {{ document_types_values|default:"[42, 28, 15, 10, 5]"|safe }},
-            chart: {
-                type: "donut",
-                height: 250
-            },
-            labels: {{ document_types_labels|default:'["PDF", "DOCX", "TXT", "XLSX", "Altro"]'|safe }},
-            colors: ["#0d6efd", "#20c997", "#fd7e14", "#6f42c1", "#dc3545"],
-            legend: {
-                position: "bottom"
-            },
-            plotOptions: {
-                pie: {
-                    donut: {
-                        size: "55%",
-                        labels: {
-                            show: true,
-                            total: {
-                                show: true,
-                                fontSize: "16px",
-                                label: "Totale",
-                                formatter: function(w) {
-                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            dataLabels: {
-                enabled: false
+        },
+        fill: {
+            type: 'gradient',
+            gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.7,
+                opacityTo: 0.3,
+                stops: [0, 90, 100]
             }
-        };
-
-        document.addEventListener("DOMContentLoaded", function() {
-            // Inizializza i grafici
-            const activityChart = new ApexCharts(
-                document.querySelector("#activity-chart"),
-                activityChartOptions
-            );
-            activityChart.render();
-
-            const documentsChart = new ApexCharts(
-                document.querySelector("#documents-chart"),
-                documentChartOptions
-            );
-            documentsChart.render();
-
-            // Funzione per aggiornare i dati del grafico attività
-            window.updateActivityChart = function(period) {
-                let newData;
-                let newCategories;
-
-                // Dati simulati per i diversi periodi
-                if (period === "week") {
-                    newCategories = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-                    newData = {
-                        documents: [3, 4, 2, 7, 5, 1, 2],
-                        notes: [2, 5, 3, 4, 2, 0, 1],
-                        interactions: [5, 3, 8, 6, 4, 2, 3]
-                    };
-                } else if (period === "month") {
-                    newCategories = ["Sett 1", "Sett 2", "Sett 3", "Sett 4"];
-                    newData = {
-                        documents: [14, 18, 12, 9],
-                        notes: [10, 15, 8, 12],
-                        interactions: [22, 18, 19, 14]
-                    };
-                } else if (period === "year") {
-                    newCategories = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
-                    newData = {
-                        documents: [25, 18, 22, 30, 35, 28, 32, 24, 20, 28, 32, 34],
-                        notes: [18, 15, 20, 25, 22, 20, 18, 15, 17, 22, 24, 28],
-                        interactions: [35, 30, 38, 42, 45, 40, 36, 32, 38, 44, 48, 50]
-                    };
+        },
+        colors: ['#2ecc71'],
+        tooltip: {
+            y: {
+                formatter: function(val) {
+                    return '$' + val.toFixed(2);
                 }
+            }
+        }
+    };
+    new ApexCharts(document.querySelector("#savings-timeline-chart"), savingsTimelineOptions).render();
 
-                // Aggiorna i dati del grafico
-                activityChart.updateOptions({
-                    xaxis: {
-                        categories: newCategories
-                    }
-                });
-
-                activityChart.updateSeries([
-                    {
-                        name: "Documenti",
-                        data: newData.documents
-                    },
-                    {
-                        name: "Note",
-                        data: newData.notes
-                    },
-                    {
-                        name: "Interazioni AI",
-                        data: newData.interactions
-                    }
-                ]);
-            };
-
-            // Configurazione grafico trend della cache
-            const cacheTrendOptions = {
-                series: [
-                    {
-                        name: "Embedding totali",
-                        data: {{ cache_embeddings_count|safe }},
-                        color: "#8e44ad"
-                    },
-                    {
-                        name: "Riutilizzi",
-                        data: {{ cache_reuse_count|safe }},
-                        color: "#2ecc71"
-                    },
-                    {
-                        name: "Risparmio ($)",
-                        data: {{ cache_savings|safe }},
-                        color: "#3498db"
-                    }
-                ],
-                chart: {
-                    type: "line",
-                    height: 300,
-                    toolbar: {
-                        show: false
-                    },
-                    zoom: {
-                        enabled: false
-                    }
-                },
-                dataLabels: {
-                    enabled: false
-                },
-                stroke: {
-                    curve: "smooth",
-                    width: [3, 3, 2]
-                },
-                grid: {
-                    borderColor: "#e7e7e7",
-                    row: {
-                        colors: ["#f3f3f3", "transparent"],
-                        opacity: 0.5
-                    }
-                },
-                markers: {
-                    size: 4,
-                    colors: ["#8e44ad", "#2ecc71", "#3498db"],
-                    strokeColors: "#fff",
-                    strokeWidth: 2,
-                    hover: {
-                        size: 7
-                    }
-                },
-                xaxis: {
-                    categories: {{ cache_dates|safe }},
-                    axisBorder: {
-                        show: false
-                    },
-                    axisTicks: {
-                        show: false
-                    },
+    // Savings by Type Chart
+    var savingsByTypeOptions = {
+        series: {{ cache_file_types_values|safe }},
+        chart: {
+            type: 'donut',
+            height: 350
+        },
+        labels: {{ cache_file_types_labels|safe }},
+        colors: ['#3498db', '#e74c3c', '#f39c12', '#9b59b6', '#2ecc71'],
+        legend: {
+            position: 'bottom'
+        },
+        plotOptions: {
+            pie: {
+                donut: {
                     labels: {
-                        style: {
-                            colors: "#78909c"
-                        }
-                    }
-                },
-                yaxis: [
-                    {
-                        title: {
-                            text: "Conteggio",
-                            style: {
-                                color: "#8e44ad"
-                            }
-                        },
-                        labels: {
-                            style: {
-                                colors: "#78909c"
+                        show: true,
+                        total: {
+                            show: true,
+                            label: 'Totale',
+                            formatter: function (w) {
+                                return w.globals.seriesTotals.reduce((a, b) => a + b, 0)
                             }
                         }
-                    },
-                    {
-                        opposite: true,
-                        title: {
-                            text: "Risparmio ($)",
-                            style: {
-                                color: "#3498db"
-                            }
-                        },
-                        labels: {
-                            style: {
-                                colors: "#78909c"
-                            }
-                        },
-                        seriesName: "Risparmio ($)"
                     }
-                ],
-                tooltip: {
-                    y: {
-                        formatter: function(value, { series, seriesIndex, dataPointIndex, w }) {
-                            if (seriesIndex === 2) {
-                                return "$" + value.toFixed(2);
-                            }
-                            return value;
-                        }
-                    }
-                },
-                legend: {
-                    position: "top",
-                    horizontalAlign: "center"
                 }
-            };
+            }
+        }
+    };
+    new ApexCharts(document.querySelector("#savings-by-type-chart"), savingsByTypeOptions).render();
 
-            // Configurazione grafico a ciambella per tipi di file nella cache
-            const cacheTypesOptions = {
-                series: {{ cache_file_types_values|default:"[0, 0, 0, 0, 0]"|safe }},
-                chart: {
-                    type: "donut",
-                    height: 300
-                },
-                labels: {{ cache_file_types_labels|default:'["PDF", "DOCX", "TXT", "CSV", "ALTRO"]'|safe }},
-                colors: ["#8e44ad", "#2ecc71", "#3498db", "#e74c3c", "#f39c12"],
-                legend: {
-                    position: "bottom"
-                },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: "55%",
-                            labels: {
-                                show: true,
-                                total: {
-                                    show: true,
-                                    fontSize: "16px",
-                                    label: "Totale",
-                                    formatter: function(w) {
-                                        return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    formatter: function (val, opts) {
-                        return opts.w.config.series[opts.seriesIndex] + " (" + val.toFixed(1) + "%)";
-                    }
-                },
-                responsive: [{
-                    breakpoint: 480,
-                    options: {
-                        chart: {
-                            height: 250
-                        },
-                        legend: {
-                            position: "bottom"
-                        }
-                    }
-                }]
-            };
+    // Cost Comparison Chart
+    var costComparisonOptions = {
+        series: [{
+            name: 'Senza Cache',
+            data: [{{ total_cache_stats.count|add:total_cache_stats.reuses|multiply:0.0001|floatformat:2 }}]
+        }, {
+            name: 'Con Cache',
+            data: [{{ total_cache_stats.count|multiply:0.0001|floatformat:2 }}]
+        }, {
+            name: 'Risparmio',
+            data: [{{ cache_stats.estimated_savings|floatformat:2 }}]
+        }],
+        chart: {
+            type: 'bar',
+            height: 350
+        },
+        plotOptions: {
+            bar: {
+                horizontal: false,
+                columnWidth: '55%',
+                endingShape: 'rounded'
+            },
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+                return '$' + val.toFixed(2);
+            }
+        },
+        xaxis: {
+            categories: ['Costi API'],
+        },
+        yaxis: {
+            title: {
+                text: 'Costo ($)'
+            }
+        },
+        colors: ['#e74c3c', '#3498db', '#2ecc71'],
+        legend: {
+            position: 'top'
+        }
+    };
+    new ApexCharts(document.querySelector("#cost-comparison-chart"), costComparisonOptions).render();
+});
 
-            // Inizializzazione dei grafici della cache
-            const cacheTrendChart = new ApexCharts(
-                document.querySelector("#cache-trend-chart"),
-                cacheTrendOptions
-            );
-            cacheTrendChart.render();
-
-            const cacheTypesChart = new ApexCharts(
-                document.querySelector("#cache-types-chart"),
-                cacheTypesOptions
-            );
-            cacheTypesChart.render();
-
-            // Aggiungi evento al pulsante di aggiornamento statistiche
-            document.querySelector('.card-header button').addEventListener('click', function() {
-                this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Aggiornamento...';
-                this.disabled = true;
-
-                // Esegui una chiamata AJAX per aggiornare le statistiche
-                fetch('{% url "dashboard" %}?update_cache_stats=true', {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Ricarica la pagina per visualizzare le statistiche aggiornate
-                        window.location.reload();
-                    } else {
-                        alert('Errore durante l\'aggiornamento delle statistiche');
-                        this.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Aggiorna statistiche';
-                        this.disabled = false;
-                    }
-                })
-                .catch(error => {
-                    console.error('Errore:', error);
-                    alert('Errore di rete. Riprova più tardi.');
-                    this.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Aggiorna statistiche';
-                    this.disabled = false;
-                });
-            });
-        });
-    </script> <!--end::Script-->
+// Helper function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
 {% endblock %}

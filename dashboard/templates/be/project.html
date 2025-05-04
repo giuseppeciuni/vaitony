@@ -125,7 +125,7 @@
 
     .user-container {
         justify-content: flex-end;
-        padding-right: 1.5rem; /* Aggiungi spazio a destra per evitare la scrollbar */
+        padding-right: 1.5rem;
     }
 
     .user-message, .ai-message {
@@ -348,6 +348,203 @@
         font-size: 0.85rem;
     }
 
+    /* Stili per il tab RAG Config */
+    .rag-info {
+        background-color: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+
+    .rag-presets {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    /* Card per preset RAG selezionato */
+    .selected-preset-card {
+        border: 2px solid;
+        border-radius: 0.75rem;
+        transition: all 0.3s ease;
+        background: white;
+        overflow: hidden;
+    }
+
+    .selected-preset-header {
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .selected-preset-body {
+        padding: 1rem;
+        background: white;
+    }
+
+    .selected-preset-specs {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+
+    .selected-preset-specs > div {
+        background: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+
+    /* Stili specifici per i diversi preset */
+    .preset-balanced {
+        border-color: #0d6efd !important;
+    }
+
+    .preset-balanced .selected-preset-header {
+        background: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+    }
+
+    .preset-high-precision {
+        border-color: #198754 !important;
+    }
+
+    .preset-high-precision .selected-preset-header {
+        background: rgba(25, 135, 84, 0.1);
+        color: #198754;
+    }
+
+    .preset-speed {
+        border-color: #ffc107 !important;
+    }
+
+    .preset-speed .selected-preset-header {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+
+    .preset-max-precision {
+        border-color: #0dcaf0 !important;
+    }
+
+    .preset-max-precision .selected-preset-header {
+        background: rgba(13, 202, 240, 0.1);
+        color: #0dcaf0;
+    }
+
+    .preset-max-speed {
+        border-color: #dc3545 !important;
+    }
+
+    .preset-max-speed .selected-preset-header {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .preset-extended-context {
+        border-color: #6610f2 !important;
+    }
+
+    .preset-extended-context .selected-preset-header {
+        background: rgba(102, 16, 242, 0.1);
+        color: #6610f2;
+    }
+
+    .badge-default {
+        background-color: #6c757d;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: normal;
+    }
+
+    /* Card per motore IA e configurazione RAG */
+    .engine-config-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .engine-config-card h6 {
+        color: #495057;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #e9ecef;
+        padding-bottom: 0.5rem;
+    }
+
+    .engine-info {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .engine-info img {
+        max-height: 40px;
+        margin-right: 1rem;
+    }
+
+    .provider-logo {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+    }
+
+    .config-params {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .params-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .param-item {
+        background: white;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid #e9ecef;
+    }
+
+    .param-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+
+    .param-value {
+        font-weight: 600;
+        color: #212529;
+    }
+
+    .customized-badge {
+        background-color: #0d6efd;
+        color: white;
+        font-size: 0.75rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 1rem;
+        margin-left: 0.5rem;
+    }
+
     /* Responsive Adjustments */
     @media (max-width: 768px) {
         .nav-tabs .nav-link {
@@ -362,26 +559,20 @@
         .chat-messages {
             height: calc(100vh - 200px);
         }
+
+        .rag-presets {
+            grid-template-columns: 1fr;
+        }
+
+        .params-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
-
 {% block content %}
 <div class="container-fluid">
     <!-- Project Header -->
-    <div class="project-header">
-        <div class="d-flex justify-content-between align-items-center">
-            <h1 class="h4 mb-0">{{ project.name }}</h1>
-            <a href="{% url 'projects_list' %}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-arrow-left me-1"></i> Indietro
-            </a>
-        </div>
-        {% if project.description %}
-        <p class="text-muted mt-2 mb-0">{{ project.description }}</p>
-        {% endif %}
-    </div>
-
-    <!-- Configurazione Progetto -->
     <div class="project-header">
         <div class="d-flex justify-content-between align-items-center">
             <h1 class="h4 mb-0">{{ project.name }}</h1>
@@ -563,7 +754,7 @@
                 </button>
             </div>
         </div>
-        <!-- Notes Tab -->
+<!-- Notes Tab -->
         <div class="tab-pane fade" id="notes" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">Note del progetto</h2>
@@ -641,271 +832,260 @@
             {% endif %}
         </div>
 
-        <!-- Contenuto del tab RAG Config -->
+        <!-- Profilo IA Tab (Updated) -->
         <div class="tab-pane fade" id="rag-config" role="tabpanel" aria-labelledby="rag-config-tab">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Configurazione del Profilo IA Corrente</h5>
-                </div>
-                <div class="card-body">
-                    <!-- Row con due card affiancate -->
-                    <div class="row mb-4">
-                        <!-- Card Motore IA -->
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0"><i class="bi bi-cpu me-2"></i>Motore IA Attivo</h6>
-                                </div>
-                                <div class="card-body">
-                                    {% if project.llm_config.engine %}
-                                        <div class="d-flex align-items-center mb-3">
-                                            {% if project.llm_config.engine.provider.logo %}
-                                                <img src="{{ project.llm_config.engine.provider.logo.url }}" alt="{{ project.llm_config.engine.provider.name }}" class="me-2" style="max-height: 32px;">
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <!-- Card Provider LLM e Engine -->
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-cpu me-2"></i>Motore IA del Progetto
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if project.llm_config.engine %}
+                                <div class="engine-info">
+                                    <div class="provider-logo">
+                                        {% if project.llm_config.engine.provider.logo %}
+                                            <img src="{{ project.llm_config.engine.provider.logo.url }}"
+                                                 alt="{{ project.llm_config.engine.provider.name }}"
+                                                 style="max-height: 40px;">
+                                        {% else %}
+                                            {% if project.llm_config.engine.provider.name == 'OpenAI' %}
+                                                <i class="bi bi-cpu-fill fs-3" style="color: #10a37f;"></i>
+                                            {% elif project.llm_config.engine.provider.name == 'Anthropic' %}
+                                                <i class="bi bi-chat-square-heart-fill fs-3" style="color: #b83280;"></i>
+                                            {% elif project.llm_config.engine.provider.name == 'Google' %}
+                                                <i class="bi bi-google fs-3" style="color: #4285F4;"></i>
+                                            {% elif project.llm_config.engine.provider.name == 'DeepSeek' %}
+                                                <i class="bi bi-braces fs-3" style="color: #0066cc;"></i>
                                             {% else %}
-                                                {% if project.llm_config.engine.provider.name == 'OpenAI' %}
-                                                    <i class="bi bi-cpu-fill fs-4 me-2" style="color: #10a37f;"></i>
-                                                {% elif project.llm_config.engine.provider.name == 'Anthropic' %}
-                                                    <i class="bi bi-chat-square-heart-fill fs-4 me-2" style="color: #b83280;"></i>
-                                                {% elif project.llm_config.engine.provider.name == 'Google' %}
-                                                    <i class="bi bi-google fs-4 me-2" style="color: #4285F4;"></i>
-                                                {% elif project.llm_config.engine.provider.name == 'Mistral' %}
-                                                    <i class="bi bi-wind fs-4 me-2" style="color: #5469d4;"></i>
-                                                {% else %}
-                                                    <i class="bi bi-braces-asterisk fs-4 me-2"></i>
-                                                {% endif %}
+                                                <i class="bi bi-robot fs-3" style="color: #6c757d;"></i>
                                             {% endif %}
-                                            <div>
-                                                <h5 class="mb-0">{{ project.llm_config.engine.provider.name }}</h5>
-                                                <p class="text-muted mb-0">{{ project.llm_config.engine.name }}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">{{ project.llm_config.engine.provider.name }}</h6>
+                                        <h5 class="mb-0 text-primary">{{ project.llm_config.engine.name }}</h5>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3">
+                                    <p class="text-muted mb-0">
+                                        {{ project.llm_config.engine.description }}
+                                    </p>
+                                </div>
+
+                                <hr>
+
+                                <div class="config-params">
+                                    <h6 class="mb-3">Parametri Configurati</h6>
+                                    <div class="params-grid">
+                                        <div class="param-item">
+                                            <div class="param-label">Temperatura</div>
+                                            <div class="param-value">{{ project.llm_config.get_temperature }}</div>
+                                        </div>
+                                        <div class="param-item">
+                                            <div class="param-label">Max Tokens</div>
+                                            <div class="param-value">{{ project.llm_config.get_max_tokens }}</div>
+                                        </div>
+                                        <div class="param-item">
+                                            <div class="param-label">Timeout</div>
+                                            <div class="param-value">{{ project.llm_config.get_timeout }}s</div>
+                                        </div>
+                                        {% if project.llm_config.engine.supports_vision %}
+                                        <div class="param-item">
+                                            <div class="param-label">Supporto Visione</div>
+                                            <div class="param-value">
+                                                <i class="bi bi-check-circle-fill text-success"></i> Attivo
                                             </div>
                                         </div>
-
-                                        <p class="small text-muted mb-0">{{ project.llm_config.engine.description }}</p>
-                                    {% else %}
-                                        <div class="alert alert-warning mb-0">
-                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                            Nessun motore configurato
-                                        </div>
-                                    {% endif %}
+                                        {% endif %}
+                                    </div>
                                 </div>
-                                <div class="card-footer bg-transparent">
-                                    <a href="{% url 'project_config' project.id %}" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-sliders me-1"></i>Configura
-                                    </a>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    Nessun motore IA configurato per questo progetto.
                                 </div>
-                            </div>
-                        </div>
-
-                        <!-- Card Profilo RAG -->
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0"><i class="bi bi-search me-2"></i>Profilo RAG Selezionato</h6>
-                                </div>
-                                <div class="card-body">
-                                    {% if project.project_config.rag_preset %}
-                                        <div class="d-flex align-items-center mb-3">
-                                            {% if project.project_config.rag_preset.name == 'Bilanciato' %}
-                                                <span class="badge bg-primary fs-5 me-3">
-                                                    <i class="bi bi-balance-scale me-1"></i>Bilanciato
-                                                </span>
-                                            {% elif project.project_config.rag_preset.name == 'Alta Precisione' %}
-                                                <span class="badge bg-success fs-5 me-3">
-                                                    <i class="bi bi-bullseye me-1"></i>Alta Precisione
-                                                </span>
-                                            {% elif project.project_config.rag_preset.name == 'Velocità' %}
-                                                <span class="badge bg-warning fs-5 me-3">
-                                                    <i class="bi bi-lightning-fill me-1"></i>Velocità
-                                                </span>
-                                            {% elif project.project_config.rag_preset.name == 'Massima Precisione' %}
-                                                <span class="badge bg-info fs-5 me-3">
-                                                    <i class="bi bi-shield-check me-1"></i>Massima Precisione
-                                                </span>
-                                            {% elif project.project_config.rag_preset.name == 'Massima Velocità' %}
-                                                <span class="badge bg-danger fs-5 me-3">
-                                                    <i class="bi bi-rocket-takeoff me-1"></i>Massima Velocità
-                                                </span>
-                                            {% elif project.project_config.rag_preset.name == 'Contesto Esteso' %}
-                                                <span class="badge bg-secondary fs-5 me-3">
-                                                    <i class="bi bi-bounding-box me-1"></i>Contesto Esteso
-                                                </span>
-                                            {% endif %}
-                                        </div>
-
-                                        <p class="small text-muted mb-0">{{ project.project_config.rag_preset.description }}</p>
-                                    {% else %}
-                                        <div class="alert alert-warning mb-0">
-                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                            Configurazione predefinita
-                                        </div>
-                                    {% endif %}
-                                </div>
-                                <div class="card-footer bg-transparent">
-                                    <a href="{% url 'project_config' project.id %}" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-sliders me-1"></i>Configura
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Caratteristiche del preset RAG -->
-                    {% if project.project_config.rag_preset %}
-                    <div class="mb-4">
-                        <h6 class="border-bottom pb-2">Caratteristiche del Profilo RAG</h6>
-                        <div class="alert alert-info">
-                            <h6 class="alert-heading"><i class="bi bi-info-circle me-1"></i>{{ project.project_config.rag_preset.name }}</h6>
-                            {% if project.project_config.rag_preset.name == 'Bilanciato' %}
-                                <p class="mb-2">Questa configurazione offre un equilibrio ottimale tra velocità e precisione. Ideale per:</p>
-                                <ul class="mb-0">
-                                    <li>Documenti di vario tipo e lunghezza</li>
-                                    <li>Ricerche generiche con buona accuratezza</li>
-                                    <li>Progetti che non richiedono ottimizzazioni specifiche</li>
-                                </ul>
-                            {% elif project.project_config.rag_preset.name == 'Alta Precisione' %}
-                                <p class="mb-2">Configurazione ottimizzata per la massima accuratezza nelle risposte. Caratteristiche:</p>
-                                <ul class="mb-0">
-                                    <li>Chunk più piccoli per maggiore precisione</li>
-                                    <li>Maggiore sovrapposizione per contesto migliorato</li>
-                                    <li>Più risultati analizzati per risposta completa</li>
-                                    <li>Ideale per documenti tecnici, legali o scientifici</li>
-                                </ul>
-                            {% elif project.project_config.rag_preset.name == 'Velocità' %}
-                                <p class="mb-2">Ottimizzato per risposte rapide mantenendo una buona qualità. Adatto per:</p>
-                                <ul class="mb-0">
-                                    <li>Chat in tempo reale</li>
-                                    <li>Documenti semplici o narrativi</li>
-                                    <li>Quando la velocità di risposta è prioritaria</li>
-                                </ul>
-                            {% elif project.project_config.rag_preset.name == 'Massima Precisione' %}
-                                <p class="mb-2">La configurazione più accurata possibile, ideale per contenuti critici. Caratteristiche:</p>
-                                <ul class="mb-0">
-                                    <li>Analisi estremamente dettagliata dei documenti</li>
-                                    <li>Massima sovrapposizione per non perdere contesto</li>
-                                    <li>Soglia di similarità molto alta</li>
-                                    <li>Perfetto per contratti, codice o documenti critici</li>
-                                </ul>
-                            {% elif project.project_config.rag_preset.name == 'Massima Velocità' %}
-                                <p class="mb-2">Configurazione per la massima velocità di risposta. Caratteristiche:</p>
-                                <ul class="mb-0">
-                                    <li>Chunk grandi per elaborazione rapida</li>
-                                    <li>Minima sovrapposizione per efficienza</li>
-                                    <li>Pochi risultati per risposta immediata</li>
-                                    <li>Ideale per FAQ o documenti brevi</li>
-                                </ul>
-                            {% elif project.project_config.rag_preset.name == 'Contesto Esteso' %}
-                                <p class="mb-2">Ottimizzato per trovare connessioni tra diverse parti dei documenti. Ideale per:</p>
-                                <ul class="mb-0">
-                                    <li>Ricerche complesse su più documenti</li>
-                                    <li>Analisi di relazioni tra concetti diversi</li>
-                                    <li>Grande sovrapposizione per massimo contesto</li>
-                                    <li>Molti risultati per visione d'insieme</li>
-                                </ul>
                             {% endif %}
                         </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- Parametri RAG in uso -->
-                    <div class="mb-4">
-                        <h6 class="border-bottom pb-2">Parametri RAG Attivi</h6>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-header bg-light">
-                                        <h6 class="mb-0">Indicizzazione</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <table class="table table-sm table-borderless mb-0">
-                                            <tbody>
-                                                <tr>
-                                                    <td class="text-muted">Dimensione chunk:</td>
-                                                    <td class="fw-medium">
-                                                        {{ rag_values.chunk_size }}
-                                                        {% if 'chunk_size' in customized_values %}
-                                                        <span class="badge bg-info ms-1" title="Personalizzato">P</span>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Sovrapposizione:</td>
-                                                    <td class="fw-medium">
-                                                        {{ rag_values.chunk_overlap }}
-                                                        {% if 'chunk_overlap' in customized_values %}
-                                                        <span class="badge bg-info ms-1" title="Personalizzato">P</span>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-header bg-light">
-                                        <h6 class="mb-0">Ricerca</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <table class="table table-sm table-borderless mb-0">
-                                            <tbody>
-                                                <tr>
-                                                    <td class="text-muted">Top K risultati:</td>
-                                                    <td class="fw-medium">
-                                                        {{ rag_values.similarity_top_k }}
-                                                        {% if 'similarity_top_k' in customized_values %}
-                                                        <span class="badge bg-info ms-1" title="Personalizzato">P</span>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Soglia similarità:</td>
-                                                    <td class="fw-medium">
-                                                        {{ rag_values.similarity_threshold }}
-                                                        {% if 'similarity_threshold' in customized_values %}
-                                                        <span class="badge bg-info ms-1" title="Personalizzato">P</span>
-                                                        {% endif %}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="alert alert-info mt-3">
-                            <i class="bi bi-info-circle-fill me-2"></i>
-                            I parametri contrassegnati con <span class="badge bg-info">P</span> sono personalizzati e sovrascrivono quelli del preset selezionato.
+                        <div class="card-footer bg-transparent">
+                            <a href="{% url 'project_config' project.id %}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-gear me-1"></i>Modifica Configurazione
+                            </a>
                         </div>
                     </div>
+                </div>
 
-                    <div class="text-end">
-                        <a href="{% url 'project_config' project.id %}" class="btn btn-primary">
-                            <i class="bi bi-gear me-1"></i> Modifica Configurazione Progetto
-                        </a>
+                <div class="col-lg-6 mb-4">
+                    <!-- Card Preset RAG Selezionato -->
+                    <div class="card h-100">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-search me-2"></i>Profilo RAG Attivo
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if project.project_config.rag_preset %}
+                                {% with preset=project.project_config.rag_preset %}
+                                <div class="selected-preset-card
+                                    {% if preset.template_type.name == "Bilanciato" %}preset-balanced{% endif %}
+                                    {% if preset.template_type.name == "Alta Precisione" %}preset-high-precision{% endif %}
+                                    {% if preset.template_type.name == "Velocità" %}preset-speed{% endif %}
+                                    {% if preset.template_type.name == "Massima Precisione" %}preset-max-precision{% endif %}
+                                    {% if preset.template_type.name == "Massima Velocità" %}preset-max-speed{% endif %}
+                                    {% if preset.template_type.name == "Contesto Esteso" %}preset-extended-context{% endif %}">
+                                    <div class="selected-preset-header">
+                                        <span>{{ preset.name }}</span>
+                                        {% if preset.is_default %}
+                                            <span class="badge-default">Default</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="selected-preset-body">
+                                        <p class="mb-3">
+                                            {{ preset.description }}
+                                        </p>
+                                        <div class="selected-preset-specs">
+                                            <div>
+                                                <strong>Chunk Size</strong>
+                                                <div>{{ preset.chunk_size }}</div>
+                                            </div>
+                                            <div>
+                                                <strong>Overlap</strong>
+                                                <div>{{ preset.chunk_overlap }}</div>
+                                            </div>
+                                            <div>
+                                                <strong>Top K</strong>
+                                                <div>{{ preset.similarity_top_k }}</div>
+                                            </div>
+                                            <div>
+                                                <strong>Similarità</strong>
+                                                <div>{{ preset.similarity_threshold }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr>
+
+                                <div class="mt-4">
+                                    <h6 class="mb-3">Impostazioni RAG Avanzate</h6>
+                                    <div class="row g-3">
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                       id="autoCitationCheck" disabled
+                                                       {% if preset.auto_citation %}checked{% endif %}>
+                                                <label class="form-check-label" for="autoCitationCheck">
+                                                    Auto Citazione
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                       id="prioritizeFilenamesCheck" disabled
+                                                       {% if preset.prioritize_filenames %}checked{% endif %}>
+                                                <label class="form-check-label" for="prioritizeFilenamesCheck">
+                                                    Priorità Nome File
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                       id="equalNotesWeightCheck" disabled
+                                                       {% if preset.equal_notes_weight %}checked{% endif %}>
+                                                <label class="form-check-label" for="equalNotesWeightCheck">
+                                                    Note con Peso Uguale
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                       id="strictContextCheck" disabled
+                                                       {% if preset.strict_context %}checked{% endif %}>
+                                                <label class="form-check-label" for="strictContextCheck">
+                                                    Contesto Stretto
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endwith %}
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    Nessun profilo RAG configurato per questo progetto.
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <a href="{% url 'project_config' project.id %}" class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-gear me-1"></i>Modifica Configurazione
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Sezione Parametri RAG Personalizzati (se presenti) -->
+            {% if customized_values %}
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-sliders me-2"></i>Parametri Personalizzati
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Questo progetto utilizza alcuni parametri personalizzati che sovrascrivono il preset selezionato.
+                            </div>
+                            <div class="params-grid">
+                                {% if 'chunk_size' in customized_values %}
+                                <div class="param-item">
+                                    <div class="param-label">Chunk Size <span class="customized-badge">Personalizzato</span></div>
+                                    <div class="param-value">{{ rag_values.chunk_size }}</div>
+                                </div>
+                                {% endif %}
+                                {% if 'chunk_overlap' in customized_values %}
+                                <div class="param-item">
+                                    <div class="param-label">Overlap <span class="customized-badge">Personalizzato</span></div>
+                                    <div class="param-value">{{ rag_values.chunk_overlap }}</div>
+                                </div>
+                                {% endif %}
+                                {% if 'similarity_top_k' in customized_values %}
+                                <div class="param-item">
+                                    <div class="param-label">Top K <span class="customized-badge">Personalizzato</span></div>
+                                    <div class="param-value">{{ rag_values.similarity_top_k }}</div>
+                                </div>
+                                {% endif %}
+                                {% if 'similarity_threshold' in customized_values %}
+                                <div class="param-item">
+                                    <div class="param-label">Threshold <span class="customized-badge">Personalizzato</span></div>
+                                    <div class="param-value">{{ rag_values.similarity_threshold }}</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
     </div>
-
-<!--    &lt;!&ndash; Danger Zone &ndash;&gt;-->
-<!--    <div class="mt-4 pt-3 border-top text-end">-->
-<!--        <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteProjectModal">-->
-<!--            <i class="bi bi-trash me-1"></i> Elimina progetto-->
-<!--        </button>-->
-<!--    </div>-->
 </div>
 
 <!-- Include Modals -->
 {% include 'be/project_modals.html' %}
 {% endblock %}
-
-
 
 {% block extra_js %}
 <script>

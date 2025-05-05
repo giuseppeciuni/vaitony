@@ -1130,7 +1130,7 @@ def create_retrieval_qa_chain(vectordb, project=None):
             search_kwargs={
                 "k": k_value_for_generic,  # Usa più documenti
                 "fetch_k": k_value_for_generic * 3,  # Recupera ancora più documenti per la selezione MMR
-                "lambda_mult": 0.3  # Riduci lambda per maggiore diversità (era 0.7)
+                "lambda_mult": 0.5  # Riduci lambda per maggiore diversità (era 0.7)
             }
         )
     elif rag_settings['retriever_type'] == 'similarity_score_threshold':

@@ -27,6 +27,7 @@ urlpatterns = [
     path('project/<int:project_id>/config/', views.project_config, name='project_config'),
 
 
+
     # Nuove URL per le impostazioni
     path('settings/ia-engine/', views.ia_engine, name='ia_engine'),
     path('settings/rag/', views.rag_settings, name='rag_settings'),

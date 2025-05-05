@@ -5,7 +5,10 @@ import shutil  # cancellazione ricorsiva di directory su FS
 import time
 import traceback
 from datetime import timedelta, datetime
-
+from django.core.management import call_command
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+import json
 from django.conf import settings
 from django.contrib import messages
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -351,13 +354,6 @@ def execute_management_command(request):
     return JsonResponse({'success': False, 'message': 'Metodo non permesso'})
 
 
-# views.py
-from django.core.management import call_command
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-import json
-
-
 #serve per poter eseguire i command di djando da interfaccia web dashboard
 @login_required
 def execute_management_command(request):
@@ -386,7 +382,6 @@ def execute_management_command(request):
             return JsonResponse({'success': False, 'message': str(e)})
 
     return JsonResponse({'success': False, 'message': 'Metodo non permesso'})
-
 
 
 def documents_uploaded(request):
@@ -467,8 +462,6 @@ def documents_uploaded(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
-
-
 
 
 def new_project(request):
@@ -788,7 +781,6 @@ def project_details(request, project_id):
         logger.warning("User not Authenticated!")
         return redirect('login')
 #################################################### SINO A QUI CONTROLLATO ################################
-
 
 
 def project(request, project_id=None):

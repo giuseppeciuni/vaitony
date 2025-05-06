@@ -75,6 +75,7 @@ class Project(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -101,6 +102,7 @@ class ProjectFile(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
     last_indexed_at = models.DateTimeField(null=True, blank=True)  # Traccia l'ultima indicizzazione
+    metadata = models.JSONField(default=dict, blank=True, null=True)  # Memorizza metadati come sorgente URL, titolo, ecc.
 
     class Meta:
         unique_together = ('project', 'file_path')
@@ -186,6 +188,7 @@ class ProjectIndexStatus(models.Model):
     documents_count = models.IntegerField(default=0)
     index_hash = models.CharField(max_length=64, null=True, blank=True)  # Hash rappresentativo dello stato dell'indice
     notes_hash = models.CharField(max_length=64, null=True, blank=True)  # Hash rappresentativo delle note
+    metadata = models.JSONField(default=dict, blank=True, null=True)  # Campo per memorizzare metadati, come lo stato del crawling
 
     def __str__(self):
         return f"Index status for project {self.project.name}"

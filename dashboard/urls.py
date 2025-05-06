@@ -26,7 +26,9 @@ urlpatterns = [
     path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
     path('project/<int:project_id>/config/', views.project_config, name='project_config'),
 
-
+    # Crawler
+    path('projects/<int:project_id>/website_crawl/', views.website_crawl, name='website_crawl'),
+    path('website_crawl/<int:project_id>/', views.website_crawl, name='website_crawl'),
 
     # Nuove URL per le impostazioni
     path('settings/ia-engine/', views.ia_engine, name='ia_engine'),

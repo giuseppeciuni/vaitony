@@ -442,7 +442,8 @@
         50% { opacity: 1; transform: scale(1.2); }
         100% { opacity: 0.4; transform: scale(1); }
     }
-/* Message separator */
+
+    /* Message separator */
     .message-date-separator {
         text-align: center;
         margin: 1.5rem 0;
@@ -666,6 +667,145 @@
         margin-left: 0.5rem;
     }
 
+    /* Stili specifici per il tab URLs */
+    .crawl-form {
+        background-color: #f8f9fa;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.05);
+    }
+
+    .crawl-status {
+        padding: 1rem;
+        border-left: 4px solid #0d6efd;
+        background-color: rgba(13, 110, 253, 0.05);
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .processed-links {
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 0.5rem;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .processed-link-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid #f1f1f1;
+        font-size: 0.9rem;
+    }
+
+    .processed-link-item:last-child {
+        border-bottom: none;
+    }
+
+    .crawl-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .crawl-stat-item {
+        background-color: #fff;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+
+    .crawl-stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #0d6efd;
+        display: block;
+    }
+
+    .crawl-stat-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .website-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        margin-bottom: 2rem;
+        box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+
+    .website-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+
+    .website-card-header {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .website-card-title {
+        font-weight: 600;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .website-card-title i {
+        margin-right: 0.5rem;
+        color: #0d6efd;
+    }
+
+    .website-links-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .website-link-card {
+        background-color: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        transition: all 0.2s ease;
+    }
+
+    .website-link-card:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.05);
+    }
+
+    .website-link-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .website-link-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .website-link-actions .btn {
+        flex: 1;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
     /* Responsive Adjustments */
     @media (max-width: 768px) {
         .nav-tabs .nav-link {
@@ -690,6 +830,14 @@
         }
 
         .notes-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .website-links-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .crawl-stats {
             grid-template-columns: 1fr;
         }
     }
@@ -731,27 +879,32 @@
     <!-- Navigation Tabs -->
     <ul class="nav nav-tabs" id="projectTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button">
+            <button class="nav-link active" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button" role="tab" aria-controls="documents" aria-selected="true">
                 <i class="bi bi-files me-1"></i> Documenti
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="ask-tab" data-bs-toggle="tab" data-bs-target="#ask" type="button">
+            <button class="nav-link" id="ask-tab" data-bs-toggle="tab" data-bs-target="#ask" type="button" role="tab" aria-controls="ask" aria-selected="false">
                 <i class="bi bi-robot me-1"></i> Chiedi all'AI
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button">
+            <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button" role="tab" aria-controls="notes" aria-selected="false">
                 <i class="bi bi-journal-text me-1"></i> Note
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="sources-tab" data-bs-toggle="tab" data-bs-target="#sources" type="button">
+            <button class="nav-link" id="urls-tab" data-bs-toggle="tab" data-bs-target="#urls" type="button" role="tab" aria-controls="urls" aria-selected="false">
+                <i class="bi bi-globe me-1"></i> URLs
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="sources-tab" data-bs-toggle="tab" data-bs-target="#sources" type="button" role="tab" aria-controls="sources" aria-selected="false">
                 <i class="bi bi-file-text me-1"></i> Fonti
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="rag-config-tab" data-bs-toggle="tab" data-bs-target="#rag-config" type="button">
+            <button class="nav-link" id="rag-config-tab" data-bs-toggle="tab" data-bs-target="#rag-config" type="button" role="tab" aria-controls="rag-config" aria-selected="false">
                 <i class="bi bi-gear me-1"></i> Profilo IA
             </button>
         </li>
@@ -760,7 +913,7 @@
     <!-- Tab Content -->
     <div class="tab-content py-3" id="projectTabsContent">
         <!-- Documents Tab -->
-        <div class="tab-pane fade show active" id="documents" role="tabpanel">
+        <div class="tab-pane fade show active" id="documents" role="tabpanel" aria-labelledby="documents-tab">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">Documenti del progetto</h2>
                 <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
@@ -814,7 +967,7 @@
         </div>
 
         <!-- Ask AI Tab -->
-        <div class="tab-pane fade" id="ask" role="tabpanel">
+        <div class="tab-pane fade" id="ask" role="tabpanel" aria-labelledby="ask-tab">
             <div class="mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 class="h5 mb-0">Chiedi all'IA sui tuoi documenti</h2>
@@ -870,18 +1023,8 @@
             </div>
         </div>
 
-        <!-- Input fisso posizionato fuori dai tab, visibile solo quando si è nel tab "Chiedi all'AI" -->
-        <div class="chat-input-container" id="fixed-chat-input" style="display: none;">
-            <div class="chat-input-wrapper">
-                <textarea class="form-control" id="question-input" rows="1"
-                          placeholder="Scrivi la tua domanda qui o premi '/' per i suggerimenti..."></textarea>
-                <button id="send-question-btn" class="btn">
-                    <i class="bi bi-send-fill"></i>
-                </button>
-            </div>
-        </div>
-<!-- Notes Tab con nuovo design -->
-        <div class="tab-pane fade" id="notes" role="tabpanel">
+        <!-- Notes Tab -->
+        <div class="tab-pane fade" id="notes" role="tabpanel" aria-labelledby="notes-tab">
             <!-- Quick Add Note Section -->
             <div class="quick-note-section mb-4">
                 <div class="card shadow-sm">
@@ -994,8 +1137,163 @@
             {% endif %}
         </div>
 
+        <!-- URLs Tab -->
+        <div class="tab-pane fade" id="urls" role="tabpanel" aria-labelledby="urls-tab">
+            <div class="mb-4">
+                <h2 class="h5 mb-3">Crawling di Siti Web</h2>
+
+                <!-- Form per l'aggiunta di una nuova URL -->
+                <div class="card crawl-form mb-4">
+                    <div class="card-body">
+                        <form id="website-crawl-form" method="POST" action="{% url 'website_crawl' project.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="website_crawl">
+                            <input type="hidden" name="project_id" value="{{ project.id }}">
+
+                            <div class="mb-3">
+                                <label for="website_url" class="form-label">URL del sito web</label>
+                                <input type="url" class="form-control" id="website_url" name="website_url"
+                                       placeholder="https://example.com" required>
+                                <div class="form-text">Inserisci l'URL completo del sito web da analizzare.</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="max_depth" class="form-label">Profondità massima</label>
+                                    <input type="number" class="form-control" id="max_depth" name="max_depth"
+                                           value="3" min="1" max="10">
+                                    <div class="form-text">Quanti livelli di link seguire (1-10).</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="max_pages" class="form-label">Pagine massime</label>
+                                    <input type="number" class="form-control" id="max_pages" name="max_pages"
+                                           value="100" min="1" max="500">
+                                    <div class="form-text">Massimo numero di pagine da processare (1-500).</div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="include_patterns" class="form-label">Pattern da includere (opzionale)</label>
+                                    <input type="text" class="form-control" id="include_patterns" name="include_patterns"
+                                           placeholder="blog,docs,news">
+                                    <div class="form-text">Separati da virgola (es. blog,docs,news).</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="exclude_patterns" class="form-label">Pattern da escludere (opzionale)</label>
+                                    <input type="text" class="form-control" id="exclude_patterns" name="exclude_patterns"
+                                           placeholder="login,cart,admin">
+                                    <div class="form-text">Separati da virgola (es. login,cart,admin).</div>
+                                </div>
+                            </div>
+
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-primary" id="start-crawl-btn">
+                                    <i class="bi bi-globe me-1"></i> Avvia Crawling
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Area di stato del crawling (visibile solo durante il processo) -->
+                <div class="card crawl-status mb-4" id="crawl-status-area" style="display: none;">
+                    <div class="card-body">
+                        <h5 class="card-title d-flex align-items-center">
+                            <span class="spinner-border spinner-border-sm me-2" role="status" id="crawl-spinner"></span>
+                            Crawling in corso
+                        </h5>
+                        <p class="mb-2" id="crawl-status-message">Analisi di <span id="current-url">https://example.com</span></p>
+
+                        <div class="crawl-stats">
+                            <div class="crawl-stat-item">
+                                <span class="crawl-stat-value" id="processed-pages-count">0</span>
+                                <span class="crawl-stat-label">Pagine Processate</span>
+                            </div>
+                            <div class="crawl-stat-item">
+                                <span class="crawl-stat-value" id="queued-pages-count">0</span>
+                                <span class="crawl-stat-label">Pagine in Coda</span>
+                            </div>
+                            <div class="crawl-stat-item">
+                                <span class="crawl-stat-value" id="failed-pages-count">0</span>
+                                <span class="crawl-stat-label">Pagine Fallite</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Link processati recentemente:</label>
+                            <div class="processed-links" id="processed-links-list">
+                                <!-- I link processati verranno aggiunti qui dinamicamente -->
+                            </div>
+                        </div>
+
+                        <div class="text-end mt-3">
+                            <button type="button" class="btn btn-danger btn-sm" id="cancel-crawl-btn">
+                                <i class="bi bi-x-circle me-1"></i> Annulla
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contenitore per i siti web elaborati -->
+                <div id="crawled-websites-container">
+                    <!-- I siti web crawled verranno aggiunti qui dinamicamente -->
+                    {% if project.metadata.crawled_websites %}
+                        {% for website in project.metadata.crawled_websites %}
+                        <div class="website-card" data-website-url="{{ website.url }}">
+                            <div class="website-card-header">
+                                <h5 class="website-card-title">
+                                    <i class="bi bi-globe2"></i>
+                                    {{ website.url }}
+                                </h5>
+                                <div>
+                                    <span class="badge bg-info">{{ website.pages|length }} pagine</span>
+                                    <button class="btn btn-sm btn-outline-danger delete-website-btn" data-website-url="{{ website.url }}">
+                                        <i class="bi bi-trash"></i> Elimina Tutto
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="website-links-grid">
+                                {% for page in website.pages %}
+                                <div class="website-link-card" data-page-url="{{ page.url }}">
+                                    <div class="website-link-title">
+                                        {{ page.url }}
+                                    </div>
+                                    <small class="text-muted">{{ page.size|filesizeformat }}</small>
+                                    <div class="website-link-actions">
+                                        <button class="btn btn-sm btn-outline-primary view-page-btn"
+                                                data-bs-toggle="modal" data-bs-target="#pageContentModal"
+                                                data-page-url="{{ page.url }}"
+                                                data-page-id="{{ page.id }}">
+                                            <i class="bi bi-eye"></i> Visualizza
+                                        </button>
+                                        <a href="{{ page.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-box-arrow-up-right"></i> Apri
+                                        </a>
+                                        <button class="btn btn-sm btn-outline-danger delete-page-btn"
+                                                data-page-id="{{ page.id }}"
+                                                data-website-url="{{ website.url }}">
+                                            <i class="bi bi-trash"></i> Elimina
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state" id="empty-websites-state">
+                            <i class="bi bi-globe"></i>
+                            <h3>Nessun sito web analizzato</h3>
+                            <p class="text-muted">Usa il form sopra per iniziare a raccogliere contenuti dai siti web</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <!-- Sources Tab -->
-        <div class="tab-pane fade" id="sources" role="tabpanel">
+        <div class="tab-pane fade" id="sources" role="tabpanel" aria-labelledby="sources-tab">
             <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
 
             {% if conversation_history and conversation_history.0.sources %}
@@ -1098,7 +1396,7 @@
                                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                                     Nessun motore IA configurato per questo progetto.
                                 </div>
-                            {% endif %}
+{% endif %}
                         </div>
                         <div class="card-footer bg-transparent">
                             <a href="{% url 'project_config' project.id %}" class="btn btn-outline-primary btn-sm">
@@ -1268,12 +1566,49 @@
             </div>
             {% endif %}
         </div>
+    </div>
+</div>
 
+<!-- Input fisso posizionato fuori dai tab, visibile solo quando si è nel tab "Chiedi all'AI" -->
+<div class="chat-input-container" id="fixed-chat-input" style="display: none;">
+    <div class="chat-input-wrapper">
+        <textarea class="form-control" id="question-input" rows="1"
+                  placeholder="Scrivi la tua domanda qui o premi '/' per i suggerimenti..."></textarea>
+        <button id="send-question-btn" class="btn">
+            <i class="bi bi-send-fill"></i>
+        </button>
     </div>
 </div>
 
 <!-- Include Modals -->
 {% include 'be/project_modals.html' %}
+
+<!-- Modal per la visualizzazione del contenuto delle pagine web -->
+<div class="modal fade" id="pageContentModal" tabindex="-1" aria-labelledby="pageContentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pageContentModalLabel">Contenuto della pagina</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <span class="page-url-display fw-bold">URL: </span>
+                    <a href="#" id="page-url-link" target="_blank" class="text-truncate"></a>
+                </div>
+                <div class="bg-light p-3 rounded" style="max-height: 70vh; overflow-y: auto;">
+                    <pre id="page-content-display" class="mb-0" style="white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <a href="#" id="page-open-link" target="_blank" class="btn btn-outline-primary">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Apri nel browser
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1451,9 +1786,406 @@ function createToastContainer() {
     return container;
 }
 
+// Sistema di crawling del sito web
+function initWebsiteCrawler() {
+    const crawlForm = document.getElementById('website-crawl-form');
+    const startCrawlBtn = document.getElementById('start-crawl-btn');
+    const cancelCrawlBtn = document.getElementById('cancel-crawl-btn');
+    const crawlStatusArea = document.getElementById('crawl-status-area');
+    const crawlStatusMessage = document.getElementById('crawl-status-message');
+    const currentUrlDisplay = document.getElementById('current-url');
+    const processedLinksContainer = document.getElementById('processed-links-list');
+    const processedPagesCount = document.getElementById('processed-pages-count');
+    const queuedPagesCount = document.getElementById('queued-pages-count');
+    const failedPagesCount = document.getElementById('failed-pages-count');
+    const crawledWebsitesContainer = document.getElementById('crawled-websites-container');
+    const emptyWebsitesState = document.getElementById('empty-websites-state');
+
+    // Variabili di stato del crawling
+    let crawlInProgress = false;
+    let crawlJob = null;
+    let processedPages = 0;
+    let queuedPages = 0;
+    let failedPages = 0;
+    let crawledLinks = [];
+
+    if (crawlForm) {
+        crawlForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            if (crawlInProgress) {
+                showToast('C\'è già un processo di crawling in corso.', 'warning');
+                return;
+            }
+
+            // Raccogli i dati dal form
+            const formData = new FormData(crawlForm);
+            const websiteUrl = formData.get('website_url');
+            const maxDepth = formData.get('max_depth');
+            const maxPages = formData.get('max_pages');
+
+            // Verifica URL
+            if (!websiteUrl || !websiteUrl.startsWith('http')) {
+                showToast('Inserisci un URL valido che inizi con http:// o https://', 'danger');
+                return;
+            }
+
+            // Inizia il crawling
+            startCrawling(websiteUrl, maxDepth, maxPages, formData);
+        });
+    }
+
+    if (cancelCrawlBtn) {
+        cancelCrawlBtn.addEventListener('click', function() {
+            if (crawlInProgress && confirm('Sei sicuro di voler interrompere il processo di crawling?')) {
+                stopCrawling();
+            }
+        });
+    }
+
+    // Gestisci i pulsanti di visualizzazione, apertura e cancellazione
+    document.addEventListener('click', function(e) {
+        // Visualizza contenuto pagina
+        if (e.target.closest('.view-page-btn')) {
+            const btn = e.target.closest('.view-page-btn');
+            const pageUrl = btn.getAttribute('data-page-url');
+            const pageId = btn.getAttribute('data-page-id');
+
+            showPageContent(pageUrl, pageId);
+        }
+
+        // Elimina contenuto di una singola pagina
+        if (e.target.closest('.delete-page-btn')) {
+            const btn = e.target.closest('.delete-page-btn');
+            const pageId = btn.getAttribute('data-page-id');
+            const websiteUrl = btn.getAttribute('data-website-url');
+
+            if (confirm('Sei sicuro di voler eliminare questo contenuto?')) {
+                deletePage(pageId, websiteUrl);
+            }
+        }
+
+        // Elimina intero sito web
+        if (e.target.closest('.delete-website-btn')) {
+            const btn = e.target.closest('.delete-website-btn');
+            const websiteUrl = btn.getAttribute('data-website-url');
+
+            if (confirm(`Sei sicuro di voler eliminare tutti i contenuti da ${websiteUrl}?`)) {
+                deleteWebsite(websiteUrl);
+            }
+        }
+    });
+
+    function startCrawling(websiteUrl, maxDepth, maxPages, formData) {
+        // Reset stato
+        processedPages = 0;
+        queuedPages = 1; // Inizia con l'URL principale in coda
+        failedPages = 0;
+        crawledLinks = [];
+
+        // Aggiorna UI
+        crawlInProgress = true;
+        startCrawlBtn.disabled = true;
+        startCrawlBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Avvio...';
+        crawlStatusArea.style.display = 'block';
+        processedLinksContainer.innerHTML = '';
+        processedPagesCount.textContent = '0';
+        queuedPagesCount.textContent = '1';
+        failedPagesCount.textContent = '0';
+        currentUrlDisplay.textContent = websiteUrl;
+
+        // Importante: assicurarsi che la richiesta sia inviata come POST
+        fetch('{% url "website_crawl" project.id %}', {
+            method: 'POST',  // Assicurati che sia POST
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCsrfToken()  // Aggiungi il token CSRF
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                crawlJob = data.job_id;
+                monitorCrawlProgress(websiteUrl);
+                showToast(`Crawling avviato per ${websiteUrl}`, 'info');
+            } else {
+                stopCrawling();
+                showToast(`Errore: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            stopCrawling();
+            showToast('Errore di rete durante l\'avvio del crawling: ' + error.message, 'danger');
+        });
+    }
+
+    // Funzione per ottenere il token CSRF da un cookie
+    function getCsrfToken() {
+        const name = 'csrftoken';
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return document.querySelector('[name=csrfmiddlewaretoken]').value; // Backup dal form
+    }
+
+    function monitorCrawlProgress(websiteUrl) {
+        const checkStatus = () => {
+            if (!crawlInProgress) return;
+
+            fetch(`{% url "website_crawl" project.id %}?check_status=true`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    if (data.status === 'completed') {
+                        // Crawling completato
+                        finishCrawling(data.stats, websiteUrl);
+                    } else if (data.status === 'failed') {
+                        // Crawling fallito
+                        stopCrawling();
+                        showToast(`Errore durante il crawling: ${data.error}`, 'danger');
+                    } else if (data.status === 'running') {
+                        // Aggiorna statistiche
+                        if (data.stats) {
+                            updateCrawlStats(data.stats);
+                        }
+
+                        // Continua a monitorare
+                        setTimeout(checkStatus, 2000);
+                    }
+                } else {
+                    stopCrawling();
+                    showToast('Errore nel monitoraggio del crawling', 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                setTimeout(checkStatus, 5000); // Riprova dopo un po'
+            });
+        };
+
+        // Avvia il monitoraggio
+        setTimeout(checkStatus, 1000);
+    }
+
+    function updateCrawlStats(stats) {
+        // Aggiorna contatori
+        if (stats.processed_pages !== undefined) {
+            processedPages = stats.processed_pages;
+            processedPagesCount.textContent = processedPages;
+        }
+
+        if (stats.queued_pages !== undefined) {
+            queuedPages = stats.queued_pages;
+            queuedPagesCount.textContent = queuedPages;
+        }
+
+        if (stats.failed_pages !== undefined) {
+            failedPages = stats.failed_pages;
+            failedPagesCount.textContent = failedPages;
+        }
+
+        // Aggiorna URL corrente
+        if (stats.current_url) {
+            currentUrlDisplay.textContent = stats.current_url;
+
+            // Aggiungi alla lista dei link processati
+            if (!crawledLinks.includes(stats.current_url)) {
+                crawledLinks.push(stats.current_url);
+
+                const linkItem = document.createElement('div');
+                linkItem.className = 'processed-link-item';
+                linkItem.textContent = stats.current_url;
+
+                // Mantieni solo gli ultimi 10 link nella visualizzazione
+                if (processedLinksContainer.childElementCount >= 10) {
+                    processedLinksContainer.removeChild(processedLinksContainer.firstChild);
+                }
+
+                processedLinksContainer.appendChild(linkItem);
+                processedLinksContainer.scrollTop = processedLinksContainer.scrollHeight;
+            }
+        }
+    }
+
+    function stopCrawling() {
+        crawlInProgress = false;
+        startCrawlBtn.disabled = false;
+        startCrawlBtn.innerHTML = '<i class="bi bi-globe me-1"></i> Avvia Crawling';
+
+        // Mantieni visibile l'area di stato per mostrate i risultati
+        if (crawlStatusArea) {
+            const spinner = document.getElementById('crawl-spinner');
+            if (spinner) spinner.style.display = 'none';
+        }
+    }
+
+    function finishCrawling(stats, websiteUrl) {
+        stopCrawling();
+
+        // Aggiorna UI con i risultati finali
+        updateCrawlStats(stats);
+        crawlStatusMessage.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i> Crawling completato: <strong>${stats.processed_pages}</strong> pagine elaborate, <strong>${stats.added_files}</strong> file aggiunti al progetto.`;
+
+        // Mostra toast di successo
+        showToast(`Crawling completato per ${websiteUrl}: ${stats.processed_pages} pagine elaborate, ${stats.added_files} file aggiunti`, 'success');
+
+        // Aggiorna l'interfaccia per mostrare i nuovi contenuti
+        setTimeout(() => {
+            location.reload(); // Per ora ricarica la pagina - in futuro aggiornare dinamicamente
+        }, 3000);
+    }
+
+    function showPageContent(pageUrl, pageId) {
+        // Aggiorna modal con i dati della pagina
+        const modal = document.getElementById('pageContentModal');
+        const contentDisplay = document.getElementById('page-content-display');
+        const urlDisplay = document.getElementById('page-url-link');
+        const openLink = document.getElementById('page-open-link');
+
+        // Reset contenuto
+        contentDisplay.textContent = 'Caricamento in corso...';
+        urlDisplay.textContent = pageUrl;
+        urlDisplay.href = pageUrl;
+        openLink.href = pageUrl;
+
+        // Carica contenuto dalla pagina
+        fetch(`{% url "project" project.id %}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'get_page_content',
+                'page_id': pageId,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Mostra contenuto
+                contentDisplay.textContent = data.content || 'Nessun contenuto disponibile';
+            } else {
+                contentDisplay.textContent = 'Errore nel caricamento del contenuto: ' + (data.message || 'errore sconosciuto');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            contentDisplay.textContent = 'Errore di rete durante il caricamento del contenuto';
+        });
+    }
+
+    function deletePage(pageId, websiteUrl) {
+        fetch(`{% url "project" project.id %}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'delete_page',
+                'page_id': pageId,
+                'website_url': websiteUrl,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Rimuovi elemento dalla UI
+                const pageElement = document.querySelector(`.website-link-card[data-page-id="${pageId}"]`);
+                if (pageElement) {
+                    pageElement.remove();
+
+                    // Controlla se era l'ultimo elemento
+                    const websiteCard = document.querySelector(`.website-card[data-website-url="${websiteUrl}"]`);
+                    if (websiteCard && !websiteCard.querySelector('.website-link-card')) {
+                        websiteCard.remove();
+
+                        // Controlla se non ci sono più website cards
+                        if (!document.querySelector('.website-card')) {
+                            if (emptyWebsitesState) {
+                                emptyWebsitesState.style.display = 'block';
+                            }
+                        }
+                    }
+                }
+
+                showToast('Contenuto della pagina eliminato con successo', 'success');
+            } else {
+                showToast('Errore durante l\'eliminazione: ' + (data.message || ''), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di rete durante l\'eliminazione', 'danger');
+        });
+    }
+
+    function deleteWebsite(websiteUrl) {
+        fetch(`{% url "project" project.id %}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'delete_website',
+                'website_url': websiteUrl,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Rimuovi elemento dalla UI
+                const websiteCard = document.querySelector(`.website-card[data-website-url="${websiteUrl}"]`);
+                if (websiteCard) {
+                    websiteCard.remove();
+
+                    // Controlla se non ci sono più website cards
+                    if (!document.querySelector('.website-card')) {
+                        if (emptyWebsitesState) {
+                            emptyWebsitesState.style.display = 'block';
+                        }
+                    }
+                }
+
+                showToast(`Contenuti da ${websiteUrl} eliminati con successo`, 'success');
+            } else {
+                showToast('Errore durante l\'eliminazione: ' + (data.message || ''), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di rete durante l\'eliminazione', 'danger');
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Inizializza il sistema di note rapide
     initQuickNoteSystem();
+
+    // Inizializza il sistema di crawling
+    initWebsiteCrawler();
 
     // Persistenza del tab attivo
     const triggerTabList = document.querySelectorAll('#projectTabs button');
@@ -1642,7 +2374,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch('{% url "project" project.id %}', {
                 method: 'POST',
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
+'X-Requested-With': 'XMLHttpRequest',
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: new URLSearchParams({
@@ -1722,7 +2454,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 { text: 'Quali sono i punti chiave del progetto?', icon: 'key' },
                 { text: 'Estrai le informazioni più importanti dalle note', icon: 'journal-text' },
                 { text: 'Trova eventuali contraddizioni nei documenti', icon: 'exclamation-triangle' },
-                { text: 'Crea una lista di azioni da eseguire in base ai contenuti', icon: 'check2-square' }
+                { text: 'Crea una lista di azioni da eseguire in base ai contenuti', icon: 'check2-square' },
+                { text: 'Analizza i contenuti estratti dai siti web', icon: 'globe' },
+                { text: 'Confronta i contenuti dei documenti con i siti web', icon: 'arrow-left-right' }
             ];
 
             suggestions.forEach(suggestion => {
@@ -2034,7 +2768,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sourcesHTML += `</div>`;
         sourcesTab.innerHTML = sourcesHTML;
 
-const sourcesTabButton = document.getElementById('sources-tab');
+        const sourcesTabButton = document.getElementById('sources-tab');
         if (sourcesTabButton) {
             if (!sourcesTabButton.querySelector('.badge')) {
                 const badge = document.createElement('span');
@@ -2185,18 +2919,6 @@ const sourcesTabButton = document.getElementById('sources-tab');
         });
     }
 
-    // Gestione importazione note (se implementata)
-    const importNotesBtn = document.getElementById('import-notes-btn');
-    if (importNotesBtn) {
-        importNotesBtn.addEventListener('click', function() {
-            const fileInput = document.getElementById('import-file');
-            const textArea = document.getElementById('import-text');
-
-            // Implementare la logica di importazione
-            showToast('Funzionalità in sviluppo', 'info');
-        });
-    }
-
     // Gestione hash URL per l'apertura automatica dei tab
     if (window.location.hash) {
         const hash = window.location.hash.substring(1);
@@ -2208,11 +2930,22 @@ const sourcesTabButton = document.getElementById('sources-tab');
         }
     }
 
+    // Carica tab salvato nel localStorage
+    const savedTab = localStorage.getItem('activeProjectTab');
+    if (savedTab) {
+        const tabEl = document.querySelector(`button[data-bs-target="${savedTab}"]`);
+        if (tabEl) {
+            setTimeout(() => {
+                new bootstrap.Tab(tabEl).show();
+            }, 100);
+        }
+    }
+
     // Gestione aggiornamento delle note che mostra i dettagli completi
     document.querySelectorAll('.note-card').forEach(card => {
         card.addEventListener('click', function(e) {
             // Evita il click sui pulsanti di azione
-            if (e.target.closest('.note-actions')) return;
+            if (e.target.closest('.note-actions') || e.target.closest('.form-check')) return;
 
             // Toggle espansione del contenuto della nota
             const contentDiv = this.querySelector('.note-content');

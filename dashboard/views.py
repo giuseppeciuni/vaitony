@@ -2487,3 +2487,477 @@ def verify_api_key(api_type, api_key):
         return False, f"Errore nella verifica: {str(e)}"
 
 
+def website_crawl(request, project_id):
+    """
+    Vista per eseguire il crawling di un sito web e aggiungere il contenuto al progetto.
+    """
+    logger.debug(f"---> website_crawl: {project_id}")
+    if request.user.is_authenticated:
+        try:
+            # Ottieni il progetto
+            project = get_object_or_404(Project, id=project_id, user=request.user)
+
+            # Ottieni o crea lo stato dell'indice del progetto
+            index_status, created = ProjectIndexStatus.objects.get_or_create(project=project)
+
+            # Inizializza il campo metadata se necessario
+            if index_status.metadata is None:
+                index_status.metadata = {}
+                index_status.save()
+
+            # Se è una richiesta AJAX per controllare lo stato
+            if request.method == 'GET' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                if 'check_status' in request.GET:
+                    # Controlla lo stato del crawling
+                    crawl_info = index_status.metadata.get('last_crawl', {})
+                    return JsonResponse({
+                        'success': True,
+                        'status': crawl_info.get('status', 'unknown'),
+                        'url': crawl_info.get('url', ''),
+                        'timestamp': crawl_info.get('timestamp', ''),
+                        'stats': crawl_info.get('stats', {}),
+                        'error': crawl_info.get('error', ''),
+                        'visited_urls': crawl_info.get('visited_urls', [])
+                    })
+
+            # Per avviare il crawling, deve essere una richiesta POST
+            elif request.method == 'POST':
+                logger.info(f"Ricevuta richiesta POST per crawling dal progetto {project_id}")
+
+                # Estrai i parametri dalla richiesta
+                website_url = request.POST.get('website_url', '').strip()
+                max_depth = int(request.POST.get('max_depth', 3))
+                max_pages = int(request.POST.get('max_pages', 100))
+                include_patterns = request.POST.get('include_patterns', '')
+                exclude_patterns = request.POST.get('exclude_patterns', '')
+
+                # Validazione
+                if not website_url:
+                    logger.warning("URL mancante nella richiesta di crawling")
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({'success': False, 'message': 'URL non specificato'})
+                    messages.error(request, "URL del sito web non specificato.")
+                    return redirect('project', project_id=project.id)
+
+                logger.info(f"Avvio crawling per {website_url} con profondità {max_depth}, max pagine {max_pages}")
+
+                # Prepara i pattern regex
+                include_patterns_list = [p.strip() for p in include_patterns.split(',') if p.strip()]
+                exclude_patterns_list = [p.strip() for p in exclude_patterns.split(',') if p.strip()]
+
+                # Per richieste AJAX, avvia il processo in background
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    import threading
+
+                    def crawl_task():
+                        try:
+                            # Importa qui per evitare import circolari
+                            from dashboard.web_crawler import WebCrawler
+
+                            logger.info(f"Thread di crawling avviato per {website_url}")
+
+                            # Avvia il job di crawling
+                            from profiles.models import ProjectFile
+                            from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
+                            import os
+                            from urllib.parse import urlparse
+                            from vaitony_project import settings
+
+                            # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+                            parsed_url = urlparse(website_url)
+                            domain = parsed_url.netloc
+
+                            # Configura la directory di output con la struttura richiesta
+                            project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id),
+                                                       str(project.id))
+                            website_content_dir = os.path.join(project_dir, 'website_content')
+                            website_dir = os.path.join(website_content_dir, domain)
+                            os.makedirs(website_dir, exist_ok=True)
+
+                            # Inizializza il crawler
+                            crawler = WebCrawler(
+                                max_depth=max_depth,
+                                max_pages=max_pages,
+                                min_text_length=500,
+                                exclude_patterns=exclude_patterns_list,
+                                include_patterns=include_patterns_list
+                            )
+
+                            # Esegui il crawling
+                            processed_pages, failed_pages, documents = crawler.crawl(website_url, website_dir)
+
+                            # Ottieni le URL visitate dal crawler
+                            # Nota: potrebbe essere necessario modificare la classe WebCrawler
+                            # per esporre questa informazione, assumendo che sia disponibile come crawler.visited_urls
+                            # Altrimenti, possiamo ricostruirla dalle informazioni disponibili
+                            visited_urls = []
+                            for doc, _ in documents:
+                                if 'url' in doc.metadata and doc.metadata['url'] not in visited_urls:
+                                    visited_urls.append(doc.metadata['url'])
+
+                            # Aggiungi i documenti al progetto
+                            added_files = []
+                            for doc, file_path in documents:
+                                # Calcola l'hash e le dimensioni del file
+                                file_hash = compute_file_hash(file_path)
+                                file_size = os.path.getsize(file_path)
+                                filename = os.path.basename(file_path)
+
+                                # Crea il record nel database CON IL CAMPO METADATA
+                                project_file = ProjectFile.objects.create(
+                                    project=project,
+                                    filename=filename,
+                                    file_path=file_path,
+                                    file_type='txt',
+                                    file_size=file_size,
+                                    file_hash=file_hash,
+                                    is_embedded=False,
+                                    last_indexed_at=None,
+                                    metadata={
+                                        'source_url': doc.metadata['url'],
+                                        'title': doc.metadata['title'],
+                                        'crawl_depth': doc.metadata['crawl_depth'],
+                                        'crawl_domain': doc.metadata['domain'],
+                                        'type': 'web_page'
+                                    }
+                                )
+
+                                added_files.append(project_file)
+
+                            # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
+                            if added_files:
+                                try:
+                                    logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
+                                    create_project_rag_chain(project)
+                                    logger.info(f"Indice vettoriale aggiornato con successo")
+                                except Exception as e:
+                                    logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+
+                            stats = {
+                                'processed_pages': processed_pages,
+                                'failed_pages': failed_pages,
+                                'added_files': len(added_files)
+                            }
+
+                            # Aggiorna lo stato del job
+                            index_status.metadata = index_status.metadata or {}
+                            index_status.metadata['last_crawl'] = {
+                                'status': 'completed',
+                                'url': website_url,
+                                'timestamp': timezone.now().isoformat(),
+                                'stats': stats,
+                                'visited_urls': visited_urls,  # Aggiungiamo la lista delle URL visitate
+                                'domain': domain,
+                                'max_depth': max_depth,
+                                'max_pages': max_pages
+                            }
+                            index_status.save()
+
+                            logger.info(f"Crawling completato per {website_url} - {stats}")
+                        except Exception as e:
+                            logger.error(f"Errore durante il crawling: {str(e)}")
+                            logger.error(traceback.format_exc())
+                            index_status.metadata = index_status.metadata or {}
+                            index_status.metadata['last_crawl'] = {
+                                'status': 'failed',
+                                'url': website_url,
+                                'timestamp': timezone.now().isoformat(),
+                                'error': str(e)
+                            }
+                            index_status.save()
+
+                    # Avvia il thread in background
+                    thread = threading.Thread(target=crawl_task)
+                    thread.daemon = True
+                    thread.start()
+
+                    logger.info(f"Thread di crawling creato con ID: {thread.ident}")
+
+                    # Aggiorna lo stato iniziale
+                    index_status.metadata = index_status.metadata or {}
+                    index_status.metadata['last_crawl'] = {
+                        'status': 'running',
+                        'url': website_url,
+                        'timestamp': timezone.now().isoformat()
+                    }
+                    index_status.save()
+
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'Crawling avviato per {website_url} con profondità {max_depth}',
+                        'job_id': thread.ident
+                    })
+
+                # Se non è una richiesta AJAX, esegui immediatamente
+                else:
+                    from dashboard.web_crawler import WebCrawler
+                    from profiles.models import ProjectFile
+                    from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
+                    import os
+                    from urllib.parse import urlparse
+                    from vaitony_project import settings
+
+                    # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+                    parsed_url = urlparse(website_url)
+                    domain = parsed_url.netloc
+
+                    # Configura la directory di output con la struttura richiesta
+                    project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+                    website_content_dir = os.path.join(project_dir, 'website_content')
+                    website_dir = os.path.join(website_content_dir, domain)
+                    os.makedirs(website_dir, exist_ok=True)
+
+                    # Inizializza il crawler
+                    crawler = WebCrawler(
+                        max_depth=max_depth,
+                        max_pages=max_pages,
+                        min_text_length=500,
+                        exclude_patterns=exclude_patterns_list,
+                        include_patterns=include_patterns_list
+                    )
+
+                    # Esegui il crawling
+                    processed_pages, failed_pages, documents = crawler.crawl(website_url, website_dir)
+
+                    # Ottieni le URL visitate dal crawler
+                    visited_urls = []
+                    for doc, _ in documents:
+                        if 'url' in doc.metadata and doc.metadata['url'] not in visited_urls:
+                            visited_urls.append(doc.metadata['url'])
+
+                    # Aggiungi i documenti al progetto
+                    added_files = []
+                    for doc, file_path in documents:
+                        # Calcola l'hash e le dimensioni del file
+                        file_hash = compute_file_hash(file_path)
+                        file_size = os.path.getsize(file_path)
+                        filename = os.path.basename(file_path)
+
+                        # Crea il record nel database CON IL CAMPO METADATA
+                        project_file = ProjectFile.objects.create(
+                            project=project,
+                            filename=filename,
+                            file_path=file_path,
+                            file_type='txt',
+                            file_size=file_size,
+                            file_hash=file_hash,
+                            is_embedded=False,
+                            last_indexed_at=None,
+                            metadata={
+                                'source_url': doc.metadata['url'],
+                                'title': doc.metadata['title'],
+                                'crawl_depth': doc.metadata['crawl_depth'],
+                                'crawl_domain': doc.metadata['domain'],
+                                'type': 'web_page'
+                            }
+                        )
+
+                        added_files.append(project_file)
+
+                    # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
+                    if added_files:
+                        create_project_rag_chain(project)
+
+                    stats = {
+                        'processed_pages': processed_pages,
+                        'failed_pages': failed_pages,
+                        'added_files': len(added_files)
+                    }
+
+                    # Salva le informazioni del crawling
+                    index_status.metadata = index_status.metadata or {}
+                    index_status.metadata['last_crawl'] = {
+                        'status': 'completed',
+                        'url': website_url,
+                        'timestamp': timezone.now().isoformat(),
+                        'stats': stats,
+                        'visited_urls': visited_urls,  # Aggiungiamo la lista delle URL visitate
+                        'domain': domain,
+                        'max_depth': max_depth,
+                        'max_pages': max_pages
+                    }
+                    index_status.save()
+
+                    messages.success(request,
+                                     f"Crawling completato: {stats['processed_pages']} pagine processate, {stats['added_files']} file aggiunti")
+                    return redirect('project', project_id=project.id)
+
+            # Redirect alla vista del progetto se nessuna azione è stata eseguita
+            return redirect('project', project_id=project.id)
+
+        except Project.DoesNotExist:
+            messages.error(request, "Progetto non trovato.")
+            return redirect('projects_list')
+    else:
+        logger.warning("User not Authenticated!")
+        return redirect('login')
+
+
+def handle_website_crawl_internal(project, start_url, max_depth=3, max_pages=100,
+                                  exclude_patterns=None, include_patterns=None,
+                                  min_text_length=500):
+    """
+    Gestisce il crawling di un sito web e l'aggiunta dei contenuti a un progetto.
+    Versione interna che non richiede l'importazione di web_crawler.py
+    """
+    from profiles.models import ProjectFile
+    from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
+    import os
+    from urllib.parse import urlparse
+    from vaitony_project import settings
+
+    # Utilizzare direttamente la classe WebCrawler dal web_crawler.py
+    from .web_crawler import WebCrawler
+
+    logger.info(f"Avvio crawling per il progetto {project.id} partendo da {start_url}")
+
+    # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+    parsed_url = urlparse(start_url)
+    domain = parsed_url.netloc
+
+    # Configura la directory di output con la struttura richiesta
+    project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+    website_content_dir = os.path.join(project_dir, 'website_content')
+    website_dir = os.path.join(website_content_dir, domain)
+    os.makedirs(website_dir, exist_ok=True)
+
+    # Inizializza il crawler
+    crawler = WebCrawler(
+        max_depth=max_depth,
+        max_pages=max_pages,
+        min_text_length=min_text_length,
+        exclude_patterns=exclude_patterns,
+        include_patterns=include_patterns
+    )
+
+    # Esegui il crawling
+    processed_pages, failed_pages, documents = crawler.crawl(start_url, website_dir)
+
+    # Aggiungi i documenti al progetto
+    added_files = []
+    for doc, file_path in documents:
+        # Calcola l'hash e le dimensioni del file
+        file_hash = compute_file_hash(file_path)
+        file_size = os.path.getsize(file_path)
+        filename = os.path.basename(file_path)
+
+        # Crea il record nel database
+        project_file = ProjectFile.objects.create(
+            project=project,
+            filename=filename,
+            file_path=file_path,
+            file_type='txt',
+            file_size=file_size,
+            file_hash=file_hash,
+            is_embedded=False,
+            last_indexed_at=None,
+            metadata={
+                'source_url': doc.metadata['url'],
+                'title': doc.metadata['title'],
+                'crawl_depth': doc.metadata['crawl_depth'],
+                'crawl_domain': doc.metadata['domain'],
+                'type': 'web_page'
+            }
+        )
+
+        added_files.append(project_file)
+
+    # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
+    if added_files:
+        try:
+            logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
+            create_project_rag_chain(project)
+            logger.info(f"Indice vettoriale aggiornato con successo")
+        except Exception as e:
+            logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+
+    return {
+        'processed_pages': processed_pages,
+        'failed_pages': failed_pages,
+        'added_files': len(added_files)
+    }
+
+
+
+# In views.py - Aggiungi questa funzione
+def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
+                         exclude_patterns=None, include_patterns=None,
+                         min_text_length=500):
+    """
+    Gestisce il crawling di un sito web e l'aggiunta dei contenuti a un progetto.
+    """
+    from profiles.models import ProjectFile
+    from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
+    import os
+    from urllib.parse import urlparse
+    from vaitony_project import settings
+
+    logger.info(f"Avvio crawling per il progetto {project.id} partendo da {start_url}")
+
+    # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+    parsed_url = urlparse(start_url)
+    domain = parsed_url.netloc
+
+    # Configura la directory di output con la struttura richiesta
+    project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+    website_content_dir = os.path.join(project_dir, 'website_content')
+    website_dir = os.path.join(website_content_dir, domain)
+    os.makedirs(website_dir, exist_ok=True)
+
+    # Inizializza il crawler
+    from .web_crawler import WebCrawler  # Importa WebCrawler dal file locale
+
+    crawler = WebCrawler(
+        max_depth=max_depth,
+        max_pages=max_pages,
+        min_text_length=min_text_length,
+        exclude_patterns=exclude_patterns,
+        include_patterns=include_patterns
+    )
+
+    # Esegui il crawling
+    processed_pages, failed_pages, documents = crawler.crawl(start_url, website_dir)
+
+    # Aggiungi i documenti al progetto
+    added_files = []
+    for doc, file_path in documents:
+        # Calcola l'hash e le dimensioni del file
+        file_hash = compute_file_hash(file_path)
+        file_size = os.path.getsize(file_path)
+        filename = os.path.basename(file_path)
+
+        # Crea il record nel database
+        project_file = ProjectFile.objects.create(
+            project=project,
+            filename=filename,
+            file_path=file_path,
+            file_type='txt',
+            file_size=file_size,
+            file_hash=file_hash,
+            is_embedded=False,
+            last_indexed_at=None,
+            metadata={
+                'source_url': doc.metadata['url'],
+                'title': doc.metadata['title'],
+                'crawl_depth': doc.metadata['crawl_depth'],
+                'crawl_domain': doc.metadata['domain'],
+                'type': 'web_page'
+            }
+        )
+
+        added_files.append(project_file)
+
+    # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
+    if added_files:
+        try:
+            logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
+            create_project_rag_chain(project)
+            logger.info(f"Indice vettoriale aggiornato con successo")
+        except Exception as e:
+            logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+
+    return {
+        'processed_pages': processed_pages,
+        'failed_pages': failed_pages,
+        'added_files': len(added_files)
+    }

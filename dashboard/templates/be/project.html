@@ -1161,13 +1161,13 @@
                                 <div class="col-md-6">
                                     <label for="max_depth" class="form-label">Profondità massima</label>
                                     <input type="number" class="form-control" id="max_depth" name="max_depth"
-                                           value="3" min="1" max="10">
+                                           value="1" min="1" max="10">
                                     <div class="form-text">Quanti livelli di link seguire (1-10).</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label for="max_pages" class="form-label">Pagine massime</label>
                                     <input type="number" class="form-control" id="max_pages" name="max_pages"
-                                           value="100" min="1" max="500">
+                                           value="3" min="1" max="500">
                                     <div class="form-text">Massimo numero di pagine da processare (1-500).</div>
                                 </div>
                             </div>
@@ -1289,6 +1289,63 @@
                         </div>
                     {% endif %}
                 </div>
+            </div>
+            <!-- Nuova sezione - URLs salvati -->
+            <div class="mt-5">
+                <h2 class="h5 mb-3">URLs Salvati</h2>
+
+                {% if project_urls %}
+                <div class="website-card">
+                    <div class="website-card-header">
+                        <h5 class="website-card-title">
+                            <i class="bi bi-globe2"></i>
+                            URLs salvati nel progetto
+                        </h5>
+                        <div>
+                            <span class="badge bg-info">{{ project_urls|length }} URLs</span>
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addUrlModal">
+                                <i class="bi bi-plus-lg"></i> Aggiungi URL
+                            </button>
+                        </div>
+                    </div>
+                    <div class="website-links-grid">
+                        {% for url in project_urls %}
+                        <div class="website-link-card" data-url-id="{{ url.id }}">
+                            <div class="website-link-title">
+                                {{ url.title|default:url.url }}
+                            </div>
+                            <small class="text-muted">{{ url.url|truncatechars:40 }}</small>
+                            <div class="website-link-actions">
+                                <button class="btn btn-sm btn-outline-primary view-url-btn"
+                                        data-bs-toggle="modal" data-bs-target="#urlContentModal"
+                                        data-url-id="{{ url.id }}"
+                                        data-url-title="{{ url.title|default:url.url }}"
+                                        data-url="{{ url.url }}">
+                                    <i class="bi bi-eye"></i> Anteprima
+                                </button>
+                                <a href="{{ url.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-box-arrow-up-right"></i> Apri
+                                </a>
+                                <button class="btn btn-sm btn-outline-danger delete-url-btn"
+                                        data-url-id="{{ url.id }}"
+                                        data-url-title="{{ url.title|default:url.url }}">
+                                    <i class="bi bi-trash"></i> Elimina
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-globe"></i>
+                    <h3>Nessun URL salvato</h3>
+                    <p class="text-muted">Aggiungi URLs al progetto per visualizzarli qui</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUrlModal">
+                        <i class="bi bi-plus-lg me-1"></i> Aggiungi URL
+                    </button>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -1609,6 +1666,88 @@
         </div>
     </div>
 </div>
+
+<!-- Modal per visualizzare il contenuto degli URL -->
+<div class="modal fade" id="urlContentModal" tabindex="-1" aria-labelledby="urlContentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="urlContentModalLabel">Contenuto URL</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <span class="url-display fw-bold">URL: </span>
+                    <a href="#" id="url-link" target="_blank" class="text-truncate"></a>
+                </div>
+                <div class="bg-light p-3 rounded" style="max-height: 70vh; overflow-y: auto;">
+                    <div id="url-content-display" class="mb-0"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <a href="#" id="open-url-link" target="_blank" class="btn btn-outline-primary">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Apri nel browser
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal per aggiungere un URL -->
+<div class="modal fade" id="addUrlModal" tabindex="-1" aria-labelledby="addUrlModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUrlModalLabel">Aggiungi URL</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{% url 'project' project.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_url">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="url" class="form-label">URL</label>
+                        <input type="url" class="form-control" id="url" name="url" placeholder="https://example.com" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i> Aggiungi
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal per confermare l'eliminazione dell'URL -->
+<div class="modal fade" id="deleteUrlModal" tabindex="-1" aria-labelledby="deleteUrlModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteUrlModalLabel">Conferma eliminazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler eliminare l'URL: <span id="delete-url-title" class="fw-bold"></span>?</p>
+                <p class="text-danger">Questa azione non può essere annullata.</p>
+            </div>
+            <form id="delete-url-form" method="POST" action="{% url 'project' project.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_url">
+                <input type="hidden" id="delete-url-id" name="url_id">
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i> Elimina
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1808,6 +1947,7 @@ function initWebsiteCrawler() {
     let queuedPages = 0;
     let failedPages = 0;
     let crawledLinks = [];
+    let monitorInterval = null; // Per tenere traccia dell'intervallo di monitoraggio
 
     if (crawlForm) {
         crawlForm.addEventListener('submit', function(e) {
@@ -1825,7 +1965,7 @@ function initWebsiteCrawler() {
             const maxPages = formData.get('max_pages');
 
             // Verifica URL
-            if (!websiteUrl || !websiteUrl.startsWith('http')) {
+            if (!websiteUrl || (!websiteUrl.startsWith('http://') && !websiteUrl.startsWith('https://'))) {
                 showToast('Inserisci un URL valido che inizi con http:// o https://', 'danger');
                 return;
             }
@@ -1838,7 +1978,7 @@ function initWebsiteCrawler() {
     if (cancelCrawlBtn) {
         cancelCrawlBtn.addEventListener('click', function() {
             if (crawlInProgress && confirm('Sei sicuro di voler interrompere il processo di crawling?')) {
-                stopCrawling();
+                stopCrawling(true); // true indica che è una richiesta utente
             }
         });
     }
@@ -1874,7 +2014,112 @@ function initWebsiteCrawler() {
                 deleteWebsite(websiteUrl);
             }
         }
+
+        // Visualizza contenuto URL (correzione)
+        if (e.target.closest('.view-url-btn')) {
+            const btn = e.target.closest('.view-url-btn');
+            const urlId = btn.getAttribute('data-url-id');
+            const urlTitle = btn.getAttribute('data-url-title');
+            const url = btn.getAttribute('data-url');
+
+            // Aggiorna i dati nella modal
+            const modal = document.getElementById('urlContentModal');
+            const contentDisplay = document.getElementById('url-content-display');
+            const urlDisplay = document.getElementById('url-link');
+            const openLink = document.getElementById('open-url-link');
+
+            // Mostra informazioni iniziali
+            contentDisplay.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Caricamento...</span></div>';
+            urlDisplay.textContent = url;
+            urlDisplay.href = url;
+            openLink.href = url;
+            document.getElementById('urlContentModalLabel').textContent = `Contenuto: ${urlTitle}`;
+
+            // Carica contenuto dell'URL
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'get_url_content',
+                    'url_id': urlId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Mostra contenuto
+                    contentDisplay.innerHTML = data.content.replace(/\n/g, '<br>');
+                } else {
+                    contentDisplay.innerHTML = '<div class="alert alert-danger">Errore nel caricamento del contenuto: ' + (data.error || 'errore sconosciuto') + '</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                contentDisplay.innerHTML = '<div class="alert alert-danger">Errore di rete durante il caricamento del contenuto</div>';
+            });
+        }
+
+        // Gestione eliminazione URL (correzione)
+        if (e.target.closest('.delete-url-btn')) {
+            const btn = e.target.closest('.delete-url-btn');
+            const urlId = btn.getAttribute('data-url-id');
+            const urlTitle = btn.getAttribute('data-url-title');
+
+            // Popola la modal di conferma
+            document.getElementById('delete-url-id').value = urlId;
+            document.getElementById('delete-url-title').textContent = urlTitle;
+
+            // Mostra la modal di conferma
+            const deleteUrlModal = new bootstrap.Modal(document.getElementById('deleteUrlModal'));
+            deleteUrlModal.show();
+        }
     });
+
+    // Gestione submit del form di eliminazione URL (correzione)
+    const deleteUrlForm = document.getElementById('delete-url-form');
+    if (deleteUrlForm) {
+        deleteUrlForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const urlId = document.getElementById('delete-url-id').value;
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'delete_url',
+                    'url_id': urlId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('deleteUrlModal'));
+                modal.hide();
+
+                if (data.success) {
+                    // Rimuovi l'elemento dall'UI
+                    const urlCard = document.querySelector(`.website-link-card[data-url-id="${urlId}"]`);
+                    if (urlCard) {
+                        urlCard.remove();
+                        showToast('URL eliminato con successo', 'success');
+                    }
+                } else {
+                    showToast('Errore durante l\'eliminazione: ' + (data.message || ''), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete durante l\'eliminazione', 'danger');
+            });
+        });
+    }
 
     function startCrawling(websiteUrl, maxDepth, maxPages, formData) {
         // Reset stato
@@ -1936,6 +2181,11 @@ function initWebsiteCrawler() {
     }
 
     function monitorCrawlProgress(websiteUrl) {
+        // Cancella eventuali intervalli esistenti
+        if (monitorInterval) {
+            clearInterval(monitorInterval);
+        }
+
         const checkStatus = () => {
             if (!crawlInProgress) return;
 
@@ -1965,8 +2215,14 @@ function initWebsiteCrawler() {
                             updateCrawlStats(data.stats);
                         }
 
-                        // Continua a monitorare
-                        setTimeout(checkStatus, 2000);
+                        // Se ci sono URL visitati, aggiungerli alla lista
+                        if (data.visited_urls && Array.isArray(data.visited_urls)) {
+                            data.visited_urls.forEach(url => {
+                                if (!crawledLinks.includes(url)) {
+                                    addProcessedLink(url);
+                                }
+                            });
+                        }
                     }
                 } else {
                     stopCrawling();
@@ -1975,12 +2231,15 @@ function initWebsiteCrawler() {
             })
             .catch(error => {
                 console.error('Errore:', error);
-                setTimeout(checkStatus, 5000); // Riprova dopo un po'
+                // Non interrompiamo il monitoraggio per errori temporanei
             });
         };
 
-        // Avvia il monitoraggio
-        setTimeout(checkStatus, 1000);
+        // Avvia il monitoraggio con un intervallo regolare
+        monitorInterval = setInterval(checkStatus, 2000);
+
+        // Esegui il primo check immediatamente
+        checkStatus();
     }
 
     function updateCrawlStats(stats) {
@@ -2003,36 +2262,89 @@ function initWebsiteCrawler() {
         // Aggiorna URL corrente
         if (stats.current_url) {
             currentUrlDisplay.textContent = stats.current_url;
-
-            // Aggiungi alla lista dei link processati
-            if (!crawledLinks.includes(stats.current_url)) {
-                crawledLinks.push(stats.current_url);
-
-                const linkItem = document.createElement('div');
-                linkItem.className = 'processed-link-item';
-                linkItem.textContent = stats.current_url;
-
-                // Mantieni solo gli ultimi 10 link nella visualizzazione
-                if (processedLinksContainer.childElementCount >= 10) {
-                    processedLinksContainer.removeChild(processedLinksContainer.firstChild);
-                }
-
-                processedLinksContainer.appendChild(linkItem);
-                processedLinksContainer.scrollTop = processedLinksContainer.scrollHeight;
-            }
+            addProcessedLink(stats.current_url);
         }
     }
 
-    function stopCrawling() {
+    function addProcessedLink(url) {
+        // Aggiungi alla lista dei link processati se non è già presente
+        if (!crawledLinks.includes(url)) {
+            crawledLinks.push(url);
+
+            const linkItem = document.createElement('div');
+            linkItem.className = 'processed-link-item';
+            linkItem.textContent = url;
+
+            // Mantieni solo gli ultimi 10 link nella visualizzazione
+            if (processedLinksContainer.childElementCount >= 10) {
+                processedLinksContainer.removeChild(processedLinksContainer.firstChild);
+            }
+
+            processedLinksContainer.appendChild(linkItem);
+            processedLinksContainer.scrollTop = processedLinksContainer.scrollHeight;
+        }
+    }
+
+    // CORREZIONE: Funzione migliorata per interrompere il crawling
+    function stopCrawling(userRequested = false) {
+        // Se l'utente ha richiesto la cancellazione, inviamo una richiesta al server
+        if (userRequested && crawlJob) {
+            fetch(`{% url "website_crawl" project.id %}`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: new URLSearchParams({
+                    'action': 'cancel_crawl',
+                    'job_id': crawlJob,
+                    'csrfmiddlewaretoken': getCsrfToken()
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Processo di crawling interrotto con successo', 'success');
+                } else {
+                    showToast('Impossibile interrompere il processo: ' + (data.message || ''), 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Errore durante la cancellazione:', error);
+                showToast('Errore di rete durante la cancellazione', 'danger');
+            });
+        }
+
+        // Aggiorna stato UI
         crawlInProgress = false;
         startCrawlBtn.disabled = false;
         startCrawlBtn.innerHTML = '<i class="bi bi-globe me-1"></i> Avvia Crawling';
 
-        // Mantieni visibile l'area di stato per mostrate i risultati
-        if (crawlStatusArea) {
-            const spinner = document.getElementById('crawl-spinner');
-            if (spinner) spinner.style.display = 'none';
+        // Cancella l'intervallo di monitoraggio
+        if (monitorInterval) {
+            clearInterval(monitorInterval);
+            monitorInterval = null;
         }
+
+        // Cambia l'aspetto dello spinner
+        const spinner = document.getElementById('crawl-spinner');
+        if (spinner) {
+            spinner.classList.remove('spinner-border');
+            spinner.innerHTML = '<i class="bi bi-x-circle-fill text-danger"></i>';
+        }
+
+        // Aggiorna il messaggio di stato
+        if (crawlStatusMessage) {
+            if (userRequested) {
+                crawlStatusMessage.innerHTML = '<i class="bi bi-x-octagon-fill text-danger me-1"></i> Crawling interrotto dall\'utente';
+            } else {
+                crawlStatusMessage.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i> Crawling completato';
+            }
+        }
+
+        // Reset job ID
+        crawlJob = null;
     }
 
     function finishCrawling(stats, websiteUrl) {
@@ -2040,17 +2352,16 @@ function initWebsiteCrawler() {
 
         // Aggiorna UI con i risultati finali
         updateCrawlStats(stats);
-        crawlStatusMessage.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i> Crawling completato: <strong>${stats.processed_pages}</strong> pagine elaborate, <strong>${stats.added_files}</strong> file aggiunti al progetto.`;
+        crawlStatusMessage.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i> Crawling completato: <strong>${stats.processed_pages}</strong> pagine elaborate, <strong>${stats.added_urls || stats.added_files || 0}</strong> contenuti aggiunti al progetto.`;
 
         // Mostra toast di successo
-        showToast(`Crawling completato per ${websiteUrl}: ${stats.processed_pages} pagine elaborate, ${stats.added_files} file aggiunti`, 'success');
+        showToast(`Crawling completato per ${websiteUrl}: ${stats.processed_pages} pagine elaborate, ${stats.added_urls || stats.added_files || 0} contenuti aggiunti`, 'success');
 
         // Aggiorna l'interfaccia per mostrare i nuovi contenuti
         setTimeout(() => {
             location.reload(); // Per ora ricarica la pagina - in futuro aggiornare dinamicamente
         }, 3000);
     }
-
     function showPageContent(pageUrl, pageId) {
         // Aggiorna modal con i dati della pagina
         const modal = document.getElementById('pageContentModal');
@@ -2374,7 +2685,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch('{% url "project" project.id %}', {
                 method: 'POST',
                 headers: {
-'X-Requested-With': 'XMLHttpRequest',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: new URLSearchParams({
@@ -2388,7 +2699,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     const modal = bootstrap.Modal.getInstance(document.getElementById('addNoteModal'));
-                    modal.hide();
+                    if (modal) modal.hide();
                     window.location.reload();
                 } else {
                     alert('Errore: ' + (data.error || 'Impossibile aggiungere la nota'));
@@ -2780,7 +3091,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-
     // Gestione eliminazione note
     document.querySelectorAll('.delete-note-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -2985,6 +3295,201 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
+
+    // Aggiungi endpoint per annullare il crawler nel backend
+    // Gestione di cancel_crawl in views.py
+    function sendCancelCrawlRequest(jobId) {
+        fetch('{% url "website_crawl" project.id %}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'cancel_crawl',
+                'job_id': jobId,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Crawling interrotto con successo', 'success');
+            } else {
+                showToast('Errore nell\'interruzione del crawling: ' + (data.message || ''), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di rete nell\'interruzione del crawling', 'danger');
+        });
+    }
+
+    // Controlla se ci sono URL nella risposta AI
+    function checkForURLsInAIResponse(text) {
+        // Se la risposta contiene URL ma nessuna fonte URL viene mostrata,
+        // suggeriamo di controllare il tab URLs
+        const urlRegex = /https?:\/\/[^\s]+/g;
+        const urls = text.match(urlRegex);
+
+        if (urls && urls.length > 0) {
+            // Controlla se ci sono fonti URL nel tab sources
+            const sourcesTab = document.getElementById('sources');
+            if (sourcesTab) {
+                const hasUrlSources = sourcesTab.innerHTML.includes('URL:');
+
+                if (!hasUrlSources) {
+                    // Aggiungi un suggerimento per controllare il tab URLs
+                    const urlsTabSuggestion = document.createElement('div');
+                    urlsTabSuggestion.className = 'text-center mt-3 mb-3';
+                    urlsTabSuggestion.innerHTML = `
+                        <span class="badge bg-light text-info shadow-sm">
+                            <i class="bi bi-info-circle me-1"></i>
+                            La risposta contiene URL. Controlla il tab "URLs" per maggiori dettagli.
+                        </span>
+                    `;
+                    chatMessages.appendChild(urlsTabSuggestion);
+                }
+            }
+        }
+    }
+
+    // Fix per il modal quando viene eliminato un URL
+    const deleteUrlModal = document.getElementById('deleteUrlModal');
+    if (deleteUrlModal) {
+        deleteUrlModal.addEventListener('hidden.bs.modal', function() {
+            // Controlla se ci sono ancora URL nel progetto
+            const urlCards = document.querySelectorAll('.website-link-card');
+            if (urlCards.length === 0) {
+                // Se non ci sono più URL, mostra il messaggio vuoto
+                const urlsContainer = document.querySelector('.website-card');
+                if (urlsContainer) {
+                    urlsContainer.innerHTML = `
+                        <div class="empty-state">
+                            <i class="bi bi-globe"></i>
+                            <h3>Nessun URL salvato</h3>
+                            <p class="text-muted">Aggiungi URLs al progetto per visualizzarli qui</p>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUrlModal">
+                                <i class="bi bi-plus-lg me-1"></i> Aggiungi URL
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        });
+    }
+
+    // Controlla se ci sono già stati errori di crawling visualizzati
+    let crawlingErrorsShown = false;
+
+    // Verifica lo stato del crawling al caricamento
+    function checkCrawlingStatus() {
+        // Se non siamo nella tab URLs, salta
+        if (!document.querySelector('#urls.active')) return;
+
+        fetch(`{% url "website_crawl" project.id %}?check_status=true`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.status === 'running') {
+                // C'è un crawling in corso, mostra lo stato
+                const crawlStatusArea = document.getElementById('crawl-status-area');
+                if (crawlStatusArea) {
+                    crawlStatusArea.style.display = 'block';
+
+                    // Aggiorna le statistiche
+                    if (data.stats) {
+                        document.getElementById('processed-pages-count').textContent = data.stats.processed_pages || 0;
+                        document.getElementById('queued-pages-count').textContent = data.stats.queued_pages || 0;
+                        document.getElementById('failed-pages-count').textContent = data.stats.failed_pages || 0;
+                    }
+
+                    // Aggiorna URL corrente
+                    if (data.current_url) {
+                        document.getElementById('current-url').textContent = data.current_url;
+                    }
+
+                    // Imposta lo stato come in corso
+                    crawlInProgress = true;
+                }
+            } else if (data.success && data.status === 'failed' && !crawlingErrorsShown) {
+                // Mostra errore solo una volta
+                showToast('Errore durante il crawling: ' + (data.error || 'Errore sconosciuto'), 'danger');
+                crawlingErrorsShown = true;
+            }
+        })
+        .catch(error => {
+            console.error('Errore nel controllo dello stato del crawling:', error);
+        });
+    }
+
+    // Controlla stato crawling al caricamento e quando si passa alla tab URLs
+    document.getElementById('urls-tab').addEventListener('shown.bs.tab', checkCrawlingStatus);
+
+    // Controlla inizialmente se siamo nella tab URLs
+    if (document.querySelector('#urls.active')) {
+        checkCrawlingStatus();
+    }
+
+    // Collega il form per aggiungere manualmente un URL
+    const addUrlForm = document.getElementById('addUrlModal').querySelector('form');
+    if (addUrlForm) {
+        addUrlForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const urlInput = this.querySelector('input[name="url"]');
+            const url = urlInput.value.trim();
+
+            if (!url) {
+                showToast('Inserisci un URL valido', 'warning');
+                return;
+            }
+
+            // Disabilita il form durante l'invio
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Aggiunta in corso...';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'add_url',
+                    'url': url,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addUrlModal'));
+                modal.hide();
+
+                if (data.success) {
+                    showToast('URL aggiunto con successo', 'success');
+                    // Ricarica la pagina per mostrare il nuovo URL
+                    location.reload();
+                } else {
+                    showToast('Errore nell\'aggiunta dell\'URL: ' + (data.message || ''), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete nell\'aggiunta dell\'URL', 'danger');
+            })
+            .finally(() => {
+                // Ripristina lo stato del bottone
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            });
+        });
+    }
 });
 </script>
 {% endblock %}

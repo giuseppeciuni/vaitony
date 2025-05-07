@@ -268,83 +268,167 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
         logger.error(f"Errore nella copia dell'embedding dalla cache globale al progetto {project.id}: {str(e)}")
         return False
 
+# def check_project_index_update_needed(project):
+#     """
+#     Verifica se l'indice FAISS del progetto deve essere aggiornato.
+#
+#     Controlla vari fattori che potrebbero richiedere un aggiornamento dell'indice:
+#     - Documenti non ancora incorporati
+#     - Cambiamento nel numero di documenti o note
+#     - Note modificate dopo l'ultimo aggiornamento dell'indice
+#     - Cambio nel contenuto delle note (tramite hash)
+#
+#     Questa funzione fornisce un modo efficiente per determinare quando
+#     è necessario aggiornare l'indice vettoriale, evitando operazioni costose
+#     quando non sono necessarie.
+#
+#     Args:
+#         project: Oggetto Project
+#
+#     Returns:
+#         bool: True se l'indice deve essere aggiornato, False altrimenti
+#     """
+#     # Importa qui per evitare l'importazione circolare
+#     from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+#
+#     # Ottieni documenti e note attive del progetto
+#     documents = ProjectFile.objects.filter(project=project)
+#     active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+#
+#     logger.debug(f"Controllo aggiornamento indice per progetto {project.id}: "
+#                  f"{documents.count()} documenti, {active_notes.count()} note attive")
+#
+#     # Se non ci sono né documenti né note attive, non è necessario un indice
+#     if not documents.exists() and not active_notes.exists():
+#         logger.debug(f"Nessun documento o nota per il progetto {project.id}, indice non necessario")
+#         return False
+#
+#     # Verifica se esistono documenti non ancora incorporati
+#     non_embedded_docs = documents.filter(is_embedded=False)
+#     if non_embedded_docs.exists():
+#         logger.debug(f"Rilevati {non_embedded_docs.count()} documenti non embedded per il progetto {project.id}")
+#         return True
+#
+#     # Controlla lo stato dell'indice nel database
+#     try:
+#         index_status = ProjectIndexStatus.objects.get(project=project)
+#
+#         # Se il numero totale di documenti e note è cambiato
+#         total_count = documents.count() + active_notes.count()
+#         if index_status.documents_count != total_count:
+#             logger.debug(f"Numero di documenti/note cambiato: {index_status.documents_count} → {total_count}")
+#             return True
+#
+#         # Se una nota è stata modificata dopo l'ultimo aggiornamento dell'indice
+#         latest_note_update = active_notes.order_by('-updated_at').first()
+#         if latest_note_update and latest_note_update.updated_at > index_status.last_updated:
+#             logger.debug(f"Note modificate dopo l'ultimo aggiornamento dell'indice")
+#             return True
+#
+#         # Verifica hash delle note (cambio contenuto)
+#         current_notes_hash = ""
+#         for note in active_notes:
+#             note_hash = hashlib.sha256(f"{note.id}_{note.content}_{note.is_included_in_rag}".encode()).hexdigest()
+#             current_notes_hash += note_hash
+#
+#         current_hash = hashlib.sha256(current_notes_hash.encode()).hexdigest()
+#
+#         if hasattr(index_status, 'notes_hash') and index_status.notes_hash != current_hash:
+#             logger.debug(f"Hash delle note cambiato")
+#             return True
+#
+#         # Indice aggiornato
+#         logger.debug(f"Indice aggiornato per il progetto {project.id}")
+#         return False
+#
+#     except ProjectIndexStatus.DoesNotExist:
+#         # Se non esiste un record per lo stato dell'indice, è necessario crearlo
+#         logger.debug(f"Nessun record di stato dell'indice per il progetto {project.id}")
+#         return True
+
+
 def check_project_index_update_needed(project):
     """
-    Verifica se l'indice FAISS del progetto deve essere aggiornato.
+    Verifica se l'indice RAG del progetto necessita di un aggiornamento.
 
-    Controlla vari fattori che potrebbero richiedere un aggiornamento dell'indice:
-    - Documenti non ancora incorporati
-    - Cambiamento nel numero di documenti o note
-    - Note modificate dopo l'ultimo aggiornamento dell'indice
-    - Cambio nel contenuto delle note (tramite hash)
-
-    Questa funzione fornisce un modo efficiente per determinare quando
-    è necessario aggiornare l'indice vettoriale, evitando operazioni costose
-    quando non sono necessarie.
+    Questa funzione controlla se ci sono documenti, note o URL non ancora
+    indicizzati, o se l'indice stesso non esiste ancora.
 
     Args:
-        project: Oggetto Project
+        project: Oggetto Project da verificare
 
     Returns:
-        bool: True se l'indice deve essere aggiornato, False altrimenti
+        bool: True se l'indice necessita di aggiornamento, False altrimenti
     """
-    # Importa qui per evitare l'importazione circolare
-    from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+    # Importazione locale per evitare dipendenze circolari
+    from profiles.models import ProjectFile, ProjectNote, ProjectURL
+    import os
+    from django.conf import settings
+    import logging
 
-    # Ottieni documenti e note attive del progetto
-    documents = ProjectFile.objects.filter(project=project)
-    active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Controllo aggiornamento indice per progetto {project.id}")
 
-    logger.debug(f"Controllo aggiornamento indice per progetto {project.id}: "
-                 f"{documents.count()} documenti, {active_notes.count()} note attive")
+    # Verifica file non ancora indicizzati
+    files_to_embed = ProjectFile.objects.filter(project=project, is_embedded=False).count()
 
-    # Se non ci sono né documenti né note attive, non è necessario un indice
-    if not documents.exists() and not active_notes.exists():
-        logger.debug(f"Nessun documento o nota per il progetto {project.id}, indice non necessario")
-        return False
+    # Verifica note attive non ancora indicizzate
+    notes_to_embed = ProjectNote.objects.filter(
+        project=project,
+        is_included_in_rag=True,
+        last_indexed_at=None
+    ).count()
 
-    # Verifica se esistono documenti non ancora incorporati
-    non_embedded_docs = documents.filter(is_embedded=False)
-    if non_embedded_docs.exists():
-        logger.debug(f"Rilevati {non_embedded_docs.count()} documenti non embedded per il progetto {project.id}")
+    # Verifica URL non ancora indicizzati
+    urls_to_embed = ProjectURL.objects.filter(
+        project=project,
+        is_indexed=False
+    ).count()
+
+    # Verifica se esiste già un indice per il progetto
+    index_path = os.path.join(
+        settings.MEDIA_ROOT,
+        'projects',
+        str(project.user.id),
+        str(project.id),
+        'vector_index'
+    )
+    has_index = os.path.exists(index_path)
+
+    # Log dettagliato dello stato
+    logger.debug(f"Progetto {project.id}:")
+    logger.debug(f"- File da indicizzare: {files_to_embed}")
+    logger.debug(f"- Note da indicizzare: {notes_to_embed}")
+    logger.debug(f"- URL da indicizzare: {urls_to_embed}")
+    logger.debug(f"- Indice esistente: {has_index}")
+
+    # Casi in cui è necessario aggiornare l'indice:
+    # 1. Non esiste un indice ma ci sono contenuti da indicizzare
+    if not has_index and (files_to_embed > 0 or notes_to_embed > 0 or urls_to_embed > 0):
+        logger.info(f"Indice RAG del progetto {project.id} necessita di creazione iniziale")
         return True
 
-    # Controlla lo stato dell'indice nel database
-    try:
-        index_status = ProjectIndexStatus.objects.get(project=project)
-
-        # Se il numero totale di documenti e note è cambiato
-        total_count = documents.count() + active_notes.count()
-        if index_status.documents_count != total_count:
-            logger.debug(f"Numero di documenti/note cambiato: {index_status.documents_count} → {total_count}")
-            return True
-
-        # Se una nota è stata modificata dopo l'ultimo aggiornamento dell'indice
-        latest_note_update = active_notes.order_by('-updated_at').first()
-        if latest_note_update and latest_note_update.updated_at > index_status.last_updated:
-            logger.debug(f"Note modificate dopo l'ultimo aggiornamento dell'indice")
-            return True
-
-        # Verifica hash delle note (cambio contenuto)
-        current_notes_hash = ""
-        for note in active_notes:
-            note_hash = hashlib.sha256(f"{note.id}_{note.content}_{note.is_included_in_rag}".encode()).hexdigest()
-            current_notes_hash += note_hash
-
-        current_hash = hashlib.sha256(current_notes_hash.encode()).hexdigest()
-
-        if hasattr(index_status, 'notes_hash') and index_status.notes_hash != current_hash:
-            logger.debug(f"Hash delle note cambiato")
-            return True
-
-        # Indice aggiornato
-        logger.debug(f"Indice aggiornato per il progetto {project.id}")
-        return False
-
-    except ProjectIndexStatus.DoesNotExist:
-        # Se non esiste un record per lo stato dell'indice, è necessario crearlo
-        logger.debug(f"Nessun record di stato dell'indice per il progetto {project.id}")
+    # 2. L'indice esiste ma ci sono nuovi contenuti da aggiungere
+    if has_index and (files_to_embed > 0 or notes_to_embed > 0 or urls_to_embed > 0):
+        logger.info(f"Indice RAG del progetto {project.id} necessita aggiornamento: nuovi contenuti")
         return True
+
+    # Verifica anche la presenza di contenuti già indicizzati
+    indexed_files = ProjectFile.objects.filter(project=project, is_embedded=True).count()
+    indexed_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True).exclude(
+        last_indexed_at=None).count()
+    indexed_urls = ProjectURL.objects.filter(project=project, is_indexed=True).count()
+
+    # 3. Se non ci sono contenuti indicizzati e neanche da indicizzare, log informativo
+    if indexed_files == 0 and indexed_notes == 0 and indexed_urls == 0:
+        logger.debug(f"Nessun documento, nota o URL indicizzato per il progetto {project.id}")
+
+    logger.info(
+        f"Indice RAG del progetto {project.id} necessita aggiornamento: {bool(files_to_embed or notes_to_embed or urls_to_embed)}")
+
+    # Ritorna True se c'è qualsiasi contenuto da indicizzare
+    return files_to_embed > 0 or notes_to_embed > 0 or urls_to_embed > 0
+
 
 
 def update_project_index_status(project, document_ids=None, note_ids=None, url_ids=None):

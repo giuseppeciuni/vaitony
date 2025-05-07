@@ -477,6 +477,8 @@ def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_dela
     raise Exception("Impossibile creare gli embedding dopo ripetuti tentativi")
 
 
+# Modifica alla funzione create_project_rag_chain in rag_utils.py
+
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
     Crea o aggiorna la catena RAG per un progetto.
@@ -492,13 +494,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
     Returns:
         RetrievalQA: Catena RAG configurata, o None in caso di errore
-
-    Il processo include:
-    1. Preparazione dei percorsi e inizializzazione
-    2. Caricamento dei documenti, delle note e degli URL
-    3. Gestione della cache degli embedding
-    4. Creazione/aggiornamento dell'indice FAISS
-    5. Configurazione della catena di recupero
     """
     # Importazione ritardata per evitare cicli di importazione
     from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache, ProjectURL
@@ -599,11 +594,16 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             for url_model in urls_to_embed:
                 logger.debug(f"Aggiunta URL all'embedding: {url_model.url}")
 
+                # CORREZIONE: Aggiungi sempre l'URL all'elenco degli URL da aggiornare
+                # anche se non ha contenuto
+                url_ids.append(url_model.id)
+
                 if not url_model.content:
-                    logger.warning(f"URL senza contenuto: {url_model.url}, saltato")
+                    logger.warning(
+                        f"URL senza contenuto: {url_model.url}, saltato per embedding ma verrà comunque marcato come indicizzato")
                     continue
 
-                # Prepara il contenuto
+                # Prepara il contenuto direttamente da ProjectURL
                 url_content = url_model.content
 
                 # Se abbiamo informazioni estratte, le aggiungiamo al contenuto
@@ -642,7 +642,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     except Exception as e:
                         logger.error(f"Errore nel processare le informazioni estratte per {url_model.url}: {str(e)}")
 
-                # Crea il documento LangChain per l'URL
+                # Crea il documento LangChain per l'URL direttamente dai dati in ProjectURL
                 url_doc = Document(
                     page_content=url_content,
                     metadata={
@@ -657,7 +657,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     }
                 )
                 docs.append(url_doc)
-                url_ids.append(url_model.id)
+                # Non è più necessario aggiungere l'ID qui perché lo abbiamo già fatto sopra
 
             # PARTE 7: ELABORAZIONE DELLE NOTE
             # -------------------------------
@@ -866,7 +866,21 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # PARTE 16: AGGIORNAMENTO STATO NEL DATABASE
         # -----------------------------------------
         if project:
+            # Usa la versione aggiornata di update_project_index_status che supporta url_ids
             update_project_index_status(project, document_ids, note_ids, url_ids)
+
+            # CORREZIONE: Forza l'aggiornamento di tutti gli URL del progetto come indicizzati
+            # se c'è stato almeno un URL processato
+            if url_ids:
+                try:
+                    # Aggiorna tutti gli URL del progetto come indicizzati
+                    ProjectURL.objects.filter(project=project).update(
+                        is_indexed=True,
+                        last_indexed_at=timezone.now()
+                    )
+                    logger.info(f"Tutti gli URL del progetto {project.id} sono stati marcati come indicizzati")
+                except Exception as e:
+                    logger.error(f"Errore nell'aggiornamento degli URL come indicizzati: {str(e)}")
 
             # Aggiorna il flag embedded per i file processati
             if document_ids:
@@ -905,14 +919,16 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     return create_retrieval_qa_chain(vectordb, project)
 
 
+
+
+
 def get_answer_from_project(project, question):
     """
     Ottiene una risposta dal sistema RAG per una domanda su un progetto specifico.
 
     Gestisce l'intero processo di query RAG per un progetto: verifica se l'indice
     deve essere aggiornato, esegue la query, gestisce le fonti ed eventuali errori,
-    inclusi errori di autenticazione API. Questa è la funzione principale
-    per interagire con il sistema RAG da un punto di vista utente.
+    inclusi errori di autenticazione API.
 
     Args:
         project: Oggetto Project
@@ -1050,6 +1066,7 @@ def get_answer_from_project(project, question):
             else:
                 result = qa_chain.invoke(question)
 
+
             processing_time = round(time.time() - start_time, 2)
             logger.info(f"Ricerca completata in {processing_time} secondi")
 
@@ -1072,6 +1089,7 @@ def get_answer_from_project(project, question):
                 "error": "api_auth_error",
                 "error_details": error_message
             }
+
         except Exception as query_error:
             logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
 
@@ -1179,6 +1197,7 @@ def get_answer_from_project(project, question):
             if warning_msg and result.get('result'):
                 result['result'] = result['result'] + warning_msg
 
+
         # Se è una domanda URL, aggiungi un avviso se non sono stati trovati risultati da URL
         if is_url_question and not unique_urls and project_urls.count() > 0:
             url_warning = "\n\nNOTA: La tua domanda sembra riguardare contenuti web, ma non sono stati trovati URL pertinenti nella ricerca."
@@ -1200,7 +1219,6 @@ def get_answer_from_project(project, question):
                 "notes": len(unique_notes)
             }
         }
-
         # Aggiungi fonti alla risposta
         for doc in source_documents:
             metadata = doc.metadata
@@ -1219,8 +1237,8 @@ def get_answer_from_project(project, question):
             else:
                 source_type = "file"
                 source_path = metadata.get("source", "")
-                filename = metadata.get('filename',
-                                        os.path.basename(source_path) if source_path else "Documento sconosciuto")
+                filename = metadata.get('filename', os.path.basename(source_path) if source_path else "Documento sconosciuto")
+
 
             page_info = ""
             if "page" in metadata:
@@ -1264,6 +1282,7 @@ def get_answer_from_project(project, question):
             "sources": [],
             "error": "general_error"
         }
+
 
 
 def create_retrieval_qa_chain(vectordb, project=None):

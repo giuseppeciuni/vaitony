@@ -157,26 +157,6 @@ class ProjectConversation(models.Model):
         return f"{self.project.name} - Q: {self.question[:50]}..."
 
 
-class AnswerSource(models.Model):
-    """
-    Tiene traccia delle fonti utilizzate per generare una risposta.
-    Collega ogni fonte (file o nota) a una conversazione specifica e
-    memorizza il contenuto rilevante, il numero di pagina e il punteggio di rilevanza.
-    """
-    conversation = models.ForeignKey(ProjectConversation, on_delete=models.CASCADE, related_name='sources')
-    project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, null=True, related_name='used_in_answers')
-    project_note = models.ForeignKey(ProjectNote, on_delete=models.SET_NULL, null=True, blank=True, related_name='used_in_answers_from_notes')
-
-    content = models.TextField()
-    page_number = models.IntegerField(null=True, blank=True)
-    relevance_score = models.FloatField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Source for {self.conversation.id} from {self.project_file.filename if self.project_file else 'unknown'}"
-
-
-
 class ProjectURL(models.Model):
     """
     Modello per salvare URL e relativi contenuti estratti durante il crawling.
@@ -239,6 +219,35 @@ class ProjectURL(models.Model):
             if len(parts) > 3:
                 return '/' + '/'.join(parts[3:])
             return '/'
+
+
+class AnswerSource(models.Model):
+    """
+    Tiene traccia delle fonti utilizzate per generare una risposta.
+    Collega ogni fonte (file, nota o URL) a una conversazione specifica e
+    memorizza il contenuto rilevante, il numero di pagina e il punteggio di rilevanza.
+    """
+    conversation = models.ForeignKey(ProjectConversation, on_delete=models.CASCADE, related_name='sources')
+    project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, null=True, blank=True, related_name='used_in_answers')
+    project_note = models.ForeignKey(ProjectNote, on_delete=models.SET_NULL, null=True, blank=True, related_name='used_in_answers_from_notes')
+    project_url = models.ForeignKey(ProjectURL, on_delete=models.SET_NULL, null=True, blank=True, related_name='used_in_answers_from_urls')
+
+    content = models.TextField()
+    page_number = models.IntegerField(null=True, blank=True)
+    relevance_score = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        source_type = "sconosciuta"
+        if self.project_file:
+            source_type = f"file: {self.project_file.filename}"
+        elif self.project_note:
+            source_type = f"nota: {self.project_note.title}"
+        elif self.project_url:
+            source_type = f"URL: {self.project_url.url}"
+
+        return f"Fonte {source_type} per conversazione {self.conversation.id}"
+
 
 
 class ProjectIndexStatus(models.Model):

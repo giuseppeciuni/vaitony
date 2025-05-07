@@ -158,18 +158,19 @@ class WebCrawler:
 
 		return content, main_text, title, meta_description
 
+
 	def crawl(self, start_url, output_dir, project=None):
 		"""
-        Esegue il crawling di un sito web partendo da un URL specificato.
+		Esegue il crawling di un sito web partendo da un URL specificato.
 
-        Args:
-            start_url: URL di partenza per il crawling
-            output_dir: Directory dove salvare i contenuti estratti
-            project: Oggetto Project per salvare gli URL nel database (default: None)
+		Args:
+			start_url: URL di partenza per il crawling
+			output_dir: Directory dove salvare eventuali file temporanei
+			project: Oggetto Project per raccogliere gli URL (default: None)
 
-        Returns:
-            tuple: (pagine processate, fallite, lista dei documenti, lista degli URL)
-        """
+		Returns:
+			tuple: (pagine processate, fallite, lista dei documenti, lista degli URL)
+		"""
 		# Importazione ritardata per evitare cicli di importazione
 		from profiles.models import ProjectURL
 
@@ -192,7 +193,7 @@ class WebCrawler:
 		processed_pages = 0
 		failed_pages = 0
 		documents = []
-		stored_urls = []  # Lista degli URL salvati nel database
+		collected_data = []  # Raccogliamo i dati qui invece di salvarli immediatamente
 
 		# Avvia Playwright per simulare un browser
 		with sync_playwright() as playwright:
@@ -289,45 +290,38 @@ class WebCrawler:
 
 					logger.info(f"Pagina salvata: {file_name} ({os.path.getsize(file_path)} bytes)")
 
-					# Se il progetto è specificato, salva l'URL nel database
+					# Invece di salvare direttamente, raccogli i dati
 					if project:
-						try:
-							# Normalizza l'URL se necessario
-							normalized_url = current_url
+						# Normalizza l'URL se necessario
+						normalized_url = current_url
 
-							# Crea o aggiorna l'URL nel database
-							url_obj, created = ProjectURL.objects.update_or_create(
-								project=project,
-								url=normalized_url,  # Utilizzo dell'URL come campo CharField
-								defaults={
-									'title': title,
-									'description': meta_description,
-									'content': page_content,
-									'extracted_info': json.dumps(extracted_info) if extracted_info else None,
-									'file_path': file_path,
-									'crawl_depth': current_depth,
-									'is_indexed': False,
-									'last_indexed_at': None,
-									'metadata': {
-										'domain': base_domain,
-										'path': parsed_suburl.path,
-										'size': len(page_content)
-									}
-								}
-							)
-							stored_urls.append(url_obj)
-							logger.info(f"URL {'creato' if created else 'aggiornato'} nel database: {current_url}")
-						except Exception as db_error:
-							logger.error(f"Errore nel salvare l'URL nel database: {str(db_error)}")
+						# Aggiungi i dati da salvare successivamente
+						url_data = {
+							'project': project,
+							'url': normalized_url,
+							'title': title,
+							'description': meta_description,
+							'content': page_content,
+							'extracted_info': json.dumps(extracted_info) if extracted_info else None,
+							'file_path': file_path,
+							'crawl_depth': current_depth,
+							'is_indexed': False,
+							'metadata': {
+								'domain': base_domain,
+								'path': parsed_suburl.path,
+								'size': len(page_content)
+							}
+						}
+						collected_data.append(url_data)
 
 					# Se non abbiamo raggiunto la profondità massima, aggiungi i link alla coda
 					if current_depth < self.max_depth:
 						# Estrai tutti i link
 						links = page.evaluate("""() => {
-                            return Array.from(document.querySelectorAll('a[href]'))
-                                .map(a => a.href)
-                                .filter(href => href && !href.startsWith('javascript:') && !href.startsWith('#'));
-                        }""")
+	                        return Array.from(document.querySelectorAll('a[href]'))
+	                            .map(a => a.href)
+	                            .filter(href => href && !href.startsWith('javascript:') && !href.startsWith('#'));
+	                    }""")
 
 						for link in links:
 							# Normalizza il link
@@ -343,6 +337,31 @@ class WebCrawler:
 
 			# Chiudi il browser
 			browser.close()
+
+		# Ora salviamo tutti gli URL raccolti al di fuori del contesto asincrono
+		stored_urls = []
+		if project and collected_data:
+			for url_data in collected_data:
+				try:
+					# Crea o aggiorna l'URL nel database
+					url_obj, created = ProjectURL.objects.update_or_create(
+						project=url_data['project'],
+						url=url_data['url'],
+						defaults={
+							'title': url_data['title'],
+							'description': url_data['description'],
+							'content': url_data['content'],
+							'extracted_info': url_data['extracted_info'],
+							'file_path': url_data['file_path'],
+							'crawl_depth': url_data['crawl_depth'],
+							'is_indexed': False,
+							'metadata': url_data['metadata']
+						}
+					)
+					stored_urls.append(url_obj)
+					logger.info(f"URL {'creato' if created else 'aggiornato'} nel database: {url_data['url']}")
+				except Exception as db_error:
+					logger.error(f"Errore nel salvare l'URL nel database: {str(db_error)}")
 
 		logger.info(f"Crawling completato: {processed_pages} pagine elaborate, {failed_pages} fallite")
 		return processed_pages, failed_pages, documents, stored_urls

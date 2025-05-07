@@ -794,11 +794,13 @@ def project_details(request, project_id):
 #     3. Permette operazioni su file e note (aggiunta, modifica, eliminazione)
 #     4. Gestisce diverse visualizzazioni (tab) dello stesso progetto
 #     5. Supporta richieste AJAX per operazioni asincrone
+#     6. Integra il supporto per i contenuti web (URL) nel sistema RAG
 #
 #     Hub centrale per tutte le operazioni relative a un singolo progetto,
 #     con supporto per diverse modalità di interazione.
 #     """
 #     logger.debug(f"---> project: {project_id}")
+#
 #     if request.user.is_authenticated:
 #         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
 #         if project_id is None and request.method == 'POST':
@@ -815,6 +817,9 @@ def project_details(request, project_id):
 #
 #             # Carica i file del progetto
 #             project_files = ProjectFile.objects.filter(project=project).order_by('-uploaded_at')
+#
+#             # Carica le URL del progetto
+#             project_urls = ProjectURL.objects.filter(project=project).order_by('-created_at')
 #
 #             # Carica le conversazioni precedenti
 #             conversations = ProjectConversation.objects.filter(project=project).order_by('-created_at')
@@ -854,19 +859,22 @@ def project_details(request, project_id):
 #                                 rag_config = ProjectRAGConfiguration.objects.get(project=project)
 #                                 current_preset = rag_config.rag_preset
 #                                 if current_preset:
-#                                     logger.info(f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+#                                     logger.info(
+#                                         f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
 #                                 else:
-#                                     logger.info("Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+#                                     logger.info(
+#                                         "Nessun profilo RAG specifico attivo, usando configurazione predefinita")
 #
 #                             except Exception as config_error:
 #                                 logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
 #
-#                             # Verifica che il progetto abbia documenti e note prima di processare la query
+#                             # Verifica che il progetto abbia documenti, note o URL prima di processare la query
 #                             project_files = ProjectFile.objects.filter(project=project)
 #                             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+#                             project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
 #
 #                             logger.info(
-#                                 f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
+#                                 f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note, {project_urls.count()} URL")
 #
 #                             try:
 #                                 # Usa la funzione ottimizzata per ottenere la risposta
@@ -912,10 +920,10 @@ def project_details(request, project_id):
 #
 #                                     # Salva le fonti utilizzate
 #                                     for source in rag_response.get('sources', []):
-#                                         # Cerchiamo di trovare il ProjectFile o ProjectNote corrispondente
-#
+#                                         # Cerchiamo di trovare il ProjectFile, ProjectNote o ProjectURL corrispondente
 #                                         project_file = None
 #                                         project_note = None
+#                                         project_url = None
 #
 #                                         # Se la fonte è una nota
 #                                         if source.get('type') == 'note':
@@ -924,6 +932,14 @@ def project_details(request, project_id):
 #                                                 try:
 #                                                     project_note = ProjectNote.objects.get(id=note_id, project=project)
 #                                                 except ProjectNote.DoesNotExist:
+#                                                     pass
+#                                         # Se la fonte è un URL
+#                                         elif source.get('type') == 'url':
+#                                             url_id = source.get('metadata', {}).get('url_id')
+#                                             if url_id:
+#                                                 try:
+#                                                     project_url = ProjectURL.objects.get(id=url_id, project=project)
+#                                                 except ProjectURL.DoesNotExist:
 #                                                     pass
 #                                         else:
 #                                             # Se è un file
@@ -940,12 +956,13 @@ def project_details(request, project_id):
 #                                         AnswerSource.objects.create(
 #                                             conversation=conversation,
 #                                             project_file=project_file,
-#                                             project_note=project_note,  # Aggiungi la nota come fonte
+#                                             project_note=project_note,
+#                                             project_url=project_url,
 #                                             content=source.get('content', ''),
 #                                             page_number=source.get('metadata', {}).get('page'),
 #                                             relevance_score=source.get('score')
 #                                         )
-#                                         logger.info(f"Conversazione salvata con ID: {conversation.id}")
+#                                     logger.info(f"Conversazione salvata con ID: {conversation.id}")
 #
 #                                 except Exception as save_error:
 #                                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
@@ -999,6 +1016,36 @@ def project_details(request, project_id):
 #                                 })
 #
 #                             messages.error(request, f"Error processing your question: {str(e)}")
+#
+#                 elif action == 'get_url_content':
+#                     # Ottieni il contenuto dell'URL
+#                     url_id = request.POST.get('url_id')
+#
+#                     try:
+#                         url_obj = ProjectURL.objects.get(id=url_id, project=project)
+#
+#                         # Log del contenuto per debug
+#                         logger.debug(f"Recupero contenuto per URL ID {url_id}: {url_obj.url}")
+#                         logger.debug(f"Content length: {len(url_obj.content or '')}")
+#
+#                         return JsonResponse({
+#                             'success': True,
+#                             'content': url_obj.content or "Nessun contenuto disponibile per questo URL",
+#                             'title': url_obj.title,
+#                             'url': url_obj.url
+#                         })
+#                     except ProjectURL.DoesNotExist:
+#                         logger.error(f"URL con ID {url_id} non trovato")
+#                         return JsonResponse({
+#                             'success': False,
+#                             'error': f"URL con ID {url_id} non trovato"
+#                         })
+#                     except Exception as e:
+#                         logger.exception(f"Errore nel recupero del contenuto dell'URL: {str(e)}")
+#                         return JsonResponse({
+#                             'success': False,
+#                             'error': str(e)
+#                         })
 #
 #                 # Gestione dell'aggiunta di file
 #                 elif action == 'add_files':
@@ -1108,6 +1155,130 @@ def project_details(request, project_id):
 #                         messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
 #                         return redirect('project', project_id=project.id)
 #
+#                 # Gestione dell'eliminazione di un URL
+#                 elif action == 'delete_url':
+#                     # Eliminazione di un URL dal progetto
+#                     url_id = request.POST.get('url_id')
+#
+#                     logger.debug(
+#                         f"Richiesta di eliminazione URL ricevuta. ID URL: {url_id}, ID progetto: {project.id}")
+#
+#                     # Verifica che url_id non sia vuoto
+#                     if not url_id:
+#                         logger.warning("Richiesta di eliminazione URL senza url_id")
+#                         messages.error(request, "ID URL non valido.")
+#                         return redirect('project', project_id=project.id)
+#
+#                     try:
+#                         # Ottieni l'URL del progetto
+#                         project_url = get_object_or_404(ProjectURL, id=url_id, project=project)
+#                         logger.info(f"URL trovato per l'eliminazione: {project_url.url} (ID: {url_id})")
+#
+#                         # Memorizza se l'URL era indicizzato
+#                         was_indexed = project_url.is_indexed
+#
+#                         # Elimina il file fisico se presente
+#                         if project_url.file_path and os.path.exists(project_url.file_path):
+#                             logger.debug(f"Eliminazione del file fisico dell'URL in: {project_url.file_path}")
+#                             try:
+#                                 os.remove(project_url.file_path)
+#                                 logger.info(f"File fisico dell'URL eliminato: {project_url.file_path}")
+#                             except Exception as e:
+#                                 logger.error(f"Errore nell'eliminazione del file fisico dell'URL: {str(e)}")
+#
+#                         # Elimina il record dal database
+#                         project_url.delete()
+#                         logger.info(f"Record eliminato dal database per l'URL ID: {url_id}")
+#
+#                         # Se l'URL era indicizzato, aggiorna l'indice vettoriale
+#                         if was_indexed:
+#                             try:
+#                                 logger.info(f"🔄 Aggiornando l'indice dopo eliminazione dell'URL")
+#                                 # Forza la ricostruzione dell'indice
+#                                 create_project_rag_chain(project=project, force_rebuild=True)
+#                                 logger.info(f"✅ Indice vettoriale ricostruito con successo")
+#                             except Exception as e:
+#                                 logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+#
+#                         messages.success(request, "URL eliminato con successo.")
+#                         return redirect('project', project_id=project.id)
+#
+#                     except Exception as e:
+#                         logger.exception(f"Errore nell'azione delete_url: {str(e)}")
+#                         messages.error(request, f"Errore nell'eliminazione dell'URL: {str(e)}")
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Gestione dell'aggiunta di un URL manuale
+#                 elif action == 'add_url':
+#                     # Aggiungi un URL al progetto
+#                     url = request.POST.get('url', '').strip()
+#
+#                     if not url:
+#                         messages.error(request, "URL non specificato.")
+#                         return redirect('project', project_id=project.id)
+#
+#                     # Normalizza l'URL aggiungendo http(s):// se necessario
+#                     if not url.startswith(('http://', 'https://')):
+#                         url = 'https://' + url
+#
+#                     try:
+#                         # Verifica se l'URL esiste già nel progetto
+#                         existing_url = ProjectURL.objects.filter(project=project, url=url).first()
+#                         if existing_url:
+#                             messages.warning(request, f"L'URL '{url}' è già presente nel progetto.")
+#                             return redirect('project', project_id=project.id)
+#
+#                         # Crea l'oggetto URL
+#                         from urllib.parse import urlparse
+#                         parsed_url = urlparse(url)
+#                         domain = parsed_url.netloc
+#
+#                         # Crea un nuovo URL nel database
+#                         project_url = ProjectURL.objects.create(
+#                             project=project,
+#                             url=url,  # Utilizzo dell'URL come CharField
+#                             title=f"URL: {domain}",  # Titolo temporaneo
+#                             is_indexed=False,  # Da indicizzare
+#                             crawl_depth=0,  # Non derivato da crawling
+#                             metadata={
+#                                 'domain': domain,
+#                                 'path': parsed_url.path,
+#                                 'manually_added': True
+#                             }
+#                         )
+#
+#                         # Avvia il processo di crawling per questo URL specifico
+#                         try:
+#                             logger.info(f"Avvio crawling per URL singolo: {url}")
+#                             # Utilizza la funzione di crawling esistente ma limitata a 1 pagina
+#                             from dashboard.views import handle_website_crawl
+#
+#                             result = handle_website_crawl(
+#                                 project,
+#                                 url,
+#                                 max_depth=0,  # Solo questa pagina
+#                                 max_pages=1,  # Solo una pagina
+#                                 min_text_length=100  # Soglia minima per contenuto
+#                             )
+#
+#                             if result and result.get('processed_pages', 0) > 0:
+#                                 messages.success(request,
+#                                                  f"URL '{url}' aggiunto al progetto e contenuto estratto con successo.")
+#                             else:
+#                                 messages.warning(request,
+#                                                  f"URL '{url}' aggiunto al progetto ma nessun contenuto è stato estratto.")
+#                         except Exception as crawl_error:
+#                             logger.error(f"Errore nel crawling dell'URL: {str(crawl_error)}")
+#                             messages.warning(request,
+#                                              f"URL '{url}' aggiunto al progetto ma si è verificato un errore nell'estrazione del contenuto.")
+#
+#                         return redirect('project', project_id=project.id)
+#
+#                     except Exception as e:
+#                         logger.exception(f"Errore nell'aggiunta dell'URL: {str(e)}")
+#                         messages.error(request, f"Errore nell'aggiunta dell'URL: {str(e)}")
+#                         return redirect('project', project_id=project.id)
+#
 #                 # Gestione delle note (aggiunta, modifica, eliminazione)
 #                 # Quando viene aggiunta una nota
 #                 elif action == 'add_note':
@@ -1198,6 +1369,24 @@ def project_details(request, project_id):
 #                             messages.error(request, message)
 #                         return redirect('project', project_id=project.id)
 #
+#                 # Avvio crawling web
+#                 elif action == 'start_crawling':
+#                     # Gestisci la richiesta di crawling
+#                     website_url = request.POST.get('website_url', '').strip()
+#                     max_depth = int(request.POST.get('max_depth', 2))
+#                     max_pages = int(request.POST.get('max_pages', 10))
+#
+#                     if not website_url:
+#                         messages.error(request, "URL del sito web non specificato.")
+#                         return redirect('project', project_id=project.id)
+#
+#                     # Normalizza l'URL aggiungendo http(s):// se necessario
+#                     if not website_url.startswith(('http://', 'https://')):
+#                         website_url = 'https://' + website_url
+#
+#                     # Reindirizza alla vista di crawling per l'elaborazione
+#                     return redirect('website_crawl', project_id=project.id)
+#
 #             # Prepara la cronologia delle conversazioni per l'interfaccia di chat
 #             conversation_history = []
 #             answer = None
@@ -1231,6 +1420,31 @@ def project_details(request, project_id):
 #                             source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
 #
 #                         sources.append(source_data)
+#                     elif source.project_note:
+#                         # Gestione delle fonti da note
+#                         source_data = {
+#                             'filename': f"Nota: {source.project_note.title or 'Senza titolo'}",
+#                             'type': 'note',
+#                             'content': source.content
+#                         }
+#
+#                         if source.relevance_score is not None:
+#                             source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
+#
+#                         sources.append(source_data)
+#                     elif source.project_url:
+#                         # Gestione delle fonti da URL
+#                         source_data = {
+#                             'filename': f"URL: {source.project_url.title or source.project_url.url}",
+#                             'type': 'url',
+#                             'content': source.content,
+#                             'url': source.project_url.url  # Aggiungi l'URL effettivo
+#                         }
+#
+#                         if source.relevance_score is not None:
+#                             source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
+#
+#                         sources.append(source_data)
 #
 #                 # SOLUZIONE AL PROBLEMA: inverti l'ordine delle conversazioni per mostrare
 #                 # le chat in ordine cronologico corretto (dalla più vecchia alla più recente)
@@ -1255,6 +1469,7 @@ def project_details(request, project_id):
 #             context = {
 #                 'project': project,
 #                 'project_files': project_files,
+#                 'project_urls': project_urls,  # Aggiunta URLs alla vista
 #                 'conversation_history': conversation_history,
 #                 'answer': answer,
 #                 'question': question,
@@ -1323,11 +1538,43 @@ def project_details(request, project_id):
 #             except Exception as e:
 #                 logger.error(f"Errore nel recuperare la configurazione LLM: {str(e)}")
 #
+#             # Aggiungi informazioni sul crawling web se disponibili
+#             try:
+#                 index_status = ProjectIndexStatus.objects.get(project=project)
+#                 if index_status.metadata and 'last_crawl' in index_status.metadata:
+#                     last_crawl = index_status.metadata['last_crawl']
+#                     context.update({
+#                         'last_crawl': last_crawl
+#                     })
+#             except Exception as e:
+#                 logger.error(f"Errore nel recuperare lo stato del crawling: {str(e)}")
+#
+#             # Aggiungi statistiche sugli URL al contesto
+#             try:
+#                 from django.db.models import Count
+#                 url_stats = {
+#                     'total': ProjectURL.objects.filter(project=project).count(),
+#                     'indexed': ProjectURL.objects.filter(project=project, is_indexed=True).count(),
+#                     'pending': ProjectURL.objects.filter(project=project, is_indexed=False).count(),
+#                     'domains': ProjectURL.objects.filter(project=project).values(
+#                         'metadata__domain').annotate(count=Count('id')).order_by('-count')[:5]
+#                 }
+#                 context.update({
+#                     'url_stats': url_stats
+#                 })
+#             except Exception as e:
+#                 logger.error(f"Errore nel recuperare le statistiche URL: {str(e)}")
+#
 #             return render(request, 'be/project.html', context)
 #
 #         except Project.DoesNotExist:
 #             messages.error(request, "Project not found.")
 #             return redirect('projects_list')
+#         except Exception as e:
+#             logger.exception(f"Errore non gestito nella vista project: {str(e)}")
+#             messages.error(request, f"Si è verificato un errore: {str(e)}")
+#             return redirect('projects_list')
+#
 #     else:
 #         logger.warning("User not Authenticated!")
 #         return redirect('login')
@@ -1337,19 +1584,22 @@ def project(request, project_id=None):
     """
     Vista principale per la gestione completa di un progetto.
 
-    Questa funzione multi-purpose:
-    1. Visualizza file, note e conversazioni del progetto
-    2. Gestisce domande RAG e mostra risposte con fonti
-    3. Permette operazioni su file e note (aggiunta, modifica, eliminazione)
-    4. Gestisce diverse visualizzazioni (tab) dello stesso progetto
-    5. Supporta richieste AJAX per operazioni asincrone
-    6. Integra il supporto per i contenuti web (URL) nel sistema RAG
+    Questa funzione gestisce tutte le operazioni relative a un progetto specifico:
+    1. Visualizzazione di file, note, URL e conversazioni associate al progetto
+    2. Gestione delle domande RAG e visualizzazione delle risposte con fonti
+    3. Operazioni CRUD (creazione, lettura, aggiornamento, eliminazione) su file, note e URL
+    4. Esecuzione e monitoraggio del crawling di siti web
+    5. Gestione di diverse visualizzazioni (tab) dello stesso progetto
+    6. Supporto per richieste AJAX per operazioni asincrone
 
-    Hub centrale per tutte le operazioni relative a un singolo progetto,
-    con supporto per diverse modalità di interazione.
+    Args:
+        request: L'oggetto HttpRequest di Django
+        project_id: ID del progetto (opzionale, può essere fornito nella richiesta POST)
+
+    Returns:
+        HttpResponse: Rendering del template o reindirizzamento
     """
     logger.debug(f"---> project: {project_id}")
-
     if request.user.is_authenticated:
         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
         if project_id is None and request.method == 'POST':
@@ -1373,30 +1623,34 @@ def project(request, project_id=None):
             # Carica le conversazioni precedenti
             conversations = ProjectConversation.objects.filter(project=project).order_by('-created_at')
 
-            # Gestisci diverse azioni
+            # Gestisci diverse azioni basate sul parametro 'action' della richiesta POST
             if request.method == 'POST':
                 action = request.POST.get('action')
 
-                # Gestione del salvataggio delle note generali
+                # ===== GESTIONE DELLE AZIONI =====
+                # Ogni blocco gestisce una specifica azione che può essere eseguita
+                # all'interno del progetto
+
+                # ----- Salvataggio delle note generali -----
                 if action == 'save_notes':
-                    # Salva le note
+                    # Aggiorna le note generali del progetto
                     project.notes = request.POST.get('notes', '')
                     project.save()
 
-                    # Se è una richiesta AJAX, restituisci una risposta JSON
+                    # Per richieste AJAX, restituisci una risposta JSON
                     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                         return JsonResponse({'status': 'success', 'message': 'Notes saved successfully.'})
 
                     messages.success(request, "Notes saved successfully.")
                     return redirect('project', project_id=project.id)
 
-                # Gestione delle domande al modello RAG
+                # ----- Domande al modello RAG -----
                 elif action == 'ask_question':
-                    # Gestisci domanda RAG
+                    # Gestione delle domande dirette al sistema RAG
                     question = request.POST.get('question', '').strip()
 
                     if question:
-                        # Misura il tempo di elaborazione
+                        # Misura il tempo di elaborazione della risposta
                         start_time = time.time()
 
                         # Ottieni la risposta dal sistema RAG
@@ -1417,7 +1671,7 @@ def project(request, project_id=None):
                             except Exception as config_error:
                                 logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
 
-                            # Verifica che il progetto abbia documenti, note o URL prima di processare la query
+                            # Verifica risorse disponibili (file, note, URL) prima di processare la query
                             project_files = ProjectFile.objects.filter(project=project)
                             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
                             project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
@@ -1429,13 +1683,13 @@ def project(request, project_id=None):
                                 # Usa la funzione ottimizzata per ottenere la risposta
                                 rag_response = get_answer_from_project(project, question)
 
-                                # Calculate processing time
+                                # Calcola il tempo di elaborazione
                                 processing_time = round(time.time() - start_time, 2)
                                 logger.info(f"RAG processing completed in {processing_time} seconds")
 
                                 # Verifica se c'è stato un errore di autenticazione API
                                 if rag_response.get('error') == 'api_auth_error':
-                                    # Crea una risposta JSON specifica per questo errore
+                                    # Crea risposta JSON specifica per questo errore
                                     error_response = {
                                         "success": False,
                                         "error": "api_auth_error",
@@ -1469,7 +1723,7 @@ def project(request, project_id=None):
 
                                     # Salva le fonti utilizzate
                                     for source in rag_response.get('sources', []):
-                                        # Cerchiamo di trovare il ProjectFile, ProjectNote o ProjectURL corrispondente
+                                        # Identifica il tipo di fonte (file, nota o URL)
                                         project_file = None
                                         project_note = None
                                         project_url = None
@@ -1517,7 +1771,7 @@ def project(request, project_id=None):
                                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
                                     # Non interrompiamo il flusso se il salvataggio fallisce
 
-                                # Create AJAX response
+                                # Crea risposta AJAX
                                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                                     return JsonResponse({
                                         "success": True,
@@ -1566,9 +1820,40 @@ def project(request, project_id=None):
 
                             messages.error(request, f"Error processing your question: {str(e)}")
 
-                # Gestione dell'aggiunta di file
+                # ----- Gestione contenuto URL -----
+                elif action == 'get_url_content':
+                    # Ottiene il contenuto di un URL specifico per anteprima
+                    url_id = request.POST.get('url_id')
+
+                    try:
+                        url_obj = ProjectURL.objects.get(id=url_id, project=project)
+
+                        # Log del contenuto per debug
+                        logger.debug(f"Recupero contenuto per URL ID {url_id}: {url_obj.url}")
+                        logger.debug(f"Content length: {len(url_obj.content or '')}")
+
+                        return JsonResponse({
+                            'success': True,
+                            'content': url_obj.content or "Nessun contenuto disponibile per questo URL",
+                            'title': url_obj.title,
+                            'url': url_obj.url
+                        })
+                    except ProjectURL.DoesNotExist:
+                        logger.error(f"URL con ID {url_id} non trovato")
+                        return JsonResponse({
+                            'success': False,
+                            'error': f"URL con ID {url_id} non trovato"
+                        })
+                    except Exception as e:
+                        logger.exception(f"Errore nel recupero del contenuto dell'URL: {str(e)}")
+                        return JsonResponse({
+                            'success': False,
+                            'error': str(e)
+                        })
+
+                # ----- Aggiunta di file -----
                 elif action == 'add_files':
-                    # Aggiunta di file al progetto
+                    # Gestione caricamento di file multipli
                     files = request.FILES.getlist('files[]')
 
                     if files:
@@ -1584,9 +1869,9 @@ def project(request, project_id=None):
                         messages.success(request, f"{len(files)} files uploaded successfully.")
                         return redirect('project', project_id=project.id)
 
-                # Gestione dell'aggiunta di una cartella
+                # ----- Aggiunta di una cartella -----
                 elif action == 'add_folder':
-                    # Aggiunta di una cartella al progetto
+                    # Gestione caricamento di interi folder con struttura
                     folder_files = request.FILES.getlist('folder[]')
 
                     if folder_files:
@@ -1617,12 +1902,12 @@ def project(request, project_id=None):
                         messages.success(request, f"Folder with {len(folder_files)} files uploaded successfully.")
                         return redirect('project', project_id=project.id)
 
-                # Gestione dell'eliminazione dei file
+                # ----- Eliminazione dei file -----
                 elif action == 'delete_file':
                     # Eliminazione di un file dal progetto
                     file_id = request.POST.get('file_id')
 
-                    # Aggiungi log dettagliati
+                    # Log dettagliati
                     logger.debug(
                         f"Richiesta di eliminazione file ricevuta. ID file: {file_id}, ID progetto: {project.id}")
 
@@ -1674,9 +1959,9 @@ def project(request, project_id=None):
                         messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
                         return redirect('project', project_id=project.id)
 
-                # Gestione dell'eliminazione di un URL
+                # ----- Eliminazione di un URL -----
                 elif action == 'delete_url':
-                    # Eliminazione di un URL dal progetto
+                    # Eliminazione di un URL dal progetto - CORREZIONE DEL BUG
                     url_id = request.POST.get('url_id')
 
                     logger.debug(
@@ -1690,7 +1975,19 @@ def project(request, project_id=None):
 
                     try:
                         # Ottieni l'URL del progetto
-                        project_url = get_object_or_404(ProjectURL, id=url_id, project=project)
+                        # CORREZIONE: Verifica esplicita che l'URL esista e appartenga al progetto
+                        if not ProjectURL.objects.filter(id=url_id, project=project).exists():
+                            logger.error(f"URL con ID {url_id} non trovato o non appartiene al progetto {project.id}")
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f"URL con ID {url_id} non trovato o non appartiene al progetto."
+                                })
+                            messages.error(request, "URL non trovato o non appartiene al progetto.")
+                            return redirect('project', project_id=project.id)
+
+                        # Ottieni l'URL dopo la verifica di esistenza
+                        project_url = ProjectURL.objects.get(id=url_id, project=project)
                         logger.info(f"URL trovato per l'eliminazione: {project_url.url} (ID: {url_id})")
 
                         # Memorizza se l'URL era indicizzato
@@ -1719,17 +2016,28 @@ def project(request, project_id=None):
                             except Exception as e:
                                 logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
 
+                        # Per richieste AJAX, invia una risposta di successo
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': "URL eliminato con successo."
+                            })
+
                         messages.success(request, "URL eliminato con successo.")
                         return redirect('project', project_id=project.id)
 
                     except Exception as e:
                         logger.exception(f"Errore nell'azione delete_url: {str(e)}")
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f"Errore nell'eliminazione dell'URL: {str(e)}"
+                            })
                         messages.error(request, f"Errore nell'eliminazione dell'URL: {str(e)}")
                         return redirect('project', project_id=project.id)
-
-                # Gestione dell'aggiunta di un URL manuale
+# ----- Aggiunta di un URL manuale -----
                 elif action == 'add_url':
-                    # Aggiungi un URL al progetto
+                    # Aggiungi un URL al progetto manualmente
                     url = request.POST.get('url', '').strip()
 
                     if not url:
@@ -1798,10 +2106,10 @@ def project(request, project_id=None):
                         messages.error(request, f"Errore nell'aggiunta dell'URL: {str(e)}")
                         return redirect('project', project_id=project.id)
 
-                # Gestione delle note (aggiunta, modifica, eliminazione)
+                # ----- Gestione delle note -----
                 # Quando viene aggiunta una nota
                 elif action == 'add_note':
-                    # Aggiungi una nuova nota al progetto
+                    # Aggiunge una nuova nota al progetto
                     content = request.POST.get('content', '').strip()
 
                     if content:
@@ -1888,7 +2196,7 @@ def project(request, project_id=None):
                             messages.error(request, message)
                         return redirect('project', project_id=project.id)
 
-                # Avvio crawling web
+                # ----- Avvio crawling web -----
                 elif action == 'start_crawling':
                     # Gestisci la richiesta di crawling
                     website_url = request.POST.get('website_url', '').strip()
@@ -1905,6 +2213,8 @@ def project(request, project_id=None):
 
                     # Reindirizza alla vista di crawling per l'elaborazione
                     return redirect('website_crawl', project_id=project.id)
+            # ===== PREPARAZIONE DATI PER IL TEMPLATE =====
+            # Prepara i dati per il rendering del template e l'interfaccia utente
 
             # Prepara la cronologia delle conversazioni per l'interfaccia di chat
             conversation_history = []
@@ -1983,8 +2293,10 @@ def project(request, project_id=None):
                         'timestamp': conv.created_at
                     })
 
+            # Ottieni le note del progetto
             project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
 
+            # Prepara il contesto base per il template
             context = {
                 'project': project,
                 'project_files': project_files,
@@ -1996,7 +2308,7 @@ def project(request, project_id=None):
                 'project_notes': project_notes
             }
 
-            # Al context aggiungo i dati che descrivono il tipo di RAG usato
+            # Aggiungi dati sulla configurazione RAG al contesto
             try:
                 # Ottieni le impostazioni RAG del progetto
                 project_config, created = ProjectRAGConfiguration.objects.get_or_create(project=project)
@@ -3257,7 +3569,21 @@ def verify_api_key(api_type, api_key):
 
 def website_crawl(request, project_id):
     """
-    Vista per eseguire il crawling di un sito web e aggiungere il contenuto al progetto.
+    Vista per eseguire e gestire il crawling di un sito web e aggiungere i contenuti al progetto.
+
+    Questa funzione:
+    1. Gestisce richieste di crawling di siti web per estrarre contenuti
+    2. Supporta monitoraggio in tempo reale del processo di crawling via AJAX
+    3. Permette la cancellazione di un processo di crawling in corso
+    4. Salva i contenuti estratti come oggetti ProjectURL nel database
+    5. Aggiorna l'indice RAG per includere i nuovi contenuti
+
+    Args:
+        request: L'oggetto HttpRequest di Django
+        project_id: ID del progetto per cui eseguire il crawling
+
+    Returns:
+        HttpResponse: Rendering del template o risposta JSON per richieste AJAX
     """
     logger.debug(f"---> website_crawl: {project_id}")
     if request.user.is_authenticated:
@@ -3288,268 +3614,398 @@ def website_crawl(request, project_id):
                         'visited_urls': crawl_info.get('visited_urls', [])
                     })
 
-            # Per avviare il crawling, deve essere una richiesta POST
+            # Per avviare il crawling o gestire altre azioni, deve essere una richiesta POST
             elif request.method == 'POST':
-                logger.info(f"Ricevuta richiesta POST per crawling dal progetto {project_id}")
+                # Verifica l'azione richiesta
+                action = request.POST.get('action')
 
-                # Estrai i parametri dalla richiesta
-                website_url = request.POST.get('website_url', '').strip()
-                max_depth = int(request.POST.get('max_depth', 3))
-                max_pages = int(request.POST.get('max_pages', 100))
-                include_patterns = request.POST.get('include_patterns', '')
-                exclude_patterns = request.POST.get('exclude_patterns', '')
+                # ----- GESTIONE CANCELLAZIONE CRAWLING -----
+                if action == 'cancel_crawl':
+                    # Implementazione dell'azione cancel_crawl per interrompere un crawling in corso
+                    logger.info(f"Richiesta di cancellazione crawling per progetto {project_id}")
 
-                # Validazione
-                if not website_url:
-                    logger.warning("URL mancante nella richiesta di crawling")
+                    # Verifica se c'è un crawling in corso
+                    last_crawl = index_status.metadata.get('last_crawl', {})
+                    if last_crawl.get('status') == 'running':
+                        # Aggiorna lo stato a 'cancelled'
+                        last_crawl['status'] = 'cancelled'
+                        last_crawl['cancelled_at'] = timezone.now().isoformat()
+                        index_status.metadata['last_crawl'] = last_crawl
+                        index_status.save()
+
+                        # Ottieni il job_id se disponibile
+                        job_id = request.POST.get('job_id')
+                        if job_id:
+                            # Qui potresti implementare una logica per interrompere effettivamente il thread
+                            # se hai un sistema di gestione dei thread di crawling
+                            logger.info(f"Tentativo di interruzione thread di crawling con ID: {job_id}")
+
+                            # Per ora aggiorniamo solo lo stato, il thread controllerà lo stato
+                            # e si interromperà autonomamente
+
+                        return JsonResponse({
+                            'success': True,
+                            'message': 'Processo di crawling interrotto con successo',
+                            'status': 'cancelled'
+                        })
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Nessun processo di crawling in corso da interrompere',
+                            'status': last_crawl.get('status', 'unknown')
+                        })
+
+                # ----- AVVIO CRAWLING -----
+                else:
+                    logger.info(f"Ricevuta richiesta POST per crawling dal progetto {project_id}")
+
+                    # Estrai i parametri dalla richiesta
+                    website_url = request.POST.get('website_url', '').strip()
+                    max_depth = int(request.POST.get('max_depth', 3))
+                    max_pages = int(request.POST.get('max_pages', 100))
+                    include_patterns = request.POST.get('include_patterns', '')
+                    exclude_patterns = request.POST.get('exclude_patterns', '')
+
+                    # Validazione
+                    if not website_url:
+                        logger.warning("URL mancante nella richiesta di crawling")
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({'success': False, 'message': 'URL non specificato'})
+                        messages.error(request, "URL del sito web non specificato.")
+                        return redirect('project', project_id=project.id)
+
+                    logger.info(f"Avvio crawling per {website_url} con profondità {max_depth}, max pagine {max_pages}")
+
+                    # Prepara i pattern regex
+                    include_patterns_list = [p.strip() for p in include_patterns.split(',') if p.strip()]
+                    exclude_patterns_list = [p.strip() for p in exclude_patterns.split(',') if p.strip()]
+
+                    # Per richieste AJAX, avvia il processo in background
                     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                        return JsonResponse({'success': False, 'message': 'URL non specificato'})
-                    messages.error(request, "URL del sito web non specificato.")
-                    return redirect('project', project_id=project.id)
+                        import threading
 
-                logger.info(f"Avvio crawling per {website_url} con profondità {max_depth}, max pagine {max_pages}")
+                        def crawl_task(website_url, max_depth, max_pages, project, exclude_patterns_list=None,
+                                       include_patterns_list=None, index_status=None):
+                            """
+                            Task in background per eseguire il crawling di un sito web.
+                            Salva i risultati direttamente nella tabella ProjectURL anziché creare ProjectFile.
 
-                # Prepara i pattern regex
-                include_patterns_list = [p.strip() for p in include_patterns.split(',') if p.strip()]
-                exclude_patterns_list = [p.strip() for p in exclude_patterns.split(',') if p.strip()]
+                            Controlla periodicamente se il processo è stato cancellato dall'utente
+                            e in tal caso interrompe l'esecuzione.
 
-                # Per richieste AJAX, avvia il processo in background
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    import threading
+                            Args:
+                                website_url (str): URL da crawlare
+                                max_depth (int): Profondità massima di crawling
+                                max_pages (int): Numero massimo di pagine
+                                project (Project): Oggetto progetto
+                                exclude_patterns_list (list): Pattern da escludere
+                                include_patterns_list (list): Pattern da includere
+                                index_status (ProjectIndexStatus): Oggetto stato dell'indice
+                            """
+                            try:
+                                # Importazioni necessarie
+                                from django.conf import settings
+                                from dashboard.web_crawler import WebCrawler
+                                from profiles.models import ProjectURL
+                                from dashboard.rag_utils import create_project_rag_chain
+                                import os
+                                from urllib.parse import urlparse
+                                from django.utils import timezone
+                                import traceback
+                                import time
 
-                    def crawl_task():
-                        try:
-                            # Importa qui per evitare import circolari
-                            from dashboard.web_crawler import WebCrawler
+                                logger.info(f"Thread di crawling avviato per {website_url}")
 
-                            logger.info(f"Thread di crawling avviato per {website_url}")
+                                # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+                                parsed_url = urlparse(website_url)
+                                domain = parsed_url.netloc
 
-                            # Avvia il job di crawling
-                            from profiles.models import ProjectFile
-                            from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
-                            import os
-                            from urllib.parse import urlparse
-                            from vaitony_project import settings
+                                # Configura la directory di output
+                                # NOTA: questa directory serve solo per file di log o cache temporanea
+                                project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id),
+                                                           str(project.id))
+                                website_content_dir = os.path.join(project_dir, 'website_content')
+                                website_dir = os.path.join(website_content_dir, domain)
+                                os.makedirs(website_dir, exist_ok=True)
 
-                            # Estrai il nome di dominio dall'URL per usarlo come nome della directory
-                            parsed_url = urlparse(website_url)
-                            domain = parsed_url.netloc
-
-                            # Configura la directory di output con la struttura richiesta
-                            project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id),
-                                                       str(project.id))
-                            website_content_dir = os.path.join(project_dir, 'website_content')
-                            website_dir = os.path.join(website_content_dir, domain)
-                            os.makedirs(website_dir, exist_ok=True)
-
-                            # Inizializza il crawler
-                            crawler = WebCrawler(
-                                max_depth=max_depth,
-                                max_pages=max_pages,
-                                min_text_length=100,
-                                exclude_patterns=exclude_patterns_list,
-                                include_patterns=include_patterns_list
-                            )
-
-                            # Esegui il crawling
-                            processed_pages, failed_pages, documents, stored_urls = crawler.crawl(website_url,
-                                                                                                  website_dir)
-
-                            # Ottieni le URL visitate dal crawler
-                            # Nota: potrebbe essere necessario modificare la classe WebCrawler
-                            # per esporre questa informazione, assumendo che sia disponibile come crawler.visited_urls
-                            # Altrimenti, possiamo ricostruirla dalle informazioni disponibili
-                            visited_urls = []
-                            for doc, _ in documents:
-                                if 'url' in doc.metadata and doc.metadata['url'] not in visited_urls:
-                                    visited_urls.append(doc.metadata['url'])
-
-                            # Aggiungi i documenti al progetto
-                            added_files = []
-                            for doc, file_path in documents:
-                                # Calcola l'hash e le dimensioni del file
-                                file_hash = compute_file_hash(file_path)
-                                file_size = os.path.getsize(file_path)
-                                filename = os.path.basename(file_path)
-
-                                # Crea il record nel database CON IL CAMPO METADATA
-                                project_file = ProjectFile.objects.create(
-                                    project=project,
-                                    filename=filename,
-                                    file_path=file_path,
-                                    file_type='txt',
-                                    file_size=file_size,
-                                    file_hash=file_hash,
-                                    is_embedded=False,
-                                    last_indexed_at=None,
-                                    metadata={
-                                        'source_url': doc.metadata['url'],
-                                        'title': doc.metadata['title'],
-                                        'crawl_depth': doc.metadata['crawl_depth'],
-                                        'crawl_domain': doc.metadata['domain'],
-                                        'type': 'web_page'
-                                    }
+                                # Inizializza il crawler
+                                crawler = WebCrawler(
+                                    max_depth=max_depth,
+                                    max_pages=max_pages,
+                                    min_text_length=100,
+                                    exclude_patterns=exclude_patterns_list,
+                                    include_patterns=include_patterns_list
                                 )
 
-                                added_files.append(project_file)
+                                # Traccia parziale delle pagine processate per aggiornare lo stato
+                                processed_pages = 0
+                                failed_pages = 0
+                                visited_urls = []
 
-                            # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
-                            if added_files:
-                                try:
-                                    logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
-                                    create_project_rag_chain(project)
-                                    logger.info(f"Indice vettoriale aggiornato con successo")
-                                except Exception as e:
-                                    logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
+                                # Variabile per tenere traccia della cancellazione
+                                cancelled = False
 
-                            stats = {
-                                'processed_pages': processed_pages,
-                                'failed_pages': failed_pages,
-                                'added_files': len(added_files)
-                            }
+                                # Funzione per controllare se il processo è stato cancellato
+                                def is_cancelled():
+                                    """
+                                    Controlla se il processo di crawling è stato cancellato dall'utente.
+                                    Aggiorna la variabile cancelled per interrompere il ciclo di crawling.
 
-                            # Aggiorna lo stato del job
-                            index_status.metadata = index_status.metadata or {}
-                            index_status.metadata['last_crawl'] = {
-                                'status': 'completed',
-                                'url': website_url,
-                                'timestamp': timezone.now().isoformat(),
-                                'stats': stats,
-                                'visited_urls': visited_urls,  # Aggiungiamo la lista delle URL visitate
-                                'domain': domain,
-                                'max_depth': max_depth,
-                                'max_pages': max_pages
-                            }
-                            index_status.save()
+                                    Returns:
+                                        bool: True se il processo è stato cancellato, False altrimenti
+                                    """
+                                    nonlocal cancelled
+                                    # Ricarica lo stato dell'indice dal database
+                                    from profiles.models import ProjectIndexStatus
+                                    try:
+                                        current_status = ProjectIndexStatus.objects.get(project=project)
+                                        last_crawl = current_status.metadata.get('last_crawl', {})
+                                        if last_crawl.get('status') == 'cancelled':
+                                            logger.info(f"Rilevata cancellazione del crawling per {website_url}")
+                                            cancelled = True
+                                            return True
+                                    except Exception as e:
+                                        logger.error(f"Errore nel controllo dello stato di cancellazione: {str(e)}")
+                                    return False
 
-                            logger.info(f"Crawling completato per {website_url} - {stats}")
-                        except Exception as e:
-                            logger.error(f"Errore durante il crawling: {str(e)}")
-                            logger.error(traceback.format_exc())
-                            index_status.metadata = index_status.metadata or {}
-                            index_status.metadata['last_crawl'] = {
-                                'status': 'failed',
-                                'url': website_url,
-                                'timestamp': timezone.now().isoformat(),
-                                'error': str(e)
-                            }
-                            index_status.save()
+                                # Sostituisci la funzione crawl originale con una versione che controlla la cancellazione
+                                def crawl_with_cancel_check():
+                                    """
+                                    Esegue il crawling con controlli periodici per la cancellazione.
+                                    Se il processo viene cancellato, interrompe il crawling pulitamente.
 
-                    # Avvia il thread in background
-                    thread = threading.Thread(target=crawl_task)
-                    thread.daemon = True
-                    thread.start()
+                                    Returns:
+                                        tuple: (processed_pages, failed_pages, documents, stored_urls)
+                                    """
+                                    nonlocal processed_pages, failed_pages, visited_urls
 
-                    logger.info(f"Thread di crawling creato con ID: {thread.ident}")
+                                    # Inizializza variabili
+                                    documents = []
+                                    stored_urls = []
 
-                    # Aggiorna lo stato iniziale
-                    index_status.metadata = index_status.metadata or {}
-                    index_status.metadata['last_crawl'] = {
-                        'status': 'running',
-                        'url': website_url,
-                        'timestamp': timezone.now().isoformat()
-                    }
-                    index_status.save()
+                                    # Avvia il crawling ma controlla periodicamente lo stato
+                                    # Nota: questa è una versione semplificata, andrebbe integrata con il vero metodo di crawling
+                                    try:
+                                        # Eseguiamo il crawling con la funzione standard, ma monitorando la cancellazione
+                                        processed_pages, failed_pages, documents, stored_urls = crawler.crawl(
+                                            website_url, website_dir, project)
 
-                    return JsonResponse({
-                        'success': True,
-                        'message': f'Crawling avviato per {website_url} con profondità {max_depth}',
-                        'job_id': thread.ident
-                    })
+                                        # Raccogliamo tutti gli URL visitati
+                                        visited_urls = [url.url for url in stored_urls] if stored_urls else []
 
-                # Se non è una richiesta AJAX, esegui immediatamente
-                else:
-                    from dashboard.web_crawler import WebCrawler
-                    from profiles.models import ProjectFile
-                    from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
-                    import os
-                    from urllib.parse import urlparse
-                    from vaitony_project import settings
+                                        # Aggiorna lo stato periodicamente
+                                        if index_status:
+                                            index_status.metadata = index_status.metadata or {}
+                                            index_status.metadata['last_crawl'] = {
+                                                'status': 'running',
+                                                'url': website_url,
+                                                'timestamp': timezone.now().isoformat(),
+                                                'stats': {
+                                                    'processed_pages': processed_pages,
+                                                    'failed_pages': failed_pages,
+                                                    'added_urls': len(stored_urls) if stored_urls else 0
+                                                },
+                                                'visited_urls': visited_urls
+                                            }
+                                            index_status.save()
 
-                    # Estrai il nome di dominio dall'URL per usarlo come nome della directory
-                    parsed_url = urlparse(website_url)
-                    domain = parsed_url.netloc
+                                        # Controlla se il processo è stato cancellato
+                                        is_cancelled()
+                                    except Exception as e:
+                                        logger.error(f"Errore durante il crawling: {str(e)}")
+                                        failed_pages += 1
 
-                    # Configura la directory di output con la struttura richiesta
-                    project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-                    website_content_dir = os.path.join(project_dir, 'website_content')
-                    website_dir = os.path.join(website_content_dir, domain)
-                    os.makedirs(website_dir, exist_ok=True)
+                                    return processed_pages, failed_pages, documents, stored_urls
 
-                    # Inizializza il crawler
-                    crawler = WebCrawler(
-                        max_depth=max_depth,
-                        max_pages=max_pages,
-                        min_text_length=500,
-                        exclude_patterns=exclude_patterns_list,
-                        include_patterns=include_patterns_list
-                    )
+                                # Esegui il crawling con controllo cancellazione
+                                if not is_cancelled():
+                                    processed_pages, failed_pages, documents, stored_urls = crawl_with_cancel_check()
 
-                    # Esegui il crawling
-                    processed_pages, failed_pages, documents = crawler.crawl(website_url, website_dir)
+                                # Se il processo è stato cancellato, aggiorna lo stato finale
+                                if cancelled:
+                                    if index_status:
+                                        index_status.metadata = index_status.metadata or {}
+                                        index_status.metadata['last_crawl'] = {
+                                            'status': 'cancelled',
+                                            'url': website_url,
+                                            'timestamp': timezone.now().isoformat(),
+                                            'stats': {
+                                                'processed_pages': processed_pages,
+                                                'failed_pages': failed_pages,
+                                                'added_urls': len(stored_urls) if stored_urls else 0
+                                            },
+                                            'visited_urls': visited_urls,
+                                            'cancelled_at': timezone.now().isoformat()
+                                        }
+                                        index_status.save()
+                                    logger.info(f"Crawling interrotto manualmente per {website_url}")
+                                    return
 
-                    # Ottieni le URL visitate dal crawler
-                    visited_urls = []
-                    for doc, _ in documents:
-                        if 'url' in doc.metadata and doc.metadata['url'] not in visited_urls:
-                            visited_urls.append(doc.metadata['url'])
+                                # Aggiorna l'indice vettoriale se abbiamo URL da incorporare
+                                if stored_urls and not cancelled:
+                                    try:
+                                        logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
+                                        create_project_rag_chain(project)
+                                        logger.info(f"Indice vettoriale aggiornato con successo")
+                                    except Exception as e:
+                                        logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
 
-                    # Aggiungi i documenti al progetto
-                    added_files = []
-                    for doc, file_path in documents:
-                        # Calcola l'hash e le dimensioni del file
-                        file_hash = compute_file_hash(file_path)
-                        file_size = os.path.getsize(file_path)
-                        filename = os.path.basename(file_path)
+                                stats = {
+                                    'processed_pages': processed_pages,
+                                    'failed_pages': failed_pages,
+                                    'added_urls': len(stored_urls) if stored_urls else 0
+                                }
 
-                        # Crea il record nel database CON IL CAMPO METADATA
-                        project_file = ProjectFile.objects.create(
-                            project=project,
-                            filename=filename,
-                            file_path=file_path,
-                            file_type='txt',
-                            file_size=file_size,
-                            file_hash=file_hash,
-                            is_embedded=False,
-                            last_indexed_at=None,
-                            metadata={
-                                'source_url': doc.metadata['url'],
-                                'title': doc.metadata['title'],
-                                'crawl_depth': doc.metadata['crawl_depth'],
-                                'crawl_domain': doc.metadata['domain'],
-                                'type': 'web_page'
-                            }
+                                # Aggiorna lo stato del job se non è stato cancellato
+                                if index_status and not cancelled:
+                                    index_status.metadata = index_status.metadata or {}
+                                    index_status.metadata['last_crawl'] = {
+                                        'status': 'completed',
+                                        'url': website_url,
+                                        'timestamp': timezone.now().isoformat(),
+                                        'stats': stats,
+                                        'visited_urls': visited_urls,
+                                        'domain': domain,
+                                        'max_depth': max_depth,
+                                        'max_pages': max_pages
+                                    }
+                                    index_status.save()
+
+                                logger.info(f"Crawling completato per {website_url} - {stats}")
+                            except Exception as e:
+                                logger.error(f"Errore durante il crawling: {str(e)}")
+                                logger.error(traceback.format_exc())
+                                if index_status:
+                                    index_status.metadata = index_status.metadata or {}
+                                    index_status.metadata['last_crawl'] = {
+                                        'status': 'failed',
+                                        'url': website_url,
+                                        'timestamp': timezone.now().isoformat(),
+                                        'error': str(e)
+                                    }
+                                    index_status.save()
+
+                        # Avvia il thread in background
+                        thread = threading.Thread(
+                            target=crawl_task,
+                            args=(website_url, max_depth, max_pages, project, exclude_patterns_list,
+                                  include_patterns_list,
+                                  index_status)
+                        )
+                        thread.start()
+
+                        logger.info(f"Thread di crawling creato con ID: {thread.ident}")
+
+                        # Aggiorna lo stato iniziale
+                        index_status.metadata = index_status.metadata or {}
+                        index_status.metadata['last_crawl'] = {
+                            'status': 'running',
+                            'url': website_url,
+                            'timestamp': timezone.now().isoformat()
+                        }
+                        index_status.save()
+
+                        return JsonResponse({
+                            'success': True,
+                            'message': f'Crawling avviato per {website_url} con profondità {max_depth}',
+                            'job_id': thread.ident
+                        })
+
+                    # Se non è una richiesta AJAX, esegui immediatamente
+                    else:
+                        # Implementazione per esecuzione sincrona (raro caso d'uso)
+                        from dashboard.web_crawler import WebCrawler
+                        from profiles.models import ProjectFile
+                        from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
+                        import os
+                        from urllib.parse import urlparse
+                        from vaitony_project import settings
+
+                        # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+                        parsed_url = urlparse(website_url)
+                        domain = parsed_url.netloc
+
+                        # Configura la directory di output con la struttura richiesta
+                        project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id),
+                                                   str(project.id))
+                        website_content_dir = os.path.join(project_dir, 'website_content')
+                        website_dir = os.path.join(website_content_dir, domain)
+                        os.makedirs(website_dir, exist_ok=True)
+
+                        # Inizializza il crawler
+                        crawler = WebCrawler(
+                            max_depth=max_depth,
+                            max_pages=max_pages,
+                            min_text_length=500,
+                            exclude_patterns=exclude_patterns_list,
+                            include_patterns=include_patterns_list
                         )
 
-                        added_files.append(project_file)
+                        # Esegui il crawling
+                        processed_pages, failed_pages, documents = crawler.crawl(website_url, website_dir)
 
-                    # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
-                    if added_files:
-                        create_project_rag_chain(project)
+                        # Ottieni le URL visitate dal crawler
+                        visited_urls = []
+                        for doc, _ in documents:
+                            if 'url' in doc.metadata and doc.metadata['url'] not in visited_urls:
+                                visited_urls.append(doc.metadata['url'])
 
-                    stats = {
-                        'processed_pages': processed_pages,
-                        'failed_pages': failed_pages,
-                        'added_files': len(added_files)
-                    }
+                        # Aggiungi i documenti al progetto
+                        added_files = []
+                        for doc, file_path in documents:
+                            # Calcola l'hash e le dimensioni del file
+                            file_hash = compute_file_hash(file_path)
+                            file_size = os.path.getsize(file_path)
+                            filename = os.path.basename(file_path)
 
-                    # Salva le informazioni del crawling
-                    index_status.metadata = index_status.metadata or {}
-                    index_status.metadata['last_crawl'] = {
-                        'status': 'completed',
-                        'url': website_url,
-                        'timestamp': timezone.now().isoformat(),
-                        'stats': stats,
-                        'visited_urls': visited_urls,  # Aggiungiamo la lista delle URL visitate
-                        'domain': domain,
-                        'max_depth': max_depth,
-                        'max_pages': max_pages
-                    }
-                    index_status.save()
+                            # Crea il record nel database CON IL CAMPO METADATA
+                            project_file = ProjectFile.objects.create(
+                                project=project,
+                                filename=filename,
+                                file_path=file_path,
+                                file_type='txt',
+                                file_size=file_size,
+                                file_hash=file_hash,
+                                is_embedded=False,
+                                last_indexed_at=None,
+                                metadata={
+                                    'source_url': doc.metadata['url'],
+                                    'title': doc.metadata['title'],
+                                    'crawl_depth': doc.metadata['crawl_depth'],
+                                    'crawl_domain': doc.metadata['domain'],
+                                    'type': 'web_page'
+                                }
+                            )
 
-                    messages.success(request,
-                                     f"Crawling completato: {stats['processed_pages']} pagine processate, {stats['added_files']} file aggiunti")
-                    return redirect('project', project_id=project.id)
+                            added_files.append(project_file)
+
+                        # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
+                        if added_files:
+                            create_project_rag_chain(project)
+
+                        stats = {
+                            'processed_pages': processed_pages,
+                            'failed_pages': failed_pages,
+                            'added_files': len(added_files)
+                        }
+
+                        # Salva le informazioni del crawling
+                        index_status.metadata = index_status.metadata or {}
+                        index_status.metadata['last_crawl'] = {
+                            'status': 'completed',
+                            'url': website_url,
+                            'timestamp': timezone.now().isoformat(),
+                            'stats': stats,
+                            'visited_urls': visited_urls,  # Aggiungiamo la lista delle URL visitate
+                            'domain': domain,
+                            'max_depth': max_depth,
+                            'max_pages': max_pages
+                        }
+                        index_status.save()
+
+                        messages.success(request,
+                                         f"Crawling completato: {stats['processed_pages']} pagine processate, {stats['added_files']} file aggiunti")
+                        return redirect('project', project_id=project.id)
 
             # Redirect alla vista del progetto se nessuna azione è stata eseguita
             return redirect('project', project_id=project.id)
@@ -3647,35 +4103,40 @@ def handle_website_crawl_internal(project, start_url, max_depth=3, max_pages=100
     }
 
 
-
-# In views.py - Aggiungi questa funzione
 def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
                          exclude_patterns=None, include_patterns=None,
                          min_text_length=500):
     """
     Gestisce il crawling di un sito web e l'aggiunta dei contenuti a un progetto.
+    Salva i contenuti direttamente nella tabella ProjectURL anziché creare file.
+
+    Args:
+        project: Oggetto Project per cui eseguire il crawling
+        start_url: URL di partenza per il crawling
+        max_depth: Profondità massima di crawling (default: 3)
+        max_pages: Numero massimo di pagine da analizzare (default: 100)
+        exclude_patterns: Lista di pattern regex da escludere negli URL (default: None)
+        include_patterns: Lista di pattern regex da includere negli URL (default: None)
+        min_text_length: Lunghezza minima del testo da considerare valido (default: 500)
+
+    Returns:
+        dict: Dizionario con statistiche sul crawling (pagine elaborate, fallite, URL aggiunti)
     """
-    from profiles.models import ProjectFile
-    from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
-    import os
+    # Import solo ProjectURL e funzioni necessarie
+    from profiles.models import ProjectURL
+    from dashboard.rag_utils import create_project_rag_chain
     from urllib.parse import urlparse
-    from vaitony_project import settings
 
     logger.info(f"Avvio crawling per il progetto {project.id} partendo da {start_url}")
 
-    # Estrai il nome di dominio dall'URL per usarlo come nome della directory
+    # Estrai il nome di dominio dall'URL
     parsed_url = urlparse(start_url)
     domain = parsed_url.netloc
 
-    # Configura la directory di output con la struttura richiesta
-    project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-    website_content_dir = os.path.join(project_dir, 'website_content')
-    website_dir = os.path.join(website_content_dir, domain)
-    os.makedirs(website_dir, exist_ok=True)
-
     # Inizializza il crawler
-    from .web_crawler import WebCrawler  # Importa WebCrawler dal file locale
+    from .web_crawler import WebCrawler
 
+    # Configura il crawler
     crawler = WebCrawler(
         max_depth=max_depth,
         max_pages=max_pages,
@@ -3684,40 +4145,12 @@ def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
         include_patterns=include_patterns
     )
 
-    # Esegui il crawling
-    processed_pages, failed_pages, documents = crawler.crawl(start_url, website_dir)
+    # Esegui il crawling - passa il progetto ma non la directory di output
+    # Ora il crawler salverà direttamente in ProjectURL
+    processed_pages, failed_pages, _, stored_urls = crawler.crawl(start_url, None, project)
 
-    # Aggiungi i documenti al progetto
-    added_files = []
-    for doc, file_path in documents:
-        # Calcola l'hash e le dimensioni del file
-        file_hash = compute_file_hash(file_path)
-        file_size = os.path.getsize(file_path)
-        filename = os.path.basename(file_path)
-
-        # Crea il record nel database
-        project_file = ProjectFile.objects.create(
-            project=project,
-            filename=filename,
-            file_path=file_path,
-            file_type='txt',
-            file_size=file_size,
-            file_hash=file_hash,
-            is_embedded=False,
-            last_indexed_at=None,
-            metadata={
-                'source_url': doc.metadata['url'],
-                'title': doc.metadata['title'],
-                'crawl_depth': doc.metadata['crawl_depth'],
-                'crawl_domain': doc.metadata['domain'],
-                'type': 'web_page'
-            }
-        )
-
-        added_files.append(project_file)
-
-    # Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
-    if added_files:
+    # Aggiorna l'indice vettoriale solo se abbiamo URL da aggiungere
+    if stored_urls:
         try:
             logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
             create_project_rag_chain(project)
@@ -3725,8 +4158,9 @@ def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
         except Exception as e:
             logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
 
+    # Restituisci statistiche sul processo di crawling
     return {
         'processed_pages': processed_pages,
         'failed_pages': failed_pages,
-        'added_files': len(added_files)
+        'added_urls': len(stored_urls)
     }

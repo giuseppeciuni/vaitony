@@ -12,7 +12,7 @@ import os
 import hashlib
 import logging
 from django.conf import settings
-from datetime import timezone
+from django.utils import timezone
 
 # Configurazione logger
 logger = logging.getLogger(__name__)

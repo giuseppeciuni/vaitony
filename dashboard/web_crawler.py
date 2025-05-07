@@ -1,7 +1,8 @@
 """
 Modulo per il crawling e l'embedding di contenuti web nel sistema RAG.
 Supporta la navigazione ricorsiva dei link interni fino a una profondità specificata,
-con simulazione di browser completo per gestire siti dinamici.
+con simulazione di browser completo per gestire siti dinamici e integrazione con modelli LLM
+per l'estrazione di contenuti informativi.
 """
 
 import os
@@ -9,6 +10,7 @@ import time
 import uuid
 import logging
 import re
+import json
 from urllib.parse import urlparse, urljoin
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
@@ -24,25 +26,29 @@ class WebCrawler:
 	"""
     Classe per il crawling di siti web con supporto per JavaScript e
     navigazione ricorsiva di link interni fino a una profondità specificata.
+    Include funzionalità per l'estrazione di contenuti informativi tramite LLM.
     """
 
 	def __init__(self, max_depth=2, max_pages=10, min_text_length=500,
-				 exclude_patterns=None, include_patterns=None, timeout=30000):
+				 exclude_patterns=None, include_patterns=None, timeout=30000,
+				 llm_provider=None):
 		"""
         Inizializza il crawler con i parametri specificati.
 
         Args:
-            max_depth: Profondità massima di crawling (default: 3)
-            max_pages: Numero massimo di pagine da analizzare (default: 100)
+            max_depth: Profondità massima di crawling (default: 2)
+            max_pages: Numero massimo di pagine da analizzare (default: 10)
             min_text_length: Lunghezza minima del testo da considerare valido (default: 500)
             exclude_patterns: Lista di pattern regex da escludere negli URL (default: None)
             include_patterns: Lista di pattern regex da includere negli URL (default: None)
             timeout: Timeout in ms per il caricamento delle pagine (default: 30000)
+            llm_provider: Provider LLM da utilizzare per l'estrazione di contenuti (default: None)
         """
 		self.max_depth = max_depth
 		self.max_pages = max_pages
 		self.min_text_length = min_text_length
 		self.timeout = timeout
+		self.llm_provider = llm_provider
 
 		# Compila i pattern regex
 		self.exclude_patterns = None
@@ -59,14 +65,14 @@ class WebCrawler:
 
 	def should_process_url(self, url):
 		"""
-		Verifica se un URL dovrebbe essere processato in base ai pattern di inclusione/esclusione.
+        Verifica se un URL dovrebbe essere processato in base ai pattern di inclusione/esclusione.
 
-		Args:
-			url: URL da verificare
+        Args:
+            url: URL da verificare
 
-		Returns:
-			bool: True se l'URL dovrebbe essere processato, False altrimenti
-		"""
+        Returns:
+            bool: True se l'URL dovrebbe essere processato, False altrimenti
+        """
 		# Controlla i pattern di esclusione di default
 		if self.default_exclude.match(url):
 			return False
@@ -87,16 +93,17 @@ class WebCrawler:
 		# Se non ci sono pattern di inclusione, processa l'URL
 		return True
 
-	def extract_text_content(self, soup):
+	def extract_text_content(self, soup, url):
 		"""
-		Estrae il contenuto testuale significativo da una pagina HTML.
+        Estrae il contenuto testuale significativo da una pagina HTML.
 
-		Args:
-			soup: Oggetto BeautifulSoup della pagina
+        Args:
+            soup: Oggetto BeautifulSoup della pagina
+            url: URL della pagina
 
-		Returns:
-			tuple: (contenuto testuale, testo principale)
-		"""
+        Returns:
+            tuple: (contenuto testuale, testo principale, titolo, meta descrizione)
+        """
 		# Rimuovi elementi non informativi
 		for element in soup.find_all(['script', 'style', 'nav', 'footer', 'header', 'aside']):
 			element.decompose()
@@ -128,7 +135,7 @@ class WebCrawler:
 		if main_content:
 			# Estrai il testo mantenendo la struttura dei paragrafi
 			paragraphs = []
-			for p in main_content.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']):
+			for p in main_content.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'pre']):
 				text = p.get_text().strip()
 				if text:
 					paragraphs.append(text)
@@ -137,31 +144,35 @@ class WebCrawler:
 		else:
 			main_text = soup.get_text()
 
-		# Costruisci il contenuto completo con titolo e meta descrizione
+		# Ottieni meta descrizione
 		meta_description = ""
 		meta_desc_tag = soup.find('meta', attrs={'name': 'description'})
 		if meta_desc_tag and 'content' in meta_desc_tag.attrs:
 			meta_description = meta_desc_tag['content'].strip()
 
+		# Costruisci il contenuto completo
 		content = f"Titolo: {title}\n\n"
 		if meta_description:
 			content += f"Descrizione: {meta_description}\n\n"
-
 		content += main_text
 
-		return content, main_text
+		return content, main_text, title, meta_description
 
-	def crawl(self, start_url, output_dir):
+	def crawl(self, start_url, output_dir, project=None):
 		"""
-		Esegue il crawling di un sito web partendo da un URL specificato.
+        Esegue il crawling di un sito web partendo da un URL specificato.
 
-		Args:
-			start_url: URL di partenza per il crawling
-			output_dir: Directory dove salvare i contenuti estratti
+        Args:
+            start_url: URL di partenza per il crawling
+            output_dir: Directory dove salvare i contenuti estratti
+            project: Oggetto Project per salvare gli URL nel database (default: None)
 
-		Returns:
-			tuple: (pagine processate, fallite, lista dei documenti)
-		"""
+        Returns:
+            tuple: (pagine processate, fallite, lista dei documenti, lista degli URL)
+        """
+		# Importazione ritardata per evitare cicli di importazione
+		from profiles.models import ProjectURL
+
 		# Validazione dell'URL
 		if not start_url.startswith(('http://', 'https://')):
 			start_url = 'https://' + start_url
@@ -181,6 +192,7 @@ class WebCrawler:
 		processed_pages = 0
 		failed_pages = 0
 		documents = []
+		stored_urls = []  # Lista degli URL salvati nel database
 
 		# Avvia Playwright per simulare un browser
 		with sync_playwright() as playwright:
@@ -222,15 +234,19 @@ class WebCrawler:
 
 					# Utilizza BeautifulSoup per estrarre il contenuto
 					soup = BeautifulSoup(html_content, 'html.parser')
-					page_content, main_text = self.extract_text_content(soup)
+					page_content, main_text, title, meta_description = self.extract_text_content(soup, current_url)
 
 					# Verifica la lunghezza minima del testo
 					if len(main_text) < self.min_text_length:
 						logger.debug(f"Pagina saltata: contenuto troppo breve ({len(main_text)} caratteri)")
 						continue
 
-					# Ottieni il titolo
-					title = soup.title.text.strip() if soup.title else f"Pagina {base_domain}"
+					# Se è stato specificato un provider LLM, usa l'API per estrarre informazioni
+					extracted_info = None
+					if self.llm_provider and hasattr(self, f"extract_info_with_{self.llm_provider.lower()}"):
+						extraction_method = getattr(self, f"extract_info_with_{self.llm_provider.lower()}")
+						extracted_info = extraction_method(page_content, current_url)
+						logger.info(f"Informazioni estratte con {self.llm_provider} per {current_url}")
 
 					# Crea un nome file basato sull'URL
 					parsed_suburl = urlparse(current_url)
@@ -273,14 +289,45 @@ class WebCrawler:
 
 					logger.info(f"Pagina salvata: {file_name} ({os.path.getsize(file_path)} bytes)")
 
+					# Se il progetto è specificato, salva l'URL nel database
+					if project:
+						try:
+							# Normalizza l'URL se necessario
+							normalized_url = current_url
+
+							# Crea o aggiorna l'URL nel database
+							url_obj, created = ProjectURL.objects.update_or_create(
+								project=project,
+								url=normalized_url,  # Utilizzo dell'URL come campo CharField
+								defaults={
+									'title': title,
+									'description': meta_description,
+									'content': page_content,
+									'extracted_info': json.dumps(extracted_info) if extracted_info else None,
+									'file_path': file_path,
+									'crawl_depth': current_depth,
+									'is_indexed': False,
+									'last_indexed_at': None,
+									'metadata': {
+										'domain': base_domain,
+										'path': parsed_suburl.path,
+										'size': len(page_content)
+									}
+								}
+							)
+							stored_urls.append(url_obj)
+							logger.info(f"URL {'creato' if created else 'aggiornato'} nel database: {current_url}")
+						except Exception as db_error:
+							logger.error(f"Errore nel salvare l'URL nel database: {str(db_error)}")
+
 					# Se non abbiamo raggiunto la profondità massima, aggiungi i link alla coda
 					if current_depth < self.max_depth:
 						# Estrai tutti i link
 						links = page.evaluate("""() => {
-	                        return Array.from(document.querySelectorAll('a[href]'))
-	                            .map(a => a.href)
-	                            .filter(href => href && !href.startsWith('javascript:') && !href.startsWith('#'));
-	                    }""")
+                            return Array.from(document.querySelectorAll('a[href]'))
+                                .map(a => a.href)
+                                .filter(href => href && !href.startsWith('javascript:') && !href.startsWith('#'));
+                        }""")
 
 						for link in links:
 							# Normalizza il link
@@ -298,83 +345,4 @@ class WebCrawler:
 			browser.close()
 
 		logger.info(f"Crawling completato: {processed_pages} pagine elaborate, {failed_pages} fallite")
-		return processed_pages, failed_pages, documents
-
-
-def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
-						 exclude_patterns=None, include_patterns=None,
-						 min_text_length=500):
-	"""
-	Gestisce il crawling di un sito web e l'aggiunta dei contenuti a un progetto.
-	"""
-	from profiles.models import ProjectFile
-	from dashboard.rag_utils import compute_file_hash, create_project_rag_chain
-
-	logger.info(f"Avvio crawling per il progetto {project.id} partendo da {start_url}")
-
-	# Estrai il nome di dominio dall'URL per usarlo come nome della directory
-	from urllib.parse import urlparse
-	parsed_url = urlparse(start_url)
-	domain = parsed_url.netloc
-
-	# Configura la directory di output con la struttura richiesta
-	project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-	website_content_dir = os.path.join(project_dir, 'website_content')
-	website_dir = os.path.join(website_content_dir, domain)
-	os.makedirs(website_dir, exist_ok=True)
-
-	# Inizializza il crawler
-	crawler = WebCrawler(
-		max_depth=max_depth,
-		max_pages=max_pages,
-		min_text_length=min_text_length,
-		exclude_patterns=exclude_patterns,
-		include_patterns=include_patterns
-	)
-
-	# Esegui il crawling
-	processed_pages, failed_pages, documents = crawler.crawl(start_url, website_dir)
-
-	# Aggiungi i documenti al progetto
-	added_files = []
-	for doc, file_path in documents:
-		# Calcola l'hash e le dimensioni del file
-		file_hash = compute_file_hash(file_path)
-		file_size = os.path.getsize(file_path)
-		filename = os.path.basename(file_path)
-
-		# Crea il record nel database
-		project_file = ProjectFile.objects.create(
-			project=project,
-			filename=filename,
-			file_path=file_path,
-			file_type='txt',
-			file_size=file_size,
-			file_hash=file_hash,
-			is_embedded=False,
-			last_indexed_at=None,
-			metadata={
-				'source_url': doc.metadata['url'],
-				'title': doc.metadata['title'],
-				'crawl_depth': doc.metadata['crawl_depth'],
-				'crawl_domain': doc.metadata['domain'],
-				'type': 'web_page'
-			}
-		)
-
-		added_files.append(project_file)
-
-	# Aggiorna l'indice vettoriale solo se abbiamo file da aggiungere
-	if added_files:
-		try:
-			logger.info(f"Aggiornamento dell'indice vettoriale dopo crawling web")
-			create_project_rag_chain(project)
-			logger.info(f"Indice vettoriale aggiornato con successo")
-		except Exception as e:
-			logger.error(f"Errore nell'aggiornamento dell'indice vettoriale: {str(e)}")
-
-	return {
-		'processed_pages': processed_pages,
-		'failed_pages': failed_pages,
-		'added_files': len(added_files)
-	}
+		return processed_pages, failed_pages, documents, stored_urls

@@ -18,6 +18,7 @@ from django.db.models.functions import TruncDate
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
+from django.db.models import Count
 from django.utils import timezone
 
 # Importazioni dai moduli RAG
@@ -30,7 +31,7 @@ from profiles.models import (
     Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource,
     LLMEngine, UserAPIKey, LLMProvider, RagTemplateType, RagDefaultSettings,
     EmbeddingCacheStats, GlobalEmbeddingCache, ProjectRAGConfiguration,
-    ProjectLLMConfiguration, ProjectIndexStatus, DefaultSystemPrompts,
+    ProjectLLMConfiguration, ProjectIndexStatus, DefaultSystemPrompts, ProjectURL,
 )
 from .cache_statistics import update_embedding_cache_stats
 
@@ -783,6 +784,555 @@ def project_details(request, project_id):
 #################################################### SINO A QUI CONTROLLATO ################################
 
 
+# def project(request, project_id=None):
+#     """
+#     Vista principale per la gestione completa di un progetto.
+#
+#     Questa funzione multi-purpose:
+#     1. Visualizza file, note e conversazioni del progetto
+#     2. Gestisce domande RAG e mostra risposte con fonti
+#     3. Permette operazioni su file e note (aggiunta, modifica, eliminazione)
+#     4. Gestisce diverse visualizzazioni (tab) dello stesso progetto
+#     5. Supporta richieste AJAX per operazioni asincrone
+#
+#     Hub centrale per tutte le operazioni relative a un singolo progetto,
+#     con supporto per diverse modalità di interazione.
+#     """
+#     logger.debug(f"---> project: {project_id}")
+#     if request.user.is_authenticated:
+#         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
+#         if project_id is None and request.method == 'POST':
+#             project_id = request.POST.get('project_id')
+#
+#         # Se ancora non abbiamo un project_id, ridireziona alla lista progetti
+#         if project_id is None:
+#             messages.error(request, "Project not found.")
+#             return redirect('projects_list')
+#
+#         # Ottieni il progetto esistente
+#         try:
+#             project = Project.objects.get(id=project_id, user=request.user)
+#
+#             # Carica i file del progetto
+#             project_files = ProjectFile.objects.filter(project=project).order_by('-uploaded_at')
+#
+#             # Carica le conversazioni precedenti
+#             conversations = ProjectConversation.objects.filter(project=project).order_by('-created_at')
+#
+#             # Gestisci diverse azioni
+#             if request.method == 'POST':
+#                 action = request.POST.get('action')
+#
+#                 # Gestione del salvataggio delle note generali
+#                 if action == 'save_notes':
+#                     # Salva le note
+#                     project.notes = request.POST.get('notes', '')
+#                     project.save()
+#
+#                     # Se è una richiesta AJAX, restituisci una risposta JSON
+#                     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                         return JsonResponse({'status': 'success', 'message': 'Notes saved successfully.'})
+#
+#                     messages.success(request, "Notes saved successfully.")
+#                     return redirect('project', project_id=project.id)
+#
+#                 # Gestione delle domande al modello RAG
+#                 elif action == 'ask_question':
+#                     # Gestisci domanda RAG
+#                     question = request.POST.get('question', '').strip()
+#
+#                     if question:
+#                         # Misura il tempo di elaborazione
+#                         start_time = time.time()
+#
+#                         # Ottieni la risposta dal sistema RAG
+#                         try:
+#                             logger.info(f"Elaborazione domanda RAG: '{question[:50]}...' per progetto {project.id}")
+#
+#                             # Verifica configurazione RAG attuale
+#                             try:
+#                                 rag_config = ProjectRAGConfiguration.objects.get(project=project)
+#                                 current_preset = rag_config.rag_preset
+#                                 if current_preset:
+#                                     logger.info(f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+#                                 else:
+#                                     logger.info("Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+#
+#                             except Exception as config_error:
+#                                 logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
+#
+#                             # Verifica che il progetto abbia documenti e note prima di processare la query
+#                             project_files = ProjectFile.objects.filter(project=project)
+#                             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+#
+#                             logger.info(
+#                                 f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
+#
+#                             try:
+#                                 # Usa la funzione ottimizzata per ottenere la risposta
+#                                 rag_response = get_answer_from_project(project, question)
+#
+#                                 # Calculate processing time
+#                                 processing_time = round(time.time() - start_time, 2)
+#                                 logger.info(f"RAG processing completed in {processing_time} seconds")
+#
+#                                 # Verifica se c'è stato un errore di autenticazione API
+#                                 if rag_response.get('error') == 'api_auth_error':
+#                                     # Crea una risposta JSON specifica per questo errore
+#                                     error_response = {
+#                                         "success": False,
+#                                         "error": "api_auth_error",
+#                                         "error_details": rag_response.get('error_details', ''),
+#                                         "answer": rag_response.get('answer', 'Errore di autenticazione API'),
+#                                         "sources": []
+#                                     }
+#
+#                                     # Non salvare conversazioni con errori di autenticazione
+#                                     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                                         return JsonResponse(error_response)
+#                                     else:
+#                                         messages.error(request,
+#                                                        "Errore di autenticazione API. Verifica le chiavi API nelle impostazioni del motore IA.")
+#                                         return redirect('project', project_id=project.id)
+#
+#                                 # Log delle fonti trovate
+#                                 if 'sources' in rag_response and rag_response['sources']:
+#                                     logger.info(f"Trovate {len(rag_response['sources'])} fonti rilevanti")
+#                                 else:
+#                                     logger.warning("Nessuna fonte trovata per la risposta")
+#
+#                                 # Salva la conversazione nel database
+#                                 try:
+#                                     conversation = ProjectConversation.objects.create(
+#                                         project=project,
+#                                         question=question,
+#                                         answer=rag_response.get('answer', 'No answer found.'),
+#                                         processing_time=processing_time
+#                                     )
+#
+#                                     # Salva le fonti utilizzate
+#                                     for source in rag_response.get('sources', []):
+#                                         # Cerchiamo di trovare il ProjectFile o ProjectNote corrispondente
+#
+#                                         project_file = None
+#                                         project_note = None
+#
+#                                         # Se la fonte è una nota
+#                                         if source.get('type') == 'note':
+#                                             note_id = source.get('metadata', {}).get('note_id')
+#                                             if note_id:
+#                                                 try:
+#                                                     project_note = ProjectNote.objects.get(id=note_id, project=project)
+#                                                 except ProjectNote.DoesNotExist:
+#                                                     pass
+#                                         else:
+#                                             # Se è un file
+#                                             source_path = source.get('metadata', {}).get('source', '')
+#                                             if source_path:
+#                                                 # Cerca il file per path
+#                                                 try:
+#                                                     project_file = ProjectFile.objects.get(project=project,
+#                                                                                            file_path=source_path)
+#                                                 except ProjectFile.DoesNotExist:
+#                                                     pass
+#
+#                                         # Salva la fonte
+#                                         AnswerSource.objects.create(
+#                                             conversation=conversation,
+#                                             project_file=project_file,
+#                                             project_note=project_note,  # Aggiungi la nota come fonte
+#                                             content=source.get('content', ''),
+#                                             page_number=source.get('metadata', {}).get('page'),
+#                                             relevance_score=source.get('score')
+#                                         )
+#                                         logger.info(f"Conversazione salvata con ID: {conversation.id}")
+#
+#                                 except Exception as save_error:
+#                                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
+#                                     # Non interrompiamo il flusso se il salvataggio fallisce
+#
+#                                 # Create AJAX response
+#                                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                                     return JsonResponse({
+#                                         "success": True,
+#                                         "answer": rag_response.get('answer', 'No answer found.'),
+#                                         "sources": rag_response.get('sources', []),
+#                                         "processing_time": processing_time,
+#                                         "engine_info": rag_response.get('engine', {})
+#                                     })
+#                             except Exception as specific_error:
+#                                 logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
+#                                 error_message = str(specific_error)
+#
+#                                 # Verifica se l'errore è di autenticazione OpenAI
+#                                 if 'openai.AuthenticationError' in str(
+#                                         type(specific_error)) or 'invalid_api_key' in error_message:
+#                                     error_response = {
+#                                         "success": False,
+#                                         "error": "api_auth_error",
+#                                         "error_details": error_message,
+#                                         "answer": "Errore di autenticazione con l'API. Verifica le tue chiavi API nelle impostazioni.",
+#                                         "sources": []
+#                                     }
+#                                 else:
+#                                     error_response = {
+#                                         "success": False,
+#                                         "error": "processing_error",
+#                                         "error_details": error_message,
+#                                         "answer": f"Error processing your question: {error_message}",
+#                                         "sources": []
+#                                     }
+#
+#                                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                                     return JsonResponse(error_response)
+#
+#                                 messages.error(request, f"Error processing your question: {error_message}")
+#
+#                         except Exception as e:
+#                             logger.exception(f"Error processing RAG query: {str(e)}")
+#                             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                                 return JsonResponse({
+#                                     "success": False,
+#                                     "error": str(e),
+#                                     "answer": f"Error processing your question: {str(e)}",
+#                                     "sources": []
+#                                 })
+#
+#                             messages.error(request, f"Error processing your question: {str(e)}")
+#
+#                 # Gestione dell'aggiunta di file
+#                 elif action == 'add_files':
+#                     # Aggiunta di file al progetto
+#                     files = request.FILES.getlist('files[]')
+#
+#                     if files:
+#                         # Directory del progetto
+#                         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id),
+#                                                    str(project.id))
+#                         os.makedirs(project_dir, exist_ok=True)
+#
+#                         for file in files:
+#                             # Usa la funzione ottimizzata per il caricamento dei file
+#                             handle_project_file_upload(project, file, project_dir)
+#
+#                         messages.success(request, f"{len(files)} files uploaded successfully.")
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Gestione dell'aggiunta di una cartella
+#                 elif action == 'add_folder':
+#                     # Aggiunta di una cartella al progetto
+#                     folder_files = request.FILES.getlist('folder[]')
+#
+#                     if folder_files:
+#                         # Directory del progetto
+#                         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(request.user.id),
+#                                                    str(project.id))
+#                         os.makedirs(project_dir, exist_ok=True)
+#
+#                         for file in folder_files:
+#                             # Gestisci il percorso relativo per la cartella
+#                             relative_path = file.name
+#                             if hasattr(file, 'webkitRelativePath') and file.webkitRelativePath:
+#                                 relative_path = file.webkitRelativePath
+#
+#                             path_parts = relative_path.split('/')
+#                             if len(path_parts) > 1:
+#                                 # Crea sottocartelle se necessario
+#                                 subfolder_path = '/'.join(path_parts[1:-1])
+#                                 subfolder_dir = os.path.join(project_dir, subfolder_path)
+#                                 os.makedirs(subfolder_dir, exist_ok=True)
+#                                 file_path = os.path.join(subfolder_dir, path_parts[-1])
+#                             else:
+#                                 file_path = os.path.join(project_dir, path_parts[-1])
+#
+#                             # Usa la funzione ottimizzata per il caricamento dei file
+#                             handle_project_file_upload(project, file, project_dir, file_path)
+#
+#                         messages.success(request, f"Folder with {len(folder_files)} files uploaded successfully.")
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Gestione dell'eliminazione dei file
+#                 elif action == 'delete_file':
+#                     # Eliminazione di un file dal progetto
+#                     file_id = request.POST.get('file_id')
+#
+#                     # Aggiungi log dettagliati
+#                     logger.debug(
+#                         f"Richiesta di eliminazione file ricevuta. ID file: {file_id}, ID progetto: {project.id}")
+#
+#                     # Verifica che file_id non sia vuoto
+#                     if not file_id:
+#                         logger.warning("Richiesta di eliminazione file senza file_id")
+#                         messages.error(request, "ID file non valido.")
+#                         return redirect('project', project_id=project.id)
+#
+#                     try:
+#                         # Ottieni il file del progetto
+#                         project_file = get_object_or_404(ProjectFile, id=file_id, project=project)
+#                         logger.info(f"File trovato per l'eliminazione: {project_file.filename} (ID: {file_id})")
+#
+#                         # Elimina il file fisico
+#                         if os.path.exists(project_file.file_path):
+#                             logger.debug(f"Eliminazione del file fisico in: {project_file.file_path}")
+#                             try:
+#                                 os.remove(project_file.file_path)
+#                                 logger.info(f"File fisico eliminato: {project_file.file_path}")
+#                             except Exception as e:
+#                                 logger.error(f"Errore nell'eliminazione del file fisico: {str(e)}")
+#                                 # Continua con l'eliminazione dal database anche se l'eliminazione del file fallisce
+#                         else:
+#                             logger.warning(f"File fisico non trovato in: {project_file.file_path}")
+#
+#                         # Memorizza se il file era incorporato
+#                         was_embedded = project_file.is_embedded
+#
+#                         # Elimina il record dal database
+#                         project_file.delete()
+#                         logger.info(f"Record eliminato dal database per il file ID: {file_id}")
+#
+#                         # Se il file era incorporato, aggiorna l'indice vettoriale
+#                         if was_embedded:
+#                             try:
+#                                 logger.info(f"🔄 Aggiornando l'indice dopo eliminazione del file")
+#                                 # Forza la ricostruzione dell'indice poiché è difficile rimuovere documenti specificicamente
+#                                 create_project_rag_chain(project=project, force_rebuild=True)
+#                                 logger.info(f"✅ Indice vettoriale ricostruito con successo")
+#                             except Exception as e:
+#                                 logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+#
+#                         messages.success(request, "File eliminato con successo.")
+#                         return redirect('project', project_id=project.id)
+#
+#                     except Exception as e:
+#                         logger.exception(f"Errore nell'azione delete_file: {str(e)}")
+#                         messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Gestione delle note (aggiunta, modifica, eliminazione)
+#                 # Quando viene aggiunta una nota
+#                 elif action == 'add_note':
+#                     # Aggiungi una nuova nota al progetto
+#                     content = request.POST.get('content', '').strip()
+#
+#                     if content:
+#                         # Usa la funzione ottimizzata per aggiungere note
+#                         note = handle_add_note(project, content)
+#
+#                         # Risposta per richieste AJAX
+#                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                             return JsonResponse({
+#                                 'success': True,
+#                                 'note_id': note.id,
+#                                 'message': 'Note added successfully.'
+#                             })
+#
+#                         # Se non è una richiesta AJAX, aggiungi un messaggio e reindirizza
+#                         messages.success(request, "Note added successfully.")
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Quando viene modificata una nota
+#                 elif action == 'edit_note':
+#                     # Modifica una nota esistente
+#                     note_id = request.POST.get('note_id')
+#                     content = request.POST.get('content', '').strip()
+#
+#                     if note_id and content:
+#                         # Usa la funzione ottimizzata per modificare note
+#                         success, message = handle_update_note(project, note_id, content)
+#
+#                         # Risposta per richieste AJAX
+#                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                             return JsonResponse({
+#                                 'success': success,
+#                                 'message': message
+#                             })
+#
+#                         if success:
+#                             messages.success(request, message)
+#                         else:
+#                             messages.error(request, message)
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Quando viene eliminata una nota
+#                 elif action == 'delete_note':
+#                     # Elimina una nota
+#                     note_id = request.POST.get('note_id')
+#
+#                     if note_id:
+#                         # Usa la funzione ottimizzata per eliminare note
+#                         success, message = handle_delete_note(project, note_id)
+#
+#                         # Risposta per richieste AJAX
+#                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                             return JsonResponse({
+#                                 'success': success,
+#                                 'message': message
+#                             })
+#
+#                         if success:
+#                             messages.success(request, message)
+#                         else:
+#                             messages.error(request, message)
+#                         return redirect('project', project_id=project.id)
+#
+#                 # Inclusione/esclusione di note dal RAG
+#                 elif action == 'toggle_note_inclusion':
+#                     # Toggle inclusione nella ricerca RAG
+#                     note_id = request.POST.get('note_id')
+#                     is_included = request.POST.get('is_included') == 'true'
+#
+#                     if note_id:
+#                         # Usa la funzione ottimizzata per toggle inclusione note
+#                         success, message = handle_toggle_note_inclusion(project, note_id, is_included)
+#
+#                         # Risposta per richieste AJAX
+#                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+#                             return JsonResponse({
+#                                 'success': success,
+#                                 'message': message
+#                             })
+#
+#                         if success:
+#                             messages.success(request, message)
+#                         else:
+#                             messages.error(request, message)
+#                         return redirect('project', project_id=project.id)
+#
+#             # Prepara la cronologia delle conversazioni per l'interfaccia di chat
+#             conversation_history = []
+#             answer = None
+#             question = None
+#             sources = None
+#
+#             if conversations.exists():
+#                 # Ottieni l'ultima conversazione per l'interfaccia di chat
+#                 latest_conversation = conversations.first()
+#
+#                 # Prepara la risposta e la domanda per l'ultima conversazione
+#                 answer = latest_conversation.answer
+#                 question = latest_conversation.question
+#
+#                 # Ottieni le fonti utilizzate
+#                 raw_sources = AnswerSource.objects.filter(conversation=latest_conversation)
+#                 sources = []
+#
+#                 for source in raw_sources:
+#                     if source.project_file:
+#                         source_data = {
+#                             'filename': source.project_file.filename,
+#                             'type': source.project_file.extension,
+#                             'content': source.content
+#                         }
+#
+#                         if source.page_number is not None:
+#                             source_data['filename'] += f" (pag. {source.page_number + 1})"
+#
+#                         if source.relevance_score is not None:
+#                             source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
+#
+#                         sources.append(source_data)
+#
+#                 # SOLUZIONE AL PROBLEMA: inverti l'ordine delle conversazioni per mostrare
+#                 # le chat in ordine cronologico corretto (dalla più vecchia alla più recente)
+#                 ordered_conversations = list(conversations)
+#                 ordered_conversations.reverse()
+#
+#                 # Prepara la cronologia delle conversazioni per l'interfaccia di chat
+#                 for conv in ordered_conversations:
+#                     conversation_history.append({
+#                         'is_user': True,
+#                         'content': conv.question,
+#                         'timestamp': conv.created_at
+#                     })
+#                     conversation_history.append({
+#                         'is_user': False,
+#                         'content': conv.answer,
+#                         'timestamp': conv.created_at
+#                     })
+#
+#             project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
+#
+#             context = {
+#                 'project': project,
+#                 'project_files': project_files,
+#                 'conversation_history': conversation_history,
+#                 'answer': answer,
+#                 'question': question,
+#                 'sources': sources,
+#                 'project_notes': project_notes
+#             }
+#
+#             # Al context aggiungo i dati che descrivono il tipo di RAG usato
+#             try:
+#                 # Ottieni le impostazioni RAG del progetto
+#                 project_config, created = ProjectRAGConfiguration.objects.get_or_create(project=project)
+#
+#                 # Determina i valori effettivi (personalizzati o ereditati dal preset)
+#                 rag_values = {
+#                     'chunk_size': project_config.get_chunk_size(),
+#                     'chunk_overlap': project_config.get_chunk_overlap(),
+#                     'similarity_top_k': project_config.get_similarity_top_k(),
+#                     'mmr_lambda': project_config.get_mmr_lambda(),
+#                     'similarity_threshold': project_config.get_similarity_threshold(),
+#                     'retriever_type': project_config.get_retriever_type(),
+#                     'auto_citation': project_config.get_auto_citation(),
+#                     'prioritize_filenames': project_config.get_prioritize_filenames(),
+#                     'equal_notes_weight': project_config.get_equal_notes_weight(),
+#                     'strict_context': project_config.get_strict_context(),
+#                 }
+#
+#                 # Identifica quali valori sono personalizzati e quali provengono dal preset
+#                 customized_values = {}
+#                 for key in ['chunk_size', 'chunk_overlap', 'similarity_top_k', 'mmr_lambda',
+#                             'similarity_threshold', 'retriever_type', 'system_prompt',
+#                             'auto_citation', 'prioritize_filenames', 'equal_notes_weight', 'strict_context']:
+#                     if getattr(project_config, key, None) is not None:
+#                         customized_values[key] = True
+#
+#                 # Ottieni il preset attualmente selezionato
+#                 current_preset = project_config.rag_preset
+#
+#                 # Ottieni tutti i preset disponibili per mostrare come opzioni
+#                 all_presets = RagDefaultSettings.objects.all().order_by('template_type__name', 'name')
+#             except Exception as e:
+#                 logger.error(f"Errore nel recuperare la configurazione RAG: {str(e)}")
+#                 rag_values = {}
+#                 current_preset = None
+#                 customized_values = {}
+#                 all_presets = []
+#
+#             # Aggiorna il context con i valori RAG
+#             context.update({
+#                 'rag_values': rag_values,
+#                 'current_preset': current_preset,
+#                 'customized_values': customized_values,
+#                 'all_presets': all_presets,
+#             })
+#
+#             # Ottieni anche informazioni sul motore LLM utilizzato
+#             try:
+#                 project_llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(project=project)
+#                 engine = project_llm_config.engine
+#
+#                 # Aggiungi informazioni sul motore al context
+#                 context.update({
+#                     'llm_config': project_llm_config,
+#                     'engine': engine,
+#                     'provider': engine.provider if engine else None,
+#                 })
+#             except Exception as e:
+#                 logger.error(f"Errore nel recuperare la configurazione LLM: {str(e)}")
+#
+#             return render(request, 'be/project.html', context)
+#
+#         except Project.DoesNotExist:
+#             messages.error(request, "Project not found.")
+#             return redirect('projects_list')
+#     else:
+#         logger.warning("User not Authenticated!")
+#         return redirect('login')
+
+
 def project(request, project_id=None):
     """
     Vista principale per la gestione completa di un progetto.
@@ -793,11 +1343,13 @@ def project(request, project_id=None):
     3. Permette operazioni su file e note (aggiunta, modifica, eliminazione)
     4. Gestisce diverse visualizzazioni (tab) dello stesso progetto
     5. Supporta richieste AJAX per operazioni asincrone
+    6. Integra il supporto per i contenuti web (URL) nel sistema RAG
 
     Hub centrale per tutte le operazioni relative a un singolo progetto,
     con supporto per diverse modalità di interazione.
     """
     logger.debug(f"---> project: {project_id}")
+
     if request.user.is_authenticated:
         # Se non è specificato un project_id, verifica se è fornito nella richiesta POST
         if project_id is None and request.method == 'POST':
@@ -814,6 +1366,9 @@ def project(request, project_id=None):
 
             # Carica i file del progetto
             project_files = ProjectFile.objects.filter(project=project).order_by('-uploaded_at')
+
+            # Carica le URL del progetto
+            project_urls = ProjectURL.objects.filter(project=project).order_by('-created_at')
 
             # Carica le conversazioni precedenti
             conversations = ProjectConversation.objects.filter(project=project).order_by('-created_at')
@@ -853,19 +1408,22 @@ def project(request, project_id=None):
                                 rag_config = ProjectRAGConfiguration.objects.get(project=project)
                                 current_preset = rag_config.rag_preset
                                 if current_preset:
-                                    logger.info(f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
+                                    logger.info(
+                                        f"Profilo RAG attivo: {current_preset.template_type.name} - {current_preset.name}")
                                 else:
-                                    logger.info("Nessun profilo RAG specifico attivo, usando configurazione predefinita")
+                                    logger.info(
+                                        "Nessun profilo RAG specifico attivo, usando configurazione predefinita")
 
                             except Exception as config_error:
                                 logger.warning(f"Impossibile determinare la configurazione RAG: {str(config_error)}")
 
-                            # Verifica che il progetto abbia documenti e note prima di processare la query
+                            # Verifica che il progetto abbia documenti, note o URL prima di processare la query
                             project_files = ProjectFile.objects.filter(project=project)
                             project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+                            project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
 
                             logger.info(
-                                f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note")
+                                f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note, {project_urls.count()} URL")
 
                             try:
                                 # Usa la funzione ottimizzata per ottenere la risposta
@@ -911,10 +1469,10 @@ def project(request, project_id=None):
 
                                     # Salva le fonti utilizzate
                                     for source in rag_response.get('sources', []):
-                                        # Cerchiamo di trovare il ProjectFile o ProjectNote corrispondente
-
+                                        # Cerchiamo di trovare il ProjectFile, ProjectNote o ProjectURL corrispondente
                                         project_file = None
                                         project_note = None
+                                        project_url = None
 
                                         # Se la fonte è una nota
                                         if source.get('type') == 'note':
@@ -923,6 +1481,14 @@ def project(request, project_id=None):
                                                 try:
                                                     project_note = ProjectNote.objects.get(id=note_id, project=project)
                                                 except ProjectNote.DoesNotExist:
+                                                    pass
+                                        # Se la fonte è un URL
+                                        elif source.get('type') == 'url':
+                                            url_id = source.get('metadata', {}).get('url_id')
+                                            if url_id:
+                                                try:
+                                                    project_url = ProjectURL.objects.get(id=url_id, project=project)
+                                                except ProjectURL.DoesNotExist:
                                                     pass
                                         else:
                                             # Se è un file
@@ -939,12 +1505,13 @@ def project(request, project_id=None):
                                         AnswerSource.objects.create(
                                             conversation=conversation,
                                             project_file=project_file,
-                                            project_note=project_note,  # Aggiungi la nota come fonte
+                                            project_note=project_note,
+                                            project_url=project_url,
                                             content=source.get('content', ''),
                                             page_number=source.get('metadata', {}).get('page'),
                                             relevance_score=source.get('score')
                                         )
-                                        logger.info(f"Conversazione salvata con ID: {conversation.id}")
+                                    logger.info(f"Conversazione salvata con ID: {conversation.id}")
 
                                 except Exception as save_error:
                                     logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
@@ -1107,6 +1674,130 @@ def project(request, project_id=None):
                         messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
                         return redirect('project', project_id=project.id)
 
+                # Gestione dell'eliminazione di un URL
+                elif action == 'delete_url':
+                    # Eliminazione di un URL dal progetto
+                    url_id = request.POST.get('url_id')
+
+                    logger.debug(
+                        f"Richiesta di eliminazione URL ricevuta. ID URL: {url_id}, ID progetto: {project.id}")
+
+                    # Verifica che url_id non sia vuoto
+                    if not url_id:
+                        logger.warning("Richiesta di eliminazione URL senza url_id")
+                        messages.error(request, "ID URL non valido.")
+                        return redirect('project', project_id=project.id)
+
+                    try:
+                        # Ottieni l'URL del progetto
+                        project_url = get_object_or_404(ProjectURL, id=url_id, project=project)
+                        logger.info(f"URL trovato per l'eliminazione: {project_url.url} (ID: {url_id})")
+
+                        # Memorizza se l'URL era indicizzato
+                        was_indexed = project_url.is_indexed
+
+                        # Elimina il file fisico se presente
+                        if project_url.file_path and os.path.exists(project_url.file_path):
+                            logger.debug(f"Eliminazione del file fisico dell'URL in: {project_url.file_path}")
+                            try:
+                                os.remove(project_url.file_path)
+                                logger.info(f"File fisico dell'URL eliminato: {project_url.file_path}")
+                            except Exception as e:
+                                logger.error(f"Errore nell'eliminazione del file fisico dell'URL: {str(e)}")
+
+                        # Elimina il record dal database
+                        project_url.delete()
+                        logger.info(f"Record eliminato dal database per l'URL ID: {url_id}")
+
+                        # Se l'URL era indicizzato, aggiorna l'indice vettoriale
+                        if was_indexed:
+                            try:
+                                logger.info(f"🔄 Aggiornando l'indice dopo eliminazione dell'URL")
+                                # Forza la ricostruzione dell'indice
+                                create_project_rag_chain(project=project, force_rebuild=True)
+                                logger.info(f"✅ Indice vettoriale ricostruito con successo")
+                            except Exception as e:
+                                logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+
+                        messages.success(request, "URL eliminato con successo.")
+                        return redirect('project', project_id=project.id)
+
+                    except Exception as e:
+                        logger.exception(f"Errore nell'azione delete_url: {str(e)}")
+                        messages.error(request, f"Errore nell'eliminazione dell'URL: {str(e)}")
+                        return redirect('project', project_id=project.id)
+
+                # Gestione dell'aggiunta di un URL manuale
+                elif action == 'add_url':
+                    # Aggiungi un URL al progetto
+                    url = request.POST.get('url', '').strip()
+
+                    if not url:
+                        messages.error(request, "URL non specificato.")
+                        return redirect('project', project_id=project.id)
+
+                    # Normalizza l'URL aggiungendo http(s):// se necessario
+                    if not url.startswith(('http://', 'https://')):
+                        url = 'https://' + url
+
+                    try:
+                        # Verifica se l'URL esiste già nel progetto
+                        existing_url = ProjectURL.objects.filter(project=project, url=url).first()
+                        if existing_url:
+                            messages.warning(request, f"L'URL '{url}' è già presente nel progetto.")
+                            return redirect('project', project_id=project.id)
+
+                        # Crea l'oggetto URL
+                        from urllib.parse import urlparse
+                        parsed_url = urlparse(url)
+                        domain = parsed_url.netloc
+
+                        # Crea un nuovo URL nel database
+                        project_url = ProjectURL.objects.create(
+                            project=project,
+                            url=url,  # Utilizzo dell'URL come CharField
+                            title=f"URL: {domain}",  # Titolo temporaneo
+                            is_indexed=False,  # Da indicizzare
+                            crawl_depth=0,  # Non derivato da crawling
+                            metadata={
+                                'domain': domain,
+                                'path': parsed_url.path,
+                                'manually_added': True
+                            }
+                        )
+
+                        # Avvia il processo di crawling per questo URL specifico
+                        try:
+                            logger.info(f"Avvio crawling per URL singolo: {url}")
+                            # Utilizza la funzione di crawling esistente ma limitata a 1 pagina
+                            from dashboard.views import handle_website_crawl
+
+                            result = handle_website_crawl(
+                                project,
+                                url,
+                                max_depth=0,  # Solo questa pagina
+                                max_pages=1,  # Solo una pagina
+                                min_text_length=100  # Soglia minima per contenuto
+                            )
+
+                            if result and result.get('processed_pages', 0) > 0:
+                                messages.success(request,
+                                                 f"URL '{url}' aggiunto al progetto e contenuto estratto con successo.")
+                            else:
+                                messages.warning(request,
+                                                 f"URL '{url}' aggiunto al progetto ma nessun contenuto è stato estratto.")
+                        except Exception as crawl_error:
+                            logger.error(f"Errore nel crawling dell'URL: {str(crawl_error)}")
+                            messages.warning(request,
+                                             f"URL '{url}' aggiunto al progetto ma si è verificato un errore nell'estrazione del contenuto.")
+
+                        return redirect('project', project_id=project.id)
+
+                    except Exception as e:
+                        logger.exception(f"Errore nell'aggiunta dell'URL: {str(e)}")
+                        messages.error(request, f"Errore nell'aggiunta dell'URL: {str(e)}")
+                        return redirect('project', project_id=project.id)
+
                 # Gestione delle note (aggiunta, modifica, eliminazione)
                 # Quando viene aggiunta una nota
                 elif action == 'add_note':
@@ -1197,6 +1888,24 @@ def project(request, project_id=None):
                             messages.error(request, message)
                         return redirect('project', project_id=project.id)
 
+                # Avvio crawling web
+                elif action == 'start_crawling':
+                    # Gestisci la richiesta di crawling
+                    website_url = request.POST.get('website_url', '').strip()
+                    max_depth = int(request.POST.get('max_depth', 2))
+                    max_pages = int(request.POST.get('max_pages', 10))
+
+                    if not website_url:
+                        messages.error(request, "URL del sito web non specificato.")
+                        return redirect('project', project_id=project.id)
+
+                    # Normalizza l'URL aggiungendo http(s):// se necessario
+                    if not website_url.startswith(('http://', 'https://')):
+                        website_url = 'https://' + website_url
+
+                    # Reindirizza alla vista di crawling per l'elaborazione
+                    return redirect('website_crawl', project_id=project.id)
+
             # Prepara la cronologia delle conversazioni per l'interfaccia di chat
             conversation_history = []
             answer = None
@@ -1230,6 +1939,31 @@ def project(request, project_id=None):
                             source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
 
                         sources.append(source_data)
+                    elif source.project_note:
+                        # Gestione delle fonti da note
+                        source_data = {
+                            'filename': f"Nota: {source.project_note.title or 'Senza titolo'}",
+                            'type': 'note',
+                            'content': source.content
+                        }
+
+                        if source.relevance_score is not None:
+                            source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
+
+                        sources.append(source_data)
+                    elif source.project_url:
+                        # Gestione delle fonti da URL
+                        source_data = {
+                            'filename': f"URL: {source.project_url.title or source.project_url.url}",
+                            'type': 'url',
+                            'content': source.content,
+                            'url': source.project_url.url  # Aggiungi l'URL effettivo
+                        }
+
+                        if source.relevance_score is not None:
+                            source_data['filename'] += f" - Rilevanza: {source.relevance_score:.2f}"
+
+                        sources.append(source_data)
 
                 # SOLUZIONE AL PROBLEMA: inverti l'ordine delle conversazioni per mostrare
                 # le chat in ordine cronologico corretto (dalla più vecchia alla più recente)
@@ -1254,6 +1988,7 @@ def project(request, project_id=None):
             context = {
                 'project': project,
                 'project_files': project_files,
+                'project_urls': project_urls,  # Aggiunta URLs alla vista
                 'conversation_history': conversation_history,
                 'answer': answer,
                 'question': question,
@@ -1322,14 +2057,47 @@ def project(request, project_id=None):
             except Exception as e:
                 logger.error(f"Errore nel recuperare la configurazione LLM: {str(e)}")
 
+            # Aggiungi informazioni sul crawling web se disponibili
+            try:
+                index_status = ProjectIndexStatus.objects.get(project=project)
+                if index_status.metadata and 'last_crawl' in index_status.metadata:
+                    last_crawl = index_status.metadata['last_crawl']
+                    context.update({
+                        'last_crawl': last_crawl
+                    })
+            except Exception as e:
+                logger.error(f"Errore nel recuperare lo stato del crawling: {str(e)}")
+
+            # Aggiungi statistiche sugli URL al contesto
+            try:
+                from django.db.models import Count
+                url_stats = {
+                    'total': ProjectURL.objects.filter(project=project).count(),
+                    'indexed': ProjectURL.objects.filter(project=project, is_indexed=True).count(),
+                    'pending': ProjectURL.objects.filter(project=project, is_indexed=False).count(),
+                    'domains': ProjectURL.objects.filter(project=project).values(
+                        'metadata__domain').annotate(count=Count('id')).order_by('-count')[:5]
+                }
+                context.update({
+                    'url_stats': url_stats
+                })
+            except Exception as e:
+                logger.error(f"Errore nel recuperare le statistiche URL: {str(e)}")
+
             return render(request, 'be/project.html', context)
 
         except Project.DoesNotExist:
             messages.error(request, "Project not found.")
             return redirect('projects_list')
+        except Exception as e:
+            logger.exception(f"Errore non gestito nella vista project: {str(e)}")
+            messages.error(request, f"Si è verificato un errore: {str(e)}")
+            return redirect('projects_list')
+
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
+
 
 
 def project_config(request, project_id):
@@ -2578,13 +3346,14 @@ def website_crawl(request, project_id):
                             crawler = WebCrawler(
                                 max_depth=max_depth,
                                 max_pages=max_pages,
-                                min_text_length=500,
+                                min_text_length=100,
                                 exclude_patterns=exclude_patterns_list,
                                 include_patterns=include_patterns_list
                             )
 
                             # Esegui il crawling
-                            processed_pages, failed_pages, documents = crawler.crawl(website_url, website_dir)
+                            processed_pages, failed_pages, documents, stored_urls = crawler.crawl(website_url,
+                                                                                                  website_dir)
 
                             # Ottieni le URL visitate dal crawler
                             # Nota: potrebbe essere necessario modificare la classe WebCrawler

@@ -176,6 +176,71 @@ class AnswerSource(models.Model):
         return f"Source for {self.conversation.id} from {self.project_file.filename if self.project_file else 'unknown'}"
 
 
+
+class ProjectURL(models.Model):
+    """
+    Modello per salvare URL e relativi contenuti estratti durante il crawling.
+    Associato a un Project e utilizzato nel sistema RAG.
+    """
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='urls')
+    url = models.CharField(max_length=500)  # Modificato da URLField a CharField con lunghezza sicura per MySQL
+    title = models.CharField(max_length=500, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    content = models.TextField(blank=True, null=True)
+    extracted_info = models.JSONField(blank=True, null=True)
+    file_path = models.CharField(max_length=767, blank=True, null=True)  # Ridotto anche questo per sicurezza
+    crawl_depth = models.IntegerField(default=0)
+    is_indexed = models.BooleanField(default=False)
+    last_indexed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    metadata = models.JSONField(default=dict, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('project', 'url')
+        indexes = [
+            models.Index(fields=['project', 'is_indexed']),
+            models.Index(fields=['url'])
+        ]
+
+    def __str__(self):
+        return f"{self.url[:50]}{'...' if len(self.url) > 50 else ''} ({self.project.name})"
+
+    def get_domain(self):
+        """Estrae il dominio dall'URL"""
+        from urllib.parse import urlparse
+        try:
+            # Aggiungi validazione URL di base
+            if not self.url.startswith(('http://', 'https://')):
+                url_with_scheme = 'https://' + self.url
+            else:
+                url_with_scheme = self.url
+            return urlparse(url_with_scheme).netloc
+        except Exception:
+            # Gestione degli errori più robusta
+            parts = self.url.split('/')
+            if len(parts) > 2:
+                return parts[2] if parts[0].endswith(':') else parts[0]
+            return self.url
+
+    def get_path(self):
+        """Estrae il percorso dall'URL"""
+        from urllib.parse import urlparse
+        try:
+            # Aggiungi validazione URL di base
+            if not self.url.startswith(('http://', 'https://')):
+                url_with_scheme = 'https://' + self.url
+            else:
+                url_with_scheme = self.url
+            return urlparse(url_with_scheme).path
+        except Exception:
+            # Gestione degli errori più robusta
+            parts = self.url.split('/')
+            if len(parts) > 3:
+                return '/' + '/'.join(parts[3:])
+            return '/'
+
+
 class ProjectIndexStatus(models.Model):
     """
     Tiene traccia dello stato dell'indice vettoriale FAISS per ciascun progetto.
@@ -1400,3 +1465,36 @@ def log_rag_query(sender, instance, created, **kwargs):
 
         except UserSubscription.DoesNotExist:
             pass
+
+
+
+# Signal per aggiornare l'indice quando viene aggiunto o aggiornato un URL
+@receiver(post_save, sender=ProjectURL)
+def update_rag_index_on_url_change(sender, instance, created, **kwargs):
+    """
+    Signal che viene attivato quando un oggetto ProjectURL viene creato o modificato.
+    Aggiorna l'indice RAG del progetto per includere i nuovi contenuti o le modifiche.
+    """
+    from dashboard.rag_utils import create_project_rag_chain
+
+    # Se l'URL è già indicizzato e non è appena stato creato, imposta is_indexed a False
+    # per forzare il riaggiornamento dell'indice
+    if not created and instance.is_indexed:
+        # Evita ricorsione infinita impostando manualmente il flag senza chiamare save()
+        ProjectURL.objects.filter(id=instance.id).update(is_indexed=False)
+
+    # Segnala nel log l'evento
+    logger.info(
+        f"{'Creato nuovo' if created else 'Aggiornato'} URL {instance.url} per il progetto {instance.project.id}")
+
+    try:
+        # Aggiorna l'indice RAG solo se necessario
+        # Il riaggiornamento avverrà nella prossima query RAG o quando viene chiamata la funzione di controllo
+        # Questo evita di ricostruire l'indice troppe volte se vengono aggiornate molte URL in sequenza
+        from dashboard.rag_utils import check_project_index_update_needed
+
+        # Segna che l'indice necessita di aggiornamento
+        check_needed = check_project_index_update_needed(instance.project)
+        logger.info(f"Indice RAG del progetto {instance.project.id} necessita aggiornamento: {check_needed}")
+    except Exception as e:
+        logger.error(f"Errore nel segnalare l'aggiornamento dell'indice RAG: {str(e)}")

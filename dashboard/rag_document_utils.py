@@ -12,6 +12,7 @@ import os
 import hashlib
 import logging
 from django.conf import settings
+from datetime import timezone
 
 # Configurazione logger
 logger = logging.getLogger(__name__)
@@ -346,81 +347,121 @@ def check_project_index_update_needed(project):
         return True
 
 
-def update_project_index_status(project, document_ids=None, note_ids=None):
+def update_project_index_status(project, document_ids=None, note_ids=None, url_ids=None):
     """
-    Aggiorna lo stato dell'indice per un progetto.
+    Aggiorna lo stato dell'indice di un progetto dopo la creazione o l'aggiornamento dell'indice vettoriale.
 
-    Crea o aggiorna il record di stato dell'indice nel database, calcola
-    un hash delle note attive, e aggiorna lo stato di embedding dei documenti e note.
-    Questo permette di tenere traccia dello stato dell'indice vettoriale e
-    identificare quando è necessario aggiornarlo.
+    Questa funzione aggiorna i metadati che tengono traccia dello stato dell'indice vettoriale,
+    inclusi conteggio documenti, hash rappresentativo, e timestamp ultimo aggiornamento.
+    Supporta file, note e URL come fonti per l'indice RAG.
 
     Args:
-        project: Oggetto Project
-        document_ids: Lista di ID dei documenti aggiornati (opzionale)
-        note_ids: Lista di ID delle note aggiornate (opzionale)
+        project: L'oggetto Project a cui appartiene l'indice
+        document_ids: Lista di ID dei file processati (opzionale)
+        note_ids: Lista di ID delle note processate (opzionale)
+        url_ids: Lista di ID degli URL processati (opzionale)
+
+    Returns:
+        ProjectIndexStatus: L'oggetto status dell'indice aggiornato
     """
-    from django.utils import timezone
-    # Importa qui per evitare l'importazione circolare
-    from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
+    # Importazione ritardata per evitare cicli di importazione
+    from profiles.models import ProjectIndexStatus, ProjectFile, ProjectNote, ProjectURL
 
-    # Calcola l'hash delle note attive per tenere traccia dei loro cambiamenti
-    active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-    notes_hash = ""
+    # Inizializza liste vuote se non fornite
+    if document_ids is None:
+        document_ids = []
+    if note_ids is None:
+        note_ids = []
+    if url_ids is None:
+        url_ids = []
 
-    for note in active_notes:
-        # Crea un hash unico per ogni nota in base al suo contenuto e stato
-        note_hash = hashlib.sha256(f"{note.id}_{note.content}_{note.is_included_in_rag}".encode()).hexdigest()
-        notes_hash += note_hash
+    logger.debug(f"Aggiornamento stato indice per progetto {project.id}")
 
-    # Calcola un hash complessivo di tutte le note
-    current_hash = hashlib.sha256(notes_hash.encode()).hexdigest()
-
-    # Crea o aggiorna lo stato dell'indice
     try:
-        # Aggiorna lo stato se esiste
-        index_status = ProjectIndexStatus.objects.get(project=project)
+        # Ottieni o crea lo stato dell'indice
+        index_status, created = ProjectIndexStatus.objects.get_or_create(project=project)
+
+        # Aggiorna i campi di base
         index_status.index_exists = True
         index_status.last_updated = timezone.now()
-        index_status.documents_count = ProjectFile.objects.filter(project=project).count() + active_notes.count()
-        index_status.notes_hash = current_hash
+
+        # Aggiorna il conteggio dei documenti (somma dei file, note e URL)
+        total_documents = len(document_ids) + len(note_ids) + len(url_ids)
+        if total_documents > 0:
+            index_status.documents_count = total_documents
+        else:
+            # Se non sono stati specificati documenti, conta quelli esistenti nel progetto
+            file_count = ProjectFile.objects.filter(project=project, is_embedded=True).count()
+            note_count = ProjectNote.objects.filter(project=project, is_included_in_rag=True).count()
+            url_count = ProjectURL.objects.filter(project=project, is_indexed=True).count()
+            index_status.documents_count = file_count + note_count + url_count
+
+        # Calcola un hash rappresentativo per l'indice
+        try:
+            from hashlib import sha256
+
+            # Inizializza gli input per il calcolo dell'hash
+            hash_components = []
+
+            # Aggiungi dettagli sui file
+            if document_ids:
+                # Usa i timestamp dei file e gli hash per creare una rappresentazione unica
+                files_data = ProjectFile.objects.filter(id__in=document_ids).values('file_hash', 'last_modified')
+                for file_data in files_data:
+                    hash_components.append(f"{file_data['file_hash']}_{file_data['last_modified']}")
+
+            # Aggiungi dettagli sulle note
+            if note_ids:
+                notes_data = ProjectNote.objects.filter(id__in=note_ids).values('id', 'updated_at')
+                for note_data in notes_data:
+                    hash_components.append(f"note_{note_data['id']}_{note_data['updated_at']}")
+
+            # Aggiungi dettagli sugli URL
+            if url_ids:
+                urls_data = ProjectURL.objects.filter(id__in=url_ids).values('id', 'updated_at')
+                for url_data in urls_data:
+                    hash_components.append(f"url_{url_data['id']}_{url_data['updated_at']}")
+
+            # Se non ci sono componenti specifici, usa un timestamp
+            if not hash_components:
+                hash_components.append(f"last_updated_{index_status.last_updated}")
+
+            # Crea l'hash combinando tutti i componenti
+            hash_input = "_".join(hash_components)
+            index_status.index_hash = sha256(hash_input.encode()).hexdigest()
+
+            # Aggiorna anche l'hash delle note se ci sono note
+            if note_ids:
+                notes_hash_input = "_".join([f"note_{note_id}" for note_id in note_ids])
+                index_status.notes_hash = sha256(notes_hash_input.encode()).hexdigest()
+
+        except Exception as e:
+            logger.error(f"Errore nel calcolo dell'hash dell'indice: {str(e)}")
+
+        # Aggiorna il campo metadata con informazioni sul processo di indicizzazione
+        if index_status.metadata is None:
+            index_status.metadata = {}
+
+        # Aggiungi info sulla composizione dell'indice
+        index_status.metadata.update({
+            'last_index_update': {
+                'timestamp': timezone.now().isoformat(),
+                'files_count': len(document_ids),
+                'notes_count': len(note_ids),
+                'urls_count': len(url_ids),
+                'total_count': total_documents
+            }
+        })
+
+        # Salva tutte le modifiche
         index_status.save()
+        logger.info(f"Stato indice aggiornato per progetto {project.id}: {index_status.documents_count} documenti")
 
-        logger.info(f"Stato indice aggiornato per il progetto {project.id}")
-    except ProjectIndexStatus.DoesNotExist:
-        # Crea un nuovo stato se non esiste
-        index_status = ProjectIndexStatus.objects.create(
-            project=project,
-            index_exists=True,
-            last_updated=timezone.now(),
-            documents_count=ProjectFile.objects.filter(project=project).count() + active_notes.count(),
-            notes_hash=current_hash
-        )
-        logger.info(f"Stato indice creato per il progetto {project.id}")
+        return index_status
 
-    # Aggiorna lo stato di embedding dei documenti specificati
-    if document_ids:
-        for doc_id in document_ids:
-            try:
-                doc = ProjectFile.objects.get(id=doc_id)
-                doc.is_embedded = True
-                doc.last_indexed_at = timezone.now()
-                doc.save(update_fields=['is_embedded', 'last_indexed_at'])
-                logger.debug(f"Documento {doc_id} ({doc.filename}) marcato come embedded")
-            except ProjectFile.DoesNotExist:
-                logger.warning(f"Documento {doc_id} non trovato durante l'aggiornamento dello stato di embedding")
-
-    # Aggiorna il timestamp di indicizzazione delle note specificate
-    if note_ids:
-        for note_id in note_ids:
-            try:
-                note = ProjectNote.objects.get(id=note_id)
-                note.last_indexed_at = timezone.now()
-                note.save(update_fields=['last_indexed_at'])
-                logger.debug(
-                    f"Nota {note_id} ({note.title or 'Senza titolo'}) aggiornata con timestamp di indicizzazione")
-            except ProjectNote.DoesNotExist:
-                logger.warning(f"Nota {note_id} non trovata durante l'aggiornamento dello stato di indicizzazione")
+    except Exception as e:
+        logger.error(f"Errore nell'aggiornamento dello stato dell'indice: {str(e)}")
+        return None
 
 
 def scan_project_directory(project):

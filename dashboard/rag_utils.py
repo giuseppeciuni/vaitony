@@ -7,12 +7,14 @@ Questo modulo gestisce:
 - Gestione delle query e recupero delle risposte
 - Operazioni sulle note e sui file dei progetti
 """
-
+import json
 import base64
 import hashlib
 import logging
 import os
 import time
+from urllib.parse import urlparse
+
 import openai
 from django.conf import settings
 from django.db.models import F, Q
@@ -475,14 +477,12 @@ def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_dela
     raise Exception("Impossibile creare gli embedding dopo ripetuti tentativi")
 
 
-
-
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
     Crea o aggiorna la catena RAG per un progetto.
 
     Questa funzione gestisce la creazione e l'aggiornamento dell'indice vettoriale FAISS per un progetto,
-    includendo sia i file che le note del progetto. Supporta la cache degli embedding per ottimizzare
+    includendo file, note e URL del progetto. Supporta la cache degli embedding per ottimizzare
     le prestazioni e ridurre le chiamate API.
 
     Args:
@@ -495,13 +495,13 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
     Il processo include:
     1. Preparazione dei percorsi e inizializzazione
-    2. Caricamento dei documenti e delle note
+    2. Caricamento dei documenti, delle note e degli URL
     3. Gestione della cache degli embedding
     4. Creazione/aggiornamento dell'indice FAISS
     5. Configurazione della catena di recupero
     """
     # Importazione ritardata per evitare cicli di importazione
-    from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache
+    from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache, ProjectURL
 
     logger.debug(f"Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
 
@@ -510,6 +510,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     cached_files = []  # Lista dei file trovati nella cache
     document_ids = []  # ID dei documenti processati
     note_ids = []  # ID delle note processate
+    url_ids = []  # ID degli URL processati
 
     if project:
         # PARTE 2: CONFIGURAZIONE PERCORSI E RECUPERO DATI
@@ -522,9 +523,10 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # Assicura che la directory del progetto esista
         os.makedirs(project_dir, exist_ok=True)
 
-        # Recupera tutti i file e le note attive del progetto
+        # Recupera tutti i file, le note attive e gli URL del progetto
         all_files = ProjectFile.objects.filter(project=project)
         all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+        all_urls = ProjectURL.objects.filter(project=project)  # URL del progetto
 
         # PARTE 3: GESTIONE RICOSTRUZIONE FORZATA
         # -------------------------------------
@@ -535,13 +537,17 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # PARTE 4: CARICAMENTO DEI DOCUMENTI
         # ---------------------------------
         if docs is None:
-            # Determina quali file devono essere elaborati
+            # Determina quali elementi devono essere elaborati
             if force_rebuild:
                 files_to_embed = all_files
-                logger.info(f"Ricostruendo indice con {files_to_embed.count()} file e {all_active_notes.count()} note")
+                urls_to_embed = all_urls
+                logger.info(
+                    f"Ricostruendo indice con {files_to_embed.count()} file, {all_active_notes.count()} note e {urls_to_embed.count()} URL")
             else:
                 files_to_embed = all_files.filter(is_embedded=False)
-                logger.info(f"File da incorporare: {[f.filename for f in files_to_embed]}")
+                urls_to_embed = all_urls.filter(is_indexed=False)
+                logger.info(f"File da incorporare: {len(files_to_embed)}")
+                logger.info(f"URL da incorporare: {len(urls_to_embed)}")
                 logger.info(f"Note attive trovate: {all_active_notes.count()}")
 
             # Inizializza la lista per i documenti
@@ -573,7 +579,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     })
 
                 # IMPORTANTE: Carichiamo SEMPRE il documento per l'indice
-                # Questo è il fix critico per il bug della cache
                 langchain_docs = load_document(doc_model.file_path)
 
                 if langchain_docs:
@@ -582,13 +587,79 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         doc.metadata['filename'] = doc_model.filename
                         doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
                         doc.metadata['source'] = doc_model.file_path
+                        doc.metadata['type'] = 'file'  # Tipo esplicito per distinguere la fonte
 
                     docs.extend(langchain_docs)
                     document_ids.append(doc_model.id)
                 else:
                     logger.warning(f"Nessun contenuto estratto dal file {doc_model.filename}")
 
-            # PARTE 6: ELABORAZIONE DELLE NOTE
+            # PARTE 6: ELABORAZIONE DEGLI URL
+            # -------------------------------
+            for url_model in urls_to_embed:
+                logger.debug(f"Aggiunta URL all'embedding: {url_model.url}")
+
+                if not url_model.content:
+                    logger.warning(f"URL senza contenuto: {url_model.url}, saltato")
+                    continue
+
+                # Prepara il contenuto
+                url_content = url_model.content
+
+                # Se abbiamo informazioni estratte, le aggiungiamo al contenuto
+                if url_model.extracted_info:
+                    try:
+                        extracted_info = json.loads(url_model.extracted_info)
+                        summary = extracted_info.get('summary', '')
+                        key_points = extracted_info.get('key_points', [])
+                        entities = extracted_info.get('entities', [])
+                        content_type = extracted_info.get('content_type', 'unknown')
+
+                        # Costruisci un contenuto migliorato con le informazioni estratte
+                        enhanced_content = f"URL: {url_model.url}\n"
+                        enhanced_content += f"Titolo: {url_model.title or 'Nessun titolo'}\n"
+                        enhanced_content += f"Tipo di contenuto: {content_type}\n\n"
+
+                        if summary:
+                            enhanced_content += f"RIEPILOGO:\n{summary}\n\n"
+
+                        if key_points:
+                            enhanced_content += "PUNTI CHIAVE:\n"
+                            for idx, point in enumerate(key_points, 1):
+                                enhanced_content += f"{idx}. {point}\n"
+                            enhanced_content += "\n"
+
+                        if entities:
+                            enhanced_content += "ENTITÀ RILEVANTI:\n"
+                            entity_text = ", ".join(entities[:10])  # Limita per non sovraccaricare
+                            enhanced_content += f"{entity_text}\n\n"
+
+                        # Aggiungi il contenuto originale
+                        enhanced_content += "CONTENUTO COMPLETO:\n" + url_content
+
+                        # Usa il contenuto migliorato
+                        url_content = enhanced_content
+                    except Exception as e:
+                        logger.error(f"Errore nel processare le informazioni estratte per {url_model.url}: {str(e)}")
+
+                # Crea il documento LangChain per l'URL
+                url_doc = Document(
+                    page_content=url_content,
+                    metadata={
+                        "source": f"url_{url_model.id}",
+                        "type": "url",
+                        "title": url_model.title or "URL senza titolo",
+                        "url_id": url_model.id,
+                        "url": url_model.url,
+                        "domain": url_model.get_domain() if hasattr(url_model, 'get_domain') else urlparse(
+                            url_model.url).netloc,
+                        "filename": f"URL: {url_model.title or url_model.url}"
+                    }
+                )
+                docs.append(url_doc)
+                url_ids.append(url_model.id)
+
+            # PARTE 7: ELABORAZIONE DELLE NOTE
             # -------------------------------
             for note in all_active_notes:
                 logger.debug(f"Aggiunta nota all'embedding: {note.title or 'Senza titolo'}")
@@ -607,23 +678,24 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 docs.append(note_doc)
                 note_ids.append(note.id)
 
-            logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note)")
+            logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note e {len(url_ids)} sono URL)")
             logger.info(f"Documenti in cache: {len(cached_files)}")
     else:
-        # PARTE 7: CONFIGURAZIONE DI FALLBACK SENZA PROGETTO
+        # PARTE 8: CONFIGURAZIONE DI FALLBACK SENZA PROGETTO
         # ------------------------------------------------
         index_name = "default_index"
         index_path = os.path.join(settings.MEDIA_ROOT, index_name)
         document_ids = None
         note_ids = None
+        url_ids = None
         cached_files = []
 
-    # PARTE 8: INIZIALIZZAZIONE EMBEDDINGS
+    # PARTE 9: INIZIALIZZAZIONE EMBEDDINGS
     # -----------------------------------
     embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user if project else None))
     vectordb = None
 
-    # PARTE 9: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS
+    # PARTE 10: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS
     # ------------------------------------------------
     if docs and len(docs) > 0:
         logger.info(
@@ -645,12 +717,24 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
         # Assicura che ogni chunk mantenga i metadati necessari
         for chunk in split_docs:
+            # Assicura che i metadati di base siano presenti
             if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
                 filename = os.path.basename(chunk.metadata['source'])
                 chunk.metadata['filename'] = filename
                 chunk.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
 
-        # PARTE 10: DECISIONE SU AGGIORNAMENTO O CREAZIONE NUOVO INDICE
+            # Assicura che il tipo di fonte sia specificato
+            if 'type' not in chunk.metadata:
+                # Determina il tipo in base alla fonte
+                source = chunk.metadata.get('source', '')
+                if source.startswith('url_'):
+                    chunk.metadata['type'] = 'url'
+                elif source.startswith('note_'):
+                    chunk.metadata['type'] = 'note'
+                else:
+                    chunk.metadata['type'] = 'file'
+
+        # PARTE 11: DECISIONE SU AGGIORNAMENTO O CREAZIONE NUOVO INDICE
         # -----------------------------------------------------------
         if os.path.exists(index_path) and not force_rebuild:
             try:
@@ -664,13 +748,13 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 logger.info(f"Creazione di un nuovo indice FAISS come fallback")
                 vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
         else:
-            # PARTE 11: CREAZIONE NUOVO INDICE
+            # PARTE 12: CREAZIONE NUOVO INDICE
             # -------------------------------
             logger.info(f"Creazione di un nuovo indice FAISS")
             try:
                 vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
 
-                # PARTE 12: SALVATAGGIO NELLA CACHE GLOBALE
+                # PARTE 13: SALVATAGGIO NELLA CACHE GLOBALE
                 # ---------------------------------------
                 if document_ids and project:
                     for doc_id in document_ids:
@@ -708,7 +792,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 # Fallback ulteriore
                 vectordb = FAISS.from_documents(split_docs, embeddings)
 
-    # PARTE 13: CARICAMENTO INDICE ESISTENTE SE NON CI SONO NUOVI DOCUMENTI
+    # PARTE 14: CARICAMENTO INDICE ESISTENTE SE NON CI SONO NUOVI DOCUMENTI
     # -------------------------------------------------------------------
     elif not docs or len(docs) == 0:
         if os.path.exists(index_path):
@@ -722,7 +806,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
             return None
 
-    # PARTE 14: SALVATAGGIO DELL'INDICE E AGGIORNAMENTO STATO
+    # PARTE 15: SALVATAGGIO DELL'INDICE E AGGIORNAMENTO STATO
     # -----------------------------------------------------
     if vectordb:
         # Assicura che la directory esista e salva l'indice
@@ -736,29 +820,53 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # Verifica quali file sono nell'indice
         unique_sources = set()
         file_distribution = {}
+        url_distribution = {}
+        note_distribution = {}
+
         for doc_id, doc in vectordb.docstore._dict.items():
             if hasattr(doc, 'metadata') and 'source' in doc.metadata:
                 source = doc.metadata['source']
+                source_type = doc.metadata.get('type', 'unknown')
                 unique_sources.add(source)
-                filename = os.path.basename(source)
 
-                if filename not in file_distribution:
-                    file_distribution[filename] = 0
-                file_distribution[filename] += 1
+                if source_type == 'file':
+                    filename = os.path.basename(source)
+                    if filename not in file_distribution:
+                        file_distribution[filename] = 0
+                    file_distribution[filename] += 1
+                elif source_type == 'url':
+                    url = doc.metadata.get('url', 'unknown_url')
+                    if url not in url_distribution:
+                        url_distribution[url] = 0
+                    url_distribution[url] += 1
+                elif source_type == 'note':
+                    note_title = doc.metadata.get('title', 'unknown_note')
+                    if note_title not in note_distribution:
+                        note_distribution[note_title] = 0
+                    note_distribution[note_title] += 1
 
-        logger.info(f"File unici nell'indice: {len(unique_sources)}")
-        for source in unique_sources:
-            logger.info(f"  - {os.path.basename(source)}")
+        logger.info(f"Fonti uniche nell'indice: {len(unique_sources)}")
 
-        # Log della distribuzione dei documenti per file
-        logger.info(f"Distribuzione dei chunk per file:")
-        for filename, count in file_distribution.items():
-            logger.info(f"  - {filename}: {count} chunk")
+        # Log della distribuzione dei documenti per tipo
+        if file_distribution:
+            logger.info(f"Distribuzione dei chunk per file:")
+            for filename, count in file_distribution.items():
+                logger.info(f"  - {filename}: {count} chunk")
 
-        # PARTE 15: AGGIORNAMENTO STATO NEL DATABASE
+        if url_distribution:
+            logger.info(f"Distribuzione dei chunk per URL:")
+            for url, count in url_distribution.items():
+                logger.info(f"  - {url[:50]}{'...' if len(url) > 50 else ''}: {count} chunk")
+
+        if note_distribution:
+            logger.info(f"Distribuzione dei chunk per note:")
+            for note_title, count in note_distribution.items():
+                logger.info(f"  - {note_title}: {count} chunk")
+
+        # PARTE 16: AGGIORNAMENTO STATO NEL DATABASE
         # -----------------------------------------
         if project:
-            update_project_index_status(project, document_ids, note_ids)
+            update_project_index_status(project, document_ids, note_ids, url_ids)
 
             # Aggiorna il flag embedded per i file processati
             if document_ids:
@@ -771,6 +879,17 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     except ProjectFile.DoesNotExist:
                         logger.warning(f"File con ID {doc_id} non trovato durante l'aggiornamento")
 
+            # Aggiorna il flag indexed per gli URL processati
+            if url_ids:
+                for url_id in url_ids:
+                    try:
+                        url = ProjectURL.objects.get(id=url_id)
+                        url.is_indexed = True
+                        url.last_indexed_at = timezone.now()
+                        url.save(update_fields=['is_indexed', 'last_indexed_at'])
+                    except ProjectURL.DoesNotExist:
+                        logger.warning(f"URL con ID {url_id} non trovato durante l'aggiornamento")
+
             # Aggiorna il timestamp per le note processate
             if note_ids:
                 for note_id in note_ids:
@@ -781,7 +900,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     except ProjectNote.DoesNotExist:
                         logger.warning(f"Nota con ID {note_id} non trovata durante l'aggiornamento")
 
-    # PARTE 16: CREAZIONE DELLA CATENA RAG
+    # PARTE 17: CREAZIONE DELLA CATENA RAG
     # -----------------------------------
     return create_retrieval_qa_chain(vectordb, project)
 
@@ -803,23 +922,29 @@ def get_answer_from_project(project, question):
         dict: Dizionario con la risposta, le fonti utilizzate e metadati aggiuntivi
     """
     # Importazione ritardata per evitare cicli di importazione
-    from profiles.models import ProjectFile, ProjectNote, ProjectRAGConfiguration
+    from profiles.models import ProjectFile, ProjectNote, ProjectRAGConfiguration, ProjectURL
 
     logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
 
     try:
-        # Verifica presenza di documenti e note nel progetto
+        # Verifica presenza di documenti, note e URL nel progetto
         project_files = ProjectFile.objects.filter(project=project)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+        project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)  # URL indicizzati
 
-        if not project_files.exists() and not project_notes.exists():
-            return {"answer": "Il progetto non contiene documenti o note attive.", "sources": []}
+        if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
+            return {
+                "answer": "Il progetto non contiene documenti, note attive o URL indicizzati.",
+                "sources": []
+            }
 
         # Ottieni informazioni sul motore LLM usato dal progetto
         try:
             engine_info = get_project_LLM_settings(project)
             logger.info(
-                f"Utilizzando motore {engine_info['provider'].name if engine_info['provider'] else 'openai'} - {engine_info['model']} per il progetto {project.id}")
+                f"Utilizzando motore {engine_info['provider'].name if engine_info['provider'] else 'openai'} "
+                f"- {engine_info['model']} per il progetto {project.id}"
+            )
         except Exception as e:
             logger.warning(f"Impossibile determinare il motore del progetto: {str(e)}")
             # Usa engine_info di fallback
@@ -833,15 +958,24 @@ def get_answer_from_project(project, question):
             'tutti i documenti', 'ogni documento', 'riassumi tutti',
             'riassumi i punti principali di tutti', 'all documents',
             'every document', 'summarize all', 'tutti i file',
-            'each document', 'riassumere tutti', 'summarize everything'
+            'each document', 'riassumere tutti', 'summarize everything',
+            'tutti gli url', 'tutte le pagine web', 'tutte le pagine',
+            'tutti i siti', 'all websites', 'all urls', 'all pages'
+        ])
+
+        # Verifica se la domanda è specifica per gli URL
+        is_url_question = any(term in question.lower() for term in [
+            'url', 'sito web', 'pagina web', 'website', 'web page',
+            'link', 'http', 'https', 'www', 'siti internet', 'web',
+            'navigato', 'navigati', 'crawlati', 'esplorati'
         ])
 
         # Gestisci le domande generiche con configurazioni speciali
         original_config = None
         temp_config_modified = False
 
-        if is_generic_question:
-            logger.info("Rilevata domanda generica che richiede informazioni da tutti i documenti")
+        if is_generic_question or is_url_question:
+            logger.info(f"Rilevata domanda {'generica' if is_generic_question else 'specifica per URL'}")
 
             # Salva la configurazione originale e modifica temporaneamente
             try:
@@ -854,17 +988,17 @@ def get_answer_from_project(project, question):
                     'retriever_type': project_config.retriever_type
                 }
 
-                # Modifica temporaneamente per domande generiche
-                project_config.similarity_top_k = 20  # Aumenta il numero di documenti recuperati
-                project_config.mmr_lambda = 0.1  # Massimizza la diversità
+                # Modifica temporaneamente per domande generiche o URL
+                project_config.similarity_top_k = 20 if is_generic_question else 12  # Più documenti per domande generiche
+                project_config.mmr_lambda = 0.1 if is_generic_question else 0.3  # Più diversità per domande generiche
                 project_config.retriever_type = 'mmr'  # Forza l'uso di MMR per diversità
                 project_config.save()
 
                 temp_config_modified = True
-                logger.info("Configurazione temporanea applicata per domanda generica")
+                logger.info("Configurazione temporanea applicata per domanda speciale")
 
             except Exception as e:
-                logger.error(f"Errore nella modifica della configurazione per domanda generica: {str(e)}")
+                logger.error(f"Errore nella modifica della configurazione: {str(e)}")
 
         # Crea o aggiorna catena RAG
         if update_needed:
@@ -882,7 +1016,7 @@ def get_answer_from_project(project, question):
                     setattr(project_config, key, value)
                 project_config.save()
 
-            return {"answer": "Non è stato possibile creare un indice per i documenti di questo progetto.",
+            return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto.",
                     "sources": []}
 
         # Esegui la ricerca e ottieni la risposta
@@ -890,16 +1024,27 @@ def get_answer_from_project(project, question):
         start_time = time.time()
 
         try:
-            # Se è una domanda generica, potrebbe essere necessario modificare la query
+            # Modifica la query in base al tipo di domanda
             if is_generic_question:
                 enhanced_question = f"""
                 {question}
 
                 IMPORTANTE: Per favore assicurati di:
-                1. Identificare TUTTI i documenti disponibili nel contesto
-                2. Riassumere i punti principali di CIASCUN documento
-                3. Citare esplicitamente il nome di ogni documento quando presenti le sue informazioni
-                4. Organizzare la risposta per documento, non per argomento
+                1. Identificare TUTTI i documenti disponibili nel contesto (file, note e URL)
+                2. Riassumere i punti principali di CIASCUNA fonte
+                3. Citare esplicitamente il nome/URL di ogni fonte quando presenti le sue informazioni
+                4. Organizzare la risposta per fonte, non per argomento
+                """
+                result = qa_chain.invoke(enhanced_question)
+            elif is_url_question:
+                # Per domande specifiche sugli URL, enfatizza i contenuti web
+                enhanced_question = f"""
+                {question}
+
+                IMPORTANTE: Questa domanda riguarda contenuti web/URL. Per favore:
+                1. Presta particolare attenzione alle fonti di tipo URL nel contesto
+                2. Quando citi informazioni da URL, indica esplicitamente il link della fonte
+                3. Se la domanda si riferisce a un URL specifico, concentrati principalmente su quello
                 """
                 result = qa_chain.invoke(enhanced_question)
             else:
@@ -971,33 +1116,74 @@ def get_answer_from_project(project, question):
 
         # Analizza la distribuzione dei documenti nei risultati
         source_files = {}
+        source_urls = {}
+        source_notes = {}
         unique_files = set()
+        unique_urls = set()
+        unique_notes = set()
+
         for doc in source_documents:
-            source = doc.metadata.get('source', 'unknown')
-            filename = os.path.basename(source)
-            unique_files.add(filename)
+            doc_type = doc.metadata.get('type', 'unknown')
 
-            if filename not in source_files:
-                source_files[filename] = 0
-            source_files[filename] += 1
+            if doc_type == 'file':
+                source = doc.metadata.get('source', 'unknown')
+                filename = os.path.basename(source)
+                unique_files.add(filename)
 
-        logger.info(f"Distribuzione dei frammenti per file nei risultati: {source_files}")
+                if filename not in source_files:
+                    source_files[filename] = 0
+                source_files[filename] += 1
+            elif doc_type == 'url':
+                source_url = doc.metadata.get('url', 'unknown')
+                unique_urls.add(source_url)
+
+                if source_url not in source_urls:
+                    source_urls[source_url] = 0
+                source_urls[source_url] += 1
+            elif doc_type == 'note':
+                note_title = doc.metadata.get('title', 'unknown')
+                unique_notes.add(note_title)
+
+                if note_title not in source_notes:
+                    source_notes[note_title] = 0
+                source_notes[note_title] += 1
+
+        # Log della distribuzione dei risultati per tipo
         logger.info(f"File unici nei risultati: {len(unique_files)}")
+        logger.info(f"URL unici nei risultati: {len(unique_urls)}")
+        logger.info(f"Note uniche nei risultati: {len(unique_notes)}")
 
-        # Se è una domanda generica e i risultati provengono da pochi file,
-        # aggiungi un avviso alla risposta
-        if is_generic_question and len(unique_files) < project_files.count():
-            all_project_files = [f.filename for f in project_files]
-            missing_files = [f for f in all_project_files if f not in unique_files]
+        # Verifica per domande generiche se abbiamo una buona copertura
+        if is_generic_question:
+            warning_msg = ""
 
-            logger.warning(f"Domanda generica ma mancano risultati da: {missing_files}")
+            # Verifica la copertura dei file
+            if project_files.count() > 0 and len(unique_files) < project_files.count():
+                all_project_files = [f.filename for f in project_files]
+                missing_files = [f for f in all_project_files if f not in unique_files]
+                if missing_files:
+                    warning_msg += f"\n\nNOTA: La risposta include informazioni da {len(unique_files)} dei {project_files.count()} documenti disponibili nel progetto."
+                    warning_msg += f" Documenti non inclusi: {', '.join(missing_files[:5])}" + (
+                        "..." if len(missing_files) > 5 else "")
 
-            # Modifica la risposta per includere un avviso
-            original_answer = result.get('result', 'Nessuna risposta trovata.')
-            warning = f"\n\nNOTA: La risposta include informazioni da {len(unique_files)} dei {project_files.count()} documenti disponibili nel progetto."
-            if missing_files:
-                warning += f" I seguenti documenti non sono stati inclusi: {', '.join(missing_files)}."
-            result['result'] = original_answer + warning
+            # Verifica la copertura degli URL
+            if project_urls.count() > 0 and len(unique_urls) < project_urls.count():
+                all_project_urls = [u.url for u in project_urls]
+                missing_urls = [u for u in all_project_urls if u not in unique_urls]
+                if missing_urls:
+                    warning_msg += f"\n\nNOTA: La risposta include informazioni da {len(unique_urls)} dei {project_urls.count()} URL disponibili nel progetto."
+                    warning_msg += f" URL non inclusi: {', '.join([u[:30] + '...' for u in missing_urls[:3]])}" + (
+                        "..." if len(missing_urls) > 3 else "")
+
+            # Aggiorna la risposta se necessario
+            if warning_msg and result.get('result'):
+                result['result'] = result['result'] + warning_msg
+
+        # Se è una domanda URL, aggiungi un avviso se non sono stati trovati risultati da URL
+        if is_url_question and not unique_urls and project_urls.count() > 0:
+            url_warning = "\n\nNOTA: La tua domanda sembra riguardare contenuti web, ma non sono stati trovati URL pertinenti nella ricerca."
+            if result.get('result'):
+                result['result'] = result['result'] + url_warning
 
         # Formatta risposta
         response = {
@@ -1007,16 +1193,29 @@ def get_answer_from_project(project, question):
                 "type": engine_info['type'],
                 "model": engine_info['model']
             },
-            "processing_time": processing_time
+            "processing_time": processing_time,
+            "source_stats": {
+                "files": len(unique_files),
+                "urls": len(unique_urls),
+                "notes": len(unique_notes)
+            }
         }
 
         # Aggiungi fonti alla risposta
         for doc in source_documents:
             metadata = doc.metadata
 
+            # Determina il tipo di fonte
             if metadata.get("type") == "note":
                 source_type = "note"
                 filename = f"Nota: {metadata.get('title', 'Senza titolo')}"
+            elif metadata.get("type") == "url":
+                source_type = "url"
+                url = metadata.get('url', '')
+                title = metadata.get('title', url)
+                filename = f"URL: {title}"
+                # Aggiungi l'URL completo ai metadati per mostrarlo all'utente
+                metadata['display_url'] = url
             else:
                 source_type = "file"
                 source_path = metadata.get("source", "")

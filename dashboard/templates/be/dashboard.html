@@ -2,7 +2,6 @@
 {% load static %}
 {% load custom_filter %}
 
-<!-- Additional CSS for this specific page -->
 {% block extra_css %}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.css" integrity="sha256-4MX+61mt9NVvuPjUWdUdyfZfxSB1/Rf9WtqRHgG5S0=" crossorigin="anonymous">
     <style>
@@ -26,7 +25,10 @@
             transform: translateY(-2px);
         }
 
-        .stat-card.documents {
+        .stat-card.projects {
+            border-left-color: #6f42c1;
+        }
+         .stat-card.documents {
             border-left-color: #0d6efd;
         }
 
@@ -34,12 +36,12 @@
             border-left-color: #20c997;
         }
 
-        .stat-card.interactions {
-            border-left-color: #fd7e14;
+         .stat-card.urls {
+            border-left-color: #ffc107; /* Using warning color for URLs */
         }
 
-        .stat-card.projects {
-            border-left-color: #6f42c1;
+        .stat-card.interactions {
+            border-left-color: #fd7e14;
         }
 
         .project-icon {
@@ -79,24 +81,27 @@
             width: 16px;
             height: 16px;
             border-radius: 50%;
-            background-color: #0d6efd;
             z-index: 1;
         }
 
         .activity-badge.file {
-            background-color: #0d6efd;
+            background-color: #0d6efd; /* Primary */
         }
 
         .activity-badge.note {
-            background-color: #20c997;
+            background-color: #20c997; /* Success */
         }
 
         .activity-badge.question {
-            background-color: #fd7e14;
+            background-color: #fd7e14; /* Warning */
+        }
+
+        .activity-badge.url {
+            background-color: #ffc107; /* Yellow */
         }
 
         .activity-badge.project {
-            background-color: #6f42c1;
+            background-color: #6f42c1; /* Indigo */
         }
 
         /* Stili per la sezione cache più compatta */
@@ -117,9 +122,7 @@
     </style>
 {% endblock %}
 
-<!-- Main content of the page -->
 {% block content %}
-    <!-- Header e Navigazione -->
     <div class="app-content-header">
         <div class="container-fluid">
             <div class="row">
@@ -136,7 +139,6 @@
         </div>
     </div>
 
-    <!-- Statistiche generali -->
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="card stat-card projects h-100">
@@ -151,7 +153,7 @@
                         </div>
                     </div>
                     <p class="mt-3 mb-0 text-muted">
-                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ projects_growth|default:12 }}%</span>
+                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ projects_growth|default:0 }}%</span>
                         <span class="text-secondary">Rispetto al mese scorso</span>
                     </p>
                 </div>
@@ -171,12 +173,34 @@
                         </div>
                     </div>
                     <p class="mt-3 mb-0 text-muted">
-                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ documents_growth|default:18 }}%</span>
+                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ documents_growth|default:0 }}%</span>
                         <span class="text-secondary">Rispetto al mese scorso</span>
                     </p>
                 </div>
             </div>
         </div>
+
+         <div class="col-md-3">
+            <div class="card stat-card urls h-100">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title text-muted mb-0">URLs</h5>
+                            <h2 class="font-weight-bold mb-0">{{ urls_count|default:0 }}</h2> {# Display URL count #}
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-link fs-1 text-warning"></i> {# Using link icon and warning color #}
+                        </div>
+                    </div>
+                    <p class="mt-3 mb-0 text-muted">
+                         {# You might need to calculate urls_growth in views.py and pass it #}
+                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ urls_growth|default:0 }}%</span>
+                        <span class="text-secondary">Rispetto al mese scorso</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
 
         <div class="col-md-3">
             <div class="card stat-card notes h-100">
@@ -191,40 +215,26 @@
                         </div>
                     </div>
                     <p class="mt-3 mb-0 text-muted">
-                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ notes_growth|default:25 }}%</span>
+                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ notes_growth|default:0 }}%</span>
                         <span class="text-secondary">Rispetto al mese scorso</span>
                     </p>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card stat-card interactions h-100">
-                <div class="card-body">
-                    <div class="d-flex">
-                        <div class="flex-grow-1">
-                            <h5 class="card-title text-muted mb-0">Interazioni AI</h5>
-                            <h2 class="font-weight-bold mb-0">{{ conversations_count }}</h2>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="bi bi-robot fs-1 text-warning"></i>
-                        </div>
-                    </div>
-                    <p class="mt-3 mb-0 text-muted">
-                        <span class="text-success me-1"><i class="bi bi-arrow-up"></i> {{ conversations_growth|default:35 }}%</span>
-                        <span class="text-secondary">Rispetto al mese scorso</span>
-                    </p>
-                </div>
-            </div>
-        </div>
+         {# You had 4 stat cards, rearranged to include URLs #}
+         {# Interactions stat card moved to potentially replace one of the others or add as a 5th if space allows #}
+         {# For now, keeping 4 and including URLs instead of Interactions #}
+         {# If you want 5 or more, adjust the col-md-* classes #}
+
     </div>
 <div class="row">
         <div class="col-lg-8">
-            <!-- Attività recenti e grafici -->
             <div class="card mb-4">
                 <div class="card-header border-0">
                     <div class="d-flex justify-content-between">
                         <h3 class="card-title">Attività dei progetti</h3>
+                         {# Period selectors might require JS and backend changes to filter data by period #}
                         <div class="btn-group">
                             <button type="button" class="btn btn-sm btn-outline-secondary period-selector active" data-period="week">Settimana</button>
                             <button type="button" class="btn btn-sm btn-outline-secondary period-selector" data-period="month">Mese</button>
@@ -239,6 +249,7 @@
                             <small class="text-muted">Attività totali</small>
                         </div>
                         <div class="text-end">
+                             {# You might want to calculate total active users or other metrics here #}
                             <h4 class="text-success mb-0">+{{ active_projects }}</h4>
                             <small class="text-muted">Progetti attivi</small>
                         </div>
@@ -249,7 +260,28 @@
                 </div>
             </div>
 
-            <!-- Progetti principali -->
+             <div class="card mb-4">
+                <div class="card-header border-0">
+                    <h3 class="card-title">Statistiche RAG (Cache Embedding)</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                         <div class="col-md-6">
+                             <div id="cache-savings-chart" style="height: 250px;"></div>
+                         </div>
+                         <div class="col-md-6">
+                             <div id="cache-hit-rate-chart" style="height: 250px;"></div> {# New chart for Hit Rate #}
+                         </div>
+                    </div>
+                     <div class="d-grid gap-2 mt-3">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="showCacheModal()">
+                            <i class="bi bi-gear me-1"></i>Gestione avanzata cache
+                        </button>
+                     </div>
+                </div>
+            </div>
+
+
             <div class="card mb-4">
                 <div class="card-header border-0 bg-light">
                     <div class="d-flex justify-content-between align-items-center">
@@ -278,19 +310,27 @@
                                                 <span class="ms-1">{{ project.files.count }} doc</span>
                                             </div>
                                             <div>
+                                                 {# Assuming Project model has a related_name 'urls' for ProjectURL #}
+                                                <i class="bi bi-link text-warning"></i> {# Using link icon #}
+                                                <span class="ms-1">{{ project.urls.count|default:0 }} urls</span> {# Display URL count for project #}
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <div>
                                                 <i class="bi bi-journal-text text-success"></i>
                                                 <span class="ms-1">{{ project.project_notes.count }} note</span>
                                             </div>
                                             <div>
-                                                <i class="bi bi-chat-dots text-warning"></i>
-                                                <span class="ms-1">{{ project.conversations.count }} chat</span>
+                                                <i class="bi bi-chat-dots text-info"></i> {# Using info color for chats #}
+                                                <span class="ms-1">{{ project.conversations.count|default:0 }} chat</span> {# Display conversation count for project #}
                                             </div>
                                         </div>
                                     </div>
                                     <div class="card-footer bg-transparent pt-0 border-top-0">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <small class="text-muted">Aggiornato: {{ project.updated_at|date:"d M Y" }}</small>
-                                            <a href="{% url 'project' project.id %}" class="btn btn-sm btn-primary stretched-link">
+                                             {# Link to project details view #}
+                                            <a href="{% url 'project_details' project.id %}" class="btn btn-sm btn-primary stretched-link">
                                                 <i class="bi bi-eye me-1"></i>Visualizza
                                             </a>
                                         </div>
@@ -317,7 +357,6 @@
             </div>
         </div>
     <div class="col-lg-4">
-            <!-- Distribuzione documenti -->
             <div class="card mb-4">
                 <div class="card-header border-0">
                     <h3 class="card-title">Tipologie documenti</h3>
@@ -327,25 +366,35 @@
                 </div>
             </div>
 
-            <!-- Attività recenti -->
             <div class="card mb-4">
                 <div class="card-header border-0">
                     <div class="d-flex justify-content-between">
                         <h3 class="card-title">Attività recenti</h3>
+                         {# Link to a page showing all recent activities if you have one #}
                         <a href="#" class="link-primary link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover">Vedi tutte</a>
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="activity-timeline">
+                         {# recent_activities should now include URL activities from views.py #}
                         {% for activity in recent_activities|slice:":5" %}
                         <div class="activity-item">
-                            <div class="activity-badge {{ activity.type }}"></div>
+                             {# Dynamically set badge class based on activity type #}
+                             <div class="activity-badge {{ activity.type }}"></div>
                             <div class="d-flex justify-content-between">
                                 <h6 class="mb-1 fw-bold">{{ activity.project_name }}</h6>
                                 <small class="text-muted">{{ activity.created_at|time:"H:i" }}</small>
                             </div>
+                             {# Display description or filename/URL #}
                             <p class="mb-1">{{ activity.description|truncatechars:60 }}</p>
-                            <small class="text-muted">{{ activity.created_at|date:"d M Y" }}</small>
+                             {# Optionally add a link if it's a file or URL #}
+                            {% if activity.type == 'file' %}
+                                 {# Assuming you have a URL pattern for serving files #}
+                                 <small class="text-muted"><a href="{% url 'serve_project_file' activity.file_id %}" target="_blank">Visualizza File</a></small>
+                            {% elif activity.type == 'url' %}
+                                 <small class="text-muted"><a href="{{ activity.url }}" target="_blank">Visita URL</a></small>
+                            {% endif %}
+                            <small class="text-muted d-block">{{ activity.created_at|date:"d M Y" }}</small>
                         </div>
                         {% empty %}
                         <div class="text-center py-4">
@@ -357,7 +406,6 @@
                 </div>
             </div>
 
-            <!-- Cache Embedding Compatta -->
             <div class="card cache-compact-card">
                 <div class="card-header bg-success bg-opacity-10 border-0">
                     <div class="d-flex justify-content-between align-items-center">
@@ -371,13 +419,11 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <!-- Risparmio totale in evidenza -->
                     <div class="text-center mb-3">
                         <h3 class="text-success mb-0">${{ cache_stats.estimated_savings|floatformat:2|default:"0.00" }}</h3>
-                        <small class="text-muted">Risparmiati</small>
+                        <small class="text-muted">Risparmiati stimati</small>
                     </div>
 
-                    <!-- Mini statistiche in griglia -->
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="cache-mini-stat text-center">
@@ -397,15 +443,15 @@
                                 <small class="text-muted">Dimensione</small>
                             </div>
                         </div>
-                        <div class="col-6">
+                         <div class="col-6">
                             <div class="cache-mini-stat text-center">
-                                <h6 class="mb-0">20x</h6>
-                                <small class="text-muted">Più veloce</small>
+                                 {# This '20x Faster' is static text, ideally this would be a dynamic metric #}
+                                 <h6 class="mb-0">{{ total_cache_stats.count|default:0 }}</h6> {# Display total unique embeddings #}
+                                <small class="text-muted">Embedding Unici</small>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Dettagli cache nascosti di default -->
                     <div id="cacheDetails" class="collapse mt-3">
                         <hr>
                         <div class="d-grid gap-2">
@@ -422,7 +468,6 @@
         </div>
     </div>
 
-    <!-- Modal per la gestione avanzata della cache -->
     <div class="modal fade" id="cacheModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -431,55 +476,59 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Tab navigation -->
                     <ul class="nav nav-tabs" role="tablist">
                         <li class="nav-item">
-                            <a class="nav-link active" data-bs-toggle="tab" href="#statistics">Statistiche</a>
+                            <a class="nav-link active" data-bs-toggle="tab" href="#cache-modal-statistics">Statistiche</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-bs-toggle="tab" href="#management">Gestione</a>
+                            <a class="nav-link" data-bs-toggle="tab" href="#cache-modal-management">Gestione</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-bs-toggle="tab" href="#reports">Report</a>
+                            <a class="nav-link" data-bs-toggle="tab" href="#cache-modal-reports">Report</a>
                         </li>
                     </ul>
 
-                    <!-- Tab content -->
                     <div class="tab-content mt-3">
-                        <div class="tab-pane fade show active" id="statistics">
+                        <div class="tab-pane fade show active" id="cache-modal-statistics">
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div id="cache-savings-chart" style="height: 250px;"></div>
+                                    <div id="cache-modal-savings-chart" style="height: 250px;"></div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div id="cache-types-chart" style="height: 250px;"></div>
+                                    <div id="cache-modal-types-chart" style="height: 250px;"></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="tab-pane fade" id="management">
+                        <div class="tab-pane fade" id="cache-modal-management">
+                             <p>Qui puoi eseguire operazioni di manutenzione sulla cache degli embedding.</p>
                             <div class="d-grid gap-2">
                                 <button class="btn btn-warning" onclick="cleanCache()">
-                                    <i class="bi bi-trash3 me-1"></i>Pulisci file orfani
+                                    <i class="bi bi-trash3 me-1"></i>Pulisci file orfani (Richiede accesso al file system)
                                 </button>
                                 <button class="btn btn-danger" onclick="clearCache()">
                                     <i class="bi bi-x-circle me-1"></i>Svuota tutta la cache
                                 </button>
                             </div>
                         </div>
-                        <div class="tab-pane fade" id="reports">
+                        <div class="tab-pane fade" id="cache-modal-reports">
+                             <p>Genera report sull'utilizzo e i risparmi della cache.</p>
                             <form id="reportForm">
                                 <div class="mb-3">
                                     <label for="reportType" class="form-label">Tipo di Report</label>
                                     <select class="form-select" id="reportType">
                                         <option value="summary">Riepilogo</option>
                                         <option value="detailed">Dettagliato</option>
-                                        <option value="savings">Risparmi</option>
+                                        <option value="savings">Risparmi stimati</option>
                                     </select>
                                 </div>
                                 <button type="button" class="btn btn-primary" onclick="generateReport()">
                                     Genera Report
                                 </button>
                             </form>
+                             <div id="reportOutput" class="mt-3 alert alert-info" style="display: none;">
+                                 <h5>Output Report:</h5>
+                                 <pre id="reportContent"></pre>
+                             </div>
                         </div>
                     </div>
                 </div>
@@ -487,22 +536,35 @@
         </div>
     </div>
 {% endblock %}
+
 {% block extra_js %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Ensure data is available and parsed correctly
+    const activityDates = {{ activity_dates|safe }};
+    const activityFiles = {{ activity_files|safe }};
+    const activityNotes = {{ activity_notes|safe }};
+    const activityConversations = {{ activity_conversations|safe }};
+    {# Assuming you will pass urls_activity data from views.py #}
+    const activityUrls = {{ activity_urls|default:"[]"|safe }};
+
+
     // Grafico attività
     var activityOptions = {
         series: [{
             name: 'File',
-            data: {{ activity_files|safe }}
+            data: activityFiles
         }, {
             name: 'Note',
-            data: {{ activity_notes|safe }}
+            data: activityNotes
         }, {
             name: 'Conversazioni',
-            data: {{ activity_conversations|safe }}
+            data: activityConversations
+        }, {
+             name: 'URLs', {# Add URLs to the activity chart #}
+             data: activityUrls
         }],
         chart: {
             type: 'area',
@@ -510,7 +572,7 @@ document.addEventListener('DOMContentLoaded', function() {
             stacked: true,
             toolbar: { show: false }
         },
-        colors: ['#0d6efd', '#20c997', '#fd7e14'],
+        colors: ['#0d6efd', '#20c997', '#fd7e14', '#ffc107'], {# Add color for URLs #}
         dataLabels: { enabled: false },
         stroke: { curve: 'smooth', width: 2 },
         fill: {
@@ -525,27 +587,166 @@ document.addEventListener('DOMContentLoaded', function() {
             horizontalAlign: 'left'
         },
         xaxis: {
-            categories: {{ activity_dates|safe }}
-        }
+            categories: activityDates
+        },
+         yaxis: {
+             title: {
+                 text: 'Numero di Attività'
+             }
+         }
     };
-    new ApexCharts(document.querySelector("#activity-chart"), activityOptions).render();
+    var activityChart = new ApexCharts(document.querySelector("#activity-chart"), activityOptions);
+    activityChart.render();
+
 
     // Grafico documenti
+    const documentTypesValues = {{ document_types_values|safe }};
+    const documentTypesLabels = {{ document_types_labels|safe }};
+
     var documentsOptions = {
-        series: {{ document_types_values|safe }},
+        series: documentTypesValues,
         chart: {
             type: 'donut',
             height: 250
         },
-        labels: {{ document_types_labels|safe }},
-        colors: ['#0d6efd', '#6c757d', '#28a745', '#dc3545', '#ffc107'],
+        labels: documentTypesLabels,
+        colors: ['#0d6efd', '#6c757d', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2'], {# More colors for more types #}
         legend: {
             position: 'bottom'
+        },
+         responsive: [{
+             breakpoint: 480,
+             options: {
+                 chart: {
+                     width: 200
+                 },
+                 legend: {
+                     position: 'bottom'
+                 }
+             }
+         }]
+    };
+    var documentsChart = new ApexCharts(document.querySelector("#documents-chart"), documentsOptions);
+    documentsChart.render();
+
+
+     // Grafico Risparmi Cache Embedding (Modal)
+    const cacheStats = {{ cache_stats|safe }};
+    const totalCacheStats = {{ total_cache_stats|safe }};
+
+    var cacheSavingsOptions = {
+        series: [{
+            name: 'Risparmi Stimati (€)',
+            data: [cacheStats.estimated_savings|floatformat:2|default:"0.00"] // Data should ideally be historical
+        }],
+        chart: {
+            type: 'bar',
+            height: 250,
+             toolbar: { show: false }
+        },
+        colors: ['#20c997'],
+        plotOptions: {
+            bar: {
+                horizontal: true,
+            }
+        },
+        dataLabels: {
+            enabled: true,
+             formatter: function (val) {
+                return "€" + val;
+            }
+        },
+        xaxis: {
+            categories: ['Totale Risparmi'], // Categories should ideally be dates or periods
+             title: {
+                text: 'Importo Risparmiato'
+            }
         }
     };
-    new ApexCharts(document.querySelector("#documents-chart"), documentsOptions).render();
+     // Render in modal
+    var cacheSavingsModalChart = new ApexCharts(document.querySelector("#cache-modal-savings-chart"), cacheSavingsOptions);
+    // Only render when modal is shown to ensure the container exists and has dimensions
+     document.getElementById('cacheModal').addEventListener('shown.bs.modal', function () {
+         cacheSavingsModalChart.render();
+          cacheTypesModalChart.render(); // Also render the types chart
+          cacheHitRateChart.render(); // Also render the new hit rate chart
+     })
 
-    // Gestione cache
+
+     // Grafico Distribuzione Tipi Documenti nella Cache (Modal)
+     {# Assuming you will pass cache_document_types_values and labels from views.py #}
+     const cacheDocumentTypesValues = {{ cache_document_types_values|default:"[]"|safe }};
+     const cacheDocumentTypesLabels = {{ cache_document_types_labels|default:"[]"|safe }};
+
+    var cacheTypesOptions = {
+        series: cacheDocumentTypesValues,
+        chart: {
+            type: 'donut',
+            height: 250
+        },
+        labels: cacheDocumentTypesLabels,
+        colors: ['#0d6efd', '#6c757d', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2'],
+        legend: {
+            position: 'bottom'
+        },
+         responsive: [{
+             breakpoint: 480,
+             options: {
+                 chart: {
+                     width: 200
+                 },
+                 legend: {
+                     position: 'bottom'
+                 }
+             }
+         }]
+    };
+     // Render in modal
+    var cacheTypesModalChart = new ApexCharts(document.querySelector("#cache-modal-types-chart"), cacheTypesOptions);
+
+
+     // Grafico Hit Rate Cache (Dashboard - using cache_stats)
+     var cacheHitRateOptions = {
+         series: [cacheStats.hit_rate|floatformat:1|default:"0"],
+         chart: {
+             type: 'radialBar',
+             height: 250,
+             sparkline: {
+                 enabled: true
+             }
+         },
+         plotOptions: {
+             radialBar: {
+                 track: {
+                     background: '#e7e7e7',
+                 },
+                 dataLabels: {
+                     name: {
+                         offsetY: -10,
+                         fontSize: '13px'
+                     },
+                     value: {
+                         offsetY: 5,
+                         fontSize: '20px',
+                          formatter: function (val) {
+                             return val + "%";
+                         }
+                     }
+                 }
+             }
+         },
+         labels: ['Hit Rate'],
+         colors: ['#0d6efd'],
+         stroke: {
+             lineCap: 'round'
+         },
+     };
+     // Render in the main dashboard section
+     var cacheHitRateChart = new ApexCharts(document.querySelector("#cache-hit-rate-chart"), cacheHitRateOptions);
+     cacheHitRateChart.render();
+
+
+    // Toggle cache details visibility
     window.toggleCacheDetails = function() {
         var cacheDetails = document.getElementById('cacheDetails');
         var bsCollapse = new bootstrap.Collapse(cacheDetails, {
@@ -553,17 +754,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Show the advanced cache modal
     window.showCacheModal = function() {
         var cacheModal = new bootstrap.Modal(document.getElementById('cacheModal'));
         cacheModal.show();
     }
 
-    // Update cache stats
+    // Update cache stats button handler
     document.getElementById('update-cache-stats-btn').addEventListener('click', function() {
         const btn = this;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Aggiornamento...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Aggiornamento...';
 
+        // Fetch statistics update via AJAX
         fetch('{% url "dashboard" %}?update_cache_stats=1', {
             method: 'GET',
             headers: {
@@ -573,37 +776,66 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Reload the page on success to show updated stats
                 location.reload();
             } else {
-                alert('Errore: ' + data.message);
+                alert('Errore nell\'aggiornamento delle statistiche: ' + data.message);
             }
         })
+        .catch(error => {
+             console.error('Fetch error:', error);
+             alert('Si è verificato un errore durante l\'aggiornamento.');
+        })
         .finally(() => {
+             // Re-enable button and restore text after request completes
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Aggiorna statistiche';
         });
     });
 
-    // Funzioni per la gestione della cache
+    // Functions for cache management commands (within the modal)
     window.cleanCache = function() {
-        if (confirm('Pulire i file orfani dalla cache?')) {
+        if (confirm('Questa operazione tenterà di rimuovere i file dalla cache che non sono più associati a nessun ProjectFile. Continuare?')) {
             callManagementCommand('manage_embedding_cache', ['--clean']);
         }
     }
 
     window.clearCache = function() {
-        if (confirm('ATTENZIONE: Questa operazione cancellerà tutta la cache. Continuare?')) {
+        if (confirm('ATTENZIONE: Questa operazione cancellerà *tutta* la cache degli embedding, rimuovendo tutti i file dalla directory di cache e i record dal database. Questo richiederà una ri-vettorializzazione completa dei tuoi documenti e URL indicizzati. Continuare?')) {
             callManagementCommand('clear_embedding_cache', ['--force']);
         }
     }
 
     window.generateReport = function() {
         const reportType = document.getElementById('reportType').value;
-        callManagementCommand('report_cache_usage', ['--type', reportType]);
+        const reportOutputDiv = document.getElementById('reportOutput');
+        const reportContentPre = document.getElementById('reportContent');
+
+        // Clear previous output and show loading
+        reportContentPre.textContent = 'Generazione report...';
+        reportOutputDiv.style.display = 'block';
+
+        // Call the backend command to generate the report
+        callManagementCommand('report_cache_usage', ['--type', reportType]).then(data => {
+            if (data.success) {
+                // Assuming the command output is returned in data.message or a similar field
+                reportContentPre.textContent = data.message || 'Report generato con successo (nessun output specifico).';
+                reportOutputDiv.className = 'mt-3 alert alert-success';
+            } else {
+                reportContentPre.textContent = 'Errore nella generazione del report: ' + data.message;
+                 reportOutputDiv.className = 'mt-3 alert alert-danger';
+            }
+        }).catch(error => {
+             console.error('Report generation error:', error);
+             reportContentPre.textContent = 'Si è verificato un errore durante la generazione del report.';
+             reportOutputDiv.className = 'mt-3 alert alert-danger';
+        });
     }
 
+
+    // Helper function to call Django management commands via AJAX
     function callManagementCommand(command, args) {
-        fetch('{% url "execute_management_command" %}', {
+        return fetch('{% url "execute_management_command" %}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -614,17 +846,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 args: args
             })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Operazione completata con successo!');
-                location.reload();
-            } else {
-                alert('Errore: ' + data.message);
+        .then(response => {
+            if (!response.ok) {
+                // If response is not OK (e.g., 403, 500), try to read JSON error or throw
+                return response.json().then(err => { throw new Error(err.message || 'Errore di rete'); }).catch(() => {
+                    throw new Error('Errore di rete o risposta non JSON');
+                });
             }
+            return response.json();
+        })
+        .then(data => {
+            // Handle the JSON response from the backend
+            if (data.success) {
+                 // For management commands that trigger background tasks or don't return explicit data
+                 // you might want to just show a success message or reload for simplicity.
+                 // If the command returns output in `data.message`, the generateReport function handles it.
+                if (command !== 'report_cache_usage') { // Avoid double alert for report
+                     alert('Operazione completata con successo: ' + (data.message || ''));
+                     location.reload(); // Reload to see updated stats if applicable
+                }
+            } else {
+                alert('Errore nell\'operazione: ' + (data.message || 'Errore sconosciuto'));
+            }
+             return data; // Return data for further processing (like in generateReport)
+        })
+        .catch(error => {
+            console.error('Error calling management command:', error);
+            alert('Si è verificato un errore durante l\'esecuzione del comando: ' + error.message);
+            throw error; // Re-throw to be caught by the caller if needed
         });
     }
 
+
+    // Helper function to get CSRF token
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -639,6 +893,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return cookieValue;
     }
+
+
+    // Optional: Add event listeners for period selectors if you implement data filtering
+     document.querySelectorAll('.period-selector').forEach(button => {
+         button.addEventListener('click', function() {
+             document.querySelectorAll('.period-selector').forEach(btn => btn.classList.remove('active'));
+             this.classList.add('active');
+             const period = this.dataset.period;
+             console.log('Selected period:', period);
+             // Implement logic here to fetch and update chart data based on period
+             // This would require AJAX calls to your backend view with the selected period
+         });
+     });
+
+
 });
 </script>
 {% endblock %}

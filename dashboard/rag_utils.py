@@ -922,6 +922,370 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
 
 
+# def get_answer_from_project(project, question):
+#     """
+#     Ottiene una risposta dal sistema RAG per una domanda su un progetto specifico.
+#
+#     Gestisce l'intero processo di query RAG per un progetto: verifica se l'indice
+#     deve essere aggiornato, esegue la query, gestisce le fonti ed eventuali errori,
+#     inclusi errori di autenticazione API.
+#
+#     Args:
+#         project: Oggetto Project
+#         question: Stringa contenente la domanda dell'utente
+#
+#     Returns:
+#         dict: Dizionario con la risposta, le fonti utilizzate e metadati aggiuntivi
+#     """
+#     # Importazione ritardata per evitare cicli di importazione
+#     from profiles.models import ProjectFile, ProjectNote, ProjectRAGConfiguration, ProjectURL
+#
+#     logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
+#
+#     try:
+#         # Verifica presenza di documenti, note e URL nel progetto
+#         project_files = ProjectFile.objects.filter(project=project)
+#         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
+#         project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)  # URL indicizzati
+#
+#         if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
+#             return {
+#                 "answer": "Il progetto non contiene documenti, note attive o URL indicizzati.",
+#                 "sources": []
+#             }
+#
+#         # Ottieni informazioni sul motore LLM usato dal progetto
+#         try:
+#             engine_info = get_project_LLM_settings(project)
+#             logger.info(
+#                 f"Utilizzando motore {engine_info['provider'].name if engine_info['provider'] else 'openai'} "
+#                 f"- {engine_info['model']} per il progetto {project.id}"
+#             )
+#         except Exception as e:
+#             logger.warning(f"Impossibile determinare il motore del progetto: {str(e)}")
+#             # Usa engine_info di fallback
+#             engine_info = get_project_LLM_settings(None)
+#
+#         # Verifica se l'indice deve essere aggiornato
+#         update_needed = check_project_index_update_needed(project)
+#
+#         # Verifica se la domanda è generica (richiede informazioni da tutti i documenti)
+#         is_generic_question = any(term in question.lower() for term in [
+#             'tutti i documenti', 'ogni documento', 'riassumi tutti',
+#             'riassumi i punti principali di tutti', 'all documents',
+#             'every document', 'summarize all', 'tutti i file',
+#             'each document', 'riassumere tutti', 'summarize everything',
+#             'tutti gli url', 'tutte le pagine web', 'tutte le pagine',
+#             'tutti i siti', 'all websites', 'all urls', 'all pages'
+#         ])
+#
+#         # Verifica se la domanda è specifica per gli URL
+#         is_url_question = any(term in question.lower() for term in [
+#             'url', 'sito web', 'pagina web', 'website', 'web page',
+#             'link', 'http', 'https', 'www', 'siti internet', 'web',
+#             'navigato', 'navigati', 'crawlati', 'esplorati'
+#         ])
+#
+#         # Gestisci le domande generiche con configurazioni speciali
+#         original_config = None
+#         temp_config_modified = False
+#
+#         if is_generic_question or is_url_question:
+#             logger.info(f"Rilevata domanda {'generica' if is_generic_question else 'specifica per URL'}")
+#
+#             # Salva la configurazione originale e modifica temporaneamente
+#             try:
+#                 project_config = ProjectRAGConfiguration.objects.get(project=project)
+#
+#                 # Salva i valori originali
+#                 original_config = {
+#                     'similarity_top_k': project_config.similarity_top_k,
+#                     'mmr_lambda': project_config.mmr_lambda,
+#                     'retriever_type': project_config.retriever_type
+#                 }
+#
+#                 # Modifica temporaneamente per domande generiche o URL
+#                 project_config.similarity_top_k = 20 if is_generic_question else 12  # Più documenti per domande generiche
+#                 project_config.mmr_lambda = 0.1 if is_generic_question else 0.3  # Più diversità per domande generiche
+#                 project_config.retriever_type = 'mmr'  # Forza l'uso di MMR per diversità
+#                 project_config.save()
+#
+#                 temp_config_modified = True
+#                 logger.info("Configurazione temporanea applicata per domanda speciale")
+#
+#             except Exception as e:
+#                 logger.error(f"Errore nella modifica della configurazione: {str(e)}")
+#
+#         # Crea o aggiorna catena RAG
+#         if update_needed:
+#             logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
+#             qa_chain = create_project_rag_chain(project=project)
+#         else:
+#             logger.info("Indice aggiornato, utilizzando indice esistente")
+#             qa_chain = create_project_rag_chain(project=project, docs=[])
+#
+#         if qa_chain is None:
+#             if temp_config_modified and original_config:
+#                 # Ripristina la configurazione originale
+#                 project_config = ProjectRAGConfiguration.objects.get(project=project)
+#                 for key, value in original_config.items():
+#                     setattr(project_config, key, value)
+#                 project_config.save()
+#
+#             return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto.",
+#                     "sources": []}
+#
+#         # Esegui la ricerca e ottieni la risposta
+#         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
+#         start_time = time.time()
+#
+#         try:
+#             # Modifica la query in base al tipo di domanda
+#             if is_generic_question:
+#                 enhanced_question = f"""
+#                 {question}
+#
+#                 IMPORTANTE: Per favore assicurati di:
+#                 1. Identificare TUTTI i documenti disponibili nel contesto (file, note e URL)
+#                 2. Riassumere i punti principali di CIASCUNA fonte
+#                 3. Citare esplicitamente il nome/URL di ogni fonte quando presenti le sue informazioni
+#                 4. Organizzare la risposta per fonte, non per argomento
+#                 """
+#                 result = qa_chain.invoke(enhanced_question)
+#             elif is_url_question:
+#                 # Per domande specifiche sugli URL, enfatizza i contenuti web
+#                 enhanced_question = f"""
+#                 {question}
+#
+#                 IMPORTANTE: Questa domanda riguarda contenuti web/URL. Per favore:
+#                 1. Presta particolare attenzione alle fonti di tipo URL nel contesto
+#                 2. Quando citi informazioni da URL, indica esplicitamente il link della fonte
+#                 3. Se la domanda si riferisce a un URL specifico, concentrati principalmente su quello
+#                 """
+#                 result = qa_chain.invoke(enhanced_question)
+#             else:
+#                 result = qa_chain.invoke(question)
+#
+#
+#             processing_time = round(time.time() - start_time, 2)
+#             logger.info(f"Ricerca completata in {processing_time} secondi")
+#
+#         except openai.AuthenticationError as auth_error:
+#             # Gestione specifica dell'errore di autenticazione API
+#             error_message = str(auth_error)
+#             logger.error(f"Errore di autenticazione API {engine_info['type']}: {error_message}")
+#
+#             if temp_config_modified and original_config:
+#                 # Ripristina la configurazione originale
+#                 project_config = ProjectRAGConfiguration.objects.get(project=project)
+#                 for key, value in original_config.items():
+#                     setattr(project_config, key, value)
+#                 project_config.save()
+#
+#             return {
+#                 "answer": f"Si è verificato un errore di autenticazione con l'API {engine_info['type'].upper()}. " +
+#                           "Verifica che le chiavi API siano corrette nelle impostazioni del motore IA.",
+#                 "sources": [],
+#                 "error": "api_auth_error",
+#                 "error_details": error_message
+#             }
+#
+#         except Exception as query_error:
+#             logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
+#
+#             if temp_config_modified and original_config:
+#                 # Ripristina la configurazione originale
+#                 project_config = ProjectRAGConfiguration.objects.get(project=project)
+#                 for key, value in original_config.items():
+#                     setattr(project_config, key, value)
+#                 project_config.save()
+#
+#             # Verifica se l'errore è di autenticazione API anche se non catturato direttamente
+#             if "invalid_api_key" in str(query_error) or "authentication" in str(query_error).lower():
+#                 return {
+#                     "answer": f"Si è verificato un errore di autenticazione con l'API {engine_info['type'].upper()}. " +
+#                               "Verifica che le chiavi API siano corrette nelle impostazioni del progetto.",
+#                     "sources": [],
+#                     "error": "api_auth_error",
+#                     "error_details": str(query_error)
+#                 }
+#
+#             return {
+#                 "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(query_error)}",
+#                 "sources": [],
+#                 "error": "query_error",
+#                 "engine_info": engine_info  # Includi info sul motore per debugging
+#             }
+#
+#         # Ripristina la configurazione originale se era stata modificata
+#         if temp_config_modified and original_config:
+#             try:
+#                 project_config = ProjectRAGConfiguration.objects.get(project=project)
+#                 for key, value in original_config.items():
+#                     setattr(project_config, key, value)
+#                 project_config.save()
+#                 logger.info("Configurazione originale ripristinata")
+#             except Exception as e:
+#                 logger.error(f"Errore nel ripristinare la configurazione originale: {str(e)}")
+#
+#         # Log fonti trovate
+#         source_documents = result.get('source_documents', [])
+#         logger.info(f"Trovate {len(source_documents)} fonti pertinenti")
+#
+#         # Analizza la distribuzione dei documenti nei risultati
+#         source_files = {}
+#         source_urls = {}
+#         source_notes = {}
+#         unique_files = set()
+#         unique_urls = set()
+#         unique_notes = set()
+#
+#         for doc in source_documents:
+#             doc_type = doc.metadata.get('type', 'unknown')
+#
+#             if doc_type == 'file':
+#                 source = doc.metadata.get('source', 'unknown')
+#                 filename = os.path.basename(source)
+#                 unique_files.add(filename)
+#
+#                 if filename not in source_files:
+#                     source_files[filename] = 0
+#                 source_files[filename] += 1
+#             elif doc_type == 'url':
+#                 source_url = doc.metadata.get('url', 'unknown')
+#                 unique_urls.add(source_url)
+#
+#                 if source_url not in source_urls:
+#                     source_urls[source_url] = 0
+#                 source_urls[source_url] += 1
+#             elif doc_type == 'note':
+#                 note_title = doc.metadata.get('title', 'unknown')
+#                 unique_notes.add(note_title)
+#
+#                 if note_title not in source_notes:
+#                     source_notes[note_title] = 0
+#                 source_notes[note_title] += 1
+#
+#         # Log della distribuzione dei risultati per tipo
+#         logger.info(f"File unici nei risultati: {len(unique_files)}")
+#         logger.info(f"URL unici nei risultati: {len(unique_urls)}")
+#         logger.info(f"Note uniche nei risultati: {len(unique_notes)}")
+#
+#         # Verifica per domande generiche se abbiamo una buona copertura
+#         if is_generic_question:
+#             warning_msg = ""
+#
+#             # Verifica la copertura dei file
+#             if project_files.count() > 0 and len(unique_files) < project_files.count():
+#                 all_project_files = [f.filename for f in project_files]
+#                 missing_files = [f for f in all_project_files if f not in unique_files]
+#                 if missing_files:
+#                     warning_msg += f"\n\nNOTA: La risposta include informazioni da {len(unique_files)} dei {project_files.count()} documenti disponibili nel progetto."
+#                     warning_msg += f" Documenti non inclusi: {', '.join(missing_files[:5])}" + (
+#                         "..." if len(missing_files) > 5 else "")
+#
+#             # Verifica la copertura degli URL
+#             if project_urls.count() > 0 and len(unique_urls) < project_urls.count():
+#                 all_project_urls = [u.url for u in project_urls]
+#                 missing_urls = [u for u in all_project_urls if u not in unique_urls]
+#                 if missing_urls:
+#                     warning_msg += f"\n\nNOTA: La risposta include informazioni da {len(unique_urls)} dei {project_urls.count()} URL disponibili nel progetto."
+#                     warning_msg += f" URL non inclusi: {', '.join([u[:30] + '...' for u in missing_urls[:3]])}" + (
+#                         "..." if len(missing_urls) > 3 else "")
+#
+#             # Aggiorna la risposta se necessario
+#             if warning_msg and result.get('result'):
+#                 result['result'] = result['result'] + warning_msg
+#
+#
+#         # Se è una domanda URL, aggiungi un avviso se non sono stati trovati risultati da URL
+#         if is_url_question and not unique_urls and project_urls.count() > 0:
+#             url_warning = "\n\nNOTA: La tua domanda sembra riguardare contenuti web, ma non sono stati trovati URL pertinenti nella ricerca."
+#             if result.get('result'):
+#                 result['result'] = result['result'] + url_warning
+#
+#         # Formatta risposta
+#         response = {
+#             "answer": result.get('result', 'Nessuna risposta trovata.'),
+#             "sources": [],
+#             "engine": {
+#                 "type": engine_info['type'],
+#                 "model": engine_info['model']
+#             },
+#             "processing_time": processing_time,
+#             "source_stats": {
+#                 "files": len(unique_files),
+#                 "urls": len(unique_urls),
+#                 "notes": len(unique_notes)
+#             }
+#         }
+#         # Aggiungi fonti alla risposta
+#         for doc in source_documents:
+#             metadata = doc.metadata
+#
+#             # Determina il tipo di fonte
+#             if metadata.get("type") == "note":
+#                 source_type = "note"
+#                 filename = f"Nota: {metadata.get('title', 'Senza titolo')}"
+#             elif metadata.get("type") == "url":
+#                 source_type = "url"
+#                 url = metadata.get('url', '')
+#                 title = metadata.get('title', url)
+#                 filename = f"URL: {title}"
+#                 # Aggiungi l'URL completo ai metadati per mostrarlo all'utente
+#                 metadata['display_url'] = url
+#             else:
+#                 source_type = "file"
+#                 source_path = metadata.get("source", "")
+#                 filename = metadata.get('filename', os.path.basename(source_path) if source_path else "Documento sconosciuto")
+#
+#
+#             page_info = ""
+#             if "page" in metadata:
+#                 page_info = f" (pag. {metadata['page'] + 1})"
+#
+#             source = {
+#                 "content": doc.page_content,
+#                 "metadata": metadata,
+#                 "score": getattr(doc, 'score', None),
+#                 "type": source_type,
+#                 "filename": f"{filename}{page_info}"
+#             }
+#             response["sources"].append(source)
+#
+#         return response
+#
+#     except openai.AuthenticationError as auth_error:
+#         logger.exception(f"Errore di autenticazione API in get_answer_from_project: {str(auth_error)}")
+#         return {
+#             "answer": "Si è verificato un errore di autenticazione con l'API. " +
+#                       "Verifica che le chiavi API siano corrette nelle impostazioni del progetto.",
+#             "sources": [],
+#             "error": "api_auth_error",
+#             "error_details": str(auth_error)
+#         }
+#     except Exception as e:
+#         logger.exception(f"Errore in get_answer_from_project: {str(e)}")
+#
+#         # Verifica anche qui se l'errore è correlato all'autenticazione
+#         if "invalid_api_key" in str(e) or "authentication" in str(e).lower():
+#             return {
+#                 "answer": "Si è verificato un errore di autenticazione con l'API. " +
+#                           "Verifica che le chiavi API siano corrette nelle impostazioni del progetto.",
+#                 "sources": [],
+#                 "error": "api_auth_error",
+#                 "error_details": str(e)
+#             }
+#
+#         return {
+#             "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(e)}",
+#             "sources": [],
+#             "error": "general_error"
+#         }
+
+
+# Soluzione completa per get_answer_from_project in rag_utils.py
+
 def get_answer_from_project(project, question):
     """
     Ottiene una risposta dal sistema RAG per una domanda su un progetto specifico.
@@ -938,21 +1302,96 @@ def get_answer_from_project(project, question):
         dict: Dizionario con la risposta, le fonti utilizzate e metadati aggiuntivi
     """
     # Importazione ritardata per evitare cicli di importazione
-    from profiles.models import ProjectFile, ProjectNote, ProjectRAGConfiguration, ProjectURL
+    from profiles.models import ProjectFile, ProjectNote, ProjectRAGConfiguration, ProjectURL, ProjectIndexStatus
 
     logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
 
     try:
+        # ===== NUOVA PARTE 1: OTTIENI TUTTI GLI URL PRIMA DI INIZIARE =====
+        # Ottieni gli URL senza filtri
+        all_project_urls = ProjectURL.objects.filter(project=project)
+
+        # ===== NUOVA PARTE 2: FORZA L'AGGIORNAMENTO DELL'INDICE =====
+        # Se ci sono URL ma non sono marcati come indicizzati, forzane l'indicizzazione
+        unindexed_urls = all_project_urls.filter(is_indexed=False)
+        if unindexed_urls.exists():
+            logger.info(f"Trovati {unindexed_urls.count()} URL non indicizzati. Forzando l'aggiornamento...")
+            # Forza tutti gli URL come indicizzati
+            all_project_urls.update(is_indexed=True, last_indexed_at=timezone.now())
+
+        # ===== NUOVA PARTE 3: VERIFICA L'INDICE CORRETTAMENTE =====
+        # Usa ProjectIndexStatus per capire se l'indice esiste realmente
+        index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
+        index_exists = index_status.index_exists
+        index_path = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id),
+                                  "vector_index")
+
+        # Verifica fisica dell'indice
+        if not index_exists and os.path.exists(index_path):
+            # Se l'indice esiste fisicamente ma non è registrato, aggiorna lo stato
+            index_status.index_exists = True
+            index_status.save()
+            index_exists = True
+
+        # ===== INIZIO NORMALE PROCESSO RAG =====
         # Verifica presenza di documenti, note e URL nel progetto
         project_files = ProjectFile.objects.filter(project=project)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-        project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)  # URL indicizzati
+        project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
 
+        # Logga i contenuti disponibili senza filtri
+        logger.info(
+            f"Contenuti reali: {project_files.count()} file, {project_notes.count()} note, {all_project_urls.count()} URL totali")
+        logger.info(f"Di cui: {project_urls.count()} URL indicizzati")
+
+        # Verifica se il progetto ha contenuti reali
+        has_content = (project_files.exists() or project_notes.exists() or project_urls.exists())
+
+        # Verifica se l'indice deve essere aggiornato
+        update_needed = check_project_index_update_needed(project)
+
+        # Se non ci sono contenuti o l'indice necessita di aggiornamento, forza l'aggiornamento
+        if not has_content or update_needed or not index_exists:
+            if not has_content:
+                logger.info("Nessun contenuto rilevato nel progetto. Verificando indice...")
+            elif not index_exists:
+                logger.info("Indice vettoriale non trovato. Creazione necessaria.")
+            else:
+                logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
+
+            # Se ci sono URL ma l'indice non esiste, forza l'aggiornamento
+            if all_project_urls.exists() and not index_exists:
+                logger.info(f"Forzando indicizzazione di {all_project_urls.count()} URL")
+                all_project_urls.update(is_indexed=True, last_indexed_at=timezone.now())
+
+            # Crea la catena RAG con ricostruzione forzata se necessario
+            qa_chain = create_project_rag_chain(
+                project=project,
+                force_rebuild=not index_exists
+            )
+
+            if qa_chain is None:
+                return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto.",
+                        "sources": []}
+
+            # Dopo l'aggiornamento, rileggi gli URL
+            project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
+        else:
+            logger.info("Indice aggiornato, utilizzando indice esistente")
+            qa_chain = create_project_rag_chain(project=project, docs=[])
+            if qa_chain is None:
+                return {"answer": "Non è stato possibile caricare l'indice esistente per questo progetto.",
+                        "sources": []}
+
+        # Verifica finale se il progetto ha contenuti dopo l'aggiornamento
         if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
             return {
-                "answer": "Il progetto non contiene documenti, note attive o URL indicizzati.",
+                "answer": "Il progetto non contiene documenti, note attive o URL indicizzati. Aggiungi alcuni contenuti o prova ad aggiornare l'indice.",
                 "sources": []
             }
+
+        logger.info(
+            f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note, {project_urls.count()} URL")
 
         # Ottieni informazioni sul motore LLM usato dal progetto
         try:
@@ -965,9 +1404,6 @@ def get_answer_from_project(project, question):
             logger.warning(f"Impossibile determinare il motore del progetto: {str(e)}")
             # Usa engine_info di fallback
             engine_info = get_project_LLM_settings(None)
-
-        # Verifica se l'indice deve essere aggiornato
-        update_needed = check_project_index_update_needed(project)
 
         # Verifica se la domanda è generica (richiede informazioni da tutti i documenti)
         is_generic_question = any(term in question.lower() for term in [
@@ -1001,13 +1437,16 @@ def get_answer_from_project(project, question):
                 original_config = {
                     'similarity_top_k': project_config.similarity_top_k,
                     'mmr_lambda': project_config.mmr_lambda,
-                    'retriever_type': project_config.retriever_type
+                    'retriever_type': project_config.retriever_type,
+                    'similarity_threshold': project_config.similarity_threshold
                 }
 
                 # Modifica temporaneamente per domande generiche o URL
                 project_config.similarity_top_k = 20 if is_generic_question else 12  # Più documenti per domande generiche
                 project_config.mmr_lambda = 0.1 if is_generic_question else 0.3  # Più diversità per domande generiche
                 project_config.retriever_type = 'mmr'  # Forza l'uso di MMR per diversità
+                # MODIFICATO: Riduci la soglia di similarità per catturare più risultati
+                project_config.similarity_threshold = 0.5 if is_url_question else 0.6
                 project_config.save()
 
                 temp_config_modified = True
@@ -1015,25 +1454,6 @@ def get_answer_from_project(project, question):
 
             except Exception as e:
                 logger.error(f"Errore nella modifica della configurazione: {str(e)}")
-
-        # Crea o aggiorna catena RAG
-        if update_needed:
-            logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
-            qa_chain = create_project_rag_chain(project=project)
-        else:
-            logger.info("Indice aggiornato, utilizzando indice esistente")
-            qa_chain = create_project_rag_chain(project=project, docs=[])
-
-        if qa_chain is None:
-            if temp_config_modified and original_config:
-                # Ripristina la configurazione originale
-                project_config = ProjectRAGConfiguration.objects.get(project=project)
-                for key, value in original_config.items():
-                    setattr(project_config, key, value)
-                project_config.save()
-
-            return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto.",
-                    "sources": []}
 
         # Esegui la ricerca e ottieni la risposta
         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
@@ -1064,8 +1484,14 @@ def get_answer_from_project(project, question):
                 """
                 result = qa_chain.invoke(enhanced_question)
             else:
-                result = qa_chain.invoke(question)
+                # MODIFICATO: Migliora la query generale
+                enhanced_question = f"""
+                {question}
 
+                Cerca le informazioni più rilevanti nel contesto fornito. 
+                Se trovi informazioni negli URL inclusi nel contesto, includili nella risposta.
+                """
+                result = qa_chain.invoke(enhanced_question)
 
             processing_time = round(time.time() - start_time, 2)
             logger.info(f"Ricerca completata in {processing_time} secondi")
@@ -1197,12 +1623,35 @@ def get_answer_from_project(project, question):
             if warning_msg and result.get('result'):
                 result['result'] = result['result'] + warning_msg
 
-
         # Se è una domanda URL, aggiungi un avviso se non sono stati trovati risultati da URL
         if is_url_question and not unique_urls and project_urls.count() > 0:
             url_warning = "\n\nNOTA: La tua domanda sembra riguardare contenuti web, ma non sono stati trovati URL pertinenti nella ricerca."
             if result.get('result'):
                 result['result'] = result['result'] + url_warning
+
+        # Nessun risultato? Fornisci una risposta più utile
+        if not source_documents and project_urls.exists():
+            # NUOVO: Se non troviamo fonti ma sappiamo che ci sono URL, modifica la risposta
+            if is_url_question:
+                custom_answer = f"Non ho trovato informazioni specifiche su '{question}' negli URL indicizzati. "
+                custom_answer += f"Ho trovato {project_urls.count()} URL nel progetto: "
+
+                # Elenca gli URL nel progetto
+                url_list = [f"- {url.url} ({url.title or 'Nessun titolo'})" for url in project_urls[:5]]
+                if project_urls.count() > 5:
+                    url_list.append(f"... e altri {project_urls.count() - 5} URL")
+
+                custom_answer += "\n" + "\n".join(url_list)
+                custom_answer += "\n\nProva a formulare la domanda in modo diverso o a specificare quale URL ti interessa."
+
+                result = {"result": custom_answer, "source_documents": []}
+            else:
+                result = {
+                    "result": "Non ho trovato informazioni pertinenti alla tua domanda nei contenuti disponibili.",
+                    "source_documents": []}
+        elif not source_documents:
+            result = {"result": "Non ho trovato informazioni pertinenti alla tua domanda nei contenuti disponibili.",
+                      "source_documents": []}
 
         # Formatta risposta
         response = {
@@ -1219,6 +1668,7 @@ def get_answer_from_project(project, question):
                 "notes": len(unique_notes)
             }
         }
+
         # Aggiungi fonti alla risposta
         for doc in source_documents:
             metadata = doc.metadata
@@ -1237,8 +1687,8 @@ def get_answer_from_project(project, question):
             else:
                 source_type = "file"
                 source_path = metadata.get("source", "")
-                filename = metadata.get('filename', os.path.basename(source_path) if source_path else "Documento sconosciuto")
-
+                filename = metadata.get('filename',
+                                        os.path.basename(source_path) if source_path else "Documento sconosciuto")
 
             page_info = ""
             if "page" in metadata:

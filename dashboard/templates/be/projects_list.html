@@ -146,6 +146,7 @@
                                     </p>
                                 </div>
 
+                                {# SEZIONE STATISTICHE PROGETTO (FILE, CHAT, URL) #}
                                 <div class="project-stats">
                                     <div class="stat-item">
                                         <i class="bi bi-file-earmark stat-icon"></i>
@@ -155,8 +156,15 @@
                                         <i class="bi bi-chat-dots stat-icon"></i>
                                         <span>{{ project.conversations.count }} Chats</span>
                                     </div>
+                                    <div class="stat-item">
+                                        <i class="bi bi-link-45deg stat-icon"></i> {# Icona per gli URL #}
+                                        <span>{{ project.urls.count }} URLs</span> {# Conteggio degli URL #}
+                                    </div>
                                 </div>
-                            </div>
+                                {# FINE SEZIONE STATISTICHE PROGETTO #}
+
+                            </div> {# Chiusura del card-body contenente descrizione e statistiche #}
+
                             <div class="card-footer bg-transparent d-flex justify-content-between border-top-0 pt-0">
                                 <a href="{% url 'project' project.id %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye me-1"></i> View
@@ -183,7 +191,6 @@
     </div>
 </div>
 
-<!-- Modal: Delete Project -->
 <div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-labelledby="deleteProjectModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">

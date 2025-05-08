@@ -1234,61 +1234,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Contenitore per i siti web elaborati -->
-                <div id="crawled-websites-container">
-                    <!-- I siti web crawled verranno aggiunti qui dinamicamente -->
-                    {% if project.metadata.crawled_websites %}
-                        {% for website in project.metadata.crawled_websites %}
-                        <div class="website-card" data-website-url="{{ website.url }}">
-                            <div class="website-card-header">
-                                <h5 class="website-card-title">
-                                    <i class="bi bi-globe2"></i>
-                                    {{ website.url }}
-                                </h5>
-                                <div>
-                                    <span class="badge bg-info">{{ website.pages|length }} pagine</span>
-                                    <button class="btn btn-sm btn-outline-danger delete-website-btn" data-website-url="{{ website.url }}">
-                                        <i class="bi bi-trash"></i> Elimina Tutto
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="website-links-grid">
-                                {% for page in website.pages %}
-                                <div class="website-link-card" data-page-url="{{ page.url }}">
-                                    <div class="website-link-title">
-                                        {{ page.url }}
-                                    </div>
-                                    <small class="text-muted">{{ page.size|filesizeformat }}</small>
-                                    <div class="website-link-actions">
-                                        <button class="btn btn-sm btn-outline-primary view-page-btn"
-                                                data-bs-toggle="modal" data-bs-target="#pageContentModal"
-                                                data-page-url="{{ page.url }}"
-                                                data-page-id="{{ page.id }}">
-                                            <i class="bi bi-eye"></i> Visualizza
-                                        </button>
-                                        <a href="{{ page.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                                            <i class="bi bi-box-arrow-up-right"></i> Apri
-                                        </a>
-                                        <button class="btn btn-sm btn-outline-danger delete-page-btn"
-                                                data-page-id="{{ page.id }}"
-                                                data-website-url="{{ website.url }}">
-                                            <i class="bi bi-trash"></i> Elimina
-                                        </button>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="empty-state" id="empty-websites-state">
-                            <i class="bi bi-globe"></i>
-                            <h3>Nessun sito web analizzato</h3>
-                            <p class="text-muted">Usa il form sopra per iniziare a raccogliere contenuti dai siti web</p>
-                        </div>
-                    {% endif %}
-                </div>
             </div>
             <!-- Nuova sezione - URLs salvati -->
             <div class="mt-5">

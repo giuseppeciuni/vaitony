@@ -919,7 +919,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     return create_retrieval_qa_chain(vectordb, project)
 
 
-
+# Modifica alla funzione get_answer_from_project per risolvere i problemi di rilevamento note e URL
 
 def get_answer_from_project(project, question):
     """
@@ -942,19 +942,26 @@ def get_answer_from_project(project, question):
     logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
 
     try:
-        # ===== NUOVA PARTE 1: OTTIENI TUTTI GLI URL PRIMA DI INIZIARE =====
-        # Ottieni gli URL senza filtri
+        # ===== STEP 1: OTTIENI TUTTI I CONTENUTI DEL PROGETTO SENZA FILTRI =====
+        # Ottieni tutti i file, le note e gli URL senza filtri
+        all_project_files = ProjectFile.objects.filter(project=project)
+        all_project_notes = ProjectNote.objects.filter(project=project)
         all_project_urls = ProjectURL.objects.filter(project=project)
 
-        # ===== NUOVA PARTE 2: FORZA L'AGGIORNAMENTO DELL'INDICE =====
-        # Se ci sono URL ma non sono marcati come indicizzati, forzane l'indicizzazione
+        # ===== STEP 2: SINCRONIZZA I FLAG DI INCLUSIONE/INDICIZZAZIONE =====
+        # Verifica se ci sono URL non indicizzati e note non incluse
         unindexed_urls = all_project_urls.filter(is_indexed=False)
+        unincluded_notes = all_project_notes.filter(is_included_in_rag=False)
+
         if unindexed_urls.exists():
             logger.info(f"Trovati {unindexed_urls.count()} URL non indicizzati. Forzando l'aggiornamento...")
-            # Forza tutti gli URL come indicizzati
             all_project_urls.update(is_indexed=True, last_indexed_at=timezone.now())
 
-        # ===== NUOVA PARTE 3: VERIFICA L'INDICE CORRETTAMENTE =====
+        if unincluded_notes.exists():
+            logger.info(f"Trovate {unincluded_notes.count()} note non incluse nel RAG. Forzando l'inclusione...")
+            all_project_notes.update(is_included_in_rag=True, last_indexed_at=timezone.now())
+
+        # ===== STEP 3: VERIFICA L'INDICE VETTORIALE =====
         # Usa ProjectIndexStatus per capire se l'indice esiste realmente
         index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
         index_exists = index_status.index_exists
@@ -968,38 +975,32 @@ def get_answer_from_project(project, question):
             index_status.save()
             index_exists = True
 
-        # ===== INIZIO NORMALE PROCESSO RAG =====
-        # Verifica presenza di documenti, note e URL nel progetto
-        project_files = ProjectFile.objects.filter(project=project)
+        # ===== STEP 4: OTTIENI I CONTENUTI DA USARE PER LA RICERCA =====
+        # Ora ottieni i file, note e URL con i filtri appropriati
+        project_files = ProjectFile.objects.filter(project=project, is_embedded=True)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
         project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
 
-        # Logga i contenuti disponibili senza filtri
+        # Logga i contenuti disponibili
         logger.info(
-            f"Contenuti reali: {project_files.count()} file, {project_notes.count()} note, {all_project_urls.count()} URL totali")
-        logger.info(f"Di cui: {project_urls.count()} URL indicizzati")
+            f"Contenuti reali: {all_project_files.count()} file, {all_project_notes.count()} note, {all_project_urls.count()} URL totali")
+        logger.info(
+            f"Di cui: {project_files.count()} file embedded, {project_notes.count()} note incluse, {project_urls.count()} URL indicizzati")
 
-        # Verifica se il progetto ha contenuti reali
-        has_content = (project_files.exists() or project_notes.exists() or project_urls.exists())
-
-        # Verifica se l'indice deve essere aggiornato
+        # ===== STEP 5: VERIFICA SE L'INDICE NECESSITA AGGIORNAMENTO =====
         update_needed = check_project_index_update_needed(project)
 
-        # Se non ci sono contenuti o l'indice necessita di aggiornamento, forza l'aggiornamento
-        if not has_content or update_needed or not index_exists:
-            if not has_content:
-                logger.info("Nessun contenuto rilevato nel progetto. Verificando indice...")
+        # Se non ci sono contenuti o l'indice necessita di aggiornamento o non esiste
+        if (
+                not project_files.exists() and not project_notes.exists() and not project_urls.exists()) or update_needed or not index_exists:
+            if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
+                logger.info("Nessun contenuto indicizzato rilevato nel progetto. Verificando indice...")
             elif not index_exists:
                 logger.info("Indice vettoriale non trovato. Creazione necessaria.")
             else:
                 logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
 
-            # Se ci sono URL ma l'indice non esiste, forza l'aggiornamento
-            if all_project_urls.exists() and not index_exists:
-                logger.info(f"Forzando indicizzazione di {all_project_urls.count()} URL")
-                all_project_urls.update(is_indexed=True, last_indexed_at=timezone.now())
-
-            # Crea la catena RAG con ricostruzione forzata se necessario
+            # Forza la creazione di un nuovo indice, includendo tutti i contenuti disponibili
             qa_chain = create_project_rag_chain(
                 project=project,
                 force_rebuild=not index_exists
@@ -1009,7 +1010,9 @@ def get_answer_from_project(project, question):
                 return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto.",
                         "sources": []}
 
-            # Dopo l'aggiornamento, rileggi gli URL
+            # Dopo l'aggiornamento, rileggi i contenuti disponibili
+            project_files = ProjectFile.objects.filter(project=project, is_embedded=True)
+            project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
             project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
         else:
             logger.info("Indice aggiornato, utilizzando indice esistente")
@@ -1018,6 +1021,7 @@ def get_answer_from_project(project, question):
                 return {"answer": "Non è stato possibile caricare l'indice esistente per questo progetto.",
                         "sources": []}
 
+        # ===== STEP 6: VERIFICA FINALE DEI CONTENUTI DISPONIBILI =====
         # Verifica finale se il progetto ha contenuti dopo l'aggiornamento
         if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
             return {
@@ -1028,6 +1032,7 @@ def get_answer_from_project(project, question):
         logger.info(
             f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note, {project_urls.count()} URL")
 
+        # ===== STEP 7: CONFIGURAZIONE MOTORE LLM =====
         # Ottieni informazioni sul motore LLM usato dal progetto
         try:
             engine_info = get_project_LLM_settings(project)
@@ -1040,7 +1045,8 @@ def get_answer_from_project(project, question):
             # Usa engine_info di fallback
             engine_info = get_project_LLM_settings(None)
 
-        # Verifica se la domanda è generica (richiede informazioni da tutti i documenti)
+        # ===== STEP 8: ANALISI DEL TIPO DI DOMANDA =====
+        # Verifica se la domanda è generica
         is_generic_question = any(term in question.lower() for term in [
             'tutti i documenti', 'ogni documento', 'riassumi tutti',
             'riassumi i punti principali di tutti', 'all documents',
@@ -1057,12 +1063,25 @@ def get_answer_from_project(project, question):
             'navigato', 'navigati', 'crawlati', 'esplorati'
         ])
 
-        # Gestisci le domande generiche con configurazioni speciali
+        # Verifica se la domanda è specifica per le note
+        is_note_question = any(term in question.lower() for term in [
+            'nota', 'note', 'appunti', 'note personali', 'annotazioni',
+            'memo', 'promemoria', 'testo', 'testi', 'contenuto personale'
+        ])
+
+        # ===== STEP 9: CONFIGURAZIONE TEMPORANEA PER LA QUERY =====
+        # Gestisci le domande specifiche con configurazioni temporanee
         original_config = None
         temp_config_modified = False
 
-        if is_generic_question or is_url_question:
-            logger.info(f"Rilevata domanda {'generica' if is_generic_question else 'specifica per URL'}")
+        if is_generic_question or is_url_question or is_note_question:
+            type_msg = "generica"
+            if is_url_question:
+                type_msg = "specifica per URL"
+            elif is_note_question:
+                type_msg = "specifica per note"
+
+            logger.info(f"Rilevata domanda {type_msg}")
 
             # Salva la configurazione originale e modifica temporaneamente
             try:
@@ -1076,12 +1095,23 @@ def get_answer_from_project(project, question):
                     'similarity_threshold': project_config.similarity_threshold
                 }
 
-                # Modifica temporaneamente per domande generiche o URL
-                project_config.similarity_top_k = 20 if is_generic_question else 12  # Più documenti per domande generiche
-                project_config.mmr_lambda = 0.1 if is_generic_question else 0.3  # Più diversità per domande generiche
-                project_config.retriever_type = 'mmr'  # Forza l'uso di MMR per diversità
-                # MODIFICATO: Riduci la soglia di similarità per catturare più risultati
-                project_config.similarity_threshold = 0.5 if is_url_question else 0.6
+                # Modifica temporaneamente per domande specifiche
+                if is_generic_question:
+                    project_config.similarity_top_k = 20  # Più documenti per domande generiche
+                    project_config.mmr_lambda = 0.1  # Più diversità per domande generiche
+                    project_config.retriever_type = 'mmr'  # Forza l'uso di MMR per diversità
+                    project_config.similarity_threshold = 0.6
+                elif is_url_question:
+                    project_config.similarity_top_k = 12
+                    project_config.mmr_lambda = 0.3
+                    project_config.retriever_type = 'mmr'
+                    project_config.similarity_threshold = 0.5  # Più permissivo per URL
+                elif is_note_question:
+                    project_config.similarity_top_k = 8
+                    project_config.mmr_lambda = 0.4
+                    project_config.retriever_type = 'mmr'
+                    project_config.similarity_threshold = 0.5  # Più permissivo per note
+
                 project_config.save()
 
                 temp_config_modified = True
@@ -1090,6 +1120,7 @@ def get_answer_from_project(project, question):
             except Exception as e:
                 logger.error(f"Errore nella modifica della configurazione: {str(e)}")
 
+        # ===== STEP 10: ESECUZIONE DELLA RICERCA =====
         # Esegui la ricerca e ottieni la risposta
         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
         start_time = time.time()
@@ -1118,13 +1149,24 @@ def get_answer_from_project(project, question):
                 3. Se la domanda si riferisce a un URL specifico, concentrati principalmente su quello
                 """
                 result = qa_chain.invoke(enhanced_question)
+            elif is_note_question:
+                # Per domande specifiche sulle note
+                enhanced_question = f"""
+                {question}
+
+                IMPORTANTE: Questa domanda riguarda le note del progetto. Per favore:
+                1. Presta particolare attenzione alle fonti di tipo "nota" nel contesto
+                2. Quando citi informazioni da una nota, indica esplicitamente il titolo della nota
+                3. Se la domanda si riferisce a una nota specifica, concentrati principalmente su quella
+                """
+                result = qa_chain.invoke(enhanced_question)
             else:
-                # MODIFICATO: Migliora la query generale
+                # Migliora la query generale
                 enhanced_question = f"""
                 {question}
 
                 Cerca le informazioni più rilevanti nel contesto fornito. 
-                Se trovi informazioni negli URL inclusi nel contesto, includili nella risposta.
+                Se trovi informazioni nelle note o negli URL inclusi nel contesto, includili nella risposta.
                 """
                 result = qa_chain.invoke(enhanced_question)
 
@@ -1178,6 +1220,7 @@ def get_answer_from_project(project, question):
                 "engine_info": engine_info  # Includi info sul motore per debugging
             }
 
+        # ===== STEP 11: RIPRISTINO DELLA CONFIGURAZIONE ORIGINALE =====
         # Ripristina la configurazione originale se era stata modificata
         if temp_config_modified and original_config:
             try:
@@ -1189,6 +1232,7 @@ def get_answer_from_project(project, question):
             except Exception as e:
                 logger.error(f"Errore nel ripristinare la configurazione originale: {str(e)}")
 
+        # ===== STEP 12: ANALISI DELLE FONTI TROVATE =====
         # Log fonti trovate
         source_documents = result.get('source_documents', [])
         logger.info(f"Trovate {len(source_documents)} fonti pertinenti")
@@ -1232,6 +1276,7 @@ def get_answer_from_project(project, question):
         logger.info(f"URL unici nei risultati: {len(unique_urls)}")
         logger.info(f"Note uniche nei risultati: {len(unique_notes)}")
 
+        # ===== STEP 13: GESTIONE DI COPERTURA INCOMPLETA =====
         # Verifica per domande generiche se abbiamo una buona copertura
         if is_generic_question:
             warning_msg = ""
@@ -1254,20 +1299,37 @@ def get_answer_from_project(project, question):
                     warning_msg += f" URL non inclusi: {', '.join([u[:30] + '...' for u in missing_urls[:3]])}" + (
                         "..." if len(missing_urls) > 3 else "")
 
+            # Verifica la copertura delle note
+            if project_notes.count() > 0 and len(unique_notes) < project_notes.count():
+                all_project_notes = [n.title or f"Nota {n.id}" for n in project_notes]
+                missing_notes = [n for n in all_project_notes if n not in unique_notes]
+                if missing_notes:
+                    warning_msg += f"\n\nNOTA: La risposta include informazioni da {len(unique_notes)} delle {project_notes.count()} note disponibili nel progetto."
+                    warning_msg += f" Note non incluse: {', '.join(missing_notes[:3])}" + (
+                        "..." if len(missing_notes) > 3 else "")
+
             # Aggiorna la risposta se necessario
             if warning_msg and result.get('result'):
                 result['result'] = result['result'] + warning_msg
 
+        # ===== STEP 14: AVVISI PER DOMANDE SPECIFICHE SENZA RISULTATI =====
         # Se è una domanda URL, aggiungi un avviso se non sono stati trovati risultati da URL
         if is_url_question and not unique_urls and project_urls.count() > 0:
             url_warning = "\n\nNOTA: La tua domanda sembra riguardare contenuti web, ma non sono stati trovati URL pertinenti nella ricerca."
             if result.get('result'):
                 result['result'] = result['result'] + url_warning
 
+        # Se è una domanda sulle note, aggiungi un avviso se non sono state trovate note pertinenti
+        if is_note_question and not unique_notes and project_notes.count() > 0:
+            note_warning = "\n\nNOTA: La tua domanda sembra riguardare le note del progetto, ma non sono state trovate note pertinenti nella ricerca."
+            if result.get('result'):
+                result['result'] = result['result'] + note_warning
+
+        # ===== STEP 15: GESTIONE MANCANZA DI RISULTATI =====
         # Nessun risultato? Fornisci una risposta più utile
-        if not source_documents and project_urls.exists():
-            # NUOVO: Se non troviamo fonti ma sappiamo che ci sono URL, modifica la risposta
-            if is_url_question:
+        if not source_documents:
+            if is_url_question and project_urls.exists():
+                # Se non troviamo fonti ma sappiamo che ci sono URL
                 custom_answer = f"Non ho trovato informazioni specifiche su '{question}' negli URL indicizzati. "
                 custom_answer += f"Ho trovato {project_urls.count()} URL nel progetto: "
 
@@ -1280,14 +1342,26 @@ def get_answer_from_project(project, question):
                 custom_answer += "\n\nProva a formulare la domanda in modo diverso o a specificare quale URL ti interessa."
 
                 result = {"result": custom_answer, "source_documents": []}
+            elif is_note_question and project_notes.exists():
+                # Se non troviamo fonti ma sappiamo che ci sono note
+                custom_answer = f"Non ho trovato informazioni specifiche su '{question}' nelle note del progetto. "
+                custom_answer += f"Ho trovato {project_notes.count()} note nel progetto: "
+
+                # Elenca le note nel progetto
+                note_list = [f"- {note.title or f'Nota {note.id}'}" for note in project_notes[:5]]
+                if project_notes.count() > 5:
+                    note_list.append(f"... e altre {project_notes.count() - 5} note")
+
+                custom_answer += "\n" + "\n".join(note_list)
+                custom_answer += "\n\nProva a formulare la domanda in modo diverso o a specificare quale nota ti interessa."
+
+                result = {"result": custom_answer, "source_documents": []}
             else:
                 result = {
                     "result": "Non ho trovato informazioni pertinenti alla tua domanda nei contenuti disponibili.",
                     "source_documents": []}
-        elif not source_documents:
-            result = {"result": "Non ho trovato informazioni pertinenti alla tua domanda nei contenuti disponibili.",
-                      "source_documents": []}
 
+        # ===== STEP 16: FORMATTAZIONE DELLA RISPOSTA FINALE =====
         # Formatta risposta
         response = {
             "answer": result.get('result', 'Nessuna risposta trovata.'),

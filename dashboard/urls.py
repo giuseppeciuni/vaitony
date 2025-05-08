@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import execute_management_command
+from dashboard.dashboard_console import execute_management_command
 from profiles.views import user_login
 from django.conf import settings
 from django.conf.urls.static import static

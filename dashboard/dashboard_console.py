@@ -4,6 +4,9 @@ from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from django.http import JsonResponse
+from django.core.management import call_command
+import json
+
 
 # Importa i modelli necessari
 from profiles.models import (
@@ -481,3 +484,40 @@ def prepare_cache_document_types(user):
             'values': [45, 30, 15, 25, 10, 5],
             'labels': ['PDF', 'TXT', 'DOCX', 'URL', 'NOTE', 'ALTRO'],
         }
+
+
+#serve per poter eseguire i command di djando da interfaccia web dashboard
+def execute_management_command(request):
+    """
+    Esegue un comando di gestione Django in modo sicuro tramite API.
+    """
+    # Verifica l'autenticazione manualmente
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Autenticazione richiesta'})
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            command = data.get('command')
+            args = data.get('args', [])
+
+            # Lista dei comandi permessi per sicurezza
+            allowed_commands = [
+                'manage_embedding_cache',
+                'clear_embedding_cache',
+                'report_cache_usage',
+                'update_cache_stats'
+            ]
+
+            if command not in allowed_commands:
+                return JsonResponse({'success': False, 'message': 'Comando non permesso'})
+
+            # Esegui il comando
+            call_command(command, *args)
+
+            return JsonResponse({'success': True, 'message': 'Comando eseguito con successo'})
+        except Exception as e:
+            logger.error(f"Errore nell'esecuzione del comando {command}: {str(e)}")
+            return JsonResponse({'success': False, 'message': str(e)})
+
+    return JsonResponse({'success': False, 'message': 'Metodo non permesso'})

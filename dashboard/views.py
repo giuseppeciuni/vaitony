@@ -1,3 +1,4 @@
+import json
 import logging
 import mimetypes
 import os
@@ -5,23 +6,17 @@ import shutil  # cancellazione ricorsiva di directory su FS
 import time
 import traceback
 from datetime import timedelta, datetime
-from django.core.management import call_command
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-import json
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.db.models import Count, Q
-from django.db.models import Sum
-from django.db.models.functions import TruncDate
 from django.http import HttpResponse, Http404
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from django.db.models import Count
 from django.utils import timezone
-from dashboard.dashboard_console import get_dashboard_data, update_cache_statistics
 
+from dashboard.dashboard_console import get_dashboard_data, update_cache_statistics
 # Importazioni dai moduli RAG
 from dashboard.rag_utils import (
     create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note,
@@ -31,10 +26,9 @@ from dashboard.rag_utils import (
 from profiles.models import (
     Project, ProjectFile, ProjectNote, ProjectConversation, AnswerSource,
     LLMEngine, UserAPIKey, LLMProvider, RagTemplateType, RagDefaultSettings,
-    EmbeddingCacheStats, GlobalEmbeddingCache, ProjectRAGConfiguration,
+    ProjectRAGConfiguration,
     ProjectLLMConfiguration, ProjectIndexStatus, DefaultSystemPrompts, ProjectURL,
 )
-from .cache_statistics import update_embedding_cache_stats
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -60,73 +54,6 @@ def dashboard(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
-
-
-
-def execute_management_command(request):
-    """
-    Esegue un comando di gestione Django in modo sicuro tramite API.
-    """
-    # Verifica l'autenticazione manualmente
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Autenticazione richiesta'})
-
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            command = data.get('command')
-            args = data.get('args', [])
-
-            # Lista dei comandi permessi per sicurezza
-            allowed_commands = [
-                'manage_embedding_cache',
-                'clear_embedding_cache',
-                'report_cache_usage',
-                'update_cache_stats'
-            ]
-
-            if command not in allowed_commands:
-                return JsonResponse({'success': False, 'message': 'Comando non permesso'})
-
-            # Esegui il comando
-            call_command(command, *args)
-
-            return JsonResponse({'success': True, 'message': 'Comando eseguito con successo'})
-        except Exception as e:
-            logger.error(f"Errore nell'esecuzione del comando {command}: {str(e)}")
-            return JsonResponse({'success': False, 'message': str(e)})
-
-    return JsonResponse({'success': False, 'message': 'Metodo non permesso'})
-
-
-#serve per poter eseguire i command di djando da interfaccia web dashboard
-@login_required
-def execute_management_command(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            command = data.get('command')
-            args = data.get('args', [])
-
-            # Lista dei comandi permessi
-            allowed_commands = [
-                'manage_embedding_cache',
-                'clear_embedding_cache',
-                'report_cache_usage',
-                'update_cache_stats'
-            ]
-
-            if command not in allowed_commands:
-                return JsonResponse({'success': False, 'message': 'Comando non permesso'})
-
-            # Esegui il comando
-            call_command(command, *args)
-
-            return JsonResponse({'success': True, 'message': 'Comando eseguito con successo'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'message': str(e)})
-
-    return JsonResponse({'success': False, 'message': 'Metodo non permesso'})
 
 
 def documents_uploaded(request):
@@ -207,8 +134,6 @@ def documents_uploaded(request):
     else:
         logger.warning("User not Authenticated!")
         return redirect('login')
-
-
 
 
 def new_project(request):
@@ -3073,7 +2998,6 @@ def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
         dict: Dizionario con statistiche sul crawling (pagine elaborate, fallite, URL aggiunti)
     """
     # Import solo ProjectURL e funzioni necessarie
-    from profiles.models import ProjectURL
     from dashboard.rag_utils import create_project_rag_chain
     from urllib.parse import urlparse
 

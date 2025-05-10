@@ -777,7 +777,7 @@
         border: 1px solid #e9ecef;
         border-radius: 0.5rem;
         padding: 0.75rem;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
     }
 
     .website-link-card:hover {
@@ -804,6 +804,90 @@
         flex: 1;
         padding: 0.25rem 0.5rem;
         font-size: 0.75rem;
+    }
+
+    /* Stili per il toggle degli URL */
+    .website-link-card {
+        transition: all 0.3s ease;
+    }
+
+    /* Evidenzia le card degli URL attivi nella ricerca AI */
+    .website-link-card.url-active {
+        border-color: #0d6efd;
+        border-left-width: 3px;
+    }
+
+    /* Opacità ridotta per gli URL non inclusi nel RAG */
+    .website-link-card.url-inactive {
+        opacity: 0.75;
+        background-color: #f8f9fa;
+    }
+
+    /* Stile per il toggle switch */
+    .website-link-card .form-check-input {
+        cursor: pointer;
+    }
+
+    .website-link-card .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* Animazione per il cambio di stato */
+    .website-link-card .form-check-input:focus {
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* Etichetta AI accanto al toggle */
+    .website-link-card .form-check-label {
+        color: #6c757d;
+        font-size: 0.85rem;
+        transition: color 0.2s ease;
+    }
+
+    .website-link-card .form-check-input:checked + .form-check-label {
+        color: #0d6efd;
+        font-weight: 500;
+    }
+
+    /* Stato disabilitato durante l'aggiornamento */
+    .website-link-card .form-check-input:disabled {
+        opacity: 0.6;
+    }
+
+    /* Visualizzazione dei badge di stato */
+    .website-link-card .badge {
+        font-weight: normal;
+        font-size: 0.7rem;
+    }
+
+    .website-link-card .badge.bg-success {
+        background-color: #198754 !important;
+    }
+
+    .website-link-card .badge.bg-warning {
+        background-color: #ffc107 !important;
+    }
+
+    /* Tooltip per spiegare la funzione */
+    .url-toggle-tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .url-toggle-tooltip:hover::after {
+        content: "Includi/escludi questo URL dalla ricerca AI";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background-color: #212529;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        z-index: 1000;
     }
 
     /* Responsive Adjustments */
@@ -1255,29 +1339,49 @@
                     </div>
                     <div class="website-links-grid">
                         {% for url in project_urls %}
-                        <div class="website-link-card" data-url-id="{{ url.id }}">
-                            <div class="website-link-title">
-                                {{ url.title|default:url.url }}
+                            <div class="website-link-card" data-url-id="{{ url.id }}">
+                                <div class="website-link-title">
+                                    {{ url.title|default:url.url }}
+                                </div>
+                                <small class="text-muted">{{ url.url|truncatechars:40 }}</small>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <!-- Toggle switch -->
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input include-url-check" type="checkbox"
+                                               id="include-url-{{ url.id }}" data-url-id="{{ url.id }}"
+                                               {% if url.is_included_in_rag %}checked{% endif %}>
+                                        <label class="form-check-label small" for="include-url-{{ url.id }}">
+                                            AI
+                                        </label>
+                                    </div>
+                                    <!-- Indicatore di stato -->
+                                    <small class="text-muted">
+                                        {% if url.is_indexed %}
+                                        <span class="badge bg-success">Indicizzato</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">In attesa</span>
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <div class="website-link-actions mt-2">
+                                    <button class="btn btn-sm btn-outline-primary view-url-btn"
+                                            data-bs-toggle="modal" data-bs-target="#urlContentModal"
+                                            data-url-id="{{ url.id }}"
+                                            data-url-title="{{ url.title|default:url.url }}"
+                                            data-url="{{ url.url }}"
+                                            data-project-id="{{ project.id }}">
+                                        <i class="bi bi-eye"></i> Anteprima
+                                    </button>
+                                    <a href="{{ url.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-box-arrow-up-right"></i> Apri
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-danger delete-url-btn"
+                                            data-url-id="{{ url.id }}"
+                                            data-url-title="{{ url.title|default:url.url }}">
+                                        <i class="bi bi-trash"></i> Elimina
+                                    </button>
+                                </div>
                             </div>
-                            <small class="text-muted">{{ url.url|truncatechars:40 }}</small>
-                            <div class="website-link-actions">
-                                <button class="btn btn-sm btn-outline-primary view-url-btn"
-                                        data-bs-toggle="modal" data-bs-target="#urlContentModal"
-                                        data-url-id="{{ url.id }}"
-                                        data-url-title="{{ url.title|default:url.url }}"
-                                        data-url="{{ url.url }}">
-                                    <i class="bi bi-eye"></i> Anteprima
-                                </button>
-                                <a href="{{ url.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-box-arrow-up-right"></i> Apri
-                                </a>
-                                <button class="btn btn-sm btn-outline-danger delete-url-btn"
-                                        data-url-id="{{ url.id }}"
-                                        data-url-title="{{ url.title|default:url.url }}">
-                                    <i class="bi bi-trash"></i> Elimina
-                                </button>
-                            </div>
-                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -1695,6 +1799,7 @@
 </div>
 {% endblock %}
 
+
 {% block extra_js %}
 <script>
 // Quick Note System Functions
@@ -1980,7 +2085,7 @@ function initWebsiteCrawler() {
             openLink.href = url;
             document.getElementById('urlContentModalLabel').textContent = `Contenuto: ${urlTitle}`;
 
-            // Carica contenuto dell'URL
+            // Carica contenuto dell'URL specifico per questo progetto
             fetch('{% url "project" project.id %}', {
                 method: 'POST',
                 headers: {
@@ -1996,8 +2101,23 @@ function initWebsiteCrawler() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Verifica che stiamo mostrando il contenuto corretto
+                    console.log('URL ricevuto:', data.url);
+                    console.log('ID progetto:', data.project_id);
+
                     // Mostra contenuto
                     contentDisplay.innerHTML = data.content.replace(/\n/g, '<br>');
+
+                    // Aggiorna il titolo e l'URL nei link
+                    if (data.url) {
+                        urlDisplay.textContent = data.url;
+                        urlDisplay.href = data.url;
+                        openLink.href = data.url;
+                    }
+
+                    if (data.title) {
+                        document.getElementById('urlContentModalLabel').textContent = `Contenuto: ${data.title}`;
+                    }
                 } else {
                     contentDisplay.innerHTML = '<div class="alert alert-danger">Errore nel caricamento del contenuto: ' + (data.error || 'errore sconosciuto') + '</div>';
                 }
@@ -2307,7 +2427,7 @@ function initWebsiteCrawler() {
             location.reload(); // Per ora ricarica la pagina - in futuro aggiornare dinamicamente
         }, 3000);
     }
-    function showPageContent(pageUrl, pageId) {
+function showPageContent(pageUrl, pageId) {
         // Aggiorna modal con i dati della pagina
         const modal = document.getElementById('pageContentModal');
         const contentDisplay = document.getElementById('page-content-display');
@@ -2442,6 +2562,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Inizializza il sistema di crawling
     initWebsiteCrawler();
+
+    // Inizializza il sistema di toggle URL
+    initUrlToggleSystem();
 
     // Persistenza del tab attivo
     const triggerTabList = document.querySelectorAll('#projectTabs button');
@@ -3036,7 +3159,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    // Gestione eliminazione note
+// Gestione eliminazione note
     document.querySelectorAll('.delete-note-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             if (confirm('Eliminare questa nota?')) {
@@ -3436,5 +3559,111 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Funzione separata per gestire il toggle degli URL
+function initUrlToggleSystem() {
+    // Gestione del toggle degli URL per inclusione/esclusione nel RAG
+    document.querySelectorAll('.include-url-check').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const urlId = this.getAttribute('data-url-id');
+            const isIncluded = this.checked;
+
+            if (isIncluded) {
+                console.log(`✅ Attivazione URL ID: ${urlId}`);
+            } else {
+                console.log(`❌ Disattivazione URL ID: ${urlId}`);
+            }
+
+            // Disabilita temporaneamente il checkbox durante l'aggiornamento
+            this.disabled = true;
+
+            // Aggiorna l'icona accanto al checkbox per indicare che è in corso un'operazione
+            const label = this.nextElementSibling;
+            const originalLabelText = label.textContent;
+            label.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+            // Eseguiamo la richiesta con fetch - CORREZIONE: usa URL corretto
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_url_inclusion',
+                    'url_id': urlId,
+                    'is_included': isIncluded ? 'true' : 'false',
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+
+                // Prima controlliamo se la risposta è JSON
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json();
+                } else {
+                    // Se non è JSON, leggiamo come testo per debug
+                    return response.text().then(text => {
+                        console.error('Risposta non JSON ricevuta:', text.substring(0, 200));
+                        throw new Error('Il server ha restituito HTML invece di JSON');
+                    });
+                }
+            })
+            .then(data => {
+                console.log('Data ricevuta:', data);
+
+                if (data.success) {
+                    showToast(isIncluded ? 'URL incluso nella ricerca AI' : 'URL escluso dalla ricerca AI', 'success');
+
+                    // Aggiorna l'elemento visivamente
+                    const urlCard = this.closest('.website-link-card');
+                    if (urlCard) {
+                        if (isIncluded) {
+                            urlCard.classList.add('url-active');
+                            urlCard.classList.remove('url-inactive');
+                        } else {
+                            urlCard.classList.add('url-inactive');
+                            urlCard.classList.remove('url-active');
+                        }
+                    }
+                } else {
+                    // In caso di errore, ripristina lo stato del checkbox
+                    this.checked = !isIncluded;
+                    showToast('Errore durante l\'aggiornamento: ' + (data.message || 'errore sconosciuto'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                // In caso di errore, ripristina lo stato del checkbox
+                this.checked = !isIncluded;
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                // Riattiva il checkbox e ripristina il testo dell'etichetta
+                this.disabled = false;
+                label.textContent = originalLabelText;
+            });
+        });
+    });
+
+    // Inizializza classi CSS per gli URL in base allo stato iniziale
+    document.querySelectorAll('.include-url-check').forEach(checkbox => {
+        const urlCard = checkbox.closest('.website-link-card');
+        if (urlCard) {
+            if (checkbox.checked) {
+                urlCard.classList.add('url-active');
+                urlCard.classList.remove('url-inactive');
+            } else {
+                urlCard.classList.add('url-inactive');
+                urlCard.classList.remove('url-active');
+            }
+        }
+    });
+}
 </script>
 {% endblock %}

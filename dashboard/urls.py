@@ -25,6 +25,7 @@ urlpatterns = [
     path('project/<int:project_id>/details/', views.project_details, name='project_details'),
     path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
     path('project/<int:project_id>/config/', views.project_config, name='project_config'),
+    path('api/projects/<int:project_id>/urls/<int:url_id>/toggle-inclusion/', views.toggle_url_inclusion, name='toggle_url_inclusion'),
 
     # Crawler
     path('projects/<int:project_id>/website_crawl/', views.website_crawl, name='website_crawl'),

@@ -4,7 +4,7 @@ Supporta la navigazione ricorsiva dei link interni fino a una profondità specif
 con simulazione di browser completo per gestire siti dinamici e integrazione con modelli LLM
 per l'estrazione di contenuti informativi.
 """
-
+from django.utils import timezone
 import os
 import time
 import uuid
@@ -343,25 +343,48 @@ class WebCrawler:
 		if project and collected_data:
 			for url_data in collected_data:
 				try:
-					# Crea o aggiorna l'URL nel database
-					url_obj, created = ProjectURL.objects.update_or_create(
+					# Prima di creare un nuovo URL, verifica se esiste già
+					existing_url = ProjectURL.objects.filter(
 						project=url_data['project'],
-						url=url_data['url'],
-						defaults={
-							'title': url_data['title'],
-							'description': url_data['description'],
-							'content': url_data['content'],
-							'extracted_info': url_data['extracted_info'],
-							'file_path': url_data['file_path'],
-							'crawl_depth': url_data['crawl_depth'],
-							'is_indexed': False,
-							'metadata': url_data['metadata']
-						}
-					)
-					stored_urls.append(url_obj)
-					logger.info(f"URL {'creato' if created else 'aggiornato'} nel database: {url_data['url']}")
+						url=url_data['url']
+					).first()
+
+					if existing_url:
+						# Aggiorna il contenuto esistente
+						existing_url.title = url_data['title']
+						existing_url.description = url_data['description']
+						existing_url.content = url_data['content']
+						existing_url.extracted_info = url_data['extracted_info']
+						existing_url.file_path = url_data['file_path']
+						existing_url.crawl_depth = url_data['crawl_depth']
+						existing_url.is_indexed = False  # Forza reindicizzazione
+						existing_url.is_included_in_rag = True  # Assicura che sia incluso
+						existing_url.updated_at = timezone.now()  # Usa updated_at invece di last_crawled_at
+						existing_url.metadata = url_data['metadata']
+						existing_url.save()
+
+						stored_urls.append(existing_url)
+						logger.info(f"🔄 Aggiornato URL esistente {url_data['url']} per il progetto {project.id}")
+					else:
+						# Crea nuovo URL senza last_crawled_at
+						url_obj = ProjectURL.objects.create(
+							project=url_data['project'],
+							url=url_data['url'],
+							title=url_data['title'],
+							description=url_data['description'],
+							content=url_data['content'],
+							extracted_info=url_data['extracted_info'],
+							file_path=url_data['file_path'],
+							crawl_depth=url_data['crawl_depth'],
+							is_indexed=False,  # Inizialmente non indicizzato
+							is_included_in_rag=True,  # Includi di default nel RAG
+							metadata=url_data['metadata']
+						)
+						stored_urls.append(url_obj)
+						logger.info(f"🆕 Creato nuovo URL {url_data['url']} per il progetto {project.id}")
+
+
 				except Exception as db_error:
 					logger.error(f"Errore nel salvare l'URL nel database: {str(db_error)}")
-
 		logger.info(f"Crawling completato: {processed_pages} pagine elaborate, {failed_pages} fallite")
 		return processed_pages, failed_pages, documents, stored_urls

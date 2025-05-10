@@ -171,6 +171,7 @@ class ProjectURL(models.Model):
     file_path = models.CharField(max_length=767, blank=True, null=True)  # Ridotto anche questo per sicurezza
     crawl_depth = models.IntegerField(default=0)
     is_indexed = models.BooleanField(default=False)
+    is_included_in_rag = models.BooleanField(default=True)
     last_indexed_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1479,31 +1480,71 @@ def log_rag_query(sender, instance, created, **kwargs):
 
 # Signal per aggiornare l'indice quando viene aggiunto o aggiornato un URL
 @receiver(post_save, sender=ProjectURL)
+@receiver(post_save, sender=ProjectURL)
 def update_rag_index_on_url_change(sender, instance, created, **kwargs):
     """
     Signal che viene attivato quando un oggetto ProjectURL viene creato o modificato.
     Aggiorna l'indice RAG del progetto per includere i nuovi contenuti o le modifiche.
+    Gestisce anche i cambiamenti del flag is_included_in_rag per escludere/includere URL.
     """
     from dashboard.rag_utils import create_project_rag_chain
+    from django.utils import timezone
 
-    # Se l'URL è già indicizzato e non è appena stato creato, imposta is_indexed a False
-    # per forzare il riaggiornamento dell'indice
-    if not created and instance.is_indexed:
-        # Evita ricorsione infinita impostando manualmente il flag senza chiamare save()
-        ProjectURL.objects.filter(id=instance.id).update(is_indexed=False)
+    # Log del tipo di operazione
+    if created:
+        logger.info(f"🆕 Creato nuovo URL {instance.url} per il progetto {instance.project.id}")
+    else:
+        logger.info(f"🔄 Aggiornato URL {instance.url} per il progetto {instance.project.id}")
 
-    # Segnala nel log l'evento
-    logger.info(
-        f"{'Creato nuovo' if created else 'Aggiornato'} URL {instance.url} per il progetto {instance.project.id}")
+    # Controlla se stiamo aggiornando il flag is_included_in_rag
+    update_fields = kwargs.get('update_fields', [])
+    is_rag_inclusion_change = update_fields and 'is_included_in_rag' in update_fields
 
-    try:
-        # Aggiorna l'indice RAG solo se necessario
-        # Il riaggiornamento avverrà nella prossima query RAG o quando viene chiamata la funzione di controllo
-        # Questo evita di ricostruire l'indice troppe volte se vengono aggiornate molte URL in sequenza
-        from dashboard.rag_utils import check_project_index_update_needed
+    # Se è un cambio di stato di inclusione RAG, forza la ricostruzione
+    if is_rag_inclusion_change:
+        if instance.is_included_in_rag:
+            logger.info(f"✅ URL {instance.url} RIATTIVATA per la ricerca RAG - ricostruzione indice")
+        else:
+            logger.info(f"❌ URL {instance.url} DISATTIVATA dalla ricerca RAG - ricostruzione indice")
 
-        # Segna che l'indice necessita di aggiornamento
-        check_needed = check_project_index_update_needed(instance.project)
-        logger.info(f"Indice RAG del progetto {instance.project.id} necessita aggiornamento: {check_needed}")
-    except Exception as e:
-        logger.error(f"Errore nel segnalare l'aggiornamento dell'indice RAG: {str(e)}")
+        # Forza la ricostruzione completa dell'indice per riflettere il cambio
+        try:
+            create_project_rag_chain(instance.project, force_rebuild=True)
+            logger.info(f"✅ Indice RAG ricostruito con successo dopo cambio inclusione URL")
+        except Exception as e:
+            logger.error(f"❌ Errore nella ricostruzione dell'indice RAG: {str(e)}")
+        return
+
+    # Se l'URL è appena stata creata o modificata nel contenuto
+    if created or (update_fields and any(field in update_fields for field in ['content', 'title', 'extracted_info'])):
+        # Se l'URL non è inclusa nel RAG, non fare nulla
+        if not instance.is_included_in_rag:
+            logger.info(f"⚠️ URL {instance.url} non inclusa nel RAG, skip indicizzazione")
+            return
+
+        # Se l'URL è già indicizzata e non è appena stata creata, resetta il flag
+        if not created and instance.is_indexed:
+            # Evita ricorsione usando update() invece di save()
+            ProjectURL.objects.filter(id=instance.id).update(is_indexed=False)
+            logger.info(f"🔄 Reset flag is_indexed per URL {instance.url}")
+
+        # Aggiorna l'indice RAG
+        try:
+            logger.info(f"🔄 Aggiornamento indice RAG per URL {instance.url}")
+
+            # Per le nuove URL, non forziamo la ricostruzione completa
+            create_project_rag_chain(instance.project, force_rebuild=False)
+
+            # Marca l'URL come indicizzata
+            ProjectURL.objects.filter(id=instance.id).update(
+                is_indexed=True,
+                last_indexed_at=timezone.now()
+            )
+            logger.info(f"✅ URL {instance.url} indicizzata con successo")
+
+        except Exception as e:
+            logger.error(f"❌ Errore nell'aggiornamento dell'indice RAG per URL {instance.url}: {str(e)}")
+
+    # Se sono stati modificati altri campi che non richiedono reindicizzazione
+    else:
+        logger.debug(f"ℹ️ Modifica URL {instance.url} non richiede reindicizzazione")

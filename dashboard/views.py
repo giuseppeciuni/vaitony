@@ -15,12 +15,15 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
+import traceback
+from django.http import JsonResponse
+
 
 from dashboard.dashboard_console import get_dashboard_data, update_cache_statistics
 # Importazioni dai moduli RAG
 from dashboard.rag_utils import (
     create_project_rag_chain, handle_add_note, handle_delete_note, handle_update_note,
-    handle_toggle_note_inclusion, get_answer_from_project, handle_project_file_upload
+    handle_toggle_note_inclusion, get_answer_from_project, handle_project_file_upload,
 )
 # Modelli
 from profiles.models import (
@@ -705,16 +708,28 @@ def project(request, project_id=None):
 
                         # Log del contenuto per debug
                         logger.debug(f"Recupero contenuto per URL ID {url_id}: {url_obj.url}")
+                        logger.debug(f"URL completo: {url_obj.url}")
                         logger.debug(f"Content length: {len(url_obj.content or '')}")
+                        logger.debug(f"Titolo: {url_obj.title}")
+
+                        # Se non c'è contenuto, prova a recuperarlo
+                        if not url_obj.content or len(url_obj.content.strip()) < 10:
+                            logger.warning(f"URL {url_obj.url} ha contenuto vuoto o insufficiente")
+                            # Potresti qui implementare un re-crawl del contenuto se necessario
+                            content = f"Contenuto non disponibile per {url_obj.url}. Potrebbe essere necessario eseguire nuovamente il crawling."
+                        else:
+                            content = url_obj.content
 
                         return JsonResponse({
                             'success': True,
-                            'content': url_obj.content or "Nessun contenuto disponibile per questo URL",
-                            'title': url_obj.title,
-                            'url': url_obj.url
+                            'content': content,
+                            'title': url_obj.title or "Senza titolo",
+                            'url': url_obj.url,
+                            'id': url_obj.id,
+                            'project_id': project.id
                         })
                     except ProjectURL.DoesNotExist:
-                        logger.error(f"URL con ID {url_id} non trovato")
+                        logger.error(f"URL con ID {url_id} non trovato nel progetto {project.id}")
                         return JsonResponse({
                             'success': False,
                             'error': f"URL con ID {url_id} non trovato"
@@ -821,6 +836,7 @@ def project(request, project_id=None):
                             try:
                                 logger.info(f"🔄 Aggiornando l'indice dopo eliminazione del file")
                                 # Forza la ricostruzione dell'indice poiché è difficile rimuovere documenti specificicamente
+                                from dashboard.rag_utils import create_project_rag_chain
                                 create_project_rag_chain(project=project, force_rebuild=True)
                                 logger.info(f"✅ Indice vettoriale ricostruito con successo")
                             except Exception as e:
@@ -836,39 +852,58 @@ def project(request, project_id=None):
 
                 # ----- Eliminazione di un URL -----
                 elif action == 'delete_url':
-                    # Eliminazione di un URL dal progetto - CORREZIONE DEL BUG
+                    # Eliminazione di un URL dal progetto
                     url_id = request.POST.get('url_id')
 
-                    logger.debug(
-                        f"Richiesta di eliminazione URL ricevuta. ID URL: {url_id}, ID progetto: {project.id}")
+                    logger.debug(f"Richiesta di eliminazione URL ricevuta. ID URL: {url_id}, ID progetto: {project.id}")
 
                     # Verifica che url_id non sia vuoto
                     if not url_id:
                         logger.warning("Richiesta di eliminazione URL senza url_id")
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': "ID URL non fornito."
+                            })
                         messages.error(request, "ID URL non valido.")
                         return redirect('project', project_id=project.id)
 
                     try:
                         # Ottieni l'URL del progetto
-                        # CORREZIONE: Verifica esplicita che l'URL esista e appartenga al progetto
-                        if not ProjectURL.objects.filter(id=url_id, project=project).exists():
-                            logger.error(f"URL con ID {url_id} non trovato o non appartiene al progetto {project.id}")
-                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                                return JsonResponse({
-                                    'success': False,
-                                    'message': f"URL con ID {url_id} non trovato o non appartiene al progetto."
-                                })
-                            messages.error(request, "URL non trovato o non appartiene al progetto.")
-                            return redirect('project', project_id=project.id)
-
-                        # Ottieni l'URL dopo la verifica di esistenza
                         project_url = ProjectURL.objects.get(id=url_id, project=project)
                         logger.info(f"URL trovato per l'eliminazione: {project_url.url} (ID: {url_id})")
 
-                        # Memorizza se l'URL era indicizzato
+                        # Memorizza informazioni sull'URL prima di eliminarlo
                         was_indexed = project_url.is_indexed
+                        was_included_in_rag = project_url.is_included_in_rag
+                        url_address = project_url.url
+
+                        # Prima rimuovi dall'indice FAISS (prima di eliminare dal DB per avere ancora l'ID)
+                        faiss_removal_success = True
+                        if was_indexed or was_included_in_rag:
+                            try:
+                                logger.info(f"🔄 Rimozione URL dall'indice FAISS: {url_address}")
+                                # Usa la funzione specifica per rimuovere l'URL dall'indice
+                                from dashboard.rag_utils import remove_url_from_index
+                                faiss_removal_success = remove_url_from_index(project, url_id)
+
+                                if faiss_removal_success:
+                                    logger.info(f"✅ URL rimosso dall'indice FAISS con successo")
+                                else:
+                                    logger.warning(
+                                        f"⚠️ Rimozione dall'indice FAISS fallita, tentativo di ricostruzione completa")
+                                    # Se fallisce, prova con la ricostruzione completa
+                                    from dashboard.rag_utils import create_project_rag_chain
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+                                    logger.info(f"✅ Indice ricostruito completamente")
+
+                            except Exception as faiss_error:
+                                logger.error(f"❌ Errore nella rimozione/ricostruzione dell'indice: {str(faiss_error)}")
+                                logger.error(traceback.format_exc())
+                                faiss_removal_success = False
 
                         # Elimina il file fisico se presente
+                        file_deletion_success = True
                         if project_url.file_path and os.path.exists(project_url.file_path):
                             logger.debug(f"Eliminazione del file fisico dell'URL in: {project_url.file_path}")
                             try:
@@ -876,33 +911,53 @@ def project(request, project_id=None):
                                 logger.info(f"File fisico dell'URL eliminato: {project_url.file_path}")
                             except Exception as e:
                                 logger.error(f"Errore nell'eliminazione del file fisico dell'URL: {str(e)}")
+                                file_deletion_success = False
 
                         # Elimina il record dal database
                         project_url.delete()
                         logger.info(f"Record eliminato dal database per l'URL ID: {url_id}")
 
-                        # Se l'URL era indicizzato, aggiorna l'indice vettoriale
-                        if was_indexed:
-                            try:
-                                logger.info(f"🔄 Aggiornando l'indice dopo eliminazione dell'URL")
-                                # Forza la ricostruzione dell'indice
-                                create_project_rag_chain(project=project, force_rebuild=True)
-                                logger.info(f"✅ Indice vettoriale ricostruito con successo")
-                            except Exception as e:
-                                logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+                        # Determina il messaggio di risposta in base al successo delle operazioni
+                        if not faiss_removal_success:
+                            message = "URL eliminato dal database, ma si è verificato un errore nella rimozione dall'indice di ricerca."
+                            success_level = "warning"
+                        elif not file_deletion_success:
+                            message = "URL eliminato con successo, ma il file fisico non è stato rimosso."
+                            success_level = "warning"
+                        else:
+                            message = "URL eliminato con successo."
+                            success_level = "success"
 
-                        # Per richieste AJAX, invia una risposta di successo
+                        logger.info(f"✅ Eliminazione URL completata: {url_address} (livello: {success_level})")
+
+                        # Per richieste AJAX, invia una risposta appropriata
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({
                                 'success': True,
-                                'message': "URL eliminato con successo."
+                                'message': message,
+                                'warning': success_level == "warning"
                             })
 
-                        messages.success(request, "URL eliminato con successo.")
+                        # Messaggio per richieste normali
+                        if success_level == "warning":
+                            messages.warning(request, message)
+                        else:
+                            messages.success(request, message)
+
+                        return redirect('project', project_id=project.id)
+
+                    except ProjectURL.DoesNotExist:
+                        logger.error(f"URL con ID {url_id} non trovato o non appartiene al progetto {project.id}")
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f"URL con ID {url_id} non trovato."
+                            })
+                        messages.error(request, "URL non trovato.")
                         return redirect('project', project_id=project.id)
 
                     except Exception as e:
-                        logger.exception(f"Errore nell'azione delete_url: {str(e)}")
+                        logger.exception(f"Errore inaspettato nell'azione delete_url: {str(e)}")
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({
                                 'success': False,
@@ -910,7 +965,8 @@ def project(request, project_id=None):
                             })
                         messages.error(request, f"Errore nell'eliminazione dell'URL: {str(e)}")
                         return redirect('project', project_id=project.id)
-# ----- Aggiunta di un URL manuale -----
+
+                # ----- Aggiunta di un URL manuale -----
                 elif action == 'add_url':
                     # Aggiungi un URL al progetto manualmente
                     url = request.POST.get('url', '').strip()
@@ -938,16 +994,27 @@ def project(request, project_id=None):
                         # Crea un nuovo URL nel database
                         project_url = ProjectURL.objects.create(
                             project=project,
-                            url=url,  # Utilizzo dell'URL come CharField
-                            title=f"URL: {domain}",  # Titolo temporaneo
-                            is_indexed=False,  # Da indicizzare
-                            crawl_depth=0,  # Non derivato da crawling
+                            url=url,
+                            title=f"URL: {domain}",
+                            is_indexed=True,  # MODIFICA: Marca come già indicizzato
+                            is_included_in_rag=True,  # AGGIUNTA: Includi di default nel RAG
+                            crawl_depth=0,
                             metadata={
                                 'domain': domain,
                                 'path': parsed_url.path,
                                 'manually_added': True
                             }
                         )
+
+                        # AGGIUNTA: Forza l'aggiornamento immediato dell'indice dopo aver creato l'URL
+                        logger.info(f"Forzando aggiornamento indice RAG dopo aggiunta URL: {url}")
+                        try:
+                            from dashboard.rag_utils import create_project_rag_chain
+                            create_project_rag_chain(project, force_rebuild=False)
+                            logger.info(f"Indice RAG aggiornato con successo per URL: {url}")
+                        except Exception as e:
+                            logger.error(f"Errore nell'aggiornamento dell'indice RAG: {str(e)}")
+
 
                         # Avvia il processo di crawling per questo URL specifico
                         try:
@@ -1049,27 +1116,81 @@ def project(request, project_id=None):
                         return redirect('project', project_id=project.id)
 
                 # Inclusione/esclusione di note dal RAG
-                elif action == 'toggle_note_inclusion':
+                # ----- Toggle inclusione URL nel RAG -----
+                elif action == 'toggle_url_inclusion':
                     # Toggle inclusione nella ricerca RAG
-                    note_id = request.POST.get('note_id')
+                    url_id = request.POST.get('url_id')
                     is_included = request.POST.get('is_included') == 'true'
 
-                    if note_id:
-                        # Usa la funzione ottimizzata per toggle inclusione note
-                        success, message = handle_toggle_note_inclusion(project, note_id, is_included)
+                    logger.info(f"🔄 Richiesta toggle URL - ID: {url_id}, is_included: {is_included}")
 
-                        # Risposta per richieste AJAX
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    if url_id:
+                        try:
+                            # Trova l'URL del progetto
+                            url_obj = ProjectURL.objects.get(id=url_id, project=project)
+
+                            # Valore precedente per verificare il cambiamento
+                            previous_value = url_obj.is_included_in_rag
+
+                            # Aggiorna lo stato di inclusione
+                            url_obj.is_included_in_rag = is_included
+                            url_obj.save(update_fields=['is_included_in_rag', 'updated_at'])
+
+                            # AGGIUNTA: Log di attivazione/disattivazione per debug
+                            if is_included:
+                                logger.info(f"✅ URL ATTIVATA per ricerca AI: {url_obj.url} (ID: {url_id})")
+                            else:
+                                logger.info(f"❌ URL DISATTIVATA per ricerca AI: {url_obj.url} (ID: {url_id})")
+
+                            # Forza la ricostruzione dell'indice se lo stato è cambiato
+                            if previous_value != is_included:
+                                try:
+                                    logger.info(
+                                        f"🔄 Avvio aggiornamento dell'indice vettoriale dopo toggle URL {url_obj.url} -> is_included_in_rag={is_included}")
+
+                                    # Forza un nuovo crawling dell'indice vettoriale
+                                    from dashboard.rag_utils import create_project_rag_chain
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+                                    logger.info(f"✅ Ricostruzione indice completata")
+
+                                except Exception as e:
+                                    logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+                                    logger.error(traceback.format_exc())
+
+                                    return JsonResponse({
+                                        'success': False,
+                                        'message': f"URL {'incluso' if is_included else 'escluso'}, ma errore nella ricostruzione dell'indice: {str(e)}"
+                                    })
+
+                            # IMPORTANTE: Restituisci sempre una risposta JSON per questa azione
                             return JsonResponse({
-                                'success': success,
-                                'message': message
+                                'success': True,
+                                'message': f"URL {'incluso' if is_included else 'escluso'} nella ricerca AI"
                             })
 
-                        if success:
-                            messages.success(request, message)
-                        else:
-                            messages.error(request, message)
-                        return redirect('project', project_id=project.id)
+                        except ProjectURL.DoesNotExist:
+                            logger.error(f"URL con ID {url_id} non trovato")
+
+                            return JsonResponse({
+                                'success': False,
+                                'message': "URL non trovato."
+                            })
+
+                        except Exception as e:
+                            logger.error(f"Errore nel toggle URL: {str(e)}")
+                            logger.error(traceback.format_exc())
+
+                            return JsonResponse({
+                                'success': False,
+                                'message': f"Errore: {str(e)}"
+                            })
+                    else:
+                        logger.error("URL ID non fornito nella richiesta")
+
+                        return JsonResponse({
+                            'success': False,
+                            'message': "ID URL non fornito"
+                        })
 
                 # ----- Avvio crawling web -----
                 elif action == 'start_crawling':
@@ -1781,6 +1902,81 @@ def project_config(request, project_id):
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
                         messages.error(request, f"Errore: {str(e)}")
+
+                # ----- Toggle inclusione URL nel RAG -----
+                elif action == 'toggle_url_inclusion':
+                    # Toggle inclusione nella ricerca RAG
+                    url_id = request.POST.get('url_id')
+                    is_included = request.POST.get('is_included') == 'true'
+
+                    logger.info(f"🔄 Richiesta toggle URL - ID: {url_id}, is_included: {is_included}")
+
+                    if url_id:
+                        try:
+                            # Trova l'URL del progetto
+                            url_obj = ProjectURL.objects.get(id=url_id, project=project)
+
+                            # Valore precedente per verificare il cambiamento
+                            previous_value = url_obj.is_included_in_rag
+
+                            # Aggiorna lo stato di inclusione
+                            url_obj.is_included_in_rag = is_included
+                            url_obj.save(update_fields=['is_included_in_rag', 'updated_at'])
+
+                            # AGGIUNTA: Log di attivazione/disattivazione per debug
+                            if is_included:
+                                logger.info(f"✅ URL ATTIVATA per ricerca AI: {url_obj.url} (ID: {url_id})")
+                            else:
+                                logger.info(f"❌ URL DISATTIVATA per ricerca AI: {url_obj.url} (ID: {url_id})")
+
+                            # Forza la ricostruzione dell'indice se lo stato è cambiato
+                            if previous_value != is_included:
+                                try:
+                                    logger.info(
+                                        f"🔄 Avvio aggiornamento dell'indice vettoriale dopo toggle URL {url_obj.url} -> is_included_in_rag={is_included}")
+
+                                    # Forza un nuovo crawling dell'indice vettoriale
+                                    create_project_rag_chain(project=project, force_rebuild=True)
+                                    logger.info(f"✅ Ricostruzione indice completata")
+
+                                except Exception as e:
+                                    logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+                                    logger.error(traceback.format_exc())
+
+                                    return JsonResponse({
+                                        'success': False,
+                                        'message': f"URL {'incluso' if is_included else 'escluso'}, ma errore nella ricostruzione dell'indice: {str(e)}"
+                                    })
+
+                            # IMPORTANTE: Restituisci sempre una risposta JSON per questa azione
+                            return JsonResponse({
+                                'success': True,
+                                'message': f"URL {'incluso' if is_included else 'escluso'} nella ricerca AI"
+                            })
+
+                        except ProjectURL.DoesNotExist:
+                            logger.error(f"URL con ID {url_id} non trovato")
+
+                            return JsonResponse({
+                                'success': False,
+                                'message': "URL non trovato."
+                            })
+
+                        except Exception as e:
+                            logger.error(f"Errore nel toggle URL: {str(e)}")
+                            logger.error(traceback.format_exc())
+
+                            return JsonResponse({
+                                'success': False,
+                                'message': f"Errore: {str(e)}"
+                            })
+                    else:
+                        logger.error("URL ID non fornito nella richiesta")
+
+                        return JsonResponse({
+                            'success': False,
+                            'message': "ID URL non fornito"
+                        })
 
                 return redirect('project_config', project_id=project.id)
 
@@ -3023,6 +3219,7 @@ def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
     # Ora il crawler salverà direttamente in ProjectURL
     processed_pages, failed_pages, _, stored_urls = crawler.crawl(start_url, None, project)
 
+
     # Aggiorna l'indice vettoriale solo se abbiamo URL da aggiungere
     if stored_urls:
         try:
@@ -3038,3 +3235,92 @@ def handle_website_crawl(project, start_url, max_depth=3, max_pages=100,
         'failed_pages': failed_pages,
         'added_urls': len(stored_urls)
     }
+
+
+
+# Nuova vista per gestire l'attivazione/disattivazione dell'inclusione degli URL
+# NON usiamo annotazioni come richiesto
+# Potresti voler aggiungere @login_required sopra questa funzione se usi l'autenticazione utente
+# @login_required
+def toggle_url_inclusion(request, project_id, url_id):
+    """
+    Gestisce la richiesta AJAX per attivare/disattivare l'inclusione di un URL nel RAG.
+    Restituisce sempre JsonResponse.
+    """
+    # Controlla che la richiesta sia POST, come atteso dal frontend
+    if request.method == 'POST':
+        try:
+            # Leggi e parsa il corpo della richiesta JSON
+            try:
+                data = json.loads(request.body)
+                is_included = data.get('is_included')
+                # Verifica che il parametro 'is_included' sia presente
+                if is_included is None:
+                    logger.warning(f"Parametro 'is_included' mancante nella richiesta POST per project_id={project_id}, url_id={url_id}")
+                    # Ritorna un errore client 400 Bad Request in JSON
+                    return JsonResponse({'status': 'error', 'message': 'Parametro "is_included" mancante nel corpo della richiesta.'}, status=400)
+                is_included = bool(is_included) # Converti in booleano per sicurezza
+            except json.JSONDecodeError:
+                 logger.warning(f"Corpo della richiesta non JSON valido per project_id={project_id}, url_id={url_id}")
+                 # Ritorna un errore client 400 Bad Request in JSON
+                 return JsonResponse({'status': 'error', 'message': 'Corpo della richiesta JSON non valido.'}, status=400)
+
+
+            # Trova l'oggetto ProjectURL associato al progetto
+            try:
+                url_obj = ProjectURL.objects.get(id=url_id, project__id=project_id)
+            except ProjectURL.DoesNotExist:
+                logger.warning(f"Tentativo di aggiornare URL non esistente o non appartenente al progetto: project_id={project_id}, url_id={url_id}")
+                # Ritorna un errore client 404 Not Found in JSON
+                return JsonResponse({'status': 'error', 'message': 'URL non trovato o non appartenente a questo progetto.'}, status=404)
+
+            # Memorizza lo stato iniziale prima della modifica
+            initial_inclusion_status = url_obj.is_included_in_rag
+
+            # Aggiorna lo stato di inclusione
+            url_obj.is_included_in_rag = is_included
+            url_obj.save()
+
+            logger.info(f"Stato di inclusione per URL ID {url_id} ('{url_obj.url}') del progetto {project_id} aggiornato a {is_included}.")
+
+
+            # --- Logica per aggiornare l'indice RAG (se lo fai subito dopo la modifica) ---
+            # Controlla se lo stato è effettivamente cambiato e se l'URL è ora incluso
+            if initial_inclusion_status != url_obj.is_included_in_rag and url_obj.is_included_in_rag:
+                 try:
+                     logger.info(f"Avvio aggiornamento indice RAG per progetto {project_id} dopo inclusione URL {url_id}.")
+                     # Chiama la funzione per (ri)costruire o aggiornare l'indice del progetto
+                     # Assicurati che create_project_rag_chain sia importata da rag_utils.py
+                     # Potresti voler passare il progetto, non solo l'URL
+                     create_project_rag_chain(url_obj.project)
+                     logger.info(f"Indice RAG per progetto {project_id} aggiornato con successo.")
+                 except Exception as rag_error:
+                     # Gestisci gli errori durante l'aggiornamento dell'indice RAG
+                     logger.error(f"Errore critico nell'aggiornamento dell'indice RAG per progetto {project_id} dopo inclusione URL {url_id}: {rag_error}", exc_info=True)
+                     # Puoi decidere se restituire un errore fatale o solo un avviso
+                     # Se decidi che l'aggiornamento dell'URL è riuscito anche se l'indice ha fallito:
+                     return JsonResponse({
+                         'status': 'warning',
+                         'message': 'Stato URL aggiornato, ma si è verificato un errore nell\'aggiornamento dell\'indice RAG. Potrebbe essere necessaria una reindicizzazione manuale.',
+                         'url_status': url_obj.is_included_in_rag
+                         }, status=200) # Stato 200 OK perché l'aggiornamento URL è avvenuto
+
+                     # Se invece consideri il fallimento dell'indice un errore fatale per questa operazione:
+                     # return JsonResponse({'status': 'error', 'message': f'Errore interno del server: Impossibile aggiornare l\'indice RAG dopo la modifica dell\'URL.'}, status=500)
+
+            # Se tutto il blocco try riesce e non ci sono errori nell'aggiornamento RAG (o sono gestiti come warning), ritorna successo
+            # Ritorna una risposta di successo in formato JSON con il nuovo stato
+            return JsonResponse({'status': 'success', 'message': 'Stato di inclusione URL aggiornato.', 'url_status': url_obj.is_included_in_rag})
+
+
+        except Exception as e:
+            # Cattura qualsiasi altra eccezione inattesa che si verifica
+            # Logga l'errore completo con traceback per il debug
+            logger.error(f"Errore inatteso nella vista toggle_url_inclusion (project_id={project_id}, url_id={url_id}): {e}", exc_info=True)
+            # Ritorna un errore del server 500 in JSON
+            return JsonResponse({'status': 'error', 'message': f'Errore interno del server durante l\'elaborazione della richiesta.'}, status=500) # Evita di esporre dettagli specifici dell'errore in produzione
+
+    else:
+        # Gestisce i metodi HTTP diversi da POST. Ritorna un errore 405 Method Not Allowed in JSON.
+        logger.warning(f"Tentativo di accedere alla vista toggle_url_inclusion con metodo {request.method} (richiesto POST) per project_id={project_id}, url_id={url_id}")
+        return JsonResponse({'status': 'error', 'message': 'Metodo HTTP non permesso.'}, status=405)

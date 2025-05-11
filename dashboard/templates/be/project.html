@@ -992,6 +992,11 @@
                 <i class="bi bi-gear me-1"></i> Profilo IA
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="chatbot-tab" data-bs-toggle="tab" data-bs-target="#chatbot" type="button" role="tab">
+                <i class="bi bi-chat-dots me-1"></i> Chatbot
+            </button>
+        </li>
     </ul>
 
     <!-- Tab Content -->
@@ -1672,8 +1677,162 @@
             </div>
             {% endif %}
         </div>
+
+        <!-- Chatbot Tab -->
+        <div class="tab-pane fade" id="chatbot" role="tabpanel" aria-labelledby="chatbot-tab">
+            <div class="row">
+                <div class="col-lg-10 mx-auto">
+                    <!-- Sezione principale chatbot -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0 d-flex justify-content-between align-items-center">
+                                <span>
+                                    <i class="bi bi-chat-dots me-2"></i>Chatbot per Siti Web
+                                </span>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="chatbot-toggle"
+                                           {% if project.is_public_chat_enabled %}checked{% endif %}>
+                                    <label class="form-check-label text-white" for="chatbot-toggle">
+                                        <span id="chatbot-status-text">
+                                            {% if project.is_public_chat_enabled %}Attivo{% else %}Disattivo{% endif %}
+                                        </span>
+                                    </label>
+                                </div>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="chatbot-enabled-content" {% if not project.is_public_chat_enabled %}style="display: none;"{% endif %}>
+                                <!-- Contenuto quando il chatbot è abilitato -->
+                                <div class="alert alert-success mb-4">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Il chatbot pubblico è <strong>attivo</strong> per questo progetto.
+                                </div>
+
+                                <h6 class="mb-3">Codice di integrazione per il tuo sito web:</h6>
+                                <div class="mb-3">
+                                    <div class="form-control" style="height: auto; font-family: monospace; background-color: #f8f9fa;">
+                                        <pre class="mb-0"><code>&lt;!-- Vaitony Chatbot Widget --&gt;
+        &lt;script&gt;
+        (function(w,d,s,o,f,js,fjs){
+            w['VaitonyChatbot']=o;w[o]=w[o]||function(){
+            (w[o].q=w[o].q||[]).push(arguments)};w[o].l=1*new Date();
+            js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
+            js.id='vaitony-chatbot';js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
+        }(window,document,'script','vchat','{{ request.build_absolute_uri|slice:":-1" }}{% url "chatbot_widget_js" project.slug %}'));
+
+        // Configurazione opzionale
+        vchat('config', {
+            position: 'bottom-right', // bottom-right, bottom-left, top-right, top-left
+            theme: 'blue' // blue, purple, green, red
+        });
+        &lt;/script&gt;</code></pre>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="copyEmbedCode()">
+                                        <i class="bi bi-clipboard me-1"></i> Copia codice
+                                    </button>
+                                </div>
+
+                                <h6 class="mb-3">Istruzioni per l'integrazione:</h6>
+                                <ol class="mb-4">
+                                    <li>Copia il codice sopra utilizzando il pulsante "Copia codice"</li>
+                                    <li>Incolla il codice nel tuo sito web prima del tag <code>&lt;/body&gt;</code></li>
+                                    <li>Il chatbot apparirà automaticamente nell'angolo in basso a destra del tuo sito</li>
+                                    <li>Puoi personalizzare la posizione e il tema modificando i parametri di configurazione</li>
+                                </ol>
+
+                                <div class="alert alert-light border">
+                                    <h6 class="alert-heading">
+                                        <i class="bi bi-gear me-2"></i>Opzioni di personalizzazione:
+                                    </h6>
+                                    <ul class="mb-0">
+                                        <li><strong>position</strong>: Posizione del widget (bottom-right, bottom-left, top-right, top-left)</li>
+                                        <li><strong>theme</strong>: Tema colore (blue, purple, green, red)</li>
+                                    </ul>
+                                </div>
+
+                                <hr>
+
+                                <h6 class="mb-3">API JavaScript disponibili:</h6>
+                                <p>Una volta integrato, puoi controllare il chatbot programmaticamente:</p>
+                                <div class="form-control mb-3" style="font-family: monospace; background-color: #f8f9fa;">
+                                    <pre class="mb-0"><code>// Apri il chat
+        VaitonyChatbot.open();
+
+        // Chiudi il chat
+        VaitonyChatbot.close();
+
+        // Invia un messaggio
+        VaitonyChatbot.sendMessage('Ciao!');</code></pre>
+                                </div>
+                            </div>
+
+                            <div id="chatbot-disabled-content" {% if project.is_public_chat_enabled %}style="display: none;"{% endif %}>
+                                <!-- Contenuto quando il chatbot è disabilitato -->
+                                <div class="alert alert-warning mb-4">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    Il chatbot pubblico <strong>non è abilitato</strong> per questo progetto.
+                                </div>
+
+                                <p class="lead mb-4">Integra un chatbot intelligente nel tuo sito web per rispondere automaticamente alle domande dei visitatori.</p>
+
+                                <div class="alert alert-info mb-4">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Il chatbot utilizza l'intelligenza artificiale per rispondere in base ai documenti e alle informazioni di questo progetto.
+                                </div>
+
+                                <div class="text-center">
+                                    <p class="mb-3">Attiva il chatbot utilizzando l'interruttore in alto per ottenere il codice di integrazione.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Informazioni aggiuntive -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="bi bi-lightbulb me-2"></i>Funzionalità del Chatbot
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Risposte automatiche 24/7</li>
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Basato sui tuoi documenti</li>
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Integrazione semplice</li>
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Responsive su tutti i dispositivi</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Personalizzabile nell'aspetto</li>
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Multilingua</li>
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>Analytics integrate</li>
+                                        <li><i class="bi bi-check-circle text-success me-2"></i>API JavaScript per controllo avanzato</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+                            <div class="text-center">
+                                <p class="mb-2">Stato attuale del chatbot:
+                                    <span id="chatbot-status-badge" class="badge {% if project.is_public_chat_enabled %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {% if project.is_public_chat_enabled %}ATTIVO{% else %}DISATTIVO{% endif %}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
     </div>
 </div>
+
+
 
 <!-- Input fisso posizionato fuori dai tab, visibile solo quando si è nel tab "Chiedi all'AI" -->
 <div class="chat-input-container" id="fixed-chat-input" style="display: none;">
@@ -3308,6 +3467,88 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Gestione toggle chatbot
+    // Nel file project.html, modifica la gestione del toggle chatbot:
+
+    const chatbotToggle = document.getElementById('chatbot-toggle');
+
+    if (chatbotToggle) {
+        chatbotToggle.addEventListener('change', function() {
+            const isEnabled = this.checked;
+
+            // Disabilita temporaneamente lo switch
+            this.disabled = true;
+
+            // Mostra un indicatore di caricamento
+            const statusText = document.getElementById('chatbot-status-text');
+            const originalText = statusText.textContent;
+            statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
+
+            // Invia la richiesta AJAX
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_chatbot',
+                    'is_enabled': isEnabled,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Aggiorna l'interfaccia
+                    const enabledContent = document.getElementById('chatbot-enabled-content');
+                    const disabledContent = document.getElementById('chatbot-disabled-content');
+                    const statusBadge = document.getElementById('chatbot-status-badge');
+
+                    if (isEnabled) {
+                        enabledContent.style.display = 'block';
+                        disabledContent.style.display = 'none';
+                        statusText.textContent = 'Attivo';
+                        statusBadge.textContent = 'ATTIVO';
+                        statusBadge.classList.remove('bg-secondary');
+                        statusBadge.classList.add('bg-success');
+                    } else {
+                        enabledContent.style.display = 'none';
+                        disabledContent.style.display = 'block';
+                        statusText.textContent = 'Disattivo';
+                        statusBadge.textContent = 'DISATTIVO';
+                        statusBadge.classList.remove('bg-success');
+                        statusBadge.classList.add('bg-secondary');
+                    }
+
+                    showToast(data.message || 'Stato del chatbot aggiornato con successo', 'success');
+                } else {
+                    // In caso di errore, ripristina lo stato dello switch
+                    this.checked = !isEnabled;
+                    statusText.textContent = originalText;
+                    showToast(data.message || 'Errore nell\'aggiornamento del chatbot', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isEnabled;
+                statusText.textContent = originalText;
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                // Riabilita lo switch
+                this.disabled = false;
+            });
+        });
+    }
+
+
+
     // Carica tab salvato nel localStorage
     const savedTab = localStorage.getItem('activeProjectTab');
     if (savedTab) {
@@ -3559,6 +3800,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Funzione per copiare il codice di embed
+function copyEmbedCode() {
+    const embedCode = document.querySelector('#chatbot pre code').textContent;
+    navigator.clipboard.writeText(embedCode).then(() => {
+        showToast('Codice copiato negli appunti!', 'success');
+    }).catch(err => {
+        showToast('Errore nel copiare il codice', 'danger');
+        console.error('Errore clipboard:', err);
+    });
+}
 
 // Funzione separata per gestire il toggle degli URL
 function initUrlToggleSystem() {

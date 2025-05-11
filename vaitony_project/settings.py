@@ -80,6 +80,60 @@ TEMPLATES = [
 WSGI_APPLICATION = 'vaitony_project.wsgi.application'
 
 
+
+# Configurazione CORS per il supporto di iframe (ChatBot esterno)
+# # PER PRODUZIONE
+# CORS_ALLOWED_ORIGIN_REGEXES = [
+#     r"^https://.*$",  # Permette tutte le origini HTTPS
+# ]
+#
+# # Headers permessi
+# CORS_ALLOW_HEADERS = [
+#     'accept',
+#     'accept-encoding',
+#     'authorization',
+#     'content-type',
+#     'dnt',
+#     'origin',
+#     'user-agent',
+#     'x-csrftoken',
+#     'x-requested-with',
+#     'x-api-key',  # Il nostro header custom per l'API key
+# ]
+#
+# # Metodi permessi
+# CORS_ALLOW_METHODS = [
+#     'GET',
+#     'OPTIONS',
+#     'POST',
+# ]
+
+
+# Configurazione CORS per il supporto di iframe (ChatBot esterno)
+# PER SVILUPPO PIU PERMISSIVO
+CORS_ALLOW_ALL_ORIGINS = True  # Solo per sviluppo!
+
+# Headers permessi
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-api-key',  # Il nostro header custom per l'API key
+]
+
+# Metodi permessi
+CORS_ALLOW_METHODS = [
+    'GET',
+    'OPTIONS',
+    'POST',
+]
+
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 

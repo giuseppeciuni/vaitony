@@ -51,8 +51,7 @@ class Profile(models.Model):
     is_active = models.BooleanField(default=True, blank=True)
     agreement_terms = models.BooleanField(default=True, blank=False)
     picture = models.ImageField(null=True, blank=True)
-    profile_type = models.ForeignKey(Profile_type, on_delete=models.CASCADE,
-                                     default=1)  # default=1 corrisponde a NORMAL_USER
+    profile_type = models.ForeignKey(Profile_type, on_delete=models.CASCADE, default=1)  # default=1 corrisponde a NORMAL_USER
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -64,6 +63,12 @@ class Profile(models.Model):
 # ==============================================================================
 # MODELLI PER PROGETTI E FILE CORRELATI
 # ==============================================================================
+
+# In models.py, aggiungi questi import
+from django.utils.text import slugify
+import uuid
+
+
 
 class Project(models.Model):
     """
@@ -79,11 +84,35 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Campi per chatbot esterno
+    slug = models.SlugField(max_length=100, unique=True, db_index=True)
+    chat_bot_api_key = models.CharField(max_length=64, unique=True, blank=True, null=True)
+    is_public_chat_enabled = models.BooleanField(default=False)
+    allowed_domains = models.JSONField(default=list, blank=True)  # Lista di domini permessi per CORS
+
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.name} - {self.user.username}"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            # Genera uno slug univoco basato sul nome del progetto
+            base_slug = slugify(self.name)
+            unique_slug = base_slug
+            counter = 1
+            while Project.objects.filter(slug=unique_slug).exists():
+                unique_slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = unique_slug
+
+        if not self.chat_bot_api_key:
+            # Genera una API key univoca per il progetto
+            self.chat_bot_api_key = hashlib.sha256(f"{self.slug}-{uuid.uuid4()}".encode()).hexdigest()
+
+        super().save(*args, **kwargs)
+
 
 
 class ProjectFile(models.Model):

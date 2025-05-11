@@ -26,4 +26,29 @@ pip3 freeze > requirements.txt
 # Build up the environment using requirements:
 pip3 install -r requirements.txt
 
-~                                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################  JAVASCRIPT PER CHATBOT ##################################
+<!-- Vaitony Chatbot Widget -->
+<script>
+(function(w,d,s,o,f,js,fjs){
+    w['VaitonyChatbot']=o;w[o]=w[o]||function(){
+    (w[o].q=w[o].q||[]).push(arguments)};w[o].l=1*new Date();
+    js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
+    js.id='vaitony-chatbot';js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
+}(window,document,'script','vchat','https://tuodominio.com/chatbot/nome-progetto/widget.js'));
+</script>

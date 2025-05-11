@@ -4,6 +4,8 @@ from dashboard.dashboard_console import execute_management_command
 from profiles.views import user_login
 from django.conf import settings
 from django.conf.urls.static import static
+from dashboard.views import chatbot_widget, chatbot_widget_js
+from dashboard.api import external_chat_api
 
 urlpatterns = [
     path('', user_login, name='login'),
@@ -37,6 +39,10 @@ urlpatterns = [
     path('settings/billing/', views.billing_settings, name='billing_settings'),
     #path('settings/templates/', views.rag_templates, name='rag_templates'),
 
+    # URLs per il chatbot esterno
+    path('api/chat/<slug:project_slug>/', external_chat_api, name='external_chat_api'),
+    path('chatbot/<slug:project_slug>/', chatbot_widget, name='chatbot_widget'),
+    path('chatbot/<slug:project_slug>/widget.js', chatbot_widget_js, name='chatbot_widget_js'),
 
     path('api/execute-command/', execute_management_command, name='execute_management_command'),
 ]

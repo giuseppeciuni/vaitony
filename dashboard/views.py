@@ -1192,6 +1192,41 @@ def project(request, project_id=None):
                             'message': "ID URL non fornito"
                         })
 
+                # ----- Toggle Attivazione ChatBot ----
+                elif action == 'toggle_chatbot':
+                    try:
+                        is_enabled = request.POST.get('is_enabled') == 'true'
+
+                        project.is_public_chat_enabled = is_enabled
+                        project.save()
+
+                        # Log per debug
+                        logger.info(
+                            f"Chatbot {'abilitato' if is_enabled else 'disabilitato'} per il progetto {project.id}")
+
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': f'Chatbot {"abilitato" if is_enabled else "disabilitato"} con successo!'
+                            })
+
+                        messages.success(request,
+                                         f'Chatbot {"abilitato" if is_enabled else "disabilitato"} con successo!')
+                        return redirect('project', project_id=project.id)
+
+                    except Exception as e:
+                        logger.error(f"Errore nel toggle del chatbot: {str(e)}")
+                        logger.error(traceback.format_exc())
+
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore durante l\'aggiornamento: {str(e)}'
+                            })
+
+                        messages.error(request, f"Errore: {str(e)}")
+                        return redirect('project', project_id=project.id)
+
                 # ----- Avvio crawling web -----
                 elif action == 'start_crawling':
                     # Gestisci la richiesta di crawling
@@ -1541,6 +1576,39 @@ def project_config(request, project_id):
                     except Exception as e:
                         logger.error(f"Error saving API key: {str(e)}")
                         logger.error(traceback.format_exc())
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+                        messages.error(request, f"Errore: {str(e)}")
+
+
+                # Sezione per gestire le impostazioni del chatbot
+                elif action == 'save_chatbot_settings':
+                    try:
+                        project.is_public_chat_enabled = request.POST.get('enable_public_chat') == 'on'
+
+                        # Gestione domini permessi
+                        allowed_domains = request.POST.get('allowed_domains', '')
+                        if allowed_domains:
+                            domains = [d.strip() for d in allowed_domains.split(',') if d.strip()]
+                            project.allowed_domains = domains
+                        else:
+                            project.allowed_domains = []
+
+                        project.save()
+
+                        messages.success(request, "Impostazioni chatbot salvate con successo")
+
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': 'Impostazioni chatbot salvate con successo',
+                                'widget_url': request.build_absolute_uri(
+                                    reverse('chatbot_widget', kwargs={'project_slug': project.slug})),
+                                'api_key': project.api_key
+                            })
+
+                    except Exception as e:
+                        logger.error(f"Errore nel salvataggio delle impostazioni chatbot: {str(e)}")
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
                         messages.error(request, f"Errore: {str(e)}")
@@ -1978,6 +2046,8 @@ def project_config(request, project_id):
                             'message': "ID URL non fornito"
                         })
 
+                # contesto per il chatbot
+                context['chatbot_widget_url'] = request.build_absolute_uri(reverse('chatbot_widget', kwargs={'project_slug': project.slug}))
                 return redirect('project_config', project_id=project.id)
 
             # Recupera i valori effettivi RAG per il template
@@ -3324,3 +3394,38 @@ def toggle_url_inclusion(request, project_id, url_id):
         # Gestisce i metodi HTTP diversi da POST. Ritorna un errore 405 Method Not Allowed in JSON.
         logger.warning(f"Tentativo di accedere alla vista toggle_url_inclusion con metodo {request.method} (richiesto POST) per project_id={project_id}, url_id={url_id}")
         return JsonResponse({'status': 'error', 'message': 'Metodo HTTP non permesso.'}, status=405)
+
+
+
+
+
+def chatbot_widget(request, project_slug):
+    """
+    Serve il widget del chatbot per l'integrazione esterna
+    """
+    project = get_object_or_404(Project, slug=project_slug, is_active=True, is_public_chat_enabled=True)
+
+    context = {
+        'project': project,
+        'api_endpoint': request.build_absolute_uri(reverse('external_chat_api', kwargs={'project_slug': project.slug}))
+    }
+
+    return render(request, 'be/chatbot_widget.html', context)
+
+
+def chatbot_widget_js(request, project_slug):
+    """
+    Serve il JavaScript del widget del chatbot
+    """
+    project = get_object_or_404(Project, slug=project_slug, is_active=True, is_public_chat_enabled=True)
+
+    context = {
+        'project': project,
+        'api_endpoint': request.build_absolute_uri(reverse('external_chat_api', kwargs={'project_slug': project.slug})),
+        'api_key': project.chat_bot_api_key,
+        'project_slug': project.slug
+    }
+
+    response = render(request, 'be/chatbot_widget.js', context, content_type='application/javascript')
+    response['Access-Control-Allow-Origin'] = '*'
+    return response

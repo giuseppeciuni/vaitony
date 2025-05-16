@@ -97,3 +97,15 @@ url = "https://www.betsson.it/promozioni"
 r = session.get(url)
 r.html.render()  # Esegue JavaScript
 print(r.html.text)
+
+
+
+
+
+
+from profiles.chatwoot_client import *
+cw=ChatwootClient(base_url='https://chatwoot.ciunix.com',  email='giuseppe.ciuni@gmail.com',  password='ce1ip2CW!')
+cw.send_message(1, "ciao")
+
+
+

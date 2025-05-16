@@ -44,6 +44,9 @@ urlpatterns = [
     path('chatbot/<slug:project_slug>/', chatbot_widget, name='chatbot_widget'),
     path('chatbot/<slug:project_slug>/widget.js', chatbot_widget_js, name='chatbot_widget_js'),
 
+    # URL per il webhook di Chatwoot
+    path('chatwoot-webhook/', views.chatwoot_webhook, name='chatwoot_webhook'),
+
     path('api/execute-command/', execute_management_command, name='execute_management_command'),
 ]
 

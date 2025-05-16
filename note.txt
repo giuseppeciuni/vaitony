@@ -32,9 +32,20 @@ pip3 install -r requirements.txt
 
 
 
+------------------ Mysql ----------------------
+use mysql;
+CREATE USER 'vai_tony_user'@'localhost' IDENTIFIED BY 'sdjfic023u89efjos39';
+GRANT ALL PRIVILEGES ON vai_tony.* TO 'vai_tony_user'@'localhost';
+FLUSH PRIVILEGES;
+create database vai_tony;
+-----------------------------------------------
 
 
 
+
+
+
+# Note
 
 
 

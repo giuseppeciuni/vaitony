@@ -89,6 +89,10 @@ class Project(models.Model):
     chat_bot_api_key = models.CharField(max_length=64, unique=True, blank=True, null=True)
     is_public_chat_enabled = models.BooleanField(default=False)
     allowed_domains = models.JSONField(default=list, blank=True)  # Lista di domini permessi per CORS
+    chatwoot_enabled = models.BooleanField(default=False)
+    chatwoot_inbox_id = models.CharField(max_length=50, blank=True, null=True)
+    chatwoot_bot_id = models.CharField(max_length=50, blank=True, null=True)
+    chatwoot_metadata = models.JSONField(default=dict, blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']

@@ -1630,6 +1630,8 @@
                 </div>
             </div>
 
+
+
             <!-- Sezione Parametri RAG Personalizzati (se presenti) -->
             {% if customized_values %}
             <div class="row">
@@ -1683,109 +1685,78 @@
             <div class="row">
                 <div class="col-lg-10 mx-auto">
                     <!-- Sezione principale chatbot -->
-                    <div class="card mt-4">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0 d-flex justify-content-between align-items-center">
-                                <span>
-                                    <i class="bi bi-chat-dots me-2"></i>Chatbot per Siti Web
-                                </span>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="chatbot-toggle"
-                                           {% if project.is_public_chat_enabled %}checked{% endif %}>
-                                    <label class="form-check-label text-white" for="chatbot-toggle">
-                                        <span id="chatbot-status-text">
-                                            {% if project.is_public_chat_enabled %}Attivo{% else %}Disattivo{% endif %}
-                                        </span>
-                                    </label>
-                                </div>
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div id="chatbot-enabled-content" {% if not project.is_public_chat_enabled %}style="display: none;"{% endif %}>
-                                <!-- Contenuto quando il chatbot è abilitato -->
-                                <div class="alert alert-success mb-4">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    Il chatbot pubblico è <strong>attivo</strong> per questo progetto.
-                                </div>
+                    <!-- Profilo ChatWoot Tab -->
+<div class="mt-4">
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-chat-square-dots me-2"></i>Integrazione Chatwoot
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0">Chatbot Chatwoot</h6>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="chatwoot-toggle"
+                          {% if project.chatwoot_enabled %}checked{% endif %}>
+                    <label class="form-check-label" for="chatwoot-toggle">
+                        <span id="chatwoot-status-text">
+                            {% if project.chatwoot_enabled %}Attivo{% else %}Disattivo{% endif %}
+                        </span>
+                    </label>
+                </div>
+            </div>
 
-                                <h6 class="mb-3">Codice di integrazione per il tuo sito web:</h6>
-                                <div class="mb-3">
-                                    <div class="form-control" style="height: auto; font-family: monospace; background-color: #f8f9fa;">
-                                        <pre class="mb-0"><code>&lt;!-- Vaitony Chatbot Widget --&gt;
-        &lt;script&gt;
-        (function(w,d,s,o,f,js,fjs){
-            w['VaitonyChatbot']=o;w[o]=w[o]||function(){
-            (w[o].q=w[o].q||[]).push(arguments)};w[o].l=1*new Date();
-            js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
-            js.id='vaitony-chatbot';js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
-        }(window,document,'script','vchat','{{ request.build_absolute_uri|slice:":-1" }}{% url "chatbot_widget_js" project.slug %}'));
+            <div id="chatwoot-enabled-content" {% if not project.chatwoot_enabled %}style="display: none;"{% endif %}>
+                {% if project.chatwoot_inbox_id %}
+                <div class="alert alert-success mb-4">
+                    <i class="bi bi-check-circle me-2"></i>
+                    Il chatbot Chatwoot è <strong>attivo</strong> per questo progetto con Inbox ID: {{ project.chatwoot_inbox_id }}.
+                </div>
 
-        // Configurazione opzionale
-        vchat('config', {
-            position: 'bottom-right', // bottom-right, bottom-left, top-right, top-left
-            theme: 'blue' // blue, purple, green, red
-        });
-        &lt;/script&gt;</code></pre>
-                                    </div>
-                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="copyEmbedCode()">
-                                        <i class="bi bi-clipboard me-1"></i> Copia codice
-                                    </button>
-                                </div>
+                <h6 class="mb-3">Istruzioni di integrazione:</h6>
+                <ol class="mb-4">
+                    <li>Accedi al tuo pannello Chatwoot (chatwoot.ciunix.com)</li>
+                    <li>Vai su Settings > Inboxes</li>
+                    <li>Trova l'inbox "RAG Bot - {{ project.name }}" (ID: {{ project.chatwoot_inbox_id }})</li>
+                    <li>Clicca su "Widget Settings" e copia il codice di integrazione</li>
+                    <li>Incolla il codice nel tuo sito web</li>
+                </ol>
 
-                                <h6 class="mb-3">Istruzioni per l'integrazione:</h6>
-                                <ol class="mb-4">
-                                    <li>Copia il codice sopra utilizzando il pulsante "Copia codice"</li>
-                                    <li>Incolla il codice nel tuo sito web prima del tag <code>&lt;/body&gt;</code></li>
-                                    <li>Il chatbot apparirà automaticamente nell'angolo in basso a destra del tuo sito</li>
-                                    <li>Puoi personalizzare la posizione e il tema modificando i parametri di configurazione</li>
-                                </ol>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
+                </div>
 
-                                <div class="alert alert-light border">
-                                    <h6 class="alert-heading">
-                                        <i class="bi bi-gear me-2"></i>Opzioni di personalizzazione:
-                                    </h6>
-                                    <ul class="mb-0">
-                                        <li><strong>position</strong>: Posizione del widget (bottom-right, bottom-left, top-right, top-left)</li>
-                                        <li><strong>theme</strong>: Tema colore (blue, purple, green, red)</li>
-                                    </ul>
-                                </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Importante:</strong> Assicurati di aver configurato il webhook Chatwoot per ricevere le notifiche dei messaggi.
+                    <p class="mt-2 mb-0">URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/</p>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Il chatbot Chatwoot non è stato ancora creato.
+                </div>
+                <button type="button" class="btn btn-primary" id="create-chatwoot-bot-btn">
+                    <i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot
+                </button>
+                {% endif %}
+            </div>
 
-                                <hr>
+            <div id="chatwoot-disabled-content" {% if project.chatwoot_enabled %}style="display: none;"{% endif %}>
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle me-2"></i>
+                    L'integrazione con Chatwoot ti permette di creare un chatbot che risponde alle domande utilizzando le informazioni di questo progetto.
+                </div>
 
-                                <h6 class="mb-3">API JavaScript disponibili:</h6>
-                                <p>Una volta integrato, puoi controllare il chatbot programmaticamente:</p>
-                                <div class="form-control mb-3" style="font-family: monospace; background-color: #f8f9fa;">
-                                    <pre class="mb-0"><code>// Apri il chat
-        VaitonyChatbot.open();
-
-        // Chiudi il chat
-        VaitonyChatbot.close();
-
-        // Invia un messaggio
-        VaitonyChatbot.sendMessage('Ciao!');</code></pre>
-                                </div>
-                            </div>
-
-                            <div id="chatbot-disabled-content" {% if project.is_public_chat_enabled %}style="display: none;"{% endif %}>
-                                <!-- Contenuto quando il chatbot è disabilitato -->
-                                <div class="alert alert-warning mb-4">
-                                    <i class="bi bi-exclamation-triangle me-2"></i>
-                                    Il chatbot pubblico <strong>non è abilitato</strong> per questo progetto.
-                                </div>
-
-                                <p class="lead mb-4">Integra un chatbot intelligente nel tuo sito web per rispondere automaticamente alle domande dei visitatori.</p>
-
-                                <div class="alert alert-info mb-4">
-                                    <i class="bi bi-info-circle me-2"></i>
-                                    Il chatbot utilizza l'intelligenza artificiale per rispondere in base ai documenti e alle informazioni di questo progetto.
-                                </div>
-
-                                <div class="text-center">
-                                    <p class="mb-3">Attiva il chatbot utilizzando l'interruttore in alto per ottenere il codice di integrazione.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="text-center">
+                    <p class="mb-3">Attiva l'integrazione Chatwoot utilizzando l'interruttore in alto.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
                     <!-- Informazioni aggiuntive -->
                     <div class="card mt-4">
@@ -2509,7 +2480,6 @@ function initWebsiteCrawler() {
         }
     }
 
-    // CORREZIONE: Funzione migliorata per interrompere il crawling
     function stopCrawling(userRequested = false) {
         // Se l'utente ha richiesto la cancellazione, inviamo una richiesta al server
         if (userRequested && crawlJob) {
@@ -2586,7 +2556,8 @@ function initWebsiteCrawler() {
             location.reload(); // Per ora ricarica la pagina - in futuro aggiornare dinamicamente
         }, 3000);
     }
-function showPageContent(pageUrl, pageId) {
+
+    function showPageContent(pageUrl, pageId) {
         // Aggiorna modal con i dati della pagina
         const modal = document.getElementById('pageContentModal');
         const contentDisplay = document.getElementById('page-content-display');
@@ -3201,7 +3172,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showErrorToast('Errore di autenticazione API', 'Controlla le tue chiavi API nelle impostazioni del motore IA');
         }
 
-
         function showError(message) {
             const errorMsg = document.createElement('div');
             errorMsg.className = 'message-container';
@@ -3318,7 +3288,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-// Gestione eliminazione note
+
+    // Gestione eliminazione note
     document.querySelectorAll('.delete-note-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             if (confirm('Eliminare questa nota?')) {
@@ -3469,9 +3440,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Gestione toggle chatbot
     // Nel file project.html, modifica la gestione del toggle chatbot:
-
     const chatbotToggle = document.getElementById('chatbot-toggle');
-
     if (chatbotToggle) {
         chatbotToggle.addEventListener('change', function() {
             const isEnabled = this.checked;
@@ -3548,6 +3517,152 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
+    // JavaScript per gestire l'integrazione Chatwoot
+
+    // Gestione toggle Chatwoot
+    const chatwootToggle = document.getElementById('chatwoot-toggle');
+    if (chatwootToggle) {
+        chatwootToggle.addEventListener('change', function() {
+            const isEnabled = this.checked;
+
+            // Disabilita temporaneamente lo switch
+            this.disabled = true;
+
+            // Mostra un indicatore di caricamento
+            const statusText = document.getElementById('chatwoot-status-text');
+            const originalText = statusText.textContent;
+            statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
+
+            // Invia la richiesta AJAX
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_chatwoot',
+                    'is_enabled': isEnabled,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Aggiorna l'interfaccia
+                    const enabledContent = document.getElementById('chatwoot-enabled-content');
+                    const disabledContent = document.getElementById('chatwoot-disabled-content');
+
+                    if (isEnabled) {
+                        enabledContent.style.display = 'block';
+                        disabledContent.style.display = 'none';
+                        statusText.textContent = 'Attivo';
+                    } else {
+                        enabledContent.style.display = 'none';
+                        disabledContent.style.display = 'block';
+                        statusText.textContent = 'Disattivo';
+                    }
+
+                    showToast(data.message || 'Stato Chatwoot aggiornato con successo', 'success');
+                } else {
+                    // In caso di errore, ripristina lo stato dello switch
+                    this.checked = !isEnabled;
+                    statusText.textContent = originalText;
+                    showToast(data.message || 'Errore nell\'aggiornamento di Chatwoot', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isEnabled;
+                statusText.textContent = originalText;
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                // Riabilita lo switch
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Funzione per creare un bot Chatwoot
+    function createChatwootBot() {
+        const button = document.getElementById('create-chatwoot-bot-btn');
+        if (!button) return;
+
+        // Disabilita il pulsante e mostra indicatore di caricamento
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creazione in corso...';
+
+        fetch('{% url "project" project.id %}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'create_chatwoot_bot',
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Errore HTTP! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                showToast('Chatbot Chatwoot creato con successo!', 'success');
+
+                // Aggiorna l'interfaccia
+                const enabledContent = document.getElementById('chatwoot-enabled-content');
+                enabledContent.innerHTML = `
+                    <div class="alert alert-success mb-4">
+                        <i class="bi bi-check-circle me-2"></i>
+                        Il chatbot Chatwoot è <strong>attivo</strong> per questo progetto con Inbox ID: ${data.inbox_id}.
+                    </div>
+
+                    <h6 class="mb-3">Istruzioni di integrazione:</h6>
+                    <ol class="mb-4">
+                        <li>Accedi al tuo pannello Chatwoot (chatwoot.ciunix.com)</li>
+                        <li>Vai su Settings > Inboxes</li>
+                        <li>Trova l'inbox "${data.inbox_name || 'RAG Bot - ' + '{{ project.name }}'}" (ID: ${data.inbox_id})</li>
+                        <li>Clicca su "Widget Settings" e copia il codice di integrazione</li>
+                        <li>Incolla il codice nel tuo sito web</li>
+                    </ol>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Importante:</strong> Assicurati di aver configurato il webhook Chatwoot per ricevere le notifiche dei messaggi.
+                        <p class="mt-2 mb-0">URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/</p>
+                    </div>
+                `;
+            } else {
+                // Gestisci l'errore restituito dall'API
+                showToast(data.message || 'Errore nella creazione del chatbot Chatwoot', 'danger');
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot';
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di rete durante la creazione del chatbot: ' + error.message, 'danger');
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot';
+        });
+    }
+
+
+    // collega l'evento click al pulsante (non all'interno di DOMContentLoaded)
+    const createBotBtn = document.getElementById('create-chatwoot-bot-btn');
+    if (createBotBtn) {
+        createBotBtn.addEventListener('click', createChatwootBot);
+    }
 
     // Carica tab salvato nel localStorage
     const savedTab = localStorage.getItem('activeProjectTab');

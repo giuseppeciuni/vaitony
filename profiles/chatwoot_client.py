@@ -283,3 +283,77 @@ class ChatwootClient:
 					logger.error("Request Body: [Could not decode]")
 
 			raise Exception(error_message)
+
+	def get_widget_code(self, inbox_id):
+		"""
+		Ottiene il codice di integrazione del widget per una inbox specifica
+
+		Args:
+			inbox_id: ID dell'inbox di cui ottenere il codice
+
+		Returns:
+			dict: Dizionario con il codice del widget o un errore
+		"""
+		try:
+			# Prima ottieni i dettagli completi dell'inbox
+			endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
+			response = requests.get(endpoint, headers=self.get_headers())
+			result = self._handle_response(response)
+
+			# Estrai la risposta dal payload se necessario
+			if isinstance(result, dict) and 'payload' in result and isinstance(result['payload'], dict):
+				result = result['payload']
+
+			if not isinstance(result, dict):
+				logger.error(f"Formato risposta non valido durante il recupero dell'inbox: {result}")
+				return {'error': f"Formato risposta non valido: {type(result)}"}
+
+			# Verifica se l'inbox è di tipo web widget
+			if result.get('channel_type') == 'Channel::WebWidget':
+				# Ottieni direttamente lo script dal campo web_widget_script
+				script = result.get('web_widget_script')
+				if script:
+					return {
+						'widget_code': script,
+						'website_token': result.get('website_token')
+					}
+				else:
+					return {'error': "Script del widget non trovato nell'inbox"}
+
+			# Per inbox di tipo API, dovrai costruire lo script manualmente
+			elif result.get('channel_type') == 'Channel::Api':
+				# Ottieni il token dall'inbox_identifier
+				token = result.get('inbox_identifier')
+				if not token:
+					return {'error': "Token dell'inbox non trovato"}
+
+				# Costruisci lo script JavaScript
+				base_url = self.base_url
+				script = f"""
+	<script>
+	  (function(d,t) {{
+	    var BASE_URL="{base_url}";
+	    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+	    g.src=BASE_URL+"/packs/js/sdk.js";
+	    g.defer = true;
+	    g.async = true;
+	    s.parentNode.insertBefore(g,s);
+	    g.onload=function(){{
+	      window.chatwootSDK.run({{
+	        websiteToken: '{token}',
+	        baseUrl: BASE_URL
+	      }})
+	    }}
+	  }})(document,"script");
+	</script>
+	"""
+				return {
+					'widget_code': script,
+					'website_token': token
+				}
+			else:
+				return {'error': f"Tipo di inbox non supportato: {result.get('channel_type')}"}
+
+		except Exception as e:
+			logger.error(f"Errore nel recupero del codice widget: {str(e)}")
+			return {'error': str(e)}

@@ -3616,7 +3616,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Aggiorna l'interfaccia
                 const enabledContent = document.getElementById('chatwoot-enabled-content');
-                enabledContent.innerHTML = `
+
+                // Crea la base HTML
+                let htmlContent = `
                     <div class="alert alert-success mb-4">
                         <i class="bi bi-check-circle me-2"></i>
                         Il chatbot Chatwoot è <strong>attivo</strong> per questo progetto con Inbox ID: ${data.inbox_id}.
@@ -3630,7 +3632,39 @@ document.addEventListener('DOMContentLoaded', function() {
                         <li>Clicca su "Widget Settings" e copia il codice di integrazione</li>
                         <li>Incolla il codice nel tuo sito web</li>
                     </ol>
+                `;
 
+                // Se c'è il codice del widget, mostralo
+                if (data.widget_code) {
+                    htmlContent += `
+                        <div class="card mb-4">
+                            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                                <h6 class="mb-0"><i class="bi bi-code-slash me-2"></i>Codice di integrazione</h6>
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyWidgetCode()">
+                                    <i class="bi bi-clipboard me-1"></i>Copia
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <pre class="bg-light p-3 mb-0 rounded"><code id="widget-code-display">${escapeHtml(data.widget_code)}</code></pre>
+                            </div>
+                            <div class="card-footer bg-white">
+                                <small class="text-muted">Token del sito: <span class="font-monospace">${data.website_token || ''}</span></small>
+                            </div>
+                        </div>
+                    `;
+                } else if (data.widget_error) {
+                    htmlContent += `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Nota:</strong> Non è stato possibile recuperare automaticamente il codice del widget.
+                            <p>Errore: ${data.widget_error}</p>
+                            <p>Usa l'interfaccia di Chatwoot per ottenere il codice.</p>
+                        </div>
+                    `;
+                }
+
+                // Aggiungi le informazioni sul webhook
+                htmlContent += `
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle me-2"></i>
                         Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
@@ -3642,6 +3676,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         <p class="mt-2 mb-0">URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/</p>
                     </div>
                 `;
+
+                // Aggiorna il contenuto
+                enabledContent.innerHTML = htmlContent;
+
+                // Aggiungi la funzione per copiare il codice widget
+                window.copyWidgetCode = function() {
+                    const codeElement = document.getElementById('widget-code-display');
+                    if (codeElement) {
+                        const code = codeElement.textContent;
+                        navigator.clipboard.writeText(code)
+                            .then(() => showToast('Codice copiato negli appunti!', 'success'))
+                            .catch(err => showToast('Errore nel copiare il codice', 'danger'));
+                    }
+                };
             } else {
                 // Gestisci l'errore restituito dall'API
                 showToast(data.message || 'Errore nella creazione del chatbot Chatwoot', 'danger');
@@ -3657,8 +3705,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Funzione di utility per evitare problemi XSS quando si mostra il codice
+    function escapeHtml(html) {
+        return html
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 
-    // collega l'evento click al pulsante (non all'interno di DOMContentLoaded)
+    // Assicurati di collegare l'evento click al pulsante (non all'interno di DOMContentLoaded)
     const createBotBtn = document.getElementById('create-chatwoot-bot-btn');
     if (createBotBtn) {
         createBotBtn.addEventListener('click', createChatwootBot);

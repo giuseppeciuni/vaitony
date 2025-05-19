@@ -65,7 +65,7 @@ class ChatwootClient:
 					'uid': response.headers.get('uid'),
 					'content-type': 'application/json'
 				}
-				logger.info("Autenticazione JWT completata con successo")
+				logger.info("Autenticazione JWT completata con successo!")
 				return True
 			else:
 				logger.error(f"Autenticazione JWT fallita: {response.status_code} - {response.text}")

@@ -1,4 +1,6 @@
 # chatwoot_client.py - VERSIONE CON SUPPORTO JWT
+import traceback
+
 import requests
 import json
 import logging

@@ -302,6 +302,15 @@ class ChatwootClient:
 		logger.info(f"Account ID: {self.account_id}")
 		logger.info(f"Tipo autenticazione: {self.auth_type}")
 
+		# Prova un ping semplice a Chatwoot per verificare connettività
+		try:
+			ping_url = f"{self.base_url}/api/v1/ping"
+			import requests
+			ping_response = requests.get(ping_url, timeout=5)
+			logger.info(f"Ping a Chatwoot: status={ping_response.status_code}")
+		except Exception as ping_err:
+			logger.error(f"Errore ping a Chatwoot: {str(ping_err)}")
+
 		# Step 0: Verifica autenticazione
 		if self.auth_type == "jwt" and not self.jwt_headers:
 			logger.info("JWT headers mancanti, eseguo autenticazione...")
@@ -351,7 +360,7 @@ class ChatwootClient:
 
 				headers_to_use = self.get_headers()
 				logger.info(f"Utilizzo headers: {headers_to_use}")
-
+				import requests
 				response = requests.get(endpoint, headers=headers_to_use, timeout=10)
 				logger.info(f"Status risposta: {response.status_code}")
 

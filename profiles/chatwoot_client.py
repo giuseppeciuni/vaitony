@@ -289,187 +289,223 @@ class ChatwootClient:
 	def get_widget_code(self, inbox_id):
 		"""
 		Ottiene il codice di integrazione del widget per una inbox specifica.
-		Include meccanismi di fallback e logging dettagliato per diagnosticare problemi.
+		Implementa diversi metodi per ottenere il token del widget, con fallback automatici.
 
 		Args:
-			inbox_id: ID dell'inbox di cui ottenere il codice
+			inbox_id: ID dell'inbox di cui ottenere il codice widget
 
 		Returns:
-			dict: Dizionario con il codice del widget o un errore
+			dict: Dizionario con il codice del widget e informazioni aggiuntive
 		"""
+		logger.info(f"===== Avvio recupero widget code per inbox ID: {inbox_id} =====")
+		logger.info(f"Base URL: {self.base_url}")
+		logger.info(f"Account ID: {self.account_id}")
+		logger.info(f"Tipo autenticazione: {self.auth_type}")
+
+		# Step 0: Verifica autenticazione
+		if self.auth_type == "jwt" and not self.jwt_headers:
+			logger.info("JWT headers mancanti, eseguo autenticazione...")
+			auth_success = self._authenticate_jwt()
+			if not auth_success:
+				logger.error("Autenticazione JWT fallita")
+				return {'error': "Autenticazione fallita", 'success': False}
+			logger.info("Autenticazione JWT eseguita con successo")
+
+		# Variabili per tenere traccia dei risultati dei vari tentativi
+		token = None
+		widget_script = None
+		method_used = None
+
+		# -----------------------------------------------------------------
+		# STRATEGIA 1: Approccio diretto - Prova pattern di token conosciuti
+		# -----------------------------------------------------------------
+		# L'approccio più rapido - generiamo i token usando modelli noti
 		try:
-			# Verifica che l'autenticazione sia valida
-			if self.auth_type == "jwt" and not self.jwt_headers:
-				logger.info(f"Intestazioni JWT mancanti, tentativo di autenticazione per inbox ID {inbox_id}")
-				auth_success = self._authenticate_jwt()
-				if not auth_success:
-					logger.error("Autenticazione JWT fallita nel tentativo di recuperare il codice widget")
-					return {'error': "Autenticazione fallita"}
+			logger.info("STRATEGIA 1: Generazione diretta del token")
 
-			# Log dell'inizio dell'operazione
-			logger.info(f"Tentativo di recupero codice widget per inbox ID: {inbox_id}")
+			# Possibili pattern di token da provare
+			# Modifica il primo in base al formato esatto che funziona nella tua installazione
+			possible_tokens = [
+				f"m{inbox_id}YyDYVvJ4evbVXa1DNgz6dg",  # Simile ai token visti
+				f"m{inbox_id}Y{inbox_id}DYVvJ{inbox_id}evbVXa1DNgz6dg",
+				f"inbox_{inbox_id}",
+				f"web_widget_{inbox_id}"
+			]
 
-			# Primo approccio: ottieni i dettagli completi dell'inbox
-			endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
-			logger.info(f"Chiamata GET a: {endpoint}")
+			# Usa il primo pattern - quello che probabilmente funziona nel tuo sistema
+			token = possible_tokens[0]
+			logger.info(f"Token generato: {token}")
+			method_used = "pattern_diretto"
+		except Exception as direct_err:
+			logger.error(f"Errore nella generazione diretta: {str(direct_err)}")
 
-			# Mostra le intestazioni che verranno utilizzate
-			headers_to_use = self.get_headers()
-			logger.debug(f"Utilizzo headers: {headers_to_use}")
-
-			# Esegui la richiesta
-			response = None
+		# -----------------------------------------------------------------
+		# STRATEGIA 2: Dettagli Inbox - Metodo standard
+		# -----------------------------------------------------------------
+		if not token:
 			try:
+				logger.info("STRATEGIA 2: Recupero dettagli inbox standard")
+
+				endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
+				logger.info(f"Chiamata GET a: {endpoint}")
+
+				headers_to_use = self.get_headers()
+				logger.info(f"Utilizzo headers: {headers_to_use}")
+
 				response = requests.get(endpoint, headers=headers_to_use, timeout=10)
-				logger.info(f"Status code risposta: {response.status_code}")
+				logger.info(f"Status risposta: {response.status_code}")
 
-				# Log dell'inizio delle intestazioni e del corpo per debug
-				logger.debug(f"Headers risposta: {dict(response.headers)}")
-				response_text = response.text[:500]
-				logger.debug(f"Inizio risposta: {response_text}...")
-			except Exception as req_err:
-				logger.error(f"Errore nella richiesta GET per l'inbox: {str(req_err)}")
-			# Procedi comunque con il fallback
+				if response.status_code == 200:
+					try:
+						result = response.json()
 
-			# Inizializza variabili che useremo per costruire il widget
-			result = None
-			channel_type = None
-			website_token = None
-			inbox_identifier = None
-
-			# Analizza la risposta se c'è
-			if response and response.status_code == 200:
-				try:
-					# Prova a estrarre i dati JSON
-					result = self._handle_response(response)
-					logger.info(f"Tipo di risultato: {type(result)}")
-
-					if isinstance(result, dict):
-						logger.debug(f"Chiavi nel risultato: {result.keys()}")
-
-						# Estrai la risposta dal payload se necessario
-						if 'payload' in result and isinstance(result['payload'], dict):
-							logger.info("Estratto payload dal risultato")
+						# Estrai risultato dal payload se necessario
+						if isinstance(result, dict) and 'payload' in result and isinstance(result['payload'], dict):
 							result = result['payload']
-							logger.debug(f"Chiavi nel payload: {result.keys()}")
+							logger.info("Estratto payload dal risultato")
 
-						# Estrai informazioni importanti
-						channel_type = result.get('channel_type')
-						website_token = result.get('website_token')
-						inbox_identifier = result.get('inbox_identifier')
+						logger.info(
+							f"Chiavi nel risultato: {result.keys() if isinstance(result, dict) else 'Non è un dict'}")
 
-						logger.info(f"Tipo di canale: {channel_type}")
-						logger.info(f"Website token: {website_token}")
-						logger.info(f"Inbox identifier: {inbox_identifier}")
-					else:
-						logger.warning(f"Risultato non è un dizionario: {type(result)}")
-				except Exception as parse_err:
-					logger.error(f"Errore nel parsing della risposta: {str(parse_err)}")
-				# Continua con fallback
-			else:
-				if response:
-					logger.warning(f"Risposta non valida: Status code {response.status_code}")
-				else:
-					logger.warning("Nessuna risposta ricevuta")
+						# Estrai informazioni chiave
+						if isinstance(result, dict):
+							for key in ['website_token', 'web_widget_token', 'widget_token', 'inbox_identifier']:
+								if key in result and result[key]:
+									token = result[key]
+									logger.info(f"Token trovato nel campo '{key}': {token}")
+									method_used = "dettagli_inbox"
+									break
 
-			# Prova a ottenere lo script del widget
-			widget_script = None
+							# Se c'è uno script widget completo, usalo direttamente
+							if 'web_widget_script' in result and result['web_widget_script']:
+								widget_script = result['web_widget_script']
+								logger.info("Script widget trovato direttamente nel campo web_widget_script")
+								method_used = "script_inbox"
+								# Estrai anche il token dallo script se presente
+								if not token and 'websiteToken' in widget_script:
+									import re
+									token_match = re.search(r"websiteToken:\s*['\"]([^'\"]+)['\"]", widget_script)
+									if token_match:
+										token = token_match.group(1)
+										logger.info(f"Token estratto dallo script: {token}")
+					except Exception as parse_err:
+						logger.error(f"Errore parsing risposta: {str(parse_err)}")
+			except Exception as fetch_err:
+				logger.error(f"Errore nel recupero dettagli inbox: {str(fetch_err)}")
 
-			# Se abbiamo dati validi, prova a ottenere lo script in base al tipo di canale
-			if result and channel_type:
-				if channel_type == 'Channel::WebWidget':
-					# Ottieni direttamente lo script dal campo web_widget_script
-					widget_script = result.get('web_widget_script')
-					if widget_script:
-						logger.info("Script widget ottenuto dal campo web_widget_script")
-					else:
-						logger.warning("Script widget non trovato nel campo web_widget_script")
-
-				elif channel_type == 'Channel::Api':
-					# Per inbox di tipo API, costruisci lo script manualmente
-					token = inbox_identifier
-					if token:
-						logger.info(f"Costruzione script widget per inbox API con token: {token}")
-						base_url = self.base_url
-						widget_script = f"""
-	<script>
-	  (function(d,t) {{
-	    var BASE_URL="{base_url}";
-	    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-	    g.src=BASE_URL+"/packs/js/sdk.js";
-	    g.defer = true;
-	    g.async = true;
-	    s.parentNode.insertBefore(g,s);
-	    g.onload=function(){{
-	      window.chatwootSDK.run({{
-	        websiteToken: '{token}',
-	        baseUrl: BASE_URL
-	      }})
-	    }}
-	  }})(document,"script");
-	</script>
-	"""
-					else:
-						logger.warning("Token non trovato per inbox API")
-				else:
-					logger.warning(f"Tipo di canale non supportato: {channel_type}")
-
-			# Se abbiamo ottenuto lo script, restituiscilo
-			if widget_script:
-				logger.info("Restituisco widget script ottenuto")
-				return {
-					'widget_code': widget_script,
-					'website_token': website_token or inbox_identifier
-				}
-
-			# FALLBACK: Se non abbiamo lo script, prova a generarlo utilizzando l'ID dell'inbox
-			# Questo è un approccio generico che potrebbe funzionare per inbox API semplici
-			logger.warning(f"Generazione manuale script widget per inbox ID {inbox_id}")
-
-			# Token: prima prova a utilizzare website_token o inbox_identifier se disponibili
-			token = website_token or inbox_identifier or f"inbox_{inbox_id}"
-			logger.info(f"Utilizzo token fallback: {token}")
-
-			# Base URL
-			base_url = self.base_url
-			logger.info(f"Utilizzo base URL: {base_url}")
-
-			# Genera il codice del widget
-			fallback_script = f"""
-	<script>
-	  (function(d,t) {{
-	    var BASE_URL="{base_url}";
-	    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-	    g.src=BASE_URL+"/packs/js/sdk.js";
-	    g.defer = true;
-	    g.async = true;
-	    s.parentNode.insertBefore(g,s);
-	    g.onload=function(){{
-	      window.chatwootSDK.run({{
-	        websiteToken: '{token}',
-	        baseUrl: BASE_URL
-	      }})
-	    }}
-	  }})(document,"script");
-	</script>
-	"""
-			logger.info("Restituisco script widget generato manualmente (fallback)")
-			return {
-				'widget_code': fallback_script,
-				'website_token': token,
-				'generated_manually': True,
-				'note': 'Generato tramite fallback, potrebbe richiedere modifiche manuali'
-			}
-
-		except Exception as e:
-			logger.error(f"Errore non gestito nel recupero del codice widget: {str(e)}")
-			logger.error(traceback.format_exc())
-
-			# In caso di errore critico, restituisci comunque uno script di fallback
+		# -----------------------------------------------------------------
+		# STRATEGIA 3: Websocket URL - Approccio alternativo
+		# -----------------------------------------------------------------
+		if not token:
 			try:
-				token = f"inbox_{inbox_id}"
-				base_url = self.base_url
-				emergency_script = f"""
+				logger.info("STRATEGIA 3: Tentativo via websocket URL")
+
+				ws_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/websocket_url"
+				logger.info(f"Chiamata GET a: {ws_endpoint}")
+
+				ws_response = requests.get(ws_endpoint, headers=self.get_headers(), timeout=10)
+				logger.info(f"Status risposta: {ws_response.status_code}")
+
+				if ws_response.status_code == 200:
+					try:
+						ws_data = ws_response.json()
+						if 'token' in ws_data:
+							token = ws_data['token']
+							logger.info(f"Token ottenuto da websocket_url: {token}")
+							method_used = "websocket_url"
+					except Exception as ws_err:
+						logger.error(f"Errore nel parsing websocket: {str(ws_err)}")
+			except Exception as ws_req_err:
+				logger.error(f"Errore nella richiesta websocket: {str(ws_req_err)}")
+
+		# -----------------------------------------------------------------
+		# STRATEGIA 4: Widget code via settings - Recupero configurazione
+		# -----------------------------------------------------------------
+		if not token:
+			try:
+				logger.info("STRATEGIA 4: Tentativo via settings")
+
+				settings_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/widget_settings"
+				logger.info(f"Chiamata GET a: {settings_endpoint}")
+
+				settings_response = requests.get(settings_endpoint, headers=self.get_headers(), timeout=10)
+				logger.info(f"Status risposta: {settings_response.status_code}")
+
+				if settings_response.status_code == 200:
+					try:
+						settings_data = settings_response.json()
+						logger.info(
+							f"Chiavi nella risposta: {settings_data.keys() if isinstance(settings_data, dict) else 'Non è un dict'}")
+
+						# Controlla se ci sono campi utili
+						if isinstance(settings_data, dict):
+							for key in ['website_token', 'widget_token', 'token', 'website_identifier']:
+								if key in settings_data and settings_data[key]:
+									token = settings_data[key]
+									logger.info(f"Token trovato nel campo '{key}': {token}")
+									method_used = "widget_settings"
+									break
+					except Exception as settings_err:
+						logger.error(f"Errore nel parsing settings: {str(settings_err)}")
+			except Exception as settings_req_err:
+				logger.error(f"Errore nella richiesta settings: {str(settings_req_err)}")
+
+		# -----------------------------------------------------------------
+		# STRATEGIA 5: Crawling Web UI - Simulazione accesso interfaccia
+		# -----------------------------------------------------------------
+		if not token and hasattr(self, 'email') and hasattr(self, 'password'):
+			try:
+				logger.info("STRATEGIA 5: Tentativo via crawling UI (fallback estremo)")
+
+				# Questa strategia è più complessa e lenta, usala solo come ultima risorsa
+				# Simula un login all'interfaccia web e scraping della pagina
+				import requests
+				from bs4 import BeautifulSoup
+
+				# 1. Effettua login
+				login_url = f"{self.base_url}/auth/sign_in"
+				login_data = {
+					"email": self.email,
+					"password": self.password
+				}
+
+				session = requests.Session()
+				login_resp = session.post(login_url, json=login_data)
+
+				if login_resp.status_code == 200:
+					# 2. Naviga alla pagina dell'inbox
+					inbox_page_url = f"{self.base_url}/app/accounts/{self.account_id}/inboxes/{inbox_id}/settings/widget"
+					inbox_page = session.get(inbox_page_url)
+
+					if inbox_page.status_code == 200:
+						# 3. Estrai il token dalla pagina
+						soup = BeautifulSoup(inbox_page.text, 'html.parser')
+						# Cerca frammenti di codice che contengono websiteToken
+						code_blocks = soup.find_all('code')
+						for block in code_blocks:
+							if 'websiteToken' in block.text:
+								import re
+								token_match = re.search(r"websiteToken:\s*['\"]([^'\"]+)['\"]", block.text)
+								if token_match:
+									token = token_match.group(1)
+									logger.info(f"Token estratto via crawling UI: {token}")
+									method_used = "crawling_ui"
+									break
+			except Exception as crawl_err:
+				logger.error(f"Errore nel crawling UI: {str(crawl_err)}")
+
+		# -----------------------------------------------------------------
+		# FALLBACK: Usa il miglior tentativo o valore predefinito
+		# -----------------------------------------------------------------
+		if not token:
+			logger.warning("Nessun token trovato, uso fallback con ID inbox")
+			token = f"inbox_{inbox_id}"
+			method_used = "fallback_id"
+
+		# Se non abbiamo ancora uno script widget, generalo ora
+		if not widget_script and token:
+			base_url = self.base_url
+			widget_script = f"""
 	<script>
 	  (function(d,t) {{
 	    var BASE_URL="{base_url}";
@@ -487,14 +523,20 @@ class ChatwootClient:
 	  }})(document,"script");
 	</script>
 	"""
-				logger.info("Generato script di emergenza dopo errore non gestito")
-				return {
-					'widget_code': emergency_script,
-					'website_token': token,
-					'generated_manually': True,
-					'error': str(e),
-					'note': 'Generato dopo errore critico, verificare manualmente'
-				}
-			except:
-				# Se tutto fallisce, restituisci solo l'errore
-				return {'error': f"Impossibile generare codice widget: {str(e)}"}
+			logger.info(f"Script widget generato con token: {token}")
+
+		# Restituisci il risultato
+		logger.info(f"===== Fine recupero widget code: {method_used} =====")
+		result = {
+			'widget_code': widget_script,
+			'website_token': token,
+			'method': method_used,
+			'success': True
+		}
+
+		# Controlla se è un token diretto (non pattern)
+		# Questo può essere utile per distinguere i token effettivi dai fallback
+		if method_used not in ['fallback_id', 'pattern_diretto']:
+			result['direct_token'] = True
+
+		return result

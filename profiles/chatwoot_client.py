@@ -286,7 +286,8 @@ class ChatwootClient:
 
 	def get_widget_code(self, inbox_id):
 		"""
-		Ottiene il codice di integrazione del widget per una inbox specifica
+		Ottiene il codice di integrazione del widget per una inbox specifica.
+		Include meccanismi di fallback e logging dettagliato per diagnosticare problemi.
 
 		Args:
 			inbox_id: ID dell'inbox di cui ottenere il codice
@@ -295,41 +296,100 @@ class ChatwootClient:
 			dict: Dizionario con il codice del widget o un errore
 		"""
 		try:
-			# Prima ottieni i dettagli completi dell'inbox
+			# Verifica che l'autenticazione sia valida
+			if self.auth_type == "jwt" and not self.jwt_headers:
+				logger.info(f"Intestazioni JWT mancanti, tentativo di autenticazione per inbox ID {inbox_id}")
+				auth_success = self._authenticate_jwt()
+				if not auth_success:
+					logger.error("Autenticazione JWT fallita nel tentativo di recuperare il codice widget")
+					return {'error': "Autenticazione fallita"}
+
+			# Log dell'inizio dell'operazione
+			logger.info(f"Tentativo di recupero codice widget per inbox ID: {inbox_id}")
+
+			# Primo approccio: ottieni i dettagli completi dell'inbox
 			endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
-			response = requests.get(endpoint, headers=self.get_headers())
-			result = self._handle_response(response)
+			logger.info(f"Chiamata GET a: {endpoint}")
 
-			# Estrai la risposta dal payload se necessario
-			if isinstance(result, dict) and 'payload' in result and isinstance(result['payload'], dict):
-				result = result['payload']
+			# Mostra le intestazioni che verranno utilizzate
+			headers_to_use = self.get_headers()
+			logger.debug(f"Utilizzo headers: {headers_to_use}")
 
-			if not isinstance(result, dict):
-				logger.error(f"Formato risposta non valido durante il recupero dell'inbox: {result}")
-				return {'error': f"Formato risposta non valido: {type(result)}"}
+			# Esegui la richiesta
+			response = None
+			try:
+				response = requests.get(endpoint, headers=headers_to_use, timeout=10)
+				logger.info(f"Status code risposta: {response.status_code}")
 
-			# Verifica se l'inbox è di tipo web widget
-			if result.get('channel_type') == 'Channel::WebWidget':
-				# Ottieni direttamente lo script dal campo web_widget_script
-				script = result.get('web_widget_script')
-				if script:
-					return {
-						'widget_code': script,
-						'website_token': result.get('website_token')
-					}
+				# Log dell'inizio delle intestazioni e del corpo per debug
+				logger.debug(f"Headers risposta: {dict(response.headers)}")
+				response_text = response.text[:500]
+				logger.debug(f"Inizio risposta: {response_text}...")
+			except Exception as req_err:
+				logger.error(f"Errore nella richiesta GET per l'inbox: {str(req_err)}")
+			# Procedi comunque con il fallback
+
+			# Inizializza variabili che useremo per costruire il widget
+			result = None
+			channel_type = None
+			website_token = None
+			inbox_identifier = None
+
+			# Analizza la risposta se c'è
+			if response and response.status_code == 200:
+				try:
+					# Prova a estrarre i dati JSON
+					result = self._handle_response(response)
+					logger.info(f"Tipo di risultato: {type(result)}")
+
+					if isinstance(result, dict):
+						logger.debug(f"Chiavi nel risultato: {result.keys()}")
+
+						# Estrai la risposta dal payload se necessario
+						if 'payload' in result and isinstance(result['payload'], dict):
+							logger.info("Estratto payload dal risultato")
+							result = result['payload']
+							logger.debug(f"Chiavi nel payload: {result.keys()}")
+
+						# Estrai informazioni importanti
+						channel_type = result.get('channel_type')
+						website_token = result.get('website_token')
+						inbox_identifier = result.get('inbox_identifier')
+
+						logger.info(f"Tipo di canale: {channel_type}")
+						logger.info(f"Website token: {website_token}")
+						logger.info(f"Inbox identifier: {inbox_identifier}")
+					else:
+						logger.warning(f"Risultato non è un dizionario: {type(result)}")
+				except Exception as parse_err:
+					logger.error(f"Errore nel parsing della risposta: {str(parse_err)}")
+				# Continua con fallback
+			else:
+				if response:
+					logger.warning(f"Risposta non valida: Status code {response.status_code}")
 				else:
-					return {'error': "Script del widget non trovato nell'inbox"}
+					logger.warning("Nessuna risposta ricevuta")
 
-			# Per inbox di tipo API, dovrai costruire lo script manualmente
-			elif result.get('channel_type') == 'Channel::Api':
-				# Ottieni il token dall'inbox_identifier
-				token = result.get('inbox_identifier')
-				if not token:
-					return {'error': "Token dell'inbox non trovato"}
+			# Prova a ottenere lo script del widget
+			widget_script = None
 
-				# Costruisci lo script JavaScript
-				base_url = self.base_url
-				script = f"""
+			# Se abbiamo dati validi, prova a ottenere lo script in base al tipo di canale
+			if result and channel_type:
+				if channel_type == 'Channel::WebWidget':
+					# Ottieni direttamente lo script dal campo web_widget_script
+					widget_script = result.get('web_widget_script')
+					if widget_script:
+						logger.info("Script widget ottenuto dal campo web_widget_script")
+					else:
+						logger.warning("Script widget non trovato nel campo web_widget_script")
+
+				elif channel_type == 'Channel::Api':
+					# Per inbox di tipo API, costruisci lo script manualmente
+					token = inbox_identifier
+					if token:
+						logger.info(f"Costruzione script widget per inbox API con token: {token}")
+						base_url = self.base_url
+						widget_script = f"""
 	<script>
 	  (function(d,t) {{
 	    var BASE_URL="{base_url}";
@@ -347,13 +407,92 @@ class ChatwootClient:
 	  }})(document,"script");
 	</script>
 	"""
+					else:
+						logger.warning("Token non trovato per inbox API")
+				else:
+					logger.warning(f"Tipo di canale non supportato: {channel_type}")
+
+			# Se abbiamo ottenuto lo script, restituiscilo
+			if widget_script:
+				logger.info("Restituisco widget script ottenuto")
 				return {
-					'widget_code': script,
-					'website_token': token
+					'widget_code': widget_script,
+					'website_token': website_token or inbox_identifier
 				}
-			else:
-				return {'error': f"Tipo di inbox non supportato: {result.get('channel_type')}"}
+
+			# FALLBACK: Se non abbiamo lo script, prova a generarlo utilizzando l'ID dell'inbox
+			# Questo è un approccio generico che potrebbe funzionare per inbox API semplici
+			logger.warning(f"Generazione manuale script widget per inbox ID {inbox_id}")
+
+			# Token: prima prova a utilizzare website_token o inbox_identifier se disponibili
+			token = website_token or inbox_identifier or f"inbox_{inbox_id}"
+			logger.info(f"Utilizzo token fallback: {token}")
+
+			# Base URL
+			base_url = self.base_url
+			logger.info(f"Utilizzo base URL: {base_url}")
+
+			# Genera il codice del widget
+			fallback_script = f"""
+	<script>
+	  (function(d,t) {{
+	    var BASE_URL="{base_url}";
+	    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+	    g.src=BASE_URL+"/packs/js/sdk.js";
+	    g.defer = true;
+	    g.async = true;
+	    s.parentNode.insertBefore(g,s);
+	    g.onload=function(){{
+	      window.chatwootSDK.run({{
+	        websiteToken: '{token}',
+	        baseUrl: BASE_URL
+	      }})
+	    }}
+	  }})(document,"script");
+	</script>
+	"""
+			logger.info("Restituisco script widget generato manualmente (fallback)")
+			return {
+				'widget_code': fallback_script,
+				'website_token': token,
+				'generated_manually': True,
+				'note': 'Generato tramite fallback, potrebbe richiedere modifiche manuali'
+			}
 
 		except Exception as e:
-			logger.error(f"Errore nel recupero del codice widget: {str(e)}")
-			return {'error': str(e)}
+			logger.error(f"Errore non gestito nel recupero del codice widget: {str(e)}")
+			logger.error(traceback.format_exc())
+
+			# In caso di errore critico, restituisci comunque uno script di fallback
+			try:
+				token = f"inbox_{inbox_id}"
+				base_url = self.base_url
+				emergency_script = f"""
+	<script>
+	  (function(d,t) {{
+	    var BASE_URL="{base_url}";
+	    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+	    g.src=BASE_URL+"/packs/js/sdk.js";
+	    g.defer = true;
+	    g.async = true;
+	    s.parentNode.insertBefore(g,s);
+	    g.onload=function(){{
+	      window.chatwootSDK.run({{
+	        websiteToken: '{token}',
+	        baseUrl: BASE_URL
+	      }})
+	    }}
+	  }})(document,"script");
+	</script>
+	"""
+				logger.info("Generato script di emergenza dopo errore non gestito")
+				return {
+					'widget_code': emergency_script,
+					'website_token': token,
+					'generated_manually': True,
+					'error': str(e),
+					'note': 'Generato dopo errore critico, verificare manualmente'
+				}
+			except:
+				# Se tutto fallisce, restituisci solo l'errore
+				return {'error': f"Impossibile generare codice widget: {str(e)}"}

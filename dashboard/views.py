@@ -3656,18 +3656,22 @@ def chatwoot_webhook(request):
         return HttpResponse(status=500)
 
 
+
+
+
+
 def create_chatwoot_bot_for_project(project, request=None):
     """
-    Crea un bot Chatwoot per un progetto specifico usando l'autenticazione JWT.
+       Crea un bot Chatwoot per un progetto specifico usando l'autenticazione JWT.
 
-    Args:
-        project: Il progetto per cui creare il bot
-        request: L'oggetto request Django (opzionale, per richieste AJAX)
+       Args:
+           project: Il progetto per cui creare il bot
+           request: L'oggetto request Django (opzionale, per richieste AJAX)
     """
     try:
         logger.info(f"Tentativo di creazione bot Chatwoot per progetto {project.id}")
 
-        # Inizializza il client Chatwoot con autenticazione JWT
+        # Inizializza il client Chatwoot
         chatwoot_client = ChatwootClient(
             base_url=settings.CHATWOOT_API_URL,
             email=settings.CHATWOOT_EMAIL,
@@ -3676,80 +3680,153 @@ def create_chatwoot_bot_for_project(project, request=None):
         )
         chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
 
-        # Verifica che l'autenticazione sia riuscita
+        # Verifica autenticazione
         if not chatwoot_client.jwt_headers:
-            # [Codice di gestione errore invariato...]
-            pass
+            logger.error("Autenticazione Chatwoot fallita")
+            return JsonResponse({'success': False, 'message': 'Autenticazione fallita'}) if request else {
+                'success': False, 'error': 'Autenticazione fallita'}
 
-        # Crea una nuova inbox per il chatbot
+        # Crea una nuova inbox
         inbox_name = f"RAG Bot - {project.name}"
         logger.info(f"Tentativo di creazione inbox: {inbox_name}")
 
         try:
             inbox = chatwoot_client.get_bot_inbox(inbox_name)
 
-            # [Verifica della risposta invariata...]
+            # Verifica errori
+            if isinstance(inbox, dict) and 'error' in inbox:
+                logger.error(f"Errore nella creazione dell'inbox: {inbox['error']}")
+                return JsonResponse({'success': False, 'message': inbox['error']}) if request else {'success': False,
+                                                                                                    'error': inbox[
+                                                                                                        'error']}
 
             # Salva l'ID dell'inbox nel progetto
             project.chatwoot_inbox_id = inbox['id']
+            project.chatwoot_enabled = True
+            project.save()
 
-            # Aggiorna i metadati dell'inbox con l'ID e lo slug del progetto
+            logger.info(f"Inbox creata con ID: {inbox['id']}")
+
+            # AGGIUNTA DI LOG E TENTATIVO DI RECUPERO WIDGET CODE
+            logger.info(f"Tentativo di recupero widget code per inbox ID: {inbox['id']}")
+
             try:
-                # [Aggiornamento dei metadati invariato...]
-
-                # Ottieni il codice di integrazione per il widget
+                # Ottieni il codice widget
                 widget_info = chatwoot_client.get_widget_code(inbox['id'])
+                logger.info(f"Risultato get_widget_code: {widget_info}")
 
-                # Abilita l'integrazione Chatwoot nel progetto
-                project.chatwoot_enabled = True
-                project.save()
+                # Se non otteniamo un widget code, crealo manualmente
+                if not isinstance(widget_info, dict) or 'widget_code' not in widget_info:
+                    logger.warning("Widget code non trovato nella risposta, generazione manuale")
 
-                logger.info(f"Creato bot Chatwoot per il progetto {project.id} con inbox {inbox['id']}")
-
-                success_msg = 'Chatbot Chatwoot creato con successo'
-                if request and hasattr(request, 'headers') and request.headers.get(
-                        'X-Requested-With') == 'XMLHttpRequest':
-                    response_data = {
-                        'success': True,
-                        'message': success_msg,
-                        'inbox_id': inbox.get('id'),
-                        'inbox_name': inbox.get('name', inbox_name)
+                    # Genera manualmente il codice widget
+                    base_url = settings.CHATWOOT_API_URL
+                    token = inbox.get('inbox_identifier') or f"inbox_{inbox['id']}"
+                    widget_code = f"""
+<script>
+  (function(d,t) {{
+    var BASE_URL="{base_url}";
+    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+    g.src=BASE_URL+"/packs/js/sdk.js";
+    g.defer = true;
+    g.async = true;
+    s.parentNode.insertBefore(g,s);
+    g.onload=function(){{
+      window.chatwootSDK.run({{
+        websiteToken: '{token}',
+        baseUrl: BASE_URL
+      }})
+    }}
+  }})(document,"script");
+</script>
+"""
+                    widget_info = {
+                        'widget_code': widget_code,
+                        'website_token': token,
+                        'generated_manually': True
                     }
+                    logger.info(f"Widget code generato manualmente: {widget_info}")
+            except Exception as widget_error:
+                logger.error(f"Errore nel recupero del widget code: {str(widget_error)}")
+                logger.error(traceback.format_exc())
 
-                    # Aggiungi il codice del widget se disponibile
-                    if isinstance(widget_info, dict) and 'widget_code' in widget_info:
-                        response_data['widget_code'] = widget_info['widget_code']
-                        response_data['website_token'] = widget_info.get('website_token')
-                    elif isinstance(widget_info, dict) and 'error' in widget_info:
-                        response_data['widget_error'] = widget_info['error']
+                # Crea un widget code di emergenza
+                base_url = settings.CHATWOOT_API_URL
+                token = f"inbox_{inbox['id']}"
+                widget_code = f"""
+<script>
+  (function(d,t) {{
+    var BASE_URL="{base_url}";
+    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+    g.src=BASE_URL+"/packs/js/sdk.js";
+    g.defer = true;
+    g.async = true;
+    s.parentNode.insertBefore(g,s);
+    g.onload=function(){{
+      window.chatwootSDK.run({{
+        websiteToken: '{token}',
+        baseUrl: BASE_URL
+      }})
+    }}
+  }})(document,"script");
+</script>
+"""
+                widget_info = {
+                    'widget_code': widget_code,
+                    'website_token': token,
+                    'generated_manually': True,
+                    'error': str(widget_error)
+                }
+                logger.info(f"Widget code di emergenza generato: {widget_info}")
 
-                    return JsonResponse(response_data)
+            # Prepara la risposta
+            success_msg = 'Chatbot Chatwoot creato con successo'
 
-                if request:
-                    messages.success(request, success_msg)
-                    return redirect('project', project_id=project.id)
-
-                result = {
+            # Per richieste AJAX
+            if request and hasattr(request, 'headers') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                response_data = {
                     'success': True,
-                    'inbox': inbox,
-                    'message': success_msg
+                    'message': success_msg,
+                    'inbox_id': inbox.get('id'),
+                    'inbox_name': inbox.get('name', inbox_name)
                 }
 
-                # Aggiungi il codice del widget se disponibile
-                if isinstance(widget_info, dict) and 'widget_code' in widget_info:
-                    result['widget_code'] = widget_info['widget_code']
-                    result['website_token'] = widget_info.get('website_token')
+                # Aggiungi il codice widget alla risposta se disponibile
+                if widget_info and 'widget_code' in widget_info:
+                    response_data['widget_code'] = widget_info['widget_code']
+                    response_data['website_token'] = widget_info.get('website_token', '')
 
-                return result
+                logger.info(f"Inviando risposta AJAX: {response_data.keys()}")
+                return JsonResponse(response_data)
 
-            except Exception as meta_error:
-                # [Gestione errore invariata...]
-                pass
+            # Per richieste normali
+            if request:
+                messages.success(request, success_msg)
+                return redirect('project', project_id=project.id)
+
+            # Risposta standard
+            result = {
+                'success': True,
+                'inbox': inbox,
+                'message': success_msg
+            }
+
+            # Aggiungi widget code al risultato
+            if widget_info and 'widget_code' in widget_info:
+                result['widget_code'] = widget_info['widget_code']
+                result['website_token'] = widget_info.get('website_token', '')
+
+            logger.info("Ritorno risultato con successo")
+            return result
 
         except Exception as inbox_error:
-            # [Gestione errore invariata...]
-            pass
+            logger.error(f"Errore nella creazione dell'inbox: {str(inbox_error)}")
+            logger.error(traceback.format_exc())
+            return JsonResponse({'success': False, 'message': str(inbox_error)}) if request else {'success': False,
+                                                                                                  'error': str(
+                                                                                                      inbox_error)}
 
     except Exception as e:
-        # [Gestione errore invariata...]
-        pass
+        logger.error(f"Errore generale nella creazione del bot: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JsonResponse({'success': False, 'message': str(e)}) if request else {'success': False, 'error': str(e)}

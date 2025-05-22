@@ -109,3 +109,44 @@ cw.send_message(1, "ciao")
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from profiles.chatwoot_client import ChatwootClient
+from django.conf import settings
+
+print("CHATWOOT_API_URL:", settings.CHATWOOT_API_URL)
+print("CHATWOOT_ACCOUNT_ID:", settings.CHATWOOT_ACCOUNT_ID)
+
+client = ChatwootClient(
+    base_url=settings.CHATWOOT_API_URL,
+    email=settings.CHATWOOT_EMAIL,
+    password=settings.CHATWOOT_PASSWORD,
+    auth_type="jwt"
+)
+client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
+
+# Testa l'autenticazione
+print("JWT Headers:", client.jwt_headers)
+
+# Ottieni le inbox
+inboxes = client.list_inboxes()
+print("Inboxes:", inboxes)
+
+# Prova a ottenere il codice widget
+widget_code = client.get_widget_code(31)  # Usa l'ID dell'inbox del tuo caso
+print("Widget code:", widget_code)

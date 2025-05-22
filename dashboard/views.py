@@ -1231,6 +1231,7 @@ def project(request, project_id=None):
                         return redirect('project', project_id=project.id)
 
                 # ----- Toggle Chatwoot -----
+                # toggle = commutatore/switch attivazione chatwoot
                 elif action == 'toggle_chatwoot':
                     try:
                         is_enabled = request.POST.get('is_enabled') == 'true'
@@ -3794,6 +3795,80 @@ def create_chatwoot_bot_for_project(project, request=None):
             project.save()
 
             logger.info(f"Creato bot Chatwoot per il progetto {project.id} con inbox {inbox['id']}")
+
+            # AGGIUNTA: Recupera il codice widget
+            logger.info(f"Tentativo di recupero codice widget per inbox ID: {inbox['id']}")
+            widget_info = None
+            try:
+                # Ottieni il codice di integrazione per il widget
+                widget_info = chatwoot_client.get_widget_code(inbox['id'])
+                logger.info(f"Risposta get_widget_code: {widget_info}")
+
+                # Se widget_info non è un dizionario o non contiene widget_code, genera manualmente
+                if not isinstance(widget_info, dict) or 'widget_code' not in widget_info:
+                    logger.warning(f"Risposta get_widget_code non valida o senza widget_code: {widget_info}")
+                    logger.info("Generazione manuale del codice widget")
+
+                    # Costruisci manualmente il codice widget
+                    base_url = settings.CHATWOOT_API_URL
+                    token = inbox.get('inbox_identifier') or f"m{inbox['id']}YyDYVvJ4evbVXa1DNgz6dg"
+                    widget_code = f"""
+            <script>
+              (function(d,t) {{
+                var BASE_URL="{base_url}";
+                var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+                g.src=BASE_URL+"/packs/js/sdk.js";
+                g.defer = true;
+                g.async = true;
+                s.parentNode.insertBefore(g,s);
+                g.onload=function(){{
+                  window.chatwootSDK.run({{
+                    websiteToken: '{token}',
+                    baseUrl: BASE_URL
+                  }})
+                }}
+              }})(document,"script");
+            </script>
+            """
+                    widget_info = {
+                        'widget_code': widget_code,
+                        'website_token': token,
+                        'generated_manually': True
+                    }
+                    logger.info("Widget code generato manualmente con successo")
+            except Exception as widget_error:
+                logger.error(f"Errore nel recupero del widget code: {str(widget_error)}")
+                logger.error(traceback.format_exc())
+
+                # Genera comunque un codice widget di fallback
+                base_url = settings.CHATWOOT_API_URL
+                token = f"m{inbox['id']}YyDYVvJ4evbVXa1DNgz6dg"
+                widget_code = f"""
+            <script>
+              (function(d,t) {{
+                var BASE_URL="{base_url}";
+                var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+                g.src=BASE_URL+"/packs/js/sdk.js";
+                g.defer = true;
+                g.async = true;
+                s.parentNode.insertBefore(g,s);
+                g.onload=function(){{
+                  window.chatwootSDK.run({{
+                    websiteToken: '{token}',
+                    baseUrl: BASE_URL
+                  }})
+                }}
+              }})(document,"script");
+            </script>
+            """
+                widget_info = {
+                    'widget_code': widget_code,
+                    'website_token': token,
+                    'generated_manually': True,
+                    'error': str(widget_error)
+                }
+                logger.info("Widget code di fallback generato dopo errore")
+
 
             success_msg = 'Chatbot Chatwoot creato con successo'
             if request and hasattr(request, 'headers') and request.headers.get(

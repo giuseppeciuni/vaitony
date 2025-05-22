@@ -41,7 +41,9 @@ create database vai_tony;
 -----------------------------------------------
 
 
-
+# questo potrebbe essere richiesto in mysql del server
+GRANT SESSION_VARIABLES_ADMIN ON *.* TO 'vai_tony_user'@'localhost';
+FLUSH PRIVILEGES;
 
 
 

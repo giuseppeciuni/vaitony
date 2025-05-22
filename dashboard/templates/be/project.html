@@ -3611,9 +3611,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.json();
         })
         .then(data => {
-            if (data.success) {
-                showToast('Chatbot Chatwoot creato con successo!', 'success');
-
+            if (data.success) if (data.success) {
                 // Aggiorna l'interfaccia
                 const enabledContent = document.getElementById('chatwoot-enabled-content');
 
@@ -3636,6 +3634,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Se c'è il codice del widget, mostralo
                 if (data.widget_code) {
+                    console.log("Widget code ricevuto dal server:", data.widget_code);
                     htmlContent += `
                         <div class="card mb-4">
                             <div class="card-header d-flex justify-content-between align-items-center bg-light">
@@ -3659,6 +3658,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             <strong>Nota:</strong> Non è stato possibile recuperare automaticamente il codice del widget.
                             <p>Errore: ${data.widget_error}</p>
                             <p>Usa l'interfaccia di Chatwoot per ottenere il codice.</p>
+                        </div>
+                    `;
+                } else {
+                    // Caso in cui non c'è né widget_code né widget_error
+                    htmlContent += `
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Il bot è stato creato con successo. Accedi a Chatwoot per ottenere il codice di integrazione.
                         </div>
                     `;
                 }
@@ -3690,6 +3697,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             .catch(err => showToast('Errore nel copiare il codice', 'danger'));
                     }
                 };
+
+                showToast(data.message || 'Chatbot Chatwoot creato con successo!', 'success');
+            } else {
+                // In caso di errore, ripristina lo stato dello switch
+                this.checked = !isEnabled;
+                statusText.textContent = originalText;
+                showToast(data.message || 'Errore nella creazione del chatbot Chatwoot', 'danger');
             } else {
                 // Gestisci l'errore restituito dall'API
                 showToast(data.message || 'Errore nella creazione del chatbot Chatwoot', 'danger');

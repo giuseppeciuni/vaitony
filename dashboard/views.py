@@ -3717,6 +3717,21 @@ def create_chatwoot_bot_for_project(project, request=None):
             project.chatwoot_inbox_id = inbox['id']
             logger.info(f"Inbox ID ottenuto: {inbox['id']}")
 
+            # DEBUG: Verifica che arriviamo qui
+            logger.info(f"🔍 DEBUG: Punto di controllo prima di get_widget_code")
+            logger.info(f"🔍 DEBUG: chatwoot_client type: {type(chatwoot_client)}")
+            logger.info(f"🔍 DEBUG: inbox ID: {inbox['id']}")
+            logger.info(f"🔍 DEBUG: inbox content: {inbox}")
+
+            # Prova il recupero del widget code
+            logger.info(f"🔍 DEBUG: Tentando get_widget_code per inbox {inbox['id']}")
+            try:
+                widget_result = chatwoot_client.get_widget_code(inbox['id'])
+                logger.info(f"🔍 DEBUG: get_widget_code SUCCESS: {widget_result}")
+            except Exception as widget_error:
+                logger.error(f"🔍 DEBUG: get_widget_code FAILED: {str(widget_error)}")
+                logger.error(f"🔍 DEBUG: get_widget_code TRACEBACK: {traceback.format_exc()}")
+
             # PUNTO CRITICO: Tenta di recuperare il codice widget
             logger.info(f"Tentativo di recupero codice widget per inbox ID: {inbox['id']}")
             widget_info = None

@@ -329,103 +329,131 @@ class ChatwootClient:
 		# STRATEGIA 1: Approccio diretto - Prova pattern di token conosciuti
 		# -----------------------------------------------------------------
 		# L'approccio più rapido - generiamo i token usando modelli noti
+		# Salta la generazione di token fittizi e vai direttamente alle API reali
+		logger.info("STRATEGIA 1: SALTATA - Andremo direttamente alle API di Chatwoot")
+		token = None
+		method_used = None
+
+		# -----------------------------------------------------------------
+		# STRATEGIA 2: Dettagli Inbox - Metodo standard (POTENZIATO)
+		# -----------------------------------------------------------------
 		try:
-			logger.info("STRATEGIA 1: Generazione diretta del token")
+			logger.info("STRATEGIA 2: Recupero dettagli inbox standard")
 
-			# Possibili pattern di token da provare
-			# Modifica il primo in base al formato esatto che funziona nella tua installazione
-			possible_tokens = [
-				f"m{inbox_id}YyDYVvJ4evbVXa1DNgz6dg",  # Simile ai token visti
-				f"m{inbox_id}Y{inbox_id}DYVvJ{inbox_id}evbVXa1DNgz6dg",
-				f"inbox_{inbox_id}",
-				f"web_widget_{inbox_id}"
-			]
+			endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
+			logger.info(f"Chiamata GET a: {endpoint}")
 
-			# Usa il primo pattern - quello che probabilmente funziona nel tuo sistema
-			token = possible_tokens[0]
-			logger.info(f"Token generato: {token}")
-			method_used = "pattern_diretto"
-		except Exception as direct_err:
-			logger.error(f"Errore nella generazione diretta: {str(direct_err)}")
+			headers_to_use = self.get_headers()
+			logger.info(f"Utilizzo headers: {list(headers_to_use.keys())}")  # Non loggare i valori per sicurezza
+
+			response = requests.get(endpoint, headers=headers_to_use, timeout=10)
+			logger.info(f"Status risposta: {response.status_code}")
+
+			if response.status_code == 200:
+				try:
+					result = response.json()
+					logger.info(
+						f"Risposta JSON ricevuta con chiavi: {list(result.keys()) if isinstance(result, dict) else 'Non è un dict'}")
+
+					# Estrai risultato dal payload se necessario
+					if isinstance(result, dict) and 'payload' in result and isinstance(result['payload'], dict):
+						result = result['payload']
+						logger.info("Estratto payload dal risultato")
+
+					# Logga TUTTE le chiavi per capire cosa c'è
+					if isinstance(result, dict):
+						logger.info(f"Chiavi nel risultato: {list(result.keys())}")
+
+						# Cerca tutti i possibili campi che potrebbero contenere il token
+						possible_token_fields = [
+							'website_token', 'web_widget_token', 'widget_token', 'inbox_identifier',
+							'channel_id', 'uuid', 'token', 'api_key', 'identifier', 'website_identifier'
+						]
+
+						for key in possible_token_fields:
+							if key in result and result[key]:
+								token = result[key]
+								logger.info(f"✅ Token trovato nel campo '{key}': {token}")
+								method_used = "dettagli_inbox"
+								break
+
+						# Se non troviamo un token, logga tutti i valori per debug
+						if not token:
+							logger.warning("❌ Nessun token trovato nei campi standard. Contenuto completo:")
+							for key, value in result.items():
+								if isinstance(value, (str, int, bool)):
+									logger.info(f"  {key}: {value}")
+								else:
+									logger.info(f"  {key}: {type(value)} (non stringa)")
+
+						# Cerca anche script widget pre-generati
+						if 'web_widget_script' in result and result['web_widget_script']:
+							widget_script = result['web_widget_script']
+							logger.info("✅ Script widget trovato direttamente nel campo web_widget_script")
+							method_used = "script_inbox"
+							# Estrai anche il token dallo script se presente
+							if not token and 'websiteToken' in widget_script:
+								import re
+								token_match = re.search(r"websiteToken:\s*['\"]([^'\"]+)['\"]", widget_script)
+								if token_match:
+									token = token_match.group(1)
+									logger.info(f"✅ Token estratto dallo script: {token}")
+					else:
+						logger.error(f"Risposta non è un dizionario: {type(result)}")
+
+				except Exception as parse_err:
+					logger.error(f"Errore parsing risposta: {str(parse_err)}")
+					logger.error(f"Contenuto risposta raw: {response.text[:500]}")
+			else:
+				logger.error(f"Errore HTTP {response.status_code}: {response.text[:200]}")
+
+		except Exception as fetch_err:
+			logger.error(f"Errore nel recupero dettagli inbox: {str(fetch_err)}")
+			import traceback
+			logger.error(f"Traceback: {traceback.format_exc()}")
 
 		# -----------------------------------------------------------------
-		# STRATEGIA 2: Dettagli Inbox - Metodo standard
+		# STRATEGIA 3: Tentativo via API di configurazione widget
 		# -----------------------------------------------------------------
 		if not token:
 			try:
-				logger.info("STRATEGIA 2: Recupero dettagli inbox standard")
+				logger.info("STRATEGIA 3: Tentativo via API configurazione widget")
 
-				endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
-				logger.info(f"Chiamata GET a: {endpoint}")
+				# Prova l'endpoint specifico per il widget
+				widget_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/widget"
+				logger.info(f"Chiamata GET a: {widget_endpoint}")
 
-				headers_to_use = self.get_headers()
-				logger.info(f"Utilizzo headers: {headers_to_use}")
-				import requests
-				response = requests.get(endpoint, headers=headers_to_use, timeout=10)
-				logger.info(f"Status risposta: {response.status_code}")
+				widget_response = requests.get(widget_endpoint, headers=self.get_headers(), timeout=10)
+				logger.info(f"Status risposta widget: {widget_response.status_code}")
 
-				if response.status_code == 200:
+				if widget_response.status_code == 200:
 					try:
-						result = response.json()
-
-						# Estrai risultato dal payload se necessario
-						if isinstance(result, dict) and 'payload' in result and isinstance(result['payload'], dict):
-							result = result['payload']
-							logger.info("Estratto payload dal risultato")
-
+						widget_data = widget_response.json()
 						logger.info(
-							f"Chiavi nel risultato: {result.keys() if isinstance(result, dict) else 'Non è un dict'}")
+							f"Widget data keys: {list(widget_data.keys()) if isinstance(widget_data, dict) else 'Non è un dict'}")
 
-						# Estrai informazioni chiave
-						if isinstance(result, dict):
-							for key in ['website_token', 'web_widget_token', 'widget_token', 'inbox_identifier']:
-								if key in result and result[key]:
-									token = result[key]
-									logger.info(f"Token trovato nel campo '{key}': {token}")
-									method_used = "dettagli_inbox"
+						# Cerca il token nel widget data
+						if isinstance(widget_data, dict):
+							# Estrai payload se presente
+							if 'payload' in widget_data:
+								widget_data = widget_data['payload']
+
+							# Cerca token in vari campi possibili
+							for key in ['website_token', 'token', 'website_identifier', 'identifier']:
+								if key in widget_data and widget_data[key]:
+									token = widget_data[key]
+									logger.info(f"✅ Token trovato in widget data campo '{key}': {token}")
+									method_used = "widget_api"
 									break
+					except Exception as widget_err:
+						logger.error(f"Errore nel parsing widget data: {str(widget_err)}")
+				else:
+					logger.warning(f"Endpoint widget non disponibile: {widget_response.status_code}")
 
-							# Se c'è uno script widget completo, usalo direttamente
-							if 'web_widget_script' in result and result['web_widget_script']:
-								widget_script = result['web_widget_script']
-								logger.info("Script widget trovato direttamente nel campo web_widget_script")
-								method_used = "script_inbox"
-								# Estrai anche il token dallo script se presente
-								if not token and 'websiteToken' in widget_script:
-									import re
-									token_match = re.search(r"websiteToken:\s*['\"]([^'\"]+)['\"]", widget_script)
-									if token_match:
-										token = token_match.group(1)
-										logger.info(f"Token estratto dallo script: {token}")
-					except Exception as parse_err:
-						logger.error(f"Errore parsing risposta: {str(parse_err)}")
-			except Exception as fetch_err:
-				logger.error(f"Errore nel recupero dettagli inbox: {str(fetch_err)}")
+			except Exception as widget_req_err:
+				logger.error(f"Errore nella richiesta widget: {str(widget_req_err)}")
 
-		# -----------------------------------------------------------------
-		# STRATEGIA 3: Websocket URL - Approccio alternativo
-		# -----------------------------------------------------------------
-		if not token:
-			try:
-				logger.info("STRATEGIA 3: Tentativo via websocket URL")
 
-				ws_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/websocket_url"
-				logger.info(f"Chiamata GET a: {ws_endpoint}")
-
-				ws_response = requests.get(ws_endpoint, headers=self.get_headers(), timeout=10)
-				logger.info(f"Status risposta: {ws_response.status_code}")
-
-				if ws_response.status_code == 200:
-					try:
-						ws_data = ws_response.json()
-						if 'token' in ws_data:
-							token = ws_data['token']
-							logger.info(f"Token ottenuto da websocket_url: {token}")
-							method_used = "websocket_url"
-					except Exception as ws_err:
-						logger.error(f"Errore nel parsing websocket: {str(ws_err)}")
-			except Exception as ws_req_err:
-				logger.error(f"Errore nella richiesta websocket: {str(ws_req_err)}")
 
 		# -----------------------------------------------------------------
 		# STRATEGIA 4: Widget code via settings - Recupero configurazione

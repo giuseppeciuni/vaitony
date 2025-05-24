@@ -287,10 +287,10 @@ class ChatwootClient:
 	def create_inbox(self, name: str, website_url: str,
 					 channel_attributes: Optional[Dict] = None) -> Dict:
 		"""
-		Crea Website Widget con payload minimale per evitare errore 422.
+		Crea Website Widget con payload corretto per evitare errore 422.
 		"""
 		sanitized_name = self.sanitize_inbox_name(name)
-		logger.info(f"📥 Creazione Website Widget (minimale): '{sanitized_name}' per URL: {website_url}")
+		logger.info(f"📥 Creazione Website Widget: '{sanitized_name}' per URL: {website_url}")
 
 		if not website_url:
 			raise ValueError("website_url è obbligatorio per Website Widget")
@@ -301,16 +301,34 @@ class ChatwootClient:
 
 		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
 
-		# PAYLOAD MINIMALE - Solo i campi strettamente necessari
+		# PAYLOAD CORRETTO - Struttura che Chatwoot si aspetta
 		payload = {
-			"name": sanitized_name,
-			"channel": {
-				"type": "Channel::WebWidget",
-				"website_url": website_url
+			"inbox": {
+				"name": sanitized_name,
+				"channel": {
+					"type": "web_widget",  # Usa "web_widget" invece di "Channel::WebWidget"
+					"website_url": website_url
+				}
+				# 	"widget_color": channel_attributes.get("widget_color",
+				# 										   "#1f93ff") if channel_attributes else "#1f93ff",
+				# 	"welcome_title": channel_attributes.get("welcome_title", "") if channel_attributes else "",
+				# 	"welcome_tagline": channel_attributes.get("welcome_tagline", "") if channel_attributes else "",
+				# 	"greeting_enabled": channel_attributes.get("greeting_enabled",
+				# 											   True) if channel_attributes else True,
+				# 	"greeting_message": channel_attributes.get("greeting_message", "") if channel_attributes else ""
+				# }
 			}
 		}
 
-		logger.debug(f"📤 Payload minimale: {payload}")
+		# Se ci sono attributi aggiuntivi del widget, aggiungili
+		if channel_attributes:
+			# Aggiungi altri attributi del canale se presenti
+			for key, value in channel_attributes.items():
+				if key not in ["widget_color", "welcome_title", "welcome_tagline", "greeting_enabled",
+							   "greeting_message"]:
+					payload["inbox"]["channel"][key] = value
+
+		logger.debug(f"📤 Payload completo: {payload}")
 
 		try:
 			response = self._make_request_with_retry('POST', endpoint, json=payload)
@@ -359,16 +377,16 @@ class ChatwootClient:
 					  website_url: str = "https://chatbot.ciunix.com",
 					  widget_config: Optional[Dict] = None) -> Dict:
 		"""
-        Trova o crea una inbox per il chatbot di tipo Website Widget.
+		Trova o crea una inbox per il chatbot di tipo Website Widget.
 
-        Args:
-            inbox_name (str): Nome dell'inbox
-            website_url (str): URL del sito web
-            widget_config (dict, optional): Configurazione widget personalizzata
+		Args:
+			inbox_name (str): Nome dell'inbox
+			website_url (str): URL del sito web
+			widget_config (dict, optional): Configurazione widget personalizzata
 
-        Returns:
-            dict: Dati dell'inbox con website_token, oppure dict con errore
-        """
+		Returns:
+			dict: Dati dell'inbox con website_token, oppure dict con errore
+		"""
 		try:
 			cleaned_name = self.sanitize_inbox_name(inbox_name)
 
@@ -380,7 +398,8 @@ class ChatwootClient:
 				for inbox in inboxes:
 					if (isinstance(inbox, dict) and
 							inbox.get('name') == cleaned_name and
-							inbox.get('channel_type') == "Channel::WebWidget"):
+							inbox.get('channel_type') in ["Channel::WebWidget",
+														  "web_widget"]):  # Supporta entrambi i formati
 						logger.info(f"✅ Website Widget esistente trovato: '{cleaned_name}' (ID: {inbox.get('id')})")
 						return inbox
 
@@ -391,10 +410,11 @@ class ChatwootClient:
 			# Crea nuovo Website Widget
 			logger.info(f"📥 Creazione nuovo Website Widget: '{cleaned_name}'")
 
+			# Passa widget_config invece di channel_attributes
 			new_inbox = self.create_inbox(
 				name=cleaned_name,
 				website_url=website_url,
-				channel_attributes=widget_config
+				channel_attributes=widget_config  # Questo verrà usato per configurare il widget
 			)
 
 			if isinstance(new_inbox, dict) and 'id' in new_inbox:

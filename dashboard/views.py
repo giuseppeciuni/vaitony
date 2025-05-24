@@ -3657,28 +3657,27 @@ def chatwoot_webhook(request):
         return HttpResponse(status=500)
 
 
-# Nel file views.py, sostituisci la funzione create_chatwoot_bot_for_project con questa versione corretta:
+# Nel file views.py, sostituisci la funzione create_chatwoot_bot_for_project con questa versione:
 
 def create_chatwoot_bot_for_project(project, request=None):
     """
-    Crea un bot Chatwoot per un progetto specifico usando l'autenticazione JWT.
+    Crea un bot Chatwoot per un progetto usando il nuovo ChatwootClient (Website Widget only).
     """
     try:
-        logger.info(f"🚀 Tentativo di creazione bot Chatwoot per progetto {project.id}")
+        logger.info(f"🚀 Creazione Website Widget per progetto {project.id}")
 
-        # Inizializza il client Chatwoot con autenticazione JWT
+        # Inizializza il nuovo client
         chatwoot_client = ChatwootClient(
             base_url=settings.CHATWOOT_API_URL,
             email=settings.CHATWOOT_EMAIL,
-            password=settings.CHATWOOT_PASSWORD,
-            auth_type="jwt"
+            password=settings.CHATWOOT_PASSWORD
         )
         chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
 
-        # Verifica che l'autenticazione sia riuscita
+        # Verifica autenticazione
         if not chatwoot_client.authenticated:
-            logger.error("❌ Autenticazione Chatwoot fallita")
-            error_msg = 'Autenticazione con Chatwoot fallita. Controlla le credenziali nelle impostazioni.'
+            error_msg = 'Autenticazione con Chatwoot fallita. Controlla le credenziali.'
+            logger.error(f"❌ {error_msg}")
 
             if request and hasattr(request, 'headers') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'message': error_msg})
@@ -3689,11 +3688,11 @@ def create_chatwoot_bot_for_project(project, request=None):
 
             return {'success': False, 'error': error_msg}
 
-        # Prepara la configurazione per l'inbox del chatbot
+        # Configura parametri per il Website Widget
         inbox_name = f"RAG Bot - {project.name}"
-        website_url = "https://chatbot.ciunix.com"  # URL del tuo sito
+        website_url = "https://chatbot.ciunix.com"  # IL TUO DOMINIO
 
-        # Configurazione specifica per il widget
+        # Configurazione widget personalizzata
         widget_config = {
             "widget_color": "#1f93ff",
             "welcome_title": f"Ciao! Sono l'assistente di {project.name}",
@@ -3702,26 +3701,23 @@ def create_chatwoot_bot_for_project(project, request=None):
             "greeting_message": f"Ciao! Sono l'assistente AI di {project.name}. Puoi farmi qualsiasi domanda sui contenuti del progetto.",
             "enable_email_collect": False,
             "csat_survey_enabled": False,
-            "reply_time": "in_a_few_minutes",
-            "hmac_mandatory": False,
-            "pre_chat_form_enabled": False,
-            "continuity_via_email": False
+            "reply_time": "in_a_few_minutes"
         }
 
-        logger.info(f"📝 Tentativo di creazione inbox: {inbox_name} per URL: {website_url}")
+        logger.info(f"📝 Creazione Website Widget: {inbox_name} per {website_url}")
 
         try:
-            # Crea o ottieni l'inbox con la configurazione corretta
+            # Crea o ottieni il Website Widget
             inbox = chatwoot_client.get_bot_inbox(
                 inbox_name=inbox_name,
-                website_url_for_channel=website_url,
-                widget_specific_config=widget_config
+                website_url=website_url,
+                widget_config=widget_config
             )
 
-            # Verifica se c'è un errore nella risposta
+            # Verifica se c'è un errore
             if isinstance(inbox, dict) and 'error' in inbox:
-                logger.error(f"❌ Errore ottenuto da get_bot_inbox: {inbox['error']}")
-                error_msg = f"Errore nella creazione dell'inbox: {inbox['error']}"
+                error_msg = f"Errore nella creazione del Website Widget: {inbox['error']}"
+                logger.error(f"❌ {error_msg}")
 
                 if request and hasattr(request, 'headers') and request.headers.get(
                         'X-Requested-With') == 'XMLHttpRequest':
@@ -3734,156 +3730,81 @@ def create_chatwoot_bot_for_project(project, request=None):
                 return {'success': False, 'error': error_msg}
 
             # Salva l'ID dell'inbox nel progetto
-            project.chatwoot_inbox_id = inbox['id']
-            logger.info(f"📋 Inbox ID salvato nel progetto: {inbox['id']}")
+            inbox_id = inbox['id']
+            project.chatwoot_inbox_id = inbox_id
+            logger.info(f"📋 Inbox ID salvato: {inbox_id}")
 
-            # CORREZIONE PRINCIPALE: Recupera il widget code
-            logger.info(f"🔑 Tentativo di recupero codice widget per inbox ID: {inbox['id']}")
+            # Recupera il widget code autentico
+            logger.info(f"🔑 Recupero website token per inbox {inbox_id}")
 
-            try:
-                # Ottieni il codice di integrazione per il widget
-                widget_info = chatwoot_client.get_widget_code(inbox['id'])
-                logger.info(f"📋 Risposta get_widget_code: {widget_info}")
+            widget_info = chatwoot_client.get_widget_code(inbox_id)
 
-                if widget_info.get('success') and 'widget_code' in widget_info:
-                    logger.info("✅ Widget code recuperato con successo dall'API")
+            if widget_info.get('success') and 'widget_code' in widget_info:
+                # Successo! Abbiamo il token autentico
+                website_token = widget_info['website_token']
+                widget_code = widget_info['widget_code']
 
-                    # Salva le informazioni del widget nel progetto
-                    project.chatwoot_widget_code = widget_info['widget_code']
-                    project.chatwoot_website_token = widget_info.get('website_token', '')
+                logger.info(f"✅ Website token autentico ricevuto: {website_token}")
 
-                elif widget_info.get('error'):
-                    logger.warning(f"⚠️ Errore nel recupero widget code: {widget_info['error']}")
-
-                    # Se il recupero automatico fallisce, usa il metodo manuale
-                    logger.info("🔧 Fallback: generazione manuale del widget code")
-
-                    # Estrai il token dall'inbox se presente
-                    website_token = inbox.get('website_token') or inbox.get('inbox_identifier')
-
-                    if not website_token:
-                        # Ultimo tentativo: cerca nel channel data
-                        if 'channel' in inbox and inbox['channel']:
-                            channel = inbox['channel']
-                            website_token = (channel.get('website_token') or
-                                             channel.get('inbox_identifier') or
-                                             channel.get('hmac_token'))
-
-                    if not website_token:
-                        # Se ancora non troviamo il token, genera un errore
-                        error_msg = "Impossibile recuperare il token del widget dall'inbox creata"
-                        logger.error(f"❌ {error_msg}")
-
-                        if request and hasattr(request, 'headers') and request.headers.get(
-                                'X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({'success': False, 'message': error_msg})
-
-                        if request:
-                            messages.error(request, error_msg)
-                            return redirect('project', project_id=project.id)
-
-                        return {'success': False, 'error': error_msg}
-
-                    # Genera il widget code manualmente
-                    widget_code = f"""<script>
-  (function(d,t) {{
-    var BASE_URL="{settings.CHATWOOT_API_URL}";
-    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-    g.src=BASE_URL+"/packs/js/sdk.js";
-    g.defer = true;
-    g.async = true;
-    s.parentNode.insertBefore(g,s);
-    g.onload=function(){{
-      try {{
-        window.chatwootSDK.run({{
-          websiteToken: '{website_token}',
-          baseUrl: BASE_URL
-        }});
-        console.log('✅ Chatwoot widget inizializzato con token: {website_token}');
-      }} catch(e) {{
-        console.error('❌ Errore inizializzazione Chatwoot widget:', e);
-      }}
-    }};
-    g.onerror=function(){{
-      console.error('❌ Errore caricamento Chatwoot SDK da: ' + BASE_URL + '/packs/js/sdk.js');
-    }};
-  }})(document,"script");
-</script>"""
-
-                    # Salva il widget code generato manualmente
-                    project.chatwoot_widget_code = widget_code
-                    project.chatwoot_website_token = website_token
-
-                    widget_info = {
-                        'widget_code': widget_code,
-                        'website_token': website_token,
-                        'success': True,
-                        'generated_manually': True
-                    }
-                    logger.info(f"✅ Widget code generato manualmente con token: {website_token}")
-                else:
-                    # Genera widget di fallback
-                    logger.warning("⚠️ Generazione widget di fallback")
-                    fallback_token = f"fallback_{inbox['id']}"
-                    widget_code = f"""<script>
-  console.warn('⚠️ Widget Chatwoot in modalità fallback. Verifica la configurazione.');
-  // Widget code di fallback - richiede configurazione manuale
-</script>"""
-                    project.chatwoot_widget_code = widget_code
-                    project.chatwoot_website_token = fallback_token
-
-            except Exception as widget_error:
-                logger.error(f"❌ Errore nel recupero del widget code: {str(widget_error)}")
-                logger.error(traceback.format_exc())
-
-                # Anche in caso di errore, prova a generare un widget di base
-                fallback_token = f"error_{inbox['id']}"
-                widget_code = f"""<script>
-  console.error('❌ Errore nella configurazione del widget Chatwoot. Token: {fallback_token}');
-  // Widget richiede configurazione manuale
-</script>"""
+                # Salva nel progetto
                 project.chatwoot_widget_code = widget_code
-                project.chatwoot_website_token = fallback_token
+                project.chatwoot_website_token = website_token
+                project.chatwoot_enabled = True
+                project.save()
 
-            # Abilita l'integrazione Chatwoot nel progetto
-            project.chatwoot_enabled = True
-            project.save()
+                success_msg = 'Website Widget Chatwoot creato con successo!'
 
-            logger.info(f"✅ Bot Chatwoot creato per il progetto {project.id} con inbox {inbox['id']}")
+                if request and hasattr(request, 'headers') and request.headers.get(
+                        'X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': success_msg,
+                        'inbox_id': inbox_id,
+                        'inbox_name': inbox.get('name', inbox_name),
+                        'website_token': website_token,
+                        'widget_code': widget_code,
+                        'is_authentic_token': True
+                    })
 
-            success_msg = 'Chatbot Chatwoot creato con successo'
+                if request:
+                    messages.success(request, success_msg)
+                    return redirect('project', project_id=project.id)
 
-            if request and hasattr(request, 'headers') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                response_data = {
+                return {
                     'success': True,
+                    'inbox': inbox,
                     'message': success_msg,
-                    'inbox_id': inbox.get('id'),
-                    'inbox_name': inbox.get('name', inbox_name),
-                    'website_token': project.chatwoot_website_token,
-                    'widget_code': project.chatwoot_widget_code
+                    'widget_code': widget_code,
+                    'website_token': website_token
                 }
 
-                logger.info(
-                    f"📤 Risposta AJAX preparata: inbox_id={response_data['inbox_id']}, token={response_data['website_token']}")
-                return JsonResponse(response_data)
+            else:
+                # Errore nel recupero del token
+                error_msg = widget_info.get('error', 'Errore sconosciuto nel recupero del website token')
+                logger.error(f"❌ {error_msg}")
 
-            if request:
-                messages.success(request, success_msg)
-                return redirect('project', project_id=project.id)
+                # Anche se il token fallisce, l'inbox è stata creata
+                project.chatwoot_inbox_id = inbox_id
+                project.chatwoot_enabled = False  # Disabilitato perché non funzionante
+                project.save()
 
-            result = {
-                'success': True,
-                'inbox': inbox,
-                'message': success_msg,
-                'widget_code': project.chatwoot_widget_code,
-                'website_token': project.chatwoot_website_token
-            }
+                if request and hasattr(request, 'headers') and request.headers.get(
+                        'X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'message': f"Inbox creata ma errore nel token: {error_msg}",
+                        'inbox_id': inbox_id,
+                        'solutions': widget_info.get('solutions', [])
+                    })
 
-            logger.info("✅ Ritorno risultato con widget_code")
-            return result
+                if request:
+                    messages.error(request, f"Inbox creata ma errore nel token: {error_msg}")
+                    return redirect('project', project_id=project.id)
+
+                return {'success': False, 'error': error_msg}
 
         except Exception as inbox_error:
-            logger.error(f"❌ Errore nell'aggiornamento dei metadati o nel recupero del widget code: {str(inbox_error)}")
+            logger.error(f"❌ Errore nella gestione dell'inbox: {str(inbox_error)}")
             logger.error(traceback.format_exc())
 
             if request and hasattr(request, 'headers') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -3896,7 +3817,7 @@ def create_chatwoot_bot_for_project(project, request=None):
             return {'success': False, 'error': str(inbox_error)}
 
     except Exception as e:
-        logger.error(f"❌ Errore generale nella creazione del bot Chatwoot: {str(e)}")
+        logger.error(f"❌ Errore generale nella creazione del Website Widget: {str(e)}")
         logger.error(traceback.format_exc())
 
         if request and hasattr(request, 'headers') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':

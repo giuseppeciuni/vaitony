@@ -287,16 +287,8 @@ class ChatwootClient:
 	def create_inbox(self, name: str, website_url: str,
 					 channel_attributes: Optional[Dict] = None) -> Dict:
 		"""
-        Crea una nuova inbox di tipo Channel::WebWidget.
-
-        Args:
-            name (str): Nome dell'inbox
-            website_url (str): URL del sito web (OBBLIGATORIO)
-            channel_attributes (dict, optional): Attributi aggiuntivi del widget
-
-        Returns:
-            dict: Dati dell'inbox creata con website_token
-        """
+		Crea una nuova inbox di tipo Channel::WebWidget con payload corretto.
+		"""
 		sanitized_name = self.sanitize_inbox_name(name)
 		logger.info(f"📥 Creazione Website Widget: '{sanitized_name}' per URL: {website_url}")
 
@@ -309,31 +301,24 @@ class ChatwootClient:
 
 		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
 
-		# Configurazione per Website Widget
+		# CORREZIONE: Payload nel formato corretto per l'API Chatwoot
 		payload = {
 			"name": sanitized_name,
 			"channel": {
 				"type": "Channel::WebWidget",
 				"website_url": website_url,
-				"widget_color": "#1f93ff",
-				"welcome_title": "Ciao! Come posso aiutarti?",
-				"welcome_tagline": "Chatta con il nostro assistente AI",
-				"greeting_enabled": True,
-				"greeting_message": "Ciao! Sono qui per aiutarti. Fai pure la tua domanda!",
-				"enable_email_collect": False,
-				"csat_survey_enabled": False,
-				"reply_time": "in_a_few_minutes",
-				"hmac_mandatory": False,
-				"pre_chat_form_enabled": False,
-				"continuity_via_email": False
+				"widget_color": channel_attributes.get("widget_color", "#1f93ff") if channel_attributes else "#1f93ff",
+				"welcome_title": channel_attributes.get("welcome_title",
+														"Ciao! Come posso aiutarti?") if channel_attributes else "Ciao! Come posso aiutarti?",
+				"welcome_tagline": channel_attributes.get("welcome_tagline",
+														  "Chatta con il nostro assistente AI") if channel_attributes else "Chatta con il nostro assistente AI",
+				"greeting_enabled": channel_attributes.get("greeting_enabled", True) if channel_attributes else True,
+				"greeting_message": channel_attributes.get("greeting_message",
+														   "Ciao! Sono qui per aiutarti. Fai pure la tua domanda!") if channel_attributes else "Ciao! Sono qui per aiutarti. Fai pure la tua domanda!"
 			}
 		}
 
-		# Aggiungi attributi personalizzati se forniti
-		if channel_attributes:
-			payload["channel"].update(channel_attributes)
-
-		logger.debug(f"📤 Payload creazione Website Widget: {payload}")
+		logger.debug(f"📤 Payload Website Widget (formato corretto): {payload}")
 
 		try:
 			response = self._make_request_with_retry('POST', endpoint, json=payload)

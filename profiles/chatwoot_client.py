@@ -287,10 +287,10 @@ class ChatwootClient:
 	def create_inbox(self, name: str, website_url: str,
 					 channel_attributes: Optional[Dict] = None) -> Dict:
 		"""
-		Crea una nuova inbox di tipo Channel::WebWidget con payload corretto.
+		Crea Website Widget con payload minimale per evitare errore 422.
 		"""
 		sanitized_name = self.sanitize_inbox_name(name)
-		logger.info(f"📥 Creazione Website Widget: '{sanitized_name}' per URL: {website_url}")
+		logger.info(f"📥 Creazione Website Widget (minimale): '{sanitized_name}' per URL: {website_url}")
 
 		if not website_url:
 			raise ValueError("website_url è obbligatorio per Website Widget")
@@ -301,27 +301,28 @@ class ChatwootClient:
 
 		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
 
-		# CORREZIONE: Payload nel formato corretto per l'API Chatwoot
+		# PAYLOAD MINIMALE - Solo i campi strettamente necessari
 		payload = {
 			"name": sanitized_name,
 			"channel": {
 				"type": "Channel::WebWidget",
-				"website_url": website_url,
-				"widget_color": channel_attributes.get("widget_color", "#1f93ff") if channel_attributes else "#1f93ff",
-				"welcome_title": channel_attributes.get("welcome_title",
-														"Ciao! Come posso aiutarti?") if channel_attributes else "Ciao! Come posso aiutarti?",
-				"welcome_tagline": channel_attributes.get("welcome_tagline",
-														  "Chatta con il nostro assistente AI") if channel_attributes else "Chatta con il nostro assistente AI",
-				"greeting_enabled": channel_attributes.get("greeting_enabled", True) if channel_attributes else True,
-				"greeting_message": channel_attributes.get("greeting_message",
-														   "Ciao! Sono qui per aiutarti. Fai pure la tua domanda!") if channel_attributes else "Ciao! Sono qui per aiutarti. Fai pure la tua domanda!"
+				"website_url": website_url
 			}
 		}
 
-		logger.debug(f"📤 Payload Website Widget (formato corretto): {payload}")
+		logger.debug(f"📤 Payload minimale: {payload}")
 
 		try:
 			response = self._make_request_with_retry('POST', endpoint, json=payload)
+			logger.info(f"📡 Risposta creazione: Status {response.status_code}")
+
+			# Log della risposta completa per debug
+			try:
+				response_data = response.json()
+				logger.debug(f"📋 Risposta completa: {response_data}")
+			except:
+				logger.debug(f"📋 Risposta non JSON: {response.text[:300]}")
+
 			created_inbox_data = self._handle_response(response)
 
 			# Estrai dati inbox dal payload
@@ -343,10 +344,7 @@ class ChatwootClient:
 				if 'website_token' in final_inbox_data:
 					logger.info(f"🔑 Website token ricevuto: {final_inbox_data['website_token']}")
 				else:
-					logger.warning(f"⚠️ Website token non presente nella risposta di creazione")
-
-				# Log delle chiavi disponibili per debug
-				logger.debug(f"📋 Chiavi disponibili: {list(final_inbox_data.keys())}")
+					logger.warning(f"⚠️ Website token non presente, verrà recuperato successivamente")
 
 				return final_inbox_data
 			else:

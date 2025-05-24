@@ -1,223 +1,230 @@
-import base64
-import datetime
-import hashlib
-import io
-import os
-import fitz  # PyMuPDF
-import pytesseract
-from PIL import Image
-from PyPDF2 import PdfReader
-from bs4 import BeautifulSoup
-from django.conf import settings
+#!/usr/bin/env python
+# delete_all_inboxes.py - Script per eliminare tutte le inbox Chatwoot
+
+import time
+
+import requests
 
 
-def extract_text_from_pdf(pdf_path: str) -> str:
-    """Estrae il testo da un file PDF"""
-    reader = PdfReader(pdf_path)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+class ChatwootInboxCleaner:
+	def __init__(self, base_url, email, password, account_id=1):
+		"""
+        Inizializza il cleaner per eliminare le inbox.
+
+        Args:
+            base_url: URL base di Chatwoot (es: https://chatwoot.ciunix.com)
+            email: Email di accesso
+            password: Password di accesso
+            account_id: ID dell'account (default: 1)
+        """
+		self.base_url = base_url.rstrip('/')
+		self.api_base_url = f"{self.base_url}/api/v1"
+		self.email = email
+		self.password = password
+		self.account_id = account_id
+		self.jwt_headers = None
+
+	def authenticate(self):
+		"""Autentica con Chatwoot usando JWT"""
+		auth_url = f"{self.base_url}/auth/sign_in"
+		payload = {"email": self.email, "password": self.password}
+
+		try:
+			print(f"🔐 Autenticazione su {auth_url}...")
+			response = requests.post(auth_url, json=payload, timeout=10)
+
+			if response.status_code == 200:
+				self.jwt_headers = {
+					'access-token': response.headers.get('access-token'),
+					'client': response.headers.get('client'),
+					'uid': response.headers.get('uid'),
+					'content-type': 'application/json'
+				}
+				print("✅ Autenticazione riuscita!")
+				return True
+			else:
+				print(f"❌ Autenticazione fallita: {response.status_code}")
+				print(f"Risposta: {response.text}")
+				return False
+		except Exception as e:
+			print(f"❌ Errore durante l'autenticazione: {str(e)}")
+			return False
+
+	def list_inboxes(self):
+		"""Lista tutte le inbox dell'account"""
+		if not self.jwt_headers:
+			print("❌ Non autenticato")
+			return []
+
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
+
+		try:
+			print(f"📋 Recupero lista inbox da {endpoint}...")
+			response = requests.get(endpoint, headers=self.jwt_headers, timeout=10)
+
+			if response.status_code == 200:
+				result = response.json()
+
+				# Gestisce il formato payload di Chatwoot
+				if isinstance(result, dict) and 'payload' in result:
+					inboxes = result['payload']
+				else:
+					inboxes = result
+
+				print(f"📬 Trovate {len(inboxes)} inbox")
+				return inboxes
+			else:
+				print(f"❌ Errore nel recupero inbox: {response.status_code}")
+				return []
+		except Exception as e:
+			print(f"❌ Errore: {str(e)}")
+			return []
+
+	def delete_inbox(self, inbox_id, inbox_name):
+		"""Elimina una specifica inbox"""
+		if not self.jwt_headers:
+			print("❌ Non autenticato")
+			return False
+
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
+
+		try:
+			print(f"🗑️  Eliminazione inbox '{inbox_name}' (ID: {inbox_id})...")
+			response = requests.delete(endpoint, headers=self.jwt_headers, timeout=10)
+
+			if response.status_code in [200, 204]:
+				print(f"✅ Inbox '{inbox_name}' eliminata con successo")
+				return True
+			else:
+				print(f"❌ Errore nell'eliminazione di '{inbox_name}': {response.status_code}")
+				print(f"Risposta: {response.text}")
+				return False
+		except Exception as e:
+			print(f"❌ Errore nell'eliminazione di '{inbox_name}': {str(e)}")
+			return False
+
+	def delete_all_inboxes(self, confirm=False, exclude_names=None, only_rag_bots=False):
+		"""
+        Elimina tutte le inbox (con opzioni di filtro)
+
+        Args:
+            confirm: Se True, elimina senza chiedere conferma
+            exclude_names: Lista di nomi di inbox da NON eliminare
+            only_rag_bots: Se True, elimina solo le inbox che iniziano con "RAG Bot"
+        """
+		if not self.authenticate():
+			return False
+
+		inboxes = self.list_inboxes()
+		if not inboxes:
+			print("📭 Nessuna inbox trovata")
+			return True
+
+		# Filtra le inbox in base ai criteri
+		inboxes_to_delete = []
+		exclude_names = exclude_names or []
+
+		for inbox in inboxes:
+			inbox_name = inbox.get('name', 'Senza nome')
+
+			# Salta le inbox escluse
+			if inbox_name in exclude_names:
+				print(f"⏭️  Saltando '{inbox_name}' (esclusa)")
+				continue
+
+			# Se only_rag_bots=True, elimina solo le inbox RAG Bot
+			if only_rag_bots and not inbox_name.startswith('RAG Bot'):
+				print(f"⏭️  Saltando '{inbox_name}' (non è un RAG Bot)")
+				continue
+
+			inboxes_to_delete.append(inbox)
+
+		if not inboxes_to_delete:
+			print("📭 Nessuna inbox da eliminare secondo i criteri specificati")
+			return True
+
+		print(f"\n🎯 Inbox selezionate per l'eliminazione ({len(inboxes_to_delete)}):")
+		for inbox in inboxes_to_delete:
+			print(f"  - {inbox.get('name')} (ID: {inbox.get('id')})")
+
+		# Conferma eliminazione
+		if not confirm:
+			print(f"\n⚠️  ATTENZIONE: Stai per eliminare {len(inboxes_to_delete)} inbox!")
+			print("⚠️  Questa operazione è IRREVERSIBILE!")
+			response = input("\n❓ Sei sicuro? Digita 'ELIMINA' per confermare: ")
+
+			if response != 'ELIMINA':
+				print("❌ Operazione annullata")
+				return False
+
+		# Elimina le inbox
+		print(f"\n🚀 Avvio eliminazione di {len(inboxes_to_delete)} inbox...")
+
+		deleted_count = 0
+		failed_count = 0
+
+		for i, inbox in enumerate(inboxes_to_delete, 1):
+			inbox_id = inbox.get('id')
+			inbox_name = inbox.get('name', 'Senza nome')
+
+			print(f"\n[{i}/{len(inboxes_to_delete)}] ", end="")
+
+			if self.delete_inbox(inbox_id, inbox_name):
+				deleted_count += 1
+			else:
+				failed_count += 1
+
+			# Pausa tra le eliminazioni per non sovraccaricare l'API
+			if i < len(inboxes_to_delete):
+				time.sleep(1)
+
+		# Riepilogo finale
+		print(f"\n📊 RIEPILOGO ELIMINAZIONE:")
+		print(f"✅ Eliminate con successo: {deleted_count}")
+		print(f"❌ Fallite: {failed_count}")
+		print(f"📋 Totale processate: {len(inboxes_to_delete)}")
+
+		return failed_count == 0
 
 
+def main():
+	"""Funzione principale"""
+	print("=" * 50)
+	print("🗑️  CHATWOOT INBOX CLEANER")
+	print("=" * 50)
 
-def extract_text_from_html(html_path: str) -> str:
-    """Estrae il testo da un file HTML"""
-    with open(html_path, 'r', encoding='utf-8') as file:
-        soup = BeautifulSoup(file.read(), 'html.parser')
-        return soup.get_text()
+	# Configurazioni - MODIFICA QUESTI VALORI
+	CHATWOOT_URL = "https://chatwoot.ciunix.com"
+	EMAIL = "giuseppe.ciuni@gmail.com"
+	PASSWORD = "la_tua_password_qui"  # SOSTITUISCI CON LA PASSWORD VERA
+	ACCOUNT_ID = 1
 
+	# Opzioni di eliminazione
+	ONLY_RAG_BOTS = True  # Se True, elimina solo le inbox "RAG Bot - ..."
+	EXCLUDE_NAMES = []  # Lista di nomi da NON eliminare, es: ["Inbox Importante"]
 
+	# Inizializza cleaner
+	cleaner = ChatwootInboxCleaner(CHATWOOT_URL, EMAIL, PASSWORD, ACCOUNT_ID)
 
-def extract_text_from_image(image_path: str) -> str:
-    """Estrae il testo da un'immagine usando OCR"""
-    try:
-        image = Image.open(image_path)
-        text = pytesseract.image_to_string(image, lang='ita+eng')
-        return text
-    except Exception as e:
-        print(f"Errore nell'estrazione del testo dall'immagine {image_path}: {str(e)}")
-        return ""
+	# Mostra anteprima
+	print(f"🔧 Configurazione:")
+	print(f"  URL: {CHATWOOT_URL}")
+	print(f"  Account ID: {ACCOUNT_ID}")
+	print(f"  Solo RAG Bots: {ONLY_RAG_BOTS}")
+	print(f"  Inbox escluse: {EXCLUDE_NAMES}")
 
+	# Esegui eliminazione
+	success = cleaner.delete_all_inboxes(
+		confirm=False,  # Cambio a True per eliminare senza conferma
+		exclude_names=EXCLUDE_NAMES,
+		only_rag_bots=ONLY_RAG_BOTS
+	)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def process_user_files(user_dir, documents_list, search_query='', owner_username=None):
-    """
-    Funzione helper per processare i file di un utente e aggiungerli alla lista dei documenti
-    Restituisce una serie di informazioni sui documenti come nome, dimensione, path, estensione etc
-    """
-    for filename in os.listdir(user_dir):
-        file_path = os.path.join(user_dir, filename)
-
-        # Salta se non è un file
-        if not os.path.isfile(file_path):
-            continue
-
-        # Applica filtro di ricerca se fornito
-        if search_query and search_query.lower() not in filename.lower():
-            continue
-
-        # Ottieni statistiche del file
-        stats = os.stat(file_path)
-        file_size = stats.st_size
-
-        # Formatta la dimensione del file
-        if file_size < 1024:
-            size_str = f"{file_size} B"
-        elif file_size < 1024 * 1024:
-            size_str = f"{file_size / 1024:.1f} KB"
-        else:
-            size_str = f"{file_size / (1024 * 1024):.1f} MB"
-
-        # Ottieni estensione file
-        _, file_extension = os.path.splitext(filename)
-        # Ottieni data upload (usando data creazione file)
-        upload_date = datetime.datetime.fromtimestamp(stats.st_ctime).strftime('%Y-%m-%d %H:%M')
-
-        # Ottieni URL file
-        if owner_username:
-            # Se è specificato un proprietario, includi l'ID utente nell'URL
-            user_id = os.path.basename(user_dir)
-            file_url = f"{settings.MEDIA_URL}uploads/{user_id}/{filename}"
-        else:
-            # Altrimenti usa l'utente corrente
-            file_url = f"{settings.MEDIA_URL}uploads/{os.path.basename(user_dir)}/{filename}"
-
-        # Aggiungi documento alla lista
-        doc_info = {
-            'id': filename,  # Usa il nome file come ID per semplicità
-            'filename': filename,
-            'file_path': file_path,
-            'file_url': file_url,
-            'file_size': size_str,
-            'file_extension': file_extension.lower(),
-            'upload_date': upload_date
-        }
-
-        # Aggiungi informazioni sul proprietario se fornite
-        if owner_username:
-            doc_info['owner'] = owner_username
-
-        documents_list.append(doc_info)
+	if success:
+		print("\n🎉 Operazione completata con successo!")
+	else:
+		print("\n⚠️  Operazione completata con alcuni errori")
 
 
-
-
-
-def extract_page_image(file_path, page_number=0, max_size=(800, 800)):
-    """
-    Estrae l'immagine di una pagina da un documento PDF.
-
-    Args:
-        file_path: Percorso del file PDF
-        page_number: Numero di pagina da estrarre (0-based)
-        max_size: Dimensione massima dell'immagine (larghezza, altezza)
-
-    Returns:
-        str: Path dell'immagine estratta o None in caso di errore
-    """
-    try:
-        # Crea hash del percorso del file e della pagina per un nome univoco
-        file_hash = hashlib.md5(file_path.encode()).hexdigest()
-        cache_filename = f"page_{file_hash}_{page_number}.png"
-
-        # Directory per la cache delle immagini
-        cache_dir = os.path.join(settings.MEDIA_ROOT, 'document_images')
-        os.makedirs(cache_dir, exist_ok=True)
-
-        cache_path = os.path.join(cache_dir, cache_filename)
-
-        # Se l'immagine è già nella cache, restituisci il percorso
-        if os.path.exists(cache_path):
-            return cache_path
-
-        # Controlla il tipo di file
-        _, ext = os.path.splitext(file_path)
-        ext = ext.lower()
-
-        if ext == '.pdf':
-            # Apri il file PDF
-            doc = fitz.open(file_path)
-
-            # Verifica che il numero di pagina sia valido
-            if page_number < 0 or page_number >= len(doc):
-                return None
-
-            # Ottieni la pagina
-            page = doc[page_number]
-
-            # Renderizza la pagina ad alta risoluzione
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-
-            # Converti in immagine PIL
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-
-            # Ridimensiona se necessario
-            if img.width > max_size[0] or img.height > max_size[1]:
-                img.thumbnail(max_size)
-
-            # Salva l'immagine
-            img.save(cache_path)
-            return cache_path
-
-        elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-            # Per i file immagine, crea semplicemente una copia ridimensionata
-            with Image.open(file_path) as img:
-                # Ridimensiona se necessario
-                if img.width > max_size[0] or img.height > max_size[1]:
-                    img.thumbnail(max_size)
-                # Salva l'immagine
-                img.save(cache_path)
-                return cache_path
-
-        return None
-    except Exception as e:
-        print(f"Errore nell'estrazione dell'immagine: {str(e)}")
-        return None
-
-
-def get_document_image_b64(file_path, page_number=0):
-    """
-    Ottiene l'immagine di una pagina come stringa base64 per l'inclusione in HTML.
-
-    Args:
-        file_path: Percorso del file
-        page_number: Numero di pagina (per PDF)
-
-    Returns:
-        tuple: (data_uri, mime_type) o (None, None) in caso di errore
-    """
-    try:
-        image_path = extract_page_image(file_path, page_number)
-        if not image_path:
-            return None, None
-
-        # Determina il mime type
-        mime_type = "image/png"  # Default
-        _, ext = os.path.splitext(image_path)
-        if ext.lower() == '.jpg' or ext.lower() == '.jpeg':
-            mime_type = "image/jpeg"
-        elif ext.lower() == '.gif':
-            mime_type = "image/gif"
-
-        # Leggi l'immagine e codificala in base64
-        with open(image_path, "rb") as img_file:
-            encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
-            data_uri = f"data:{mime_type};base64,{encoded_string}"
-            return data_uri, mime_type
-    except Exception as e:
-        print(f"Errore nella codifica dell'immagine: {str(e)}")
-        return None, None
+if __name__ == "__main__":
+	main()

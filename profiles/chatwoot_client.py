@@ -695,66 +695,213 @@ class ChatwootClient:
                 return self._inboxes_cache['data']
             raise e
 
-    def create_inbox(self, name: str, channel_type: str = "api",
-                     webhook_url: Optional[str] = None) -> Dict:
-        """
-        Crea una nuova inbox con validazione avanzata del nome.
+    # chatwoot_client.py
+    import logging
+    import time
+    import traceback
+    from typing import Dict, List, Optional, Union
+    import requests
 
-        Args:
-            name (str): Nome dell'inbox (verrà automaticamente sanificato)
-            channel_type (str): Tipo di canale (default: "api")
-            webhook_url (str, optional): URL del webhook per notifiche
+    logger = logging.getLogger('profiles.chatwoot_client')
 
-        Returns:
-            dict: Dati della inbox creata
+    # ... (configurazione logger esistente) ...
 
-        Raises:
-            Exception: Se la creazione fallisce dopo la sanificazione
-        """
-        # Sanifica il nome prima della creazione
-        sanitized_name = self.sanitize_inbox_name(name)
+    class ChatwootClient:
+        # ... (metodi __init__, _initialize_authentication, _authenticate_jwt, get_headers, ecc. come prima) ...
 
-        logger.info(f"📥 Creazione inbox: '{sanitized_name}' (tipo: {channel_type})")
+        # Nel file chatwoot_client.py, sostituisci il metodo create_inbox con questa versione corretta:
 
-        endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
-        data = {
-            "name": sanitized_name,
-            "channel": {
-                "type": channel_type
+        def create_inbox(self, name: str,
+                         channel_type: str = "Channel::WebWidget",
+                         channel_attributes: Optional[Dict] = None) -> Dict:
+            """
+            Crea una nuova inbox per il chatbot.
+            Per un widget web, channel_type DEVE essere 'Channel::WebWidget'
+            e channel_attributes DEVE contenere 'website_url'.
+            """
+            sanitized_name = self.sanitize_inbox_name(name)
+            logger.info(f"📥 Creazione inbox: '{sanitized_name}' (tipo: {channel_type})")
+            endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
+
+            # CORREZIONE: Configurazione corretta per Channel::WebWidget
+            payload = {
+                "name": sanitized_name,
+                "channel": {
+                    "type": channel_type
+                }
             }
-        }
 
-        # Aggiungi webhook URL se fornito
-        if webhook_url:
-            data["channel"]["webhook_url"] = webhook_url
-            logger.debug(f"🔗 Webhook URL configurato: {webhook_url}")
+            # Configura attributi specifici per Channel::WebWidget
+            if channel_type == "Channel::WebWidget":
+                if not channel_attributes or "website_url" not in channel_attributes:
+                    # Se non viene fornito website_url, usa un default
+                    default_website_url = "https://example.com"
+                    logger.warning(
+                        f"⚠️ website_url non fornito per Channel::WebWidget, uso default: {default_website_url}")
+                    channel_attributes = channel_attributes or {}
+                    channel_attributes["website_url"] = default_website_url
 
-        try:
-            response = self._make_request_with_retry('POST', endpoint, json=data)
-            result = self._handle_response(response)
+                # Imposta configurazione corretta per WebWidget
+                payload["channel"].update({
+                    "website_url": channel_attributes["website_url"],
+                    "widget_color": channel_attributes.get("widget_color", "#1f93ff"),
+                    "welcome_title": channel_attributes.get("welcome_title", f"Ciao! Come posso aiutarti?"),
+                    "welcome_tagline": channel_attributes.get("welcome_tagline", "Chatta con noi"),
+                    "greeting_enabled": channel_attributes.get("greeting_enabled", True),
+                    "greeting_message": channel_attributes.get("greeting_message", "Ciao! Come posso aiutarti oggi?"),
+                    "enable_email_collect": channel_attributes.get("enable_email_collect", False),
+                    "csat_survey_enabled": channel_attributes.get("csat_survey_enabled", False),
+                    "reply_time": channel_attributes.get("reply_time", "in_a_few_minutes"),
+                    "hmac_mandatory": channel_attributes.get("hmac_mandatory", False),
+                    "pre_chat_form_enabled": channel_attributes.get("pre_chat_form_enabled", False),
+                    "continuity_via_email": channel_attributes.get("continuity_via_email", False)
+                })
 
-            # Estrai dai payload se necessario
-            inbox_data = result
-            if isinstance(result, dict) and 'payload' in result:
-                if isinstance(result['payload'], dict):
-                    inbox_data = result['payload']
-                    logger.debug("📦 Estratti dati inbox dal payload")
-                elif isinstance(result['payload'], list) and result['payload']:
-                    inbox_data = result['payload'][0]
-                    logger.debug("📦 Estratto primo elemento dal payload array")
-
-            if isinstance(inbox_data, dict) and 'id' in inbox_data:
-                # Invalida cache dopo creazione
-                self._inboxes_cache = None
-
-                logger.info(f"✅ Inbox '{sanitized_name}' creata con successo (ID: {inbox_data['id']})")
-                return inbox_data
+                logger.debug(f"📋 Configurazione WebWidget: {payload['channel']}")
             else:
-                raise Exception(f"Risposta di creazione inbox non valida: {inbox_data}")
+                # Per altri tipi di channel, aggiungi gli attributi forniti
+                if channel_attributes:
+                    payload["channel"].update(channel_attributes)
+                    logger.debug(f"🔧 Attributi canale configurati per '{name}': {channel_attributes}")
 
-        except Exception as e:
-            logger.error(f"❌ Errore nella creazione dell'inbox '{sanitized_name}': {str(e)}")
-            raise e
+            logger.debug(f"📤 Payload completo creazione inbox '{name}': {payload}")
+
+            try:
+                response = self._make_request_with_retry('POST', endpoint, json=payload)
+                created_inbox_data = self._handle_response(response)
+
+                # Estrai i dati dell'inbox dal payload se la risposta è strutturata
+                final_inbox_data = created_inbox_data
+                if isinstance(created_inbox_data, dict) and 'payload' in created_inbox_data:
+                    payload_content = created_inbox_data['payload']
+                    if isinstance(payload_content, dict):
+                        final_inbox_data = payload_content
+                    elif isinstance(payload_content, list) and payload_content:
+                        final_inbox_data = payload_content[0]
+
+                if isinstance(final_inbox_data, dict) and 'id' in final_inbox_data:
+                    self._inboxes_cache = None  # Invalida cache
+                    logger.info(f"✅ Inbox '{sanitized_name}' (ID: {final_inbox_data['id']}) creata con successo.")
+
+                    # Log del website_token se presente
+                    if 'website_token' in final_inbox_data:
+                        logger.info(f"🔑 Website token ricevuto: {final_inbox_data['website_token']}")
+                    elif 'inbox_identifier' in final_inbox_data:
+                        logger.info(f"🔑 Inbox identifier ricevuto: {final_inbox_data['inbox_identifier']}")
+                    else:
+                        logger.warning(f"⚠️ Nessun token widget trovato nella risposta di creazione")
+
+                    logger.debug(f"📋 Chiavi disponibili nell'inbox creata: {list(final_inbox_data.keys())}")
+                    return final_inbox_data
+                else:
+                    logger.error(
+                        f"❌ Risposta di creazione inbox non valida o ID mancante per '{sanitized_name}': {final_inbox_data}")
+                    raise Exception(f"Risposta di creazione inbox non valida per '{sanitized_name}'")
+
+            except Exception as e:
+                logger.error(f"❌ Errore nella creazione dell'inbox '{sanitized_name}': {str(e)}")
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.error(
+                        f"📄 Dettagli errore API: Status {e.response.status_code}, Testo: {e.response.text[:500]}")
+                raise e
+
+        # Nel file chatwoot_client.py, sostituisci il metodo get_bot_inbox con questa versione corretta:
+
+        def get_bot_inbox(self, inbox_name: str = "RAG Chatbot",
+                          website_url_for_channel: Optional[str] = None,
+                          widget_specific_config: Optional[Dict] = None) -> Dict:
+            """
+            Trova o crea una inbox per il chatbot, assicurandosi che sia di tipo 'Channel::WebWidget'.
+            Se website_url_for_channel non è fornito, usa un default.
+            """
+            try:
+                cleaned_name = self.sanitize_inbox_name(inbox_name)
+
+                # Se non viene fornito website_url, usa un default basato sul base_url
+                if not website_url_for_channel:
+                    from urllib.parse import urlparse
+                    parsed_base_url = urlparse(self.base_url)
+                    website_url_for_channel = f"https://{parsed_base_url.netloc}"
+                    logger.info(f"🔧 website_url non fornito, uso default: {website_url_for_channel}")
+
+                logger.info(
+                    f"🔍 Gestione inbox '{cleaned_name}' (tipo Channel::WebWidget) per website_url: '{website_url_for_channel}'")
+
+                # Normalizza website_url se necessario
+                final_website_url = website_url_for_channel
+                if not final_website_url.startswith(('http://', 'https://')):
+                    final_website_url = 'https://' + final_website_url
+
+                # Cerca inbox esistente con lo stesso nome
+                try:
+                    inboxes = self.list_inboxes(use_cache=False)
+                    for inbox in inboxes:
+                        if (isinstance(inbox, dict) and
+                                inbox.get('name') == cleaned_name and
+                                inbox.get('channel_type') == "Channel::WebWidget"):
+                            logger.info(
+                                f"✅ Inbox 'Channel::WebWidget' esistente trovata: '{cleaned_name}' (ID: {inbox.get('id')})")
+                            return inbox
+
+                    logger.debug(
+                        f"🔍 Nessuna inbox 'Channel::WebWidget' corrispondente trovata. Procedo con la creazione.")
+                except Exception as list_error:
+                    logger.warning(
+                        f"⚠️ Errore nel recupero lista inbox: {str(list_error)}. Procedo comunque con la creazione.")
+
+                logger.info(
+                    f"📥 Creazione nuova inbox 'Channel::WebWidget' con nome '{cleaned_name}' per URL '{final_website_url}'")
+
+                # Prepara la configurazione del channel
+                channel_attributes_for_creation = widget_specific_config.copy() if widget_specific_config else {}
+                channel_attributes_for_creation['website_url'] = final_website_url
+
+                # Aggiungi configurazioni predefinite se non presenti
+                default_config = {
+                    "widget_color": "#1f93ff",
+                    "welcome_title": "Ciao! Come posso aiutarti?",
+                    "welcome_tagline": "Chatta con il nostro assistente AI",
+                    "greeting_enabled": True,
+                    "greeting_message": "Ciao! Sono qui per aiutarti. Fai pure la tua domanda!",
+                    "enable_email_collect": False,
+                    "csat_survey_enabled": False,
+                    "reply_time": "in_a_few_minutes"
+                }
+
+                for key, value in default_config.items():
+                    if key not in channel_attributes_for_creation:
+                        channel_attributes_for_creation[key] = value
+
+                # Crea la nuova inbox
+                new_inbox = self.create_inbox(
+                    cleaned_name,
+                    channel_type="Channel::WebWidget",
+                    channel_attributes=channel_attributes_for_creation
+                )
+
+                if isinstance(new_inbox, dict) and 'id' in new_inbox:
+                    logger.info(f"✅ Nuova inbox 'Channel::WebWidget' creata: '{cleaned_name}' (ID: {new_inbox['id']})")
+                    return new_inbox
+                else:
+                    error_msg = new_inbox.get('error', f"Formato risposta da create_inbox non valido: {new_inbox}")
+                    logger.error(f"❌ Fallimento creazione inbox '{cleaned_name}': {error_msg}")
+                    return {'error': error_msg}
+
+            except ValueError as ve:
+                logger.error(f"❌ Errore di validazione in get_bot_inbox per '{inbox_name}': {str(ve)}")
+                return {'error': str(ve)}
+            except Exception as e:
+                logger.error(f"❌ Errore generale in get_bot_inbox per '{inbox_name}': {str(e)}")
+                logger.error(traceback.format_exc())
+                return {'error': str(e)}
+
+        # Non sono necessarie modifiche a get_widget_code se la Strategia 1 già cerca 'website_token'
+        # e se l'API /api/v1/accounts/{id}/inboxes/{inbox_id} restituisce un payload simile a quello fornito,
+        # che include 'website_token' al livello principale.
+        # Il payload fornito dall'utente ha "website_token": "hzMKhWYRkm2GTf1aJLdZz8bP".
+        # La Strategia 1 in get_widget_code cerca proprio 'website_token'.
+        # token_fields = ['website_token', 'inbox_identifier', ...]
+        # Quindi, dovrebbe funzionare.
 
     def get_bot_inbox(self, inbox_name: str = "RAG Chatbot") -> Dict:
         """
@@ -875,10 +1022,12 @@ class ChatwootClient:
 
     # Nel file chatwoot_client.py, sostituisci il metodo get_widget_code con questa versione:
 
+    # Nel file chatwoot_client.py, sostituisci il metodo get_widget_code con questa versione corretta:
+
     def get_widget_code(self, inbox_id: int) -> Dict[str, Union[str, bool]]:
         """
-    Recupera il codice di integrazione widget per una inbox utilizzando le API corrette di Chatwoot.
-    """
+        Recupera il codice di integrazione widget per una inbox utilizzando le API corrette di Chatwoot.
+        """
         logger.info(f"🔍 ===== AVVIO RECUPERO WIDGET CODE PER INBOX {inbox_id} =====")
         logger.info(f"🔧 Base URL: {self.base_url}")
         logger.info(f"🔧 Account ID: {self.account_id}")
@@ -900,7 +1049,7 @@ class ChatwootClient:
         }
 
         # =================================================================
-        # STRATEGIA 1: DETTAGLI INBOX COMPLETI
+        # STRATEGIA 1: DETTAGLI INBOX COMPLETI (PRINCIPALE)
         # =================================================================
         logger.info("🔍 STRATEGIA 1: Recupero dettagli completi inbox")
         try:
@@ -927,15 +1076,15 @@ class ChatwootClient:
                 if isinstance(inbox_data, dict):
                     logger.info(f"🔍 Chiavi disponibili nell'inbox: {list(inbox_data.keys())}")
 
-                    # Cerca il token nei campi principali
+                    # Log completo per debug
+                    logger.debug(f"📋 CONTENUTO INBOX COMPLETO: {inbox_data}")
+
+                    # CORREZIONE: Cerca il token nei campi corretti secondo l'API Chatwoot
                     token_fields = [
                         'website_token',  # Campo principale per widget web
-                        'inbox_identifier',  # Token identifier (quello che hai visto)
-                        'web_widget_token',  # Token widget web alternativo
-                        'widget_token',  # Token widget generico
-                        'uuid',  # UUID dell'inbox
-                        'token',  # Token generico
-                        'identifier'  # Identificatore
+                        'inbox_identifier',  # Identificatore inbox
+                        'hmac_token',  # Token HMAC se presente
+                        'identifier'  # Identificatore alternativo
                     ]
 
                     for field in token_fields:
@@ -945,13 +1094,15 @@ class ChatwootClient:
                             logger.info(f"✅ TOKEN TROVATO nel campo '{field}': {token}")
                             break
 
-                    # Se non trovato, cerca nel channel
+                    # Se non trovato nei campi principali, cerca nel channel
                     if not token and 'channel' in inbox_data:
                         channel_data = inbox_data['channel']
                         logger.info(
                             f"🔍 Analisi dati canale: {list(channel_data.keys()) if isinstance(channel_data, dict) else 'non-dict'}")
 
                         if isinstance(channel_data, dict):
+                            logger.debug(f"📋 CONTENUTO CHANNEL: {channel_data}")
+
                             for field in token_fields:
                                 if field in channel_data and channel_data[field]:
                                     token = str(channel_data[field])
@@ -959,17 +1110,31 @@ class ChatwootClient:
                                     logger.info(f"✅ TOKEN TROVATO nel canale campo '{field}': {token}")
                                     break
 
-                    # Log di tutti i campi per debug
+                    # AGGIUNTA: Se ancora non trovato, cerca nell'oggetto contact_inbox se presente
+                    if not token and 'contact_inboxes' in inbox_data:
+                        contact_inboxes = inbox_data['contact_inboxes']
+                        if contact_inboxes and len(contact_inboxes) > 0:
+                            contact_inbox = contact_inboxes[0]
+                            if 'hmac_verified' in contact_inbox or 'contact_id' in contact_inbox:
+                                # Questo potrebbe contenere il token
+                                for field in ['hmac_token', 'token', 'identifier']:
+                                    if field in contact_inbox and contact_inbox[field]:
+                                        token = str(contact_inbox[field])
+                                        method_used = f"contact_inbox_{field}"
+                                        logger.info(f"✅ TOKEN TROVATO in contact_inbox '{field}': {token}")
+                                        break
+
+                    # Log di tutti i campi per debug se non troviamo il token
                     if not token:
                         logger.warning("⚠️ Token non trovato nei campi standard")
                         logger.debug("🔍 DUMP COMPLETO INBOX DATA:")
                         for key, value in inbox_data.items():
                             if isinstance(value, (str, int, bool, type(None))):
                                 logger.debug(f"  📋 {key}: {repr(value)}")
-                            elif isinstance(value, dict) and len(value) < 5:
+                            elif isinstance(value, dict) and len(value) < 10:
                                 logger.debug(f"  📋 {key}: {value}")
                             else:
-                                logger.debug(f"  📋 {key}: {type(value)} (complex object)")
+                                logger.debug(f"  📋 {key}: {type(value)} (oggetto complesso)")
 
             else:
                 error_msg = f"Status {response.status_code}: {response.text[:200]}"
@@ -982,54 +1147,17 @@ class ChatwootClient:
             debug_info['errors_encountered'].append(f"Inbox details: {error_msg}")
 
         # =================================================================
-        # STRATEGIA 2: CONFIGURAZIONE INBOX SPECIFICA
+        # STRATEGIA 2: ENDPOINT WIDGET SPECIFICO
         # =================================================================
         if not token:
-            logger.info("🔍 STRATEGIA 2: Endpoint configurazione inbox")
+            logger.info("🔍 STRATEGIA 2: Endpoint widget specifico")
             try:
-                # Prova endpoint di configurazione (quello che vedi nell'UI)
-                config_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/configuration"
-                logger.info(f"📡 GET: {config_endpoint}")
-
-                response = self._make_request_with_retry('GET', config_endpoint)
-                debug_info['strategies_attempted'].append('configurazione_inbox')
-                logger.info(f"📡 Status: {response.status_code}")
-
-                if response.status_code == 200:
-                    config_data = response.json()
-                    debug_info['raw_responses']['configurazione'] = {
-                        'status': response.status_code,
-                        'keys': list(config_data.keys()) if isinstance(config_data, dict) else 'non-dict'
-                    }
-
-                    if isinstance(config_data, dict):
-                        logger.info(f"🔍 Configurazione keys: {list(config_data.keys())}")
-
-                        # Cerca token nella configurazione
-                        for field in ['inbox_identifier', 'website_token', 'token', 'identifier']:
-                            if field in config_data and config_data[field]:
-                                token = str(config_data[field])
-                                method_used = f"configurazione_{field}"
-                                logger.info(f"✅ TOKEN TROVATO nella configurazione '{field}': {token}")
-                                break
-
-                else:
-                    logger.info(f"⚠️ Endpoint configurazione non disponibile: {response.status_code}")
-
-            except Exception as e:
-                logger.warning(f"⚠️ Errore strategia configurazione: {str(e)}")
-
-        # =================================================================
-        # STRATEGIA 3: WIDGET SETTINGS ENDPOINT
-        # =================================================================
-        if not token:
-            logger.info("🔍 STRATEGIA 3: Widget settings endpoint")
-            try:
-                widget_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/widget"
+                # Prova endpoint widget specifico
+                widget_endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/channel/widget"
                 logger.info(f"📡 GET: {widget_endpoint}")
 
                 response = self._make_request_with_retry('GET', widget_endpoint)
-                debug_info['strategies_attempted'].append('widget_settings')
+                debug_info['strategies_attempted'].append('widget_endpoint')
                 logger.info(f"📡 Status: {response.status_code}")
 
                 if response.status_code == 200:
@@ -1040,66 +1168,102 @@ class ChatwootClient:
                     }
 
                     if isinstance(widget_data, dict):
-                        logger.info(f"🔍 Widget settings keys: {list(widget_data.keys())}")
+                        logger.info(f"🔍 Widget endpoint keys: {list(widget_data.keys())}")
+                        logger.debug(f"📋 Widget endpoint content: {widget_data}")
 
                         # Cerca token nelle impostazioni widget
-                        for field in ['website_token', 'inbox_identifier', 'token']:
+                        for field in ['website_token', 'hmac_token', 'token', 'identifier']:
                             if field in widget_data and widget_data[field]:
                                 token = str(widget_data[field])
-                                method_used = f"widget_settings_{field}"
-                                logger.info(f"✅ TOKEN TROVATO nelle impostazioni widget '{field}': {token}")
+                                method_used = f"widget_endpoint_{field}"
+                                logger.info(f"✅ TOKEN TROVATO nel widget endpoint '{field}': {token}")
                                 break
 
                 else:
-                    logger.info(f"⚠️ Endpoint widget settings non disponibile: {response.status_code}")
+                    logger.info(f"⚠️ Endpoint widget non disponibile: {response.status_code}")
 
             except Exception as e:
-                logger.warning(f"⚠️ Errore strategia widget settings: {str(e)}")
+                logger.warning(f"⚠️ Errore strategia widget endpoint: {str(e)}")
 
         # =================================================================
-        # STRATEGIA 4: FALLBACK CON TOKEN CONOSCIUTO
+        # STRATEGIA 3: PUBBLIC API ENDPOINT (se disponibile)
         # =================================================================
         if not token:
-            logger.warning("⚠️ STRATEGIA 4: Fallback con token pattern")
-            logger.warning("⚠️ Tutte le strategie API hanno fallito")
+            logger.info("🔍 STRATEGIA 3: Public widget API")
+            try:
+                # Alcuni sistemi Chatwoot espongono un endpoint pubblico per i widget
+                public_endpoint = f"{self.base_url}/widget/config/{inbox_id}"
+                logger.info(f"📡 GET: {public_endpoint}")
 
-            # Usa il pattern che abbiamo osservato funzionare
-            # NOTA: Questo dovrebbe essere sostituito con il token reale una volta che capiamo l'API
-            token = f"m{inbox_id}YyDYVvJ4evbVXa1DNgz6dg"
-            method_used = "pattern_fallback"
+                response = self._make_request_with_retry('GET', public_endpoint)
+                debug_info['strategies_attempted'].append('public_widget_api')
+                logger.info(f"📡 Status: {response.status_code}")
 
-            logger.warning(f"⚠️ TOKEN FALLBACK: {token}")
-            logger.warning("⚠️ ATTENZIONE: Questo è un token generato che potrebbe non funzionare!")
+                if response.status_code == 200:
+                    public_data = response.json()
+                    debug_info['raw_responses']['public'] = {
+                        'status': response.status_code,
+                        'keys': list(public_data.keys()) if isinstance(public_data, dict) else 'non-dict'
+                    }
+
+                    if isinstance(public_data, dict):
+                        logger.info(f"🔍 Public API keys: {list(public_data.keys())}")
+
+                        for field in ['website_token', 'widget_token', 'token']:
+                            if field in public_data and public_data[field]:
+                                token = str(public_data[field])
+                                method_used = f"public_api_{field}"
+                                logger.info(f"✅ TOKEN TROVATO nell'API pubblica '{field}': {token}")
+                                break
+
+                else:
+                    logger.info(f"⚠️ API pubblica widget non disponibile: {response.status_code}")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Errore strategia API pubblica: {str(e)}")
 
         # =================================================================
         # GENERAZIONE SCRIPT WIDGET
         # =================================================================
         if token:
-            logger.info("🔧 Generazione script widget")
+            logger.info("🔧 Generazione script widget con token autentico")
             widget_script = f"""<script>
-  (function(d,t) {{
-    var BASE_URL="{self.base_url}";
-    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-    g.src=BASE_URL+"/packs/js/sdk.js";
-    g.defer = true;
-    g.async = true;
-    s.parentNode.insertBefore(g,s);
-    g.onload=function(){{
-      try {{
-        window.chatwootSDK.run({{
-          websiteToken: '{token}',
-          baseUrl: BASE_URL
-        }});
-        console.log('✅ Chatwoot widget inizializzato con token: {token}');
-      }} catch(e) {{
-        console.error('❌ Errore inizializzazione Chatwoot widget:', e);
-      }}
-    }};
-    g.onerror=function(){{
-      console.error('❌ Errore caricamento Chatwoot SDK da: ' + BASE_URL + '/packs/js/sdk.js');
-    }};
-  }})(document,"script");
-</script>"""
+      (function(d,t) {{
+        var BASE_URL="{self.base_url}";
+        var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=BASE_URL+"/packs/js/sdk.js";
+        g.defer = true;
+        g.async = true;
+        s.parentNode.insertBefore(g,s);
+        g.onload=function(){{
+          try {{
+            window.chatwootSDK.run({{
+              websiteToken: '{token}',
+              baseUrl: BASE_URL
+            }});
+            console.log('✅ Chatwoot widget inizializzato con token: {token}');
+          }} catch(e) {{
+            console.error('❌ Errore inizializzazione Chatwoot widget:', e);
+          }}
+        }};
+        g.onerror=function(){{
+          console.error('❌ Errore caricamento Chatwoot SDK da: ' + BASE_URL + '/packs/js/sdk.js');
+        }};
+      }})(document,"script");
+    </script>"""
+        else:
+            # FALLBACK: Se non riusciamo a trovare il token, restituiamo un errore specifico
+            logger.error("❌ FALLIMENTO: Nessun token recuperato con nessuna strategia")
+            execution_time = round((time.time() - debug_info['execution_time']) * 1000, 2)
+
+            return {
+                'error': 'Impossibile recuperare il token widget da nessuna strategia API. Verifica che l\'inbox esista e sia di tipo Website.',
+                'success': False,
+                'debug_info': debug_info,
+                'inbox_id': inbox_id,
+                'execution_time_ms': execution_time,
+                'suggestion': 'Controlla manualmente l\'inbox su Chatwoot e copia il token dal codice widget generato'
+            }
 
         # =================================================================
         # RISULTATO FINALE
@@ -1117,7 +1281,7 @@ class ChatwootClient:
                 'method': method_used,
                 'success': True,
                 'debug_info': debug_info,
-                'is_authentic_token': 'fallback' not in method_used,
+                'is_authentic_token': True,
                 'inbox_id': inbox_id,
                 'execution_time_ms': execution_time
             }

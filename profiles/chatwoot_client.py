@@ -520,26 +520,18 @@ class ChatwootClient:
 			logger.info("🔧 Generazione script widget con token autentico")
 			widget_script = f"""<script>
   (function(d,t) {{
-    var BASE_URL="{self.base_url}";
-    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-    g.src=BASE_URL+"/packs/js/sdk.js";
-    g.defer = true;
-    g.async = true;
-    s.parentNode.insertBefore(g,s);
-    g.onload=function(){{
-      try {{
-        window.chatwootSDK.run({{
-          websiteToken: '{token}',
-          baseUrl: BASE_URL
-        }});
-        console.log('✅ Chatwoot widget inizializzato con token: {token}');
-      }} catch(e) {{
-        console.error('❌ Errore inizializzazione Chatwoot widget:', e);
-      }}
-    }};
-    g.onerror=function(){{
-      console.error('❌ Errore caricamento Chatwoot SDK da: ' + BASE_URL + '/packs/js/sdk.js');
-    }};
+	var BASE_URL="{self.base_url}";
+	var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+	g.src=BASE_URL+"/packs/js/sdk.js";
+	g.defer = true;
+	g.async = true;
+	s.parentNode.insertBefore(g,s);
+	g.onload=function(){{
+	  window.chatwootSDK.run({{
+		websiteToken: '{token}',
+		baseUrl: BASE_URL
+	  }});
+	}};
   }})(document,"script");
 </script>"""
 

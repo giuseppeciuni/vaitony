@@ -561,6 +561,130 @@ class ChatwootClient:
 				]
 			}
 
+
+	def configure_webhook(self, webhook_url: str, events: List[str] = None) -> Dict:
+		"""
+		Configura un webhook per l'account Chatwoot.
+
+		Args:
+			webhook_url (str): URL del webhook Django
+			events (list): Lista degli eventi da ascoltare
+
+		Returns:
+			dict: Risultato della configurazione
+		"""
+		if events is None:
+			events = ['message_created', 'conversation_created']
+
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/webhooks"
+
+		payload = {
+			"webhook": {
+				"url": webhook_url,
+				"subscriptions": events
+			}
+		}
+
+		try:
+			logger.info(f"🔗 Configurazione webhook: {webhook_url}")
+			logger.debug(f"📤 Eventi webhook: {events}")
+
+			# Verifica se il webhook esiste già
+			existing_webhooks = self.list_webhooks()
+			for webhook in existing_webhooks:
+				if webhook.get('url') == webhook_url:
+					logger.info(f"✅ Webhook già configurato: {webhook.get('id')}")
+					return webhook
+
+			# Crea nuovo webhook
+			response = self._make_request_with_retry('POST', endpoint, json=payload)
+			result = self._handle_response(response)
+
+			# Estrai dati webhook dal payload
+			webhook_data = result
+			if isinstance(result, dict) and 'payload' in result:
+				webhook_data = result['payload']
+
+			if isinstance(webhook_data, dict) and 'id' in webhook_data:
+				logger.info(f"✅ Webhook configurato: ID {webhook_data['id']}")
+				return webhook_data
+			else:
+				logger.error(f"❌ Risposta webhook non valida: {webhook_data}")
+				return {'error': 'Risposta webhook non valida'}
+
+		except Exception as e:
+			logger.error(f"❌ Errore configurazione webhook: {str(e)}")
+			return {'error': str(e)}
+
+
+	def list_webhooks(self) -> List[Dict]:
+		"""
+		Elenca tutti i webhook configurati per l'account.
+		"""
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/webhooks"
+
+		try:
+			response = self._make_request_with_retry('GET', endpoint)
+			result = self._handle_response(response)
+
+			webhooks = []
+			if isinstance(result, dict) and 'payload' in result:
+				if isinstance(result['payload'], list):
+					webhooks = result['payload']
+			elif isinstance(result, list):
+				webhooks = result
+
+			logger.info(f"✅ Trovati {len(webhooks)} webhook configurati")
+			return webhooks
+
+		except Exception as e:
+			logger.error(f"❌ Errore nel recupero webhook: {str(e)}")
+			return []
+
+
+	def update_inbox_metadata(self, inbox_id: int, project_id: int, project_slug: str) -> bool:
+		"""
+		Aggiorna i metadati dell'inbox con informazioni del progetto Django.
+
+		Args:
+			inbox_id (int): ID dell'inbox Chatwoot
+			project_id (int): ID del progetto Django
+			project_slug (str): Slug del progetto Django
+
+		Returns:
+			bool: True se l'aggiornamento è riuscito
+		"""
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}"
+
+		payload = {
+			"inbox": {
+				"additional_attributes": {
+					"project_id": str(project_id),
+					"project_slug": project_slug,
+					"django_integration": True,
+					"rag_enabled": True
+				}
+			}
+		}
+
+		try:
+			logger.info(f"🏷️ Aggiornamento metadati inbox {inbox_id}")
+			logger.debug(f"📤 Metadati: project_id={project_id}, project_slug={project_slug}")
+
+			response = self._make_request_with_retry('PATCH', endpoint, json=payload)
+
+			if response.status_code == 200:
+				logger.info(f"✅ Metadati inbox aggiornati con successo")
+				return True
+			else:
+				logger.error(f"❌ Errore aggiornamento metadati: {response.status_code}")
+				return False
+
+		except Exception as e:
+			logger.error(f"❌ Errore nell'aggiornamento metadati: {str(e)}")
+			return False
+
+
 	def send_message(self, conversation_id: int, content: str,
 					 message_type: str = "outgoing") -> Dict:
 		"""
@@ -658,6 +782,7 @@ def create_chatwoot_client_from_settings(settings_dict: Dict) -> ChatwootClient:
 		client.set_account_id(settings_dict['CHATWOOT_ACCOUNT_ID'])
 
 	return client
+
 
 
 def test_chatwoot_connection(base_url: str, email: str, password: str,

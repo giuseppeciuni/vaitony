@@ -3544,89 +3544,50 @@ def chatwoot_webhook(request):
         logger.info("=" * 60)
         logger.info(f"🔔 Webhook Chatwoot ricevuto: {event_type}")
 
-        # DEBUG COMPLETO DEL PAYLOAD
-        logger.info(f"📋 PAYLOAD COMPLETO:")
-        logger.info(json.dumps(payload, indent=2, ensure_ascii=False))
-
         # Gestisci solo gli eventi di messaggi in arrivo
         if event_type == 'message_created':
-            message = payload.get('message', {})
+            # IL PAYLOAD STESSO È IL MESSAGGIO!
+            message_type = payload.get('message_type')
+            message_content = payload.get('content', '').strip()
+            conversation_id = payload.get('conversation', {}).get('id')
+            inbox_id = payload.get('inbox', {}).get('id')
+            sender = payload.get('sender', {})
+            is_private = payload.get('private', False)
 
-            # DEBUG SPECIFICO DEL MESSAGGIO
-            logger.info(f"💬 MESSAGGIO COMPLETO:")
-            logger.info(json.dumps(message, indent=2, ensure_ascii=False))
+            logger.info(f"📋 message_type: '{message_type}'")
+            logger.info(f"📋 content: '{message_content}'")
+            logger.info(f"📋 conversation_id: {conversation_id}")
+            logger.info(f"📋 inbox_id: {inbox_id}")
+            logger.info(f"📋 private: {is_private}")
+            logger.info(f"📋 sender: {sender.get('name')} ({sender.get('email')})")
 
-            message_type = message.get('message_type')
-            logger.info(f"📋 message_type dal payload: '{message_type}' (tipo: {type(message_type)})")
-
-            # Verifica tutti i campi del messaggio
-            logger.info(f"📋 Chiavi disponibili nel messaggio: {list(message.keys())}")
-
-            # Controlla anche altri possibili campi per il tipo di messaggio
-            for key in ['type', 'private', 'incoming', 'source_type']:
-                if key in message:
-                    logger.info(f"📋 {key}: {message[key]} (tipo: {type(message[key])})")
-
-            # Processa solo messaggi in arrivo (modifica la logica)
+            # Processa solo messaggi in arrivo NON privati
             if message_type != 'incoming':
-                # Proviamo con logiche alternative
-                is_incoming = False
+                logger.debug(f"⏭️ Messaggio ignorato: tipo '{message_type}' (non incoming)")
+                return JsonResponse({'status': 'ignored', 'reason': 'not_incoming_message'})
 
-                # Strategia 1: Controlla se è un messaggio privato (spesso indica bot/admin)
-                if message.get('private') == False and message.get('content'):
-                    is_incoming = True
-                    logger.info("✅ Messaggio identificato come incoming tramite 'private=False'")
+            if is_private:
+                logger.debug(f"⏭️ Messaggio ignorato: messaggio privato")
+                return JsonResponse({'status': 'ignored', 'reason': 'private_message'})
 
-                # Strategia 2: Controlla source_type se presente
-                elif message.get('source_type') in ['web_widget', 'api']:
-                    is_incoming = True
-                    logger.info(
-                        f"✅ Messaggio identificato come incoming tramite source_type: {message.get('source_type')}")
-
-                # Strategia 3: Se non è message_type 'outgoing', assumiamo sia incoming
-                elif message_type != 'outgoing' and message.get('content'):
-                    is_incoming = True
-                    logger.info(f"✅ Messaggio identificato come incoming (non è outgoing)")
-
-                if not is_incoming:
-                    logger.debug(f"⏭️ Messaggio ignorato: tipo '{message_type}'")
-                    return JsonResponse({'status': 'ignored', 'reason': 'not_incoming_message'})
-
-            message_content = message.get('content', '').strip()
             if not message_content:
                 logger.debug("⏭️ Messaggio vuoto ignorato")
                 return JsonResponse({'status': 'ignored', 'reason': 'empty_message'})
 
-            conversation_id = payload.get('conversation', {}).get('id')
-            inbox_id = payload.get('inbox', {}).get('id')
-            contact = payload.get('sender', {})
-
             logger.info(
                 f"📨 Messaggio in arrivo: '{message_content[:50]}...' (Inbox: {inbox_id}, Conv: {conversation_id})")
 
-            # DEBUG DELLE SEZIONI CONVERSATION E INBOX
-            logger.info(f"🗣️ CONVERSATION:")
-            logger.info(json.dumps(payload.get('conversation', {}), indent=2, ensure_ascii=False))
-
-            logger.info(f"📥 INBOX:")
-            logger.info(json.dumps(payload.get('inbox', {}), indent=2, ensure_ascii=False))
-
-            logger.info(f"👤 SENDER:")
-            logger.info(json.dumps(contact, indent=2, ensure_ascii=False))
-
-            # STRATEGIA 1: Cerca progetto tramite inbox_id diretto
+            # CERCA PROGETTO tramite inbox_id
             project = Project.objects.filter(
                 chatwoot_inbox_id=str(inbox_id),
                 is_active=True,
                 chatwoot_enabled=True
             ).first()
 
-            if project:
-                logger.info(f"✅ Progetto trovato tramite inbox_id: {project.name} (ID: {project.id})")
-            else:
+            if not project:
                 logger.warning(f"❌ Nessun progetto trovato per inbox_id: {inbox_id}")
 
-                # Lista tutti i progetti con Chatwoot abilitato per debug
+                # Debug: mostra tutti i progetti disponibili
                 all_chatwoot_projects = Project.objects.filter(
                     is_active=True,
                     chatwoot_enabled=True
@@ -3643,16 +3604,115 @@ def chatwoot_webhook(request):
                     'available_projects': list(all_chatwoot_projects)
                 })
 
-            # Se abbiamo un progetto, procedi con la risposta RAG
             logger.info(f"🎯 Progetto identificato: {project.name} (ID: {project.id})")
 
-            # [Qui continua con la logica RAG esistente...]
-            # Per ora restituiamo solo un successo per debug
-            return JsonResponse({
-                'status': 'success_debug',
-                'project_id': project.id,
-                'message': 'Webhook ricevuto e progetto identificato - modalità debug'
-            })
+            # Ottieni risposta RAG dal progetto
+            try:
+                start_time = time.time()
+                logger.info(f"🤖 Elaborazione RAG per: '{message_content}'")
+
+                rag_response = get_answer_from_project(project, message_content)
+                processing_time = round(time.time() - start_time, 2)
+
+                if rag_response.get('answer'):
+                    logger.info(f"✅ Risposta RAG generata in {processing_time}s")
+
+                    # Inizializza il client Chatwoot per inviare la risposta
+                    chatwoot_client = ChatwootClient(
+                        base_url=settings.CHATWOOT_API_URL,
+                        email=settings.CHATWOOT_EMAIL,
+                        password=settings.CHATWOOT_PASSWORD,
+                        auth_type="jwt"
+                    )
+                    chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
+
+                    if not chatwoot_client.authenticated:
+                        logger.error("❌ Autenticazione Chatwoot fallita nel webhook")
+                        return JsonResponse({'status': 'error', 'message': 'Autenticazione fallita'})
+
+                    # Invia la risposta come messaggio in uscita
+                    try:
+                        logger.info(f"📤 Invio risposta a conversazione {conversation_id}")
+                        response = chatwoot_client.send_message(
+                            conversation_id=conversation_id,
+                            content=rag_response.get('answer'),
+                            message_type='outgoing'
+                        )
+
+                        logger.info(f"✅ Risposta RAG inviata con successo!")
+
+                        # Salva la conversazione nel database del progetto
+                        conversation_record = ProjectConversation.objects.create(
+                            project=project,
+                            question=message_content,
+                            answer=rag_response.get('answer', 'No answer found.'),
+                            processing_time=processing_time,
+                            metadata={
+                                'chatwoot_conversation_id': conversation_id,
+                                'chatwoot_inbox_id': inbox_id,
+                                'contact_email': sender.get('email'),
+                                'contact_name': sender.get('name'),
+                                'source': 'chatwoot_webhook',
+                                'webhook_timestamp': time.time()
+                            }
+                        )
+
+                        logger.info(f"💾 Conversazione salvata (ID: {conversation_record.id})")
+
+                        return JsonResponse({
+                            'status': 'success',
+                            'project_id': project.id,
+                            'project_name': project.name,
+                            'processing_time': processing_time,
+                            'conversation_record_id': conversation_record.id,
+                            'answer_length': len(rag_response.get('answer', ''))
+                        })
+
+                    except Exception as send_error:
+                        logger.error(f"❌ Errore invio messaggio a Chatwoot: {str(send_error)}")
+                        logger.error(traceback.format_exc())
+                        return JsonResponse({
+                            'status': 'error',
+                            'message': f'Errore invio risposta: {str(send_error)}'
+                        })
+                else:
+                    logger.warning("⚠️ Nessuna risposta generata dal sistema RAG")
+                    return JsonResponse({
+                        'status': 'warning',
+                        'message': 'Nessuna risposta generata dal RAG'
+                    })
+
+            except Exception as e:
+                logger.error(f"❌ Errore nell'elaborazione della risposta RAG: {str(e)}")
+                logger.error(traceback.format_exc())
+
+                # Invia un messaggio di errore a Chatwoot
+                try:
+                    chatwoot_client = ChatwootClient(
+                        base_url=settings.CHATWOOT_API_URL,
+                        email=settings.CHATWOOT_EMAIL,
+                        password=settings.CHATWOOT_PASSWORD,
+                        auth_type="jwt"
+                    )
+                    chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
+
+                    if chatwoot_client.authenticated:
+                        chatwoot_client.send_message(
+                            conversation_id=conversation_id,
+                            content="Mi dispiace, si è verificato un errore nell'elaborazione della tua richiesta. Il team di supporto è stato informato.",
+                            message_type='outgoing'
+                        )
+                        logger.info("✅ Messaggio di errore inviato a Chatwoot")
+                except Exception as error_send_error:
+                    logger.error(f"❌ Impossibile inviare messaggio di errore: {str(error_send_error)}")
+
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Errore elaborazione RAG: {str(e)}'
+                })
+        else:
+            logger.debug(f"⏭️ Evento ignorato: {event_type}")
+            return JsonResponse({'status': 'ignored', 'reason': f'event_type_{event_type}'})
 
         return JsonResponse({'status': 'success'})
 

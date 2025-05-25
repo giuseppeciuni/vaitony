@@ -29,6 +29,30 @@ pip3 install -r requirements.txt
 
 
 
+dopo che si installano tutte le librerie da utente del sistema operativo vaitony bisogna attivare venv3.12 ed eseguire i comandi:
+source /home/vaitony/venv3.12/bin/activate
+
+playwright install chromium
+
+installare su sistema operativo vaitony il pacchetto di sistema:
+apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0t64 \
+    libatk-bridge2.0-0t64 \
+    libcups2t64 \
+    libatspi2.0-0t64 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2t64
+
+
 
 
 

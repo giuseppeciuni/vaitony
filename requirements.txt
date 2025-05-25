@@ -97,11 +97,10 @@ pydantic==2.11.2
 pydantic-settings==2.8.1
 pydantic_core==2.33.1
 pydeck==0.9.1
-pyee==13.0.0
+pyee>=13.0.0,<14.0.0
 PyMuPDF==1.25.5
 pyparsing==3.2.3
 PyPDF2==3.0.1
-pyppeteer==2.0.0
 pyquery==2.0.1
 PySocks==1.7.1
 pytesseract==0.3.13

@@ -301,34 +301,28 @@ class ChatwootClient:
 
 		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes"
 
-		# PAYLOAD CORRETTO - Struttura che Chatwoot si aspetta
+		# PAYLOAD CORRETTO - RIMUOVI IL WRAPPER "inbox"
 		payload = {
-			"inbox": {
-				"name": sanitized_name,
-				"channel": {
-					"type": "web_widget",  # Usa "web_widget" invece di "Channel::WebWidget"
-					"website_url": website_url
-				}
-				# 	"widget_color": channel_attributes.get("widget_color",
-				# 										   "#1f93ff") if channel_attributes else "#1f93ff",
-				# 	"welcome_title": channel_attributes.get("welcome_title", "") if channel_attributes else "",
-				# 	"welcome_tagline": channel_attributes.get("welcome_tagline", "") if channel_attributes else "",
-				# 	"greeting_enabled": channel_attributes.get("greeting_enabled",
-				# 											   True) if channel_attributes else True,
-				# 	"greeting_message": channel_attributes.get("greeting_message", "") if channel_attributes else ""
-				# }
+			"name": sanitized_name,
+			"channel": {
+				"type": "web_widget",
+				"website_url": website_url,
+				"welcome_title": f"Benvenuto su {sanitized_name}",
+				"welcome_tagline": "Ciao! Come posso aiutarti oggi?",
+				"widget_color": "#1f93ff",
+				"enable_email_collect": True,
+				"csat_survey_enabled": True,
+				"reply_time": "in_a_few_minutes"
 			}
 		}
 
 		# Se ci sono attributi aggiuntivi del widget, aggiungili
 		if channel_attributes:
-			# Aggiungi altri attributi del canale se presenti
 			for key, value in channel_attributes.items():
-				if key not in ["widget_color", "welcome_title", "welcome_tagline", "greeting_enabled",
-							   "greeting_message"]:
-					payload["inbox"]["channel"][key] = value
+				if key not in payload["channel"]:
+					payload["channel"][key] = value
 
-		logger.debug(f"📤 Payload completo: {payload}")
+		logger.debug(f"📤 Payload corretto: {payload}")
 
 		try:
 			response = self._make_request_with_retry('POST', endpoint, json=payload)

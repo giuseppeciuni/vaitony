@@ -58,8 +58,6 @@ class Profile(models.Model):
         return self.user.username
 
 
-
-
 # ==============================================================================
 # MODELLI PER PROGETTI E FILE CORRELATI
 # ==============================================================================
@@ -67,8 +65,6 @@ class Profile(models.Model):
 # In models.py, aggiungi questi import
 from django.utils.text import slugify
 import uuid
-
-
 
 class Project(models.Model):
     """
@@ -287,7 +283,6 @@ class AnswerSource(models.Model):
         return f"Fonte {source_type} per conversazione {self.conversation.id}"
 
 
-
 class ProjectIndexStatus(models.Model):
     """
     Tiene traccia dello stato dell'indice vettoriale FAISS per ciascun progetto.
@@ -382,8 +377,6 @@ class RagDefaultSettings(models.Model):
                 is_default=True
             ).exclude(id=self.id).update(is_default=False)
         super().save(*args, **kwargs)
-
-
 
 
 # ==============================================================================
@@ -533,7 +526,6 @@ class DefaultSystemPrompts(models.Model):
         if self.is_default:
             DefaultSystemPrompts.objects.filter(is_default=True).exclude(id=self.id).update(is_default=False)
         super().save(*args, **kwargs)
-
 
 
 class ProjectLLMConfiguration(models.Model):

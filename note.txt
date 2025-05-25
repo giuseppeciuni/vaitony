@@ -56,6 +56,75 @@ apt-get install -y \
 
 
 
+
+
+
+
+# SERVER
+
+creare un file di configurazione per gunicorn in /etc/systemd/system/vaitony.service con il seguente contenuto:
+[Unit]
+Description=Gunicorn daemon for VaiTony Django application
+After=network.target
+
+[Service]
+User=vaitony
+Group=www-data
+WorkingDirectory=/var/www/vaitony
+Environment="PYTHONPATH=/var/www/vaitony"
+# Aggiungi queste variabili d'ambiente per aumentare il logging
+Environment="DJANGO_LOG_LEVEL=DEBUG"
+Environment="GUNICORN_LOG_LEVEL=debug"
+ExecStart=/var/www/vaitony/start_gunicorn.sh
+# Aggiungi la redirezione standard error e output a file di log
+StandardOutput=append:/var/www/vaitony/logs/gunicorn_stdout.log
+StandardError=append:/var/www/vaitony/logs/gunicorn_stderr.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+creare un file di avvio per il servizio gunicorn in /var/wwww/vaitony/start_gunicorn.sh con il seguente contenuto:
+#!/bin/bash
+cd /var/www/vaitony
+source venv3.12/bin/activate
+# Assicurati che le directory per i log esistano
+mkdir -p logs
+# Configura l'ambiente
+export PYTHONPATH=/var/www/vaitony
+export DJANGO_SETTINGS_MODULE=vaitony_project.settings
+# Esegui Gunicorn
+exec gunicorn \
+  --access-logfile logs/access.log \
+  --error-logfile logs/error.log \
+  --log-level debug \
+  --workers 1 \
+  --bind 127.0.0.1:8000 \
+  vaitony_project.wsgi:application
+
+
+
+chmod u+x /var/wwww/vaitony/start_gunicorn.sh
+cd /var/www/vaitony
+chown -R vaitony:www-data logs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ------------------ Mysql ----------------------
 use mysql;
 CREATE USER 'vai_tony_user'@'localhost' IDENTIFIED BY 'sdjfic023u89efjos39';

@@ -3664,7 +3664,7 @@ def chatbot_widget_js(request, project_slug):
 #         logger.error(traceback.format_exc())
 #         return HttpResponse(status=500)
 
-
+@csrf_exempt
 def chatwoot_webhook(request):
     """
     Gestisce le notifiche webhook da Chatwoot e risponde usando il sistema RAG

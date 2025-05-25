@@ -1582,7 +1582,7 @@ def get_answer_from_project(project, question):
             )
 
             if qa_chain is None:
-                return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto.",
+                return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto: Bisogna caricare file, note o URL indicizzati.",
                         "sources": []}
 
             # Dopo l'aggiornamento, rileggi i contenuti disponibili

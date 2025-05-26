@@ -285,6 +285,51 @@ class ChatwootClient:
 			raise e
 
 
+	def set_account_locale(self, locale='it'):
+		"""
+		Imposta la lingua dell'account Chatwoot (non dell'utente).
+		Questo influenza i messaggi del widget.
+
+		Args:
+			locale (str): Codice lingua (it, en, es, de, fr)
+
+		Returns:
+			bool: True se l'aggiornamento è riuscito
+		"""
+		if not self.authenticated:
+			logger.error("❌ Utente non autenticato per impostare la lingua dell'account")
+			return False
+
+		try:
+			# Endpoint per aggiornare le impostazioni dell'account
+			account_endpoint = f"{self.api_base_url}/accounts/{self.account_id}"
+
+			payload = {
+				"account": {
+					"locale": locale,
+					"domain": f"chatwoot.ciunix.com",  # Mantieni il dominio esistente
+					"support_email": "support@ciunix.com"  # Email di supporto
+				}
+			}
+
+			logger.info(f"🌐 Impostazione lingua account Chatwoot: {locale}")
+			logger.debug(f"📤 Payload: {payload}")
+
+			response = self._make_request_with_retry('PATCH', account_endpoint, json=payload)
+
+			if response.status_code == 200:
+				logger.info(f"✅ Lingua account Chatwoot aggiornata a: {locale}")
+				return True
+			else:
+				logger.error(f"❌ Errore nell'aggiornamento lingua account: {response.status_code}")
+				logger.error(f"📋 Risposta: {response.text[:200]}")
+				return False
+
+		except Exception as e:
+			logger.error(f"❌ Errore nell'impostazione lingua account: {str(e)}")
+			return False
+
+
 	def set_user_locale(self, locale='it'):
 		"""
 		Imposta la lingua dell'utente Chatwoot corrente.

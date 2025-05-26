@@ -1313,13 +1313,20 @@ def project(request, project_id=None):
                             chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
 
                             if chatwoot_client.authenticated:
-                                # Imposta la nuova lingua per l'utente
-                                language_updated = chatwoot_client.set_user_locale(new_language)
+                                # Imposta la nuova lingua per l'account E l'utente
+                                account_updated = chatwoot_client.set_account_locale(new_language)
+                                user_updated = chatwoot_client.set_user_locale(new_language)
 
-                                if language_updated:
+                                if account_updated:
+                                    logger.info(f"✅ Lingua account Chatwoot aggiornata a: {new_language}")
+                                else:
+                                    logger.warning(f"⚠️ Impossibile aggiornare lingua account Chatwoot")
+
+                                if user_updated:
                                     logger.info(f"✅ Lingua utente Chatwoot aggiornata a: {new_language}")
                                 else:
                                     logger.warning(f"⚠️ Impossibile aggiornare lingua utente Chatwoot")
+
                         except Exception as chatwoot_error:
                             logger.error(f"❌ Errore nell'aggiornamento lingua utente Chatwoot: {str(chatwoot_error)}")
 
@@ -3975,10 +3982,16 @@ def create_chatwoot_bot_for_project(project, request=None):
             logger.error(f"❌ {error_msg}")
             return {'success': False, 'error': error_msg}
 
+        # 🆕 IMPOSTA SIA LA LINGUA DELL'ACCOUNT CHE DELL'UTENTE
+        account_language_set = chatwoot_client.set_account_locale(project_language)
+        user_language_set = chatwoot_client.set_user_locale(project_language)
 
-        # 🆕 IMPOSTA LA LINGUA DELL'UTENTE CHATWOOT PRIMA DI CREARE L'INBOX
-        language_set = chatwoot_client.set_user_locale(project_language)
-        if language_set:
+        if account_language_set:
+            logger.info(f"✅ Lingua account Chatwoot impostata a: {project_language}")
+        else:
+            logger.warning(f"⚠️ Impossibile impostare lingua account")
+
+        if user_language_set:
             logger.info(f"✅ Lingua utente Chatwoot impostata a: {project_language}")
         else:
             logger.warning(f"⚠️ Impossibile impostare lingua utente, procedo comunque")

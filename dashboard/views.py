@@ -3983,6 +3983,11 @@ def create_chatwoot_bot_for_project(project, request=None):
             "email_collect_box_title": translations['email_collect_title'],
             "email_collect_box_subtitle": translations['email_collect_subtitle'],
             "pre_chat_form_enabled": False,
+            # OPZIONI PER RIMUOVERE IL BRANDING chatwoot dal chatbot
+            "show_branding": False,
+            "hide_branding": True,
+            "branding_enabled": False,
+            "custom_branding": False,
             "pre_chat_form_options": {
                 "pre_chat_message": translations['pre_chat_message'],
                 "require_email": False,

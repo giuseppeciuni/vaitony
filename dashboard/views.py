@@ -1284,6 +1284,44 @@ def project(request, project_id=None):
                         messages.error(request, f"Errore: {str(e)}")
                         return redirect('project', project_id=project.id)
 
+                # ----- Aggiornamento lingua chatbot -----
+                elif action == 'update_chatbot_language':
+                    try:
+                        new_language = request.POST.get('chatbot_language', 'it')
+
+                        # Valida la lingua
+                        valid_languages = ['it', 'en', 'es', 'de', 'fr']
+                        if new_language not in valid_languages:
+                            new_language = 'it'  # Fallback a italiano
+
+                        # Aggiorna la lingua del progetto
+                        project.chatbot_language = new_language
+                        project.save()
+
+                        logger.info(f"Lingua chatbot aggiornata a '{new_language}' per progetto {project.id}")
+
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': True,
+                                'message': f'Lingua del chatbot aggiornata a {new_language.upper()}',
+                                'new_language': new_language
+                            })
+
+                        messages.success(request, f'Lingua del chatbot aggiornata con successo')
+                        return redirect('project', project_id=project.id)
+
+                    except Exception as e:
+                        logger.error(f"Errore nell'aggiornamento della lingua: {str(e)}")
+
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Errore: {str(e)}'
+                            })
+
+                        messages.error(request, f"Errore: {str(e)}")
+                        return redirect('project', project_id=project.id)
+
                 # ----- Creazione bot Chatwoot -----
                 elif action == 'create_chatwoot_bot':
                     try:
@@ -1331,7 +1369,6 @@ def project(request, project_id=None):
 
                         messages.error(request, f"Errore: {str(e)}")
                         return redirect('project', project_id=project.id)
-
 
                 # ----- Avvio crawling web -----
                 elif action == 'start_crawling':
@@ -3539,140 +3576,6 @@ def chatbot_widget_js(request, project_slug):
 
 
 
-#@csrf_exempt
-# def chatwoot_webhook(request):
-#     """
-#     Gestisce le notifiche webhook da Chatwoot e risponde usando il sistema RAG
-#     """
-#     if request.method != 'POST':
-#         return HttpResponse(status=405)
-#
-#     try:
-#         payload = json.loads(request.body)
-#         event_type = payload.get('event')
-#
-#         logger.info("=" * 60)
-#         logger.info(f"🔔 Webhook Chatwoot ricevuto: {event_type}")
-#
-#         # DEBUG COMPLETO DEL PAYLOAD
-#         logger.info(f"📋 PAYLOAD COMPLETO:")
-#         logger.info(json.dumps(payload, indent=2, ensure_ascii=False))
-#
-#         # Gestisci solo gli eventi di messaggi in arrivo
-#         if event_type == 'message_created':
-#             message = payload.get('message', {})
-#
-#             # DEBUG SPECIFICO DEL MESSAGGIO
-#             logger.info(f"💬 MESSAGGIO COMPLETO:")
-#             logger.info(json.dumps(message, indent=2, ensure_ascii=False))
-#
-#             message_type = message.get('message_type')
-#             logger.info(f"📋 message_type dal payload: '{message_type}' (tipo: {type(message_type)})")
-#
-#             # Verifica tutti i campi del messaggio
-#             logger.info(f"📋 Chiavi disponibili nel messaggio: {list(message.keys())}")
-#
-#             # Controlla anche altri possibili campi per il tipo di messaggio
-#             for key in ['type', 'private', 'incoming', 'source_type']:
-#                 if key in message:
-#                     logger.info(f"📋 {key}: {message[key]} (tipo: {type(message[key])})")
-#
-#             # Processa solo messaggi in arrivo (modifica la logica)
-#             if message_type != 'incoming':
-#                 # Proviamo con logiche alternative
-#                 is_incoming = False
-#
-#                 # Strategia 1: Controlla se è un messaggio privato (spesso indica bot/admin)
-#                 if message.get('private') == False and message.get('content'):
-#                     is_incoming = True
-#                     logger.info("✅ Messaggio identificato come incoming tramite 'private=False'")
-#
-#                 # Strategia 2: Controlla source_type se presente
-#                 elif message.get('source_type') in ['web_widget', 'api']:
-#                     is_incoming = True
-#                     logger.info(
-#                         f"✅ Messaggio identificato come incoming tramite source_type: {message.get('source_type')}")
-#
-#                 # Strategia 3: Se non è message_type 'outgoing', assumiamo sia incoming
-#                 elif message_type != 'outgoing' and message.get('content'):
-#                     is_incoming = True
-#                     logger.info(f"✅ Messaggio identificato come incoming (non è outgoing)")
-#
-#                 if not is_incoming:
-#                     logger.debug(f"⏭️ Messaggio ignorato: tipo '{message_type}'")
-#                     return JsonResponse({'status': 'ignored', 'reason': 'not_incoming_message'})
-#
-#             message_content = message.get('content', '').strip()
-#             if not message_content:
-#                 logger.debug("⏭️ Messaggio vuoto ignorato")
-#                 return JsonResponse({'status': 'ignored', 'reason': 'empty_message'})
-#
-#             conversation_id = payload.get('conversation', {}).get('id')
-#             inbox_id = payload.get('inbox', {}).get('id')
-#             contact = payload.get('sender', {})
-#
-#             logger.info(
-#                 f"📨 Messaggio in arrivo: '{message_content[:50]}...' (Inbox: {inbox_id}, Conv: {conversation_id})")
-#
-#             # DEBUG DELLE SEZIONI CONVERSATION E INBOX
-#             logger.info(f"🗣️ CONVERSATION:")
-#             logger.info(json.dumps(payload.get('conversation', {}), indent=2, ensure_ascii=False))
-#
-#             logger.info(f"📥 INBOX:")
-#             logger.info(json.dumps(payload.get('inbox', {}), indent=2, ensure_ascii=False))
-#
-#             logger.info(f"👤 SENDER:")
-#             logger.info(json.dumps(contact, indent=2, ensure_ascii=False))
-#
-#             # STRATEGIA 1: Cerca progetto tramite inbox_id diretto
-#             project = Project.objects.filter(
-#                 chatwoot_inbox_id=str(inbox_id),
-#                 is_active=True,
-#                 chatwoot_enabled=True
-#             ).first()
-#
-#             if project:
-#                 logger.info(f"✅ Progetto trovato tramite inbox_id: {project.name} (ID: {project.id})")
-#             else:
-#                 logger.warning(f"❌ Nessun progetto trovato per inbox_id: {inbox_id}")
-#
-#                 # Lista tutti i progetti con Chatwoot abilitato per debug
-#                 all_chatwoot_projects = Project.objects.filter(
-#                     is_active=True,
-#                     chatwoot_enabled=True
-#                 ).values('id', 'name', 'chatwoot_inbox_id')
-#
-#                 logger.info(f"📋 Progetti Chatwoot disponibili:")
-#                 for proj in all_chatwoot_projects:
-#                     logger.info(f"  - ID: {proj['id']}, Nome: {proj['name']}, Inbox: {proj['chatwoot_inbox_id']}")
-#
-#                 return JsonResponse({
-#                     'status': 'error',
-#                     'message': 'Progetto non trovato',
-#                     'inbox_id': inbox_id,
-#                     'available_projects': list(all_chatwoot_projects)
-#                 })
-#
-#             # Se abbiamo un progetto, procedi con la risposta RAG
-#             logger.info(f"🎯 Progetto identificato: {project.name} (ID: {project.id})")
-#
-#             # [Qui continua con la logica RAG esistente...]
-#             # Per ora restituiamo solo un successo per debug
-#             return JsonResponse({
-#                 'status': 'success_debug',
-#                 'project_id': project.id,
-#                 'message': 'Webhook ricevuto e progetto identificato - modalità debug'
-#             })
-#
-#         return JsonResponse({'status': 'success'})
-#
-#     except json.JSONDecodeError:
-#         logger.error("❌ Errore nel decodificare il JSON del webhook")
-#         return HttpResponse(status=400)
-#     except Exception as e:
-#         logger.error(f"❌ Errore nell'elaborazione del webhook: {str(e)}")
-#         logger.error(traceback.format_exc())
-#         return HttpResponse(status=500)
 
 @csrf_exempt
 def chatwoot_webhook(request):
@@ -3721,16 +3624,47 @@ def chatwoot_webhook(request):
 
             logger.info(f"📨 Messaggio valido ricevuto: '{message_content[:50]}...'")
 
-            # Cerca il progetto associato all'inbox
+            # Cerca il progetto associato all'inbox (senza filtrare chatwoot_enabled)
             project = Project.objects.filter(
                 chatwoot_inbox_id=str(inbox_id),
-                is_active=True,
-                chatwoot_enabled=True
+                is_active=True
             ).first()
 
+            if not project:
+                logger.warning(f"❌ Nessun progetto trovato per inbox_id: {inbox_id}")
+                # ... resto del codice di debug rimane uguale ...
+
             # Verifica che il toggle sia ancora attivo
-            if project and not project.chatwoot_enabled:
+            if not project.chatwoot_enabled:
                 logger.info(f"🔇 Chatbot disabilitato per progetto {project.name} (ID: {project.id})")
+
+                # Invia messaggio di servizio disabilitato localizzato
+                try:
+                    # AGGIUNTA: Import e localizzazione
+                    from profiles.chatbot_translations import get_chatbot_translations
+
+                    disabled_client = ChatwootClient(
+                        base_url=settings.CHATWOOT_API_URL,
+                        email=settings.CHATWOOT_EMAIL,
+                        password=settings.CHATWOOT_PASSWORD,
+                        auth_type="jwt"
+                    )
+                    disabled_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
+
+                    if disabled_client.authenticated:
+                        # Usa le traduzioni invece del testo fisso
+                        translations = get_chatbot_translations(getattr(project, 'chatbot_language', 'it'))
+                        disabled_message = translations['disabled_message']
+
+                        disabled_client.send_message(
+                            conversation_id=conversation_id,
+                            content=disabled_message,
+                            message_type='outgoing'
+                        )
+                        logger.info("✅ Messaggio di servizio disabilitato inviato (localizzato)")
+                except Exception as disabled_error:
+                    logger.error(f"❌ Errore invio messaggio disabilitato: {str(disabled_error)}")
+
                 return JsonResponse({
                     'status': 'ignored',
                     'reason': 'chatbot_disabled',
@@ -3881,7 +3815,15 @@ def chatwoot_webhook(request):
                     error_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
 
                     if error_client.authenticated:
-                        error_message = "Mi dispiace, si è verificato un errore nell'elaborazione della tua richiesta. Il team di supporto è stato informato e ti risponderà al più presto."
+                        # AGGIUNTA: Localizzazione del messaggio di errore
+                        try:
+                            from profiles.chatbot_translations import get_chatbot_translations
+                            translations = get_chatbot_translations(getattr(project, 'chatbot_language', 'it'))
+                            error_message = translations.get('error_message',
+                                                             "Mi dispiace, si è verificato un errore nell'elaborazione della tua richiesta. Il team di supporto è stato informato e ti risponderà al più presto.")
+                        except:
+                            # Fallback se non riesce a caricare le traduzioni
+                            error_message = "Mi dispiace, si è verificato un errore nell'elaborazione della tua richiesta. Il team di supporto è stato informato e ti risponderà al più presto."
 
                         error_client.send_message(
                             conversation_id=conversation_id,
@@ -3927,7 +3869,13 @@ def create_chatwoot_bot_for_project(project, request=None):
     Crea un bot Chatwoot per il progetto con configurazione automatica del webhook.
     """
     try:
-        logger.info(f"🚀 Creazione Website Widget per progetto {project.id}")
+        # Importa le traduzioni
+        from profiles.chatbot_translations import get_chatbot_translations
+
+        # Ottieni le traduzioni per la lingua del progetto
+        translations = get_chatbot_translations(project.chatbot_language)
+
+        logger.info(f"🚀 Creazione Website Widget per progetto {project.id} in lingua {project.chatbot_language}")
 
         # Inizializza client Chatwoot
         chatwoot_client = ChatwootClient(
@@ -3956,12 +3904,35 @@ def create_chatwoot_bot_for_project(project, request=None):
             logger.info(f"✅ Webhook configurato: {webhook_url}")
 
         # 2. Crea o trova l'inbox
-        inbox_name = f"RAG Bot - {project.name}"
+        inbox_name = f"{project.name}"
         website_url = f"https://chatbot.ciunix.com/{project.slug}"
+
+
+        # Configurazione widget in italiano
+        widget_config = {
+            "welcome_title": translations['welcome_title'],
+            "welcome_tagline": translations['welcome_tagline'],
+            "widget_color": "#1f93ff",
+            "enable_email_collect": True,
+            "csat_survey_enabled": True,
+            "reply_time": "in_a_few_minutes",
+            "locale": project.chatbot_language,
+            "email_collect_box_title": translations['email_collect_title'],
+            "email_collect_box_subtitle": translations['email_collect_subtitle'],
+            "pre_chat_form_enabled": False,
+            "pre_chat_form_options": {
+                "pre_chat_message": translations['pre_chat_message'],
+                "require_email": False,
+                "require_name": False,
+                "require_phone_number": False
+            }
+        }
+
 
         bot_inbox = chatwoot_client.get_bot_inbox(
             inbox_name=inbox_name,
-            website_url=website_url
+            website_url=website_url,
+            widget_config=widget_config
         )
 
         if 'error' in bot_inbox:

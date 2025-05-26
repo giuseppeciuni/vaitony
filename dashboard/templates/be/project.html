@@ -890,6 +890,69 @@
         z-index: 1000;
     }
 
+    /* Stili per la selezione lingua chatbot */
+    .chatbot-language-form .form-select {
+        font-size: 0.95rem;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .chatbot-language-form .form-select:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+    }
+
+    .chatbot-language-form .form-select option {
+        padding: 0.5rem;
+    }
+
+    .language-badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.375rem;
+    }
+
+    .save-language-btn {
+        transition: all 0.3s ease;
+        border-radius: 0.375rem;
+    }
+
+    .save-language-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(13, 110, 253, 0.25);
+    }
+
+    .save-language-btn:active {
+        transform: translateY(0);
+    }
+
+    /* Stato di caricamento per il pulsante */
+    .save-language-btn.loading {
+        pointer-events: none;
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    .chatbot-language-card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        transition: box-shadow 0.3s ease;
+    }
+
+    .chatbot-language-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+
+    .language-status-alert {
+        border-radius: 0.5rem;
+        border: 1px solid #e9ecef;
+    }
+
+    .language-current-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
     /* Responsive Adjustments */
     @media (max-width: 768px) {
         .nav-tabs .nav-link {
@@ -1779,6 +1842,93 @@
         </div>
     </div>
 </div>
+
+<!-- Card per la selezione della lingua del chatbot -->
+<div class="card mt-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-translate me-2"></i>Lingua del Chatbot
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <p class="text-muted mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Seleziona la lingua predefinita per l'interfaccia del chatbot e i messaggi di sistema.
+            </p>
+
+            <form id="chatbot-language-form" method="POST" action="{% url 'project' project.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_chatbot_language">
+
+                <div class="row align-items-end">
+                    <div class="col-md-8">
+                        <label for="chatbot_language" class="form-label">Lingua del chatbot</label>
+                        <select class="form-select" id="chatbot_language" name="chatbot_language">
+                            <option value="it" {% if project.chatbot_language == 'it' or not project.chatbot_language %}selected{% endif %}>
+                                🇮🇹 Italiano
+                            </option>
+                            <option value="en" {% if project.chatbot_language == 'en' %}selected{% endif %}>
+                                🇬🇧 English
+                            </option>
+                            <option value="es" {% if project.chatbot_language == 'es' %}selected{% endif %}>
+                                🇪🇸 Español
+                            </option>
+                            <option value="de" {% if project.chatbot_language == 'de' %}selected{% endif %}>
+                                🇩🇪 Deutsch
+                            </option>
+                            <option value="fr" {% if project.chatbot_language == 'fr' %}selected{% endif %}>
+                                🇫🇷 Français
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary w-100" id="save-language-btn">
+                            <i class="bi bi-check-lg me-1"></i> Salva Lingua
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Mostra la lingua attuale -->
+        <div class="alert alert-light border">
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Lingua attuale:</strong>
+                    <span class="badge bg-primary ms-2">
+                        {% if project.chatbot_language == 'en' %}🇬🇧 English
+                        {% elif project.chatbot_language == 'es' %}🇪🇸 Español
+                        {% elif project.chatbot_language == 'de' %}🇩🇪 Deutsch
+                        {% elif project.chatbot_language == 'fr' %}🇫🇷 Français
+                        {% else %}🇮🇹 Italiano{% endif %}
+                    </span>
+                </div>
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        {% if project.chatwoot_inbox_id %}
+                            <i class="bi bi-check-circle text-success me-1"></i>
+                            Chatbot configurato
+                        {% else %}
+                            <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                            Chatbot non ancora creato
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Avviso per aggiornamenti -->
+        {% if project.chatwoot_inbox_id %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Nota:</strong> Le modifiche alla lingua si applicheranno ai nuovi widget creati.
+            Per aggiornare un widget esistente, potrebbe essere necessario riconfigurarlo in Chatwoot.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 
                     <!-- Informazioni aggiuntive -->
                     <div class="card mt-4">
@@ -2711,6 +2861,53 @@ function initWebsiteCrawler() {
 document.addEventListener('DOMContentLoaded', function() {
     // Inizializza il sistema di note rapide
     initQuickNoteSystem();
+
+    // Gestione del form per la lingua del chatbot
+    const languageForm = document.getElementById('chatbot-language-form');
+    const saveLanguageBtn = document.getElementById('save-language-btn');
+    if (languageForm) {
+        languageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Mostra stato di caricamento
+            saveLanguageBtn.classList.add('loading');
+            saveLanguageBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Salvando...';
+            saveLanguageBtn.disabled = true;
+
+            // Invia la richiesta
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams(new FormData(languageForm))
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Lingua del chatbot aggiornata con successo!', 'success');
+
+                    // Ricarica la pagina dopo 1 secondo per mostrare i cambiamenti
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    showToast('Errore: ' + (data.message || 'Impossibile aggiornare la lingua'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete durante l\'aggiornamento', 'danger');
+            })
+            .finally(() => {
+                // Ripristina lo stato del pulsante
+                saveLanguageBtn.classList.remove('loading');
+                saveLanguageBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Salva Lingua';
+                saveLanguageBtn.disabled = false;
+            });
+        });
+    }
 
     // Inizializza il sistema di crawling
     initWebsiteCrawler();

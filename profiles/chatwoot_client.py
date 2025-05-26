@@ -307,12 +307,23 @@ class ChatwootClient:
 			"channel": {
 				"type": "web_widget",
 				"website_url": website_url,
-				"welcome_title": f"Benvenuto su {sanitized_name}",
-				"welcome_tagline": "Ciao! Come posso aiutarti oggi?",
-				"widget_color": "#1f93ff",
-				"enable_email_collect": True,
-				"csat_survey_enabled": True,
-				"reply_time": "in_a_few_minutes"
+				"welcome_title": channel_attributes.get("welcome_title", f"Benvenuto su {sanitized_name}"),
+				"welcome_tagline": channel_attributes.get("welcome_tagline", "Ciao! Come posso aiutarti oggi?"),
+				"widget_color": channel_attributes.get("widget_color", "#1f93ff"),
+				"enable_email_collect": channel_attributes.get("enable_email_collect", True),
+				"csat_survey_enabled": channel_attributes.get("csat_survey_enabled", True),
+				"reply_time": channel_attributes.get("reply_time", "in_a_few_minutes"),
+				"locale": channel_attributes.get("locale", "it"),
+				"enable_message_events": channel_attributes.get("enable_message_events", True),
+				"enable_unread_events": channel_attributes.get("enable_unread_events", True),
+				"enable_typing_events": channel_attributes.get("enable_typing_events", True),
+				"enable_presence_events": channel_attributes.get("enable_presence_events", True),
+				"enable_auto_assignment": channel_attributes.get("enable_auto_assignment", True),
+				"continuity_via_email": channel_attributes.get("continuity_via_email", True),
+				"email_collect_box_title": channel_attributes.get("email_collect_box_title", "Lascia i tuoi contatti"),
+				"email_collect_box_subtitle": channel_attributes.get("email_collect_box_subtitle",
+																	 "Per ricevere notifiche via email"),
+				"pre_chat_form_enabled": channel_attributes.get("pre_chat_form_enabled", False)
 			}
 		}
 

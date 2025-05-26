@@ -89,10 +89,20 @@ class Project(models.Model):
     chatwoot_inbox_id = models.CharField(max_length=50, blank=True, null=True)
     chatwoot_bot_id = models.CharField(max_length=50, blank=True, null=True)
     chatwoot_metadata = models.JSONField(default=dict, blank=True, null=True)
-
     chatwoot_widget_code = models.TextField(null=True, blank=True, help_text="Codice JavaScript del widget Chatwoot")
-    chatwoot_website_token = models.CharField(max_length=255, null=True, blank=True,
-                                              help_text="Token del website Chatwoot")
+    chatwoot_website_token = models.CharField(max_length=255, null=True, blank=True, help_text="Token del website Chatwoot")
+    chatbot_language = models.CharField(
+        max_length=10,
+        default='it',
+        choices=[
+            ('it', 'Italiano'),
+            ('en', 'English'),
+            ('es', 'Español'),
+            ('fr', 'Français'),
+            ('de', 'Deutsch'),
+        ],
+        help_text="Lingua dell'interfaccia del chatbot"
+    )
 
     class Meta:
         ordering = ['-created_at']

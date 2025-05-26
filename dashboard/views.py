@@ -1294,17 +1294,79 @@ def project(request, project_id=None):
                         if new_language not in valid_languages:
                             new_language = 'it'  # Fallback a italiano
 
+                        old_language = getattr(project, 'chatbot_language', 'it')
+
                         # Aggiorna la lingua del progetto
                         project.chatbot_language = new_language
                         project.save()
 
-                        logger.info(f"Lingua chatbot aggiornata a '{new_language}' per progetto {project.id}")
+                        logger.info(
+                            f"Lingua chatbot aggiornata da '{old_language}' a '{new_language}' per progetto {project.id}")
+
+                        # Se il chatbot è già stato creato E la lingua è cambiata, aggiorna anche Chatwoot
+                        if project.chatwoot_inbox_id and old_language != new_language:
+                            try:
+                                # Importa le traduzioni
+                                from profiles.chatbot_translations import get_chatbot_translations
+
+                                # Ottieni le traduzioni per la nuova lingua
+                                translations = get_chatbot_translations(new_language)
+
+                                # Inizializza client Chatwoot
+                                chatwoot_client = ChatwootClient(
+                                    base_url=settings.CHATWOOT_API_URL,
+                                    email=settings.CHATWOOT_EMAIL,
+                                    password=settings.CHATWOOT_PASSWORD,
+                                    auth_type="jwt"
+                                )
+                                chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
+
+                                if chatwoot_client.authenticated:
+                                    # Aggiorna le impostazioni dell'inbox esistente
+                                    inbox_id = project.chatwoot_inbox_id
+
+                                    # Payload per aggiornare l'inbox
+                                    update_payload = {
+                                        "inbox": {
+                                            "welcome_title": translations['welcome_title'],
+                                            "welcome_tagline": translations['welcome_tagline'],
+                                            "locale": new_language,
+                                            "email_collect_box_title": translations['email_collect_title'],
+                                            "email_collect_box_subtitle": translations['email_collect_subtitle']
+                                        }
+                                    }
+
+                                    # URL per aggiornare l'inbox
+                                    update_url = f"{settings.CHATWOOT_API_URL}/api/v1/accounts/{settings.CHATWOOT_ACCOUNT_ID}/inboxes/{inbox_id}"
+
+                                    # Effettua la richiesta di aggiornamento
+                                    response = chatwoot_client._make_request_with_retry('PATCH', update_url,
+                                                                                        json=update_payload)
+
+                                    if response.status_code == 200:
+                                        logger.info(
+                                            f"✅ Inbox Chatwoot {inbox_id} aggiornato con nuova lingua: {new_language}")
+
+                                        # Aggiorna anche il widget code nel progetto
+                                        widget_result = chatwoot_client.get_widget_code(int(inbox_id))
+                                        if widget_result.get('success') and widget_result.get('widget_code'):
+                                            project.chatwoot_widget_code = widget_result['widget_code']
+                                            project.save()
+                                            logger.info("✅ Widget code aggiornato con nuova lingua")
+                                    else:
+                                        logger.warning(
+                                            f"⚠️ Impossibile aggiornare inbox Chatwoot: {response.status_code}")
+
+                            except Exception as chatwoot_error:
+                                logger.error(f"❌ Errore nell'aggiornamento di Chatwoot: {str(chatwoot_error)}")
+                                # Non bloccare l'operazione se Chatwoot fallisce
 
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({
                                 'success': True,
                                 'message': f'Lingua del chatbot aggiornata a {new_language.upper()}',
-                                'new_language': new_language
+                                'new_language': new_language,
+                                'chatwoot_updated': bool(project.chatwoot_inbox_id and old_language != new_language)
                             })
 
                         messages.success(request, f'Lingua del chatbot aggiornata con successo')
@@ -1312,6 +1374,7 @@ def project(request, project_id=None):
 
                     except Exception as e:
                         logger.error(f"Errore nell'aggiornamento della lingua: {str(e)}")
+                        logger.error(traceback.format_exc())
 
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({
@@ -3916,7 +3979,7 @@ def create_chatwoot_bot_for_project(project, request=None):
             "enable_email_collect": True,
             "csat_survey_enabled": True,
             "reply_time": "in_a_few_minutes",
-            "locale": project.chatbot_language,
+            "locale": project.chatbot_language, # IMPORTANTE: usa la lingua del progetto
             "email_collect_box_title": translations['email_collect_title'],
             "email_collect_box_subtitle": translations['email_collect_subtitle'],
             "pre_chat_form_enabled": False,
@@ -3979,6 +4042,10 @@ def create_chatwoot_bot_for_project(project, request=None):
             logger.info(f"✅ Bot Chatwoot configurato per progetto {project.id}")
 
             success_message = f"Bot Chatwoot creato con successo! Inbox ID: {inbox_id}"
+
+            logger.info(f"🔍 DEBUG - Lingua progetto: {getattr(project, 'chatbot_language', 'NESSUNA')}")
+            logger.info(f"🔍 DEBUG - Traduzioni usate: {translations}")
+            logger.info(f"🔍 DEBUG - Widget config locale: {widget_config.get('locale')}")
 
             # Risposta per richieste AJAX
             if request and request.headers.get('X-Requested-With') == 'XMLHttpRequest':

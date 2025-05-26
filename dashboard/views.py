@@ -1300,8 +1300,28 @@ def project(request, project_id=None):
                         project.chatbot_language = new_language
                         project.save()
 
-                        logger.info(
-                            f"Lingua chatbot aggiornata da '{old_language}' a '{new_language}' per progetto {project.id}")
+                        logger.info(f"Lingua chatbot aggiornata da '{old_language}' a '{new_language}' per progetto {project.id}")
+
+                        # 🆕 AGGIORNA ANCHE LA LINGUA DELL'UTENTE CHATWOOT
+                        try:
+                            chatwoot_client = ChatwootClient(
+                                base_url=settings.CHATWOOT_API_URL,
+                                email=settings.CHATWOOT_EMAIL,
+                                password=settings.CHATWOOT_PASSWORD,
+                                auth_type="jwt"
+                            )
+                            chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
+
+                            if chatwoot_client.authenticated:
+                                # Imposta la nuova lingua per l'utente
+                                language_updated = chatwoot_client.set_user_locale(new_language)
+
+                                if language_updated:
+                                    logger.info(f"✅ Lingua utente Chatwoot aggiornata a: {new_language}")
+                                else:
+                                    logger.warning(f"⚠️ Impossibile aggiornare lingua utente Chatwoot")
+                        except Exception as chatwoot_error:
+                            logger.error(f"❌ Errore nell'aggiornamento lingua utente Chatwoot: {str(chatwoot_error)}")
 
                         # Se il chatbot è già stato creato E la lingua è cambiata, aggiorna anche Chatwoot
                         if project.chatwoot_inbox_id and old_language != new_language:
@@ -3935,7 +3955,8 @@ def create_chatwoot_bot_for_project(project, request=None):
         # Importa le traduzioni
         from profiles.chatbot_translations import get_chatbot_translations
 
-        # Ottieni le traduzioni per la lingua del progetto
+        # Ottieni la lingua del progetto (con fallback a italiano)
+        project_language = getattr(project, 'chatbot_language', 'it')
         translations = get_chatbot_translations(project.chatbot_language)
 
         logger.info(f"🚀 Creazione Website Widget per progetto {project.id} in lingua {project.chatbot_language}")
@@ -3953,6 +3974,15 @@ def create_chatwoot_bot_for_project(project, request=None):
             error_msg = "Impossibile autenticarsi con Chatwoot"
             logger.error(f"❌ {error_msg}")
             return {'success': False, 'error': error_msg}
+
+
+        # 🆕 IMPOSTA LA LINGUA DELL'UTENTE CHATWOOT PRIMA DI CREARE L'INBOX
+        language_set = chatwoot_client.set_user_locale(project_language)
+        if language_set:
+            logger.info(f"✅ Lingua utente Chatwoot impostata a: {project_language}")
+        else:
+            logger.warning(f"⚠️ Impossibile impostare lingua utente, procedo comunque")
+
 
         # 1. Configura il webhook se non esiste già
         webhook_url = f"https://vaitony.ciunix.com/chatwoot-webhook/"

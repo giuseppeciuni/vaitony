@@ -284,6 +284,48 @@ class ChatwootClient:
 				return self._inboxes_cache['data']
 			raise e
 
+
+	def set_user_locale(self, locale='it'):
+		"""
+		Imposta la lingua dell'utente Chatwoot corrente.
+
+		Args:
+			locale (str): Codice lingua (it, en, es, de, fr)
+
+		Returns:
+			bool: True se l'aggiornamento è riuscito
+		"""
+		if not self.authenticated:
+			logger.error("❌ Utente non autenticato per impostare la lingua")
+			return False
+
+		try:
+			# Endpoint per aggiornare il profilo dell'utente
+			profile_endpoint = f"{self.api_base_url}/profile"
+
+			payload = {
+				"profile": {
+					"ui_settings": {
+						"locale": locale
+					}
+				}
+			}
+
+			logger.info(f"🌐 Impostazione lingua utente Chatwoot: {locale}")
+
+			response = self._make_request_with_retry('PUT', profile_endpoint, json=payload)
+
+			if response.status_code == 200:
+				logger.info(f"✅ Lingua utente Chatwoot aggiornata a: {locale}")
+				return True
+			else:
+				logger.error(f"❌ Errore nell'aggiornamento lingua utente: {response.status_code}")
+				return False
+
+		except Exception as e:
+			logger.error(f"❌ Errore nell'impostazione lingua utente: {str(e)}")
+			return False
+
 	def create_inbox(self, name: str, website_url: str,
 					 channel_attributes: Optional[Dict] = None) -> Dict:
 		"""
@@ -378,6 +420,7 @@ class ChatwootClient:
 			logger.error(f"❌ Errore nella creazione del Website Widget: {str(e)}")
 			raise e
 
+
 	def get_bot_inbox(self, inbox_name: str = "RAG Chatbot",
 					  website_url: str = "https://chatbot.ciunix.com",
 					  widget_config: Optional[Dict] = None) -> Dict:
@@ -433,6 +476,7 @@ class ChatwootClient:
 		except Exception as e:
 			logger.error(f"❌ Errore in get_bot_inbox: {str(e)}")
 			return {'error': str(e)}
+
 
 	def get_widget_code(self, inbox_id: int) -> Dict[str, Union[str, bool]]:
 		"""

@@ -1728,6 +1728,28 @@
                     Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
                 </div>
 
+                <!-- Codice Widget sempre visibile -->
+                {% if project.chatwoot_widget_code %}
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                        <h6 class="mb-0"><i class="bi bi-code-slash me-2"></i>Codice di integrazione Widget</h6>
+                        <button class="btn btn-sm btn-outline-primary" onclick="copyWidgetCodePermanent()">
+                            <i class="bi bi-clipboard me-1"></i>Copia Codice
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">Copia questo codice e incollalo nel tuo sito web per integrare il chatbot:</p>
+                        <pre class="bg-light p-3 mb-0 rounded"><code id="widget-code-permanent">{{ project.chatwoot_widget_code|escape }}</code></pre>
+                    </div>
+                    <div class="card-footer bg-white">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Website Token: <span class="font-monospace">{{ project.chatwoot_website_token }}</span>
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     <strong>Importante:</strong> Assicurati di aver configurato il webhook Chatwoot per ricevere le notifiche dei messaggi.
@@ -3997,6 +4019,17 @@ function copyEmbedCode() {
         console.error('Errore clipboard:', err);
     });
 }
+
+// Funzione per copiare il codice widget permanente
+window.copyWidgetCodePermanent = function() {
+    const codeElement = document.getElementById('widget-code-permanent');
+    if (codeElement) {
+        const code = codeElement.textContent;
+        navigator.clipboard.writeText(code)
+            .then(() => showToast('Codice widget copiato negli appunti!', 'success'))
+            .catch(err => showToast('Errore nel copiare il codice', 'danger'));
+    }
+};
 
 // Funzione separata per gestire il toggle degli URL
 function initUrlToggleSystem() {

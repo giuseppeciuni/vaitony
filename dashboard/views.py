@@ -1236,7 +1236,17 @@ def project(request, project_id=None):
                     try:
                         is_enabled = request.POST.get('is_enabled') == 'true'
 
+                        # Aggiorna lo stato del chatbot
                         project.chatwoot_enabled = is_enabled
+
+                        # Se viene disabilitato, aggiorna i metadati per tracciare lo stato
+                        if not is_enabled and project.chatwoot_metadata:
+                            project.chatwoot_metadata['disabled_at'] = timezone.now().isoformat()
+                            project.chatwoot_metadata['status'] = 'disabled'
+                        elif is_enabled and project.chatwoot_metadata:
+                            project.chatwoot_metadata['enabled_at'] = timezone.now().isoformat()
+                            project.chatwoot_metadata['status'] = 'enabled'
+
                         project.save()
 
                         # Log per debug
@@ -3717,6 +3727,15 @@ def chatwoot_webhook(request):
                 is_active=True,
                 chatwoot_enabled=True
             ).first()
+
+            # Verifica che il toggle sia ancora attivo
+            if project and not project.chatwoot_enabled:
+                logger.info(f"🔇 Chatbot disabilitato per progetto {project.name} (ID: {project.id})")
+                return JsonResponse({
+                    'status': 'ignored',
+                    'reason': 'chatbot_disabled',
+                    'message': 'Chatbot temporaneamente disabilitato per questo progetto'
+                })
 
             if not project:
                 logger.warning(f"❌ Nessun progetto trovato per inbox_id: {inbox_id}")

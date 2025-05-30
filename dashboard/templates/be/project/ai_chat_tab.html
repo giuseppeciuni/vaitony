@@ -1,0 +1,67 @@
+<!-- Ask AI Tab -->
+<div class="tab-pane fade" id="ask" role="tabpanel" aria-labelledby="ask-tab">
+    <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Chiedi all'IA sui tuoi documenti</h2>
+            <span class="badge bg-primary d-flex align-items-center">
+                <i class="bi bi-lightning-fill me-1"></i> Powered by
+                {% if user.ai_engine_settings.selected_engine == 'openai' %}ChatGPT
+                {% elif user.ai_engine_settings.selected_engine == 'claude' %}Claude
+                {% elif user.ai_engine_settings.selected_engine == 'deepseek' %}DeepSeek
+                {% elif user.ai_engine_settings.selected_engine == 'gemini' %}Gemini
+                {% else %}AI Engine{% endif %}
+            </span>
+        </div>
+
+        <!-- Chat messages area -->
+        <div class="chat-messages p-0 rounded" id="chat-messages">
+            {% if conversation_history %}
+                {% for message in conversation_history %}
+                    <div class="message-container {% if message.is_user %}user-container{% endif %}">
+                        <div class="message-avatar {% if message.is_user %}user-avatar{% else %}ai-avatar{% endif %}">
+                            {% if message.is_user %}
+                                <i class="bi bi-person-fill"></i>
+                            {% else %}
+                                <i class="bi bi-robot"></i>
+                            {% endif %}
+                        </div>
+                        <div class="{% if message.is_user %}user-message{% else %}ai-message{% endif %}">
+                            {{ message.content|linebreaks }}
+                            <span class="message-time">
+                                {{ message.timestamp|date:"H:i" }}
+                            </span>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="chat-empty-state">
+                    <i class="bi bi-chat-square-dots"></i>
+                    <h4>Chiedi qualsiasi cosa riguardo i tuoi documenti</h4>
+                    <p class="text-muted mb-4">L'IA analizzerà i tuoi file e le tue note per darti risposte dettagliate</p>
+                    <div class="suggestions">
+                        <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Riassumi i punti principali di tutti i documenti">
+                            <i class="bi bi-file-text me-1"></i> Riassumi tutti i documenti
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Quali sono le informazioni più importanti in questi documenti?">
+                            <i class="bi bi-lightbulb me-1"></i> Informazioni principali
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Elenca 5 punti chiave tratti dalle mie note">
+                            <i class="bi bi-list-check me-1"></i> Punti chiave dalle note
+                        </button>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Input fisso posizionato fuori dai tab, visibile solo quando si è nel tab "Chiedi all'AI" -->
+<div class="chat-input-container" id="fixed-chat-input" style="display: none;">
+    <div class="chat-input-wrapper">
+        <textarea class="form-control" id="question-input" rows="1"
+                  placeholder="Scrivi la tua domanda qui o premi '/' per i suggerimenti..."></textarea>
+        <button id="send-question-btn" class="btn">
+            <i class="bi bi-send-fill"></i>
+        </button>
+    </div>
+</div>

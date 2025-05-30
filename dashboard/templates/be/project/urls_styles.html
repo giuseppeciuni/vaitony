@@ -1,0 +1,235 @@
+<style>
+    /* Stili specifici per il tab URLs */
+    .crawl-form {
+        background-color: #f8f9fa;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.05);
+    }
+
+    .crawl-status {
+        padding: 1rem;
+        border-left: 4px solid #0d6efd;
+        background-color: rgba(13, 110, 253, 0.05);
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .processed-links {
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 0.5rem;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .processed-link-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid #f1f1f1;
+        font-size: 0.9rem;
+    }
+
+    .processed-link-item:last-child {
+        border-bottom: none;
+    }
+
+    .crawl-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .crawl-stat-item {
+        background-color: #fff;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+
+    .crawl-stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #0d6efd;
+        display: block;
+    }
+
+    .crawl-stat-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .website-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        margin-bottom: 2rem;
+        box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+
+    .website-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+
+    .website-card-header {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .website-card-title {
+        font-weight: 600;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .website-card-title i {
+        margin-right: 0.5rem;
+        color: #0d6efd;
+    }
+
+    .website-links-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .website-link-card {
+        background-color: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        transition: all 0.3s ease;
+    }
+
+    .website-link-card:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.05);
+    }
+
+    .website-link-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .website-link-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .website-link-actions .btn {
+        flex: 1;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    /* Stili per il toggle degli URL */
+    .website-link-card {
+        transition: all 0.3s ease;
+    }
+
+    /* Evidenzia le card degli URL attivi nella ricerca AI */
+    .website-link-card.url-active {
+        border-color: #0d6efd;
+        border-left-width: 3px;
+    }
+
+    /* Opacità ridotta per gli URL non inclusi nel RAG */
+    .website-link-card.url-inactive {
+        opacity: 0.75;
+        background-color: #f8f9fa;
+    }
+
+    /* Stile per il toggle switch */
+    .website-link-card .form-check-input {
+        cursor: pointer;
+    }
+
+    .website-link-card .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* Animazione per il cambio di stato */
+    .website-link-card .form-check-input:focus {
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* Etichetta AI accanto al toggle */
+    .website-link-card .form-check-label {
+        color: #6c757d;
+        font-size: 0.85rem;
+        transition: color 0.2s ease;
+    }
+
+    .website-link-card .form-check-input:checked + .form-check-label {
+        color: #0d6efd;
+        font-weight: 500;
+    }
+
+    /* Stato disabilitato durante l'aggiornamento */
+    .website-link-card .form-check-input:disabled {
+        opacity: 0.6;
+    }
+
+    /* Visualizzazione dei badge di stato */
+    .website-link-card .badge {
+        font-weight: normal;
+        font-size: 0.7rem;
+    }
+
+    .website-link-card .badge.bg-success {
+        background-color: #198754 !important;
+    }
+
+    .website-link-card .badge.bg-warning {
+        background-color: #ffc107 !important;
+    }
+
+    /* Tooltip per spiegare la funzione */
+    .url-toggle-tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .url-toggle-tooltip:hover::after {
+        content: "Includi/escludi questo URL dalla ricerca AI";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background-color: #212529;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        z-index: 1000;
+    }
+
+    /* Responsive adjustments per URLs */
+    @media (max-width: 768px) {
+        .website-links-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .crawl-stats {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

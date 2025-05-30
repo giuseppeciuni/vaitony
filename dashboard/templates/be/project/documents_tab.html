@@ -1,0 +1,53 @@
+<!-- Documents Tab -->
+<div class="tab-pane fade show active" id="documents" role="tabpanel" aria-labelledby="documents-tab">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Documenti del progetto</h2>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+            <i class="bi bi-plus-lg me-1"></i> Carica
+        </button>
+    </div>
+
+    {% if project_files %}
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+        {% for file in project_files %}
+        <div class="col">
+            <div class="document-card card h-100" data-file-id="{{ file.id }}">
+                <div class="card-body text-center p-3 view-document" data-bs-toggle="modal" data-bs-target="#documentModal"
+                     data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}" data-file-size="{{ file.file_size|filesizeformat }}"
+                     data-file-path="{% url 'serve_project_file' file.id %}">
+                    {% if file.extension == '.pdf' %}
+                        <i class="bi bi-file-earmark-pdf document-icon pdf mb-2"></i>
+                    {% elif file.extension == '.doc' or file.extension == '.docx' %}
+                        <i class="bi bi-file-earmark-word document-icon doc mb-2"></i>
+                    {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
+                        <i class="bi bi-file-earmark-excel document-icon xls mb-2"></i>
+                    {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
+                        <i class="bi bi-file-earmark-image document-icon jpg mb-2"></i>
+                    {% else %}
+                        <i class="bi bi-file-earmark document-icon mb-2"></i>
+                    {% endif %}
+                    <div class="card-title text-truncate small">{{ file.filename }}</div>
+                    <small class="text-muted d-block">{{ file.file_size|filesizeformat }}</small>
+                </div>
+                <div class="card-footer bg-white border-top-0 py-2 px-3">
+                    <button class="btn btn-sm btn-outline-danger w-100 delete-file-btn"
+                            data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}"
+                            data-bs-toggle="modal" data-bs-target="#deleteFileModal">
+                        <i class="bi bi-trash"></i> Elimina
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-folder-x"></i>
+        <h3>Nessun documento</h3>
+        <p class="text-muted">Carica file per iniziare</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+            <i class="bi bi-upload me-1"></i> Carica file
+        </button>
+    </div>
+    {% endif %}
+</div>

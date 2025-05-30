@@ -1,0 +1,225 @@
+<!-- Chatbot Tab -->
+<div class="tab-pane fade" id="chatbot" role="tabpanel" aria-labelledby="chatbot-tab">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <!-- Profilo ChatWoot Tab -->
+            <div class="mt-4">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-chat-square-dots me-2"></i>Integrazione Chatwoot
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Chatbot Chatwoot</h6>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chatwoot-toggle"
+                                      {% if project.chatwoot_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="chatwoot-toggle">
+                                    <span id="chatwoot-status-text">
+                                        {% if project.chatwoot_enabled %}Attivo{% else %}Disattivo{% endif %}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="chatwoot-enabled-content" {% if not project.chatwoot_enabled %}style="display: none;"{% endif %}>
+                            {% if project.chatwoot_inbox_id %}
+                            <div class="alert alert-success mb-4">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Il chatbot Chatwoot è <strong>attivo</strong> per questo progetto con Inbox ID: {{ project.chatwoot_inbox_id }}.
+                            </div>
+
+                            <h6 class="mb-3">Istruzioni di integrazione:</h6>
+                            <ol class="mb-4">
+                                <li>Accedi al tuo pannello Chatwoot (chatwoot.ciunix.com)</li>
+                                <li>Vai su Settings > Inboxes</li>
+                                <li>Trova l'inbox "RAG Bot - {{ project.name }}" (ID: {{ project.chatwoot_inbox_id }})</li>
+                                <li>Clicca su "Widget Settings" e copia il codice di integrazione</li>
+                                <li>Incolla il codice nel tuo sito web</li>
+                            </ol>
+
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
+                            </div>
+
+                            <!-- Codice Widget sempre visibile -->
+                            {% if project.chatwoot_widget_code %}
+                            <div class="card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                                    <h6 class="mb-0"><i class="bi bi-code-slash me-2"></i>Codice di integrazione Widget</h6>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="copyWidgetCodePermanent()">
+                                        <i class="bi bi-clipboard me-1"></i>Copia Codice
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <p class="small text-muted mb-2">Copia questo codice e incollalo nel tuo sito web per integrare il chatbot:</p>
+                                    <pre class="bg-light p-3 mb-0 rounded"><code id="widget-code-permanent">{{ project.chatwoot_widget_code|escape }}</code></pre>
+                                </div>
+                                <div class="card-footer bg-white">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Website Token: <span class="font-monospace">{{ project.chatwoot_website_token }}</span>
+                                    </small>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Importante:</strong> Assicurati di aver configurato il webhook Chatwoot per ricevere le notifiche dei messaggi.
+                                <p class="mt-2 mb-0">URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/</p>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Il chatbot Chatwoot non è stato ancora creato.
+                            </div>
+                            <button type="button" class="btn btn-primary" id="create-chatwoot-bot-btn">
+                                <i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        <div id="chatwoot-disabled-content" {% if project.chatwoot_enabled %}style="display: none;"{% endif %}>
+                            <div class="alert alert-info mb-4">
+                                <i class="bi bi-info-circle me-2"></i>
+                                L'integrazione con Chatwoot ti permette di creare un chatbot che risponde alle domande utilizzando le informazioni di questo progetto.
+                            </div>
+
+                            <div class="text-center">
+                                <p class="mb-3">Attiva l'integrazione Chatwoot utilizzando l'interruttore in alto.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card per la selezione della lingua del chatbot -->
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-translate me-2"></i>Lingua del Chatbot
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <p class="text-muted mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Seleziona la lingua predefinita per l'interfaccia del chatbot e i messaggi di sistema.
+                        </p>
+
+                        <form id="chatbot-language-form" method="POST" action="{% url 'project' project.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_chatbot_language">
+
+                            <div class="row align-items-end">
+                                <div class="col-md-8">
+                                    <label for="chatbot_language" class="form-label">Lingua del chatbot</label>
+                                    <select class="form-select" id="chatbot_language" name="chatbot_language">
+                                        <option value="it" {% if project.chatbot_language == 'it' or not project.chatbot_language %}selected{% endif %}>
+                                            🇮🇹 Italiano
+                                        </option>
+                                        <option value="en" {% if project.chatbot_language == 'en' %}selected{% endif %}>
+                                            🇬🇧 English
+                                        </option>
+                                        <option value="es" {% if project.chatbot_language == 'es' %}selected{% endif %}>
+                                            🇪🇸 Español
+                                        </option>
+                                        <option value="de" {% if project.chatbot_language == 'de' %}selected{% endif %}>
+                                            🇩🇪 Deutsch
+                                        </option>
+                                        <option value="fr" {% if project.chatbot_language == 'fr' %}selected{% endif %}>
+                                            🇫🇷 Français
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="btn btn-primary w-100" id="save-language-btn">
+                                        <i class="bi bi-check-lg me-1"></i> Salva Lingua
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Mostra la lingua attuale -->
+                    <div class="alert alert-light border">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Lingua attuale:</strong>
+                                <span class="badge bg-primary ms-2">
+                                    {% if project.chatbot_language == 'en' %}🇬🇧 English
+                                    {% elif project.chatbot_language == 'es' %}🇪🇸 Español
+                                    {% elif project.chatbot_language == 'de' %}🇩🇪 Deutsch
+                                    {% elif project.chatbot_language == 'fr' %}🇫🇷 Français
+                                    {% else %}🇮🇹 Italiano{% endif %}
+                                </span>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">
+                                    {% if project.chatwoot_inbox_id %}
+                                        <i class="bi bi-check-circle text-success me-1"></i>
+                                        Chatbot configurato
+                                    {% else %}
+                                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                                        Chatbot non ancora creato
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Avviso per aggiornamenti -->
+                    {% if project.chatwoot_inbox_id %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Nota:</strong> Le modifiche alla lingua si applicheranno ai nuovi widget creati.
+                        Per aggiornare un widget esistente, potrebbe essere necessario riconfigurarlo in Chatwoot.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Informazioni aggiuntive -->
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-lightbulb me-2"></i>Funzionalità del Chatbot
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Risposte automatiche 24/7</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Basato sui tuoi documenti</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Integrazione semplice</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Responsive su tutti i dispositivi</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Personalizzabile nell'aspetto</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Multilingua</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Analytics integrate</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>API JavaScript per controllo avanzato</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+                    <div class="text-center">
+                        <p class="mb-2">Stato attuale del chatbot:
+                            <span id="chatbot-status-badge" class="badge {% if project.is_public_chat_enabled %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if project.is_public_chat_enabled %}ATTIVO{% else %}DISATTIVO{% endif %}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

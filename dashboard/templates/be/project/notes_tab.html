@@ -1,0 +1,113 @@
+<!-- Notes Tab -->
+<div class="tab-pane fade" id="notes" role="tabpanel" aria-labelledby="notes-tab">
+    <!-- Quick Add Note Section -->
+    <div class="quick-note-section mb-4">
+        <div class="card shadow-sm">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-start">
+                    <div class="flex-grow-1 me-3">
+                        <div class="note-input-wrapper position-relative">
+                            <textarea
+                                id="quick-note-input"
+                                class="form-control border-0 bg-light"
+                                placeholder="Scrivi o incolla qui le tue note... (Ctrl+V per incollare)"
+                                rows="3"
+                                style="resize: vertical; min-height: 60px; max-height: 300px;"></textarea>
+
+                            <!-- Toolbar che appare quando il textarea è in focus -->
+                            <div class="note-toolbar d-none align-items-center justify-content-between mt-2">
+                                <div class="toolbar-left">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="paste-btn" title="Incolla da clipboard">
+                                        <i class="bi bi-clipboard"></i> Incolla
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="clear-btn" title="Pulisci">
+                                        <i class="bi bi-x-circle"></i> Pulisci
+                                    </button>
+                                    <span class="text-muted small">
+                                        <span id="char-count">0</span> caratteri
+                                    </span>
+                                </div>
+                                <div class="toolbar-right">
+                                    <div class="form-check form-switch me-3">
+                                        <input class="form-check-input" type="checkbox" id="include-in-rag" checked>
+                                        <label class="form-check-label small" for="include-in-rag">
+                                            Includi in AI
+                                        </label>
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-sm" id="save-note-btn" disabled>
+                                        <i class="bi bi-check-lg me-1"></i> Salva Nota
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="paste-drop-zone text-center p-3 border-dashed rounded d-none" id="drop-zone">
+                        <i class="bi bi-cloud-upload fs-2 text-muted mb-2"></i>
+                        <p class="mb-0 small text-muted">Trascina qui il testo o clicca per incollare</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Note salvate</h2>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-secondary me-2">{{ project_notes.count }} note</span>
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importNotesModal">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i> Importa
+            </button>
+        </div>
+    </div>
+
+    {% if project_notes %}
+    <div class="notes-grid">
+        {% for note in project_notes %}
+        <div class="note-card" data-note-id="{{ note.id }}">
+            <div class="note-header">
+                <small class="text-muted">
+                    <i class="bi bi-clock me-1"></i>
+                    {{ note.updated_at|date:"d M Y H:i" }}
+                </small>
+                <div class="note-actions">
+                    <button class="btn btn-sm btn-ghost edit-note-btn"
+                            data-bs-toggle="modal" data-bs-target="#editNoteModal"
+                            data-note-id="{{ note.id }}"
+                            data-note-content="{{ note.content }}"
+                            title="Modifica">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-ghost delete-note-btn"
+                            data-note-id="{{ note.id }}"
+                            title="Elimina">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="note-content">
+                {{ note.content|truncatechars:200 }}
+            </div>
+            <div class="note-footer">
+                <div class="form-check form-switch">
+                    <input class="form-check-input include-note-check" type="checkbox"
+                           id="include-note-{{ note.id }}" data-note-id="{{ note.id }}"
+                           {% if note.is_included_in_rag %}checked{% endif %}>
+                    <label class="form-check-label small" for="include-note-{{ note.id }}">
+                        AI
+                    </label>
+                </div>
+                <small class="text-muted">
+                    {{ note.content|wordcount }} parole
+                </small>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-notes-state text-center py-5">
+        <i class="bi bi-journal-text fs-1 text-muted mb-3"></i>
+        <h3>Nessuna nota ancora</h3>
+        <p class="text-muted">Inizia aggiungendo la tua prima nota nel box sopra</p>
+    </div>
+    {% endif %}
+</div>

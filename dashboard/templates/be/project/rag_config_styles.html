@@ -1,0 +1,272 @@
+<style>
+    /* Stili per il tab RAG Config */
+    .rag-info {
+        background-color: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+
+    .rag-presets {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    /* Card per preset RAG selezionato */
+    .selected-preset-card {
+        border: 2px solid;
+        border-radius: 0.75rem;
+        transition: all 0.3s ease;
+        background: white;
+        overflow: hidden;
+    }
+
+    .selected-preset-header {
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .selected-preset-body {
+        padding: 1rem;
+        background: white;
+    }
+
+    .selected-preset-specs {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+
+    .selected-preset-specs > div {
+        background: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+
+    /* Stili specifici per i diversi preset */
+    .preset-balanced {
+        border-color: #0d6efd !important;
+    }
+
+    .preset-balanced .selected-preset-header {
+        background: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+    }
+
+    .preset-high-precision {
+        border-color: #198754 !important;
+    }
+
+    .preset-high-precision .selected-preset-header {
+        background: rgba(25, 135, 84, 0.1);
+        color: #198754;
+    }
+
+    .preset-speed {
+        border-color: #ffc107 !important;
+    }
+
+    .preset-speed .selected-preset-header {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+
+    .preset-max-precision {
+        border-color: #0dcaf0 !important;
+    }
+
+    .preset-max-precision .selected-preset-header {
+        background: rgba(13, 202, 240, 0.1);
+        color: #0dcaf0;
+    }
+
+    .preset-max-speed {
+        border-color: #dc3545 !important;
+    }
+
+    .preset-max-speed .selected-preset-header {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .preset-extended-context {
+        border-color: #6610f2 !important;
+    }
+
+    .preset-extended-context .selected-preset-header {
+        background: rgba(102, 16, 242, 0.1);
+        color: #6610f2;
+    }
+
+    .badge-default {
+        background-color: #6c757d;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: normal;
+    }
+
+    /* Card per motore IA e configurazione RAG */
+    .engine-config-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .engine-config-card h6 {
+        color: #495057;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #e9ecef;
+        padding-bottom: 0.5rem;
+    }
+
+    .engine-info {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .engine-info img {
+        max-height: 40px;
+        margin-right: 1rem;
+    }
+
+    .provider-logo {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+    }
+
+    .config-params {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .params-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .param-item {
+        background: white;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid #e9ecef;
+    }
+
+    .param-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+
+    .param-value {
+        font-weight: 600;
+        color: #212529;
+    }
+
+    .customized-badge {
+        background-color: #0d6efd;
+        color: white;
+        font-size: 0.75rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 1rem;
+        margin-left: 0.5rem;
+    }
+
+    /* Stili per la selezione lingua chatbot */
+    .chatbot-language-form .form-select {
+        font-size: 0.95rem;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .chatbot-language-form .form-select:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+    }
+
+    .chatbot-language-form .form-select option {
+        padding: 0.5rem;
+    }
+
+    .language-badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.375rem;
+    }
+
+    .save-language-btn {
+        transition: all 0.3s ease;
+        border-radius: 0.375rem;
+    }
+
+    .save-language-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(13, 110, 253, 0.25);
+    }
+
+    .save-language-btn:active {
+        transform: translateY(0);
+    }
+
+    /* Stato di caricamento per il pulsante */
+    .save-language-btn.loading {
+        pointer-events: none;
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    .chatbot-language-card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        transition: box-shadow 0.3s ease;
+    }
+
+    .chatbot-language-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+
+    .language-status-alert {
+        border-radius: 0.5rem;
+        border: 1px solid #e9ecef;
+    }
+
+    .language-current-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    /* Responsive Adjustments per RAG */
+    @media (max-width: 768px) {
+        .rag-presets {
+            grid-template-columns: 1fr;
+        }
+
+        .params-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

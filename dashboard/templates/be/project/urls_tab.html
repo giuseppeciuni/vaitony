@@ -1,0 +1,177 @@
+<!-- URLs Tab -->
+<div class="tab-pane fade" id="urls" role="tabpanel" aria-labelledby="urls-tab">
+    <div class="mb-4">
+        <h2 class="h5 mb-3">Crawling di Siti Web</h2>
+
+        <!-- Form per l'aggiunta di una nuova URL -->
+        <div class="card crawl-form mb-4">
+            <div class="card-body">
+                <form id="website-crawl-form" method="POST" action="{% url 'website_crawl' project.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="website_crawl">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+
+                    <div class="mb-3">
+                        <label for="website_url" class="form-label">URL del sito web</label>
+                        <input type="url" class="form-control" id="website_url" name="website_url"
+                               placeholder="https://example.com" required>
+                        <div class="form-text">Inserisci l'URL completo del sito web da analizzare.</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="max_depth" class="form-label">Profondità massima</label>
+                            <input type="number" class="form-control" id="max_depth" name="max_depth"
+                                   value="1" min="1" max="10">
+                            <div class="form-text">Quanti livelli di link seguire (1-10).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="max_pages" class="form-label">Pagine massime</label>
+                            <input type="number" class="form-control" id="max_pages" name="max_pages"
+                                   value="3" min="1" max="500">
+                            <div class="form-text">Massimo numero di pagine da processare (1-500).</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="include_patterns" class="form-label">Pattern da includere (opzionale)</label>
+                            <input type="text" class="form-control" id="include_patterns" name="include_patterns"
+                                   placeholder="blog,docs,news">
+                            <div class="form-text">Separati da virgola (es. blog,docs,news).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="exclude_patterns" class="form-label">Pattern da escludere (opzionale)</label>
+                            <input type="text" class="form-control" id="exclude_patterns" name="exclude_patterns"
+                                   placeholder="login,cart,admin">
+                            <div class="form-text">Separati da virgola (es. login,cart,admin).</div>
+                        </div>
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary" id="start-crawl-btn">
+                            <i class="bi bi-globe me-1"></i> Avvia Crawling
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Area di stato del crawling (visibile solo durante il processo) -->
+        <div class="card crawl-status mb-4" id="crawl-status-area" style="display: none;">
+            <div class="card-body">
+                <h5 class="card-title d-flex align-items-center">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" id="crawl-spinner"></span>
+                    Crawling in corso
+                </h5>
+                <p class="mb-2" id="crawl-status-message">Analisi di <span id="current-url">https://example.com</span></p>
+
+                <div class="crawl-stats">
+                    <div class="crawl-stat-item">
+                        <span class="crawl-stat-value" id="processed-pages-count">0</span>
+                        <span class="crawl-stat-label">Pagine Processate</span>
+                    </div>
+                    <div class="crawl-stat-item">
+                        <span class="crawl-stat-value" id="queued-pages-count">0</span>
+                        <span class="crawl-stat-label">Pagine in Coda</span>
+                    </div>
+                    <div class="crawl-stat-item">
+                        <span class="crawl-stat-value" id="failed-pages-count">0</span>
+                        <span class="crawl-stat-label">Pagine Fallite</span>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <label class="form-label">Link processati recentemente:</label>
+                    <div class="processed-links" id="processed-links-list">
+                        <!-- I link processati verranno aggiunti qui dinamicamente -->
+                    </div>
+                </div>
+
+                <div class="text-end mt-3">
+                    <button type="button" class="btn btn-danger btn-sm" id="cancel-crawl-btn">
+                        <i class="bi bi-x-circle me-1"></i> Annulla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sezione URLs salvati -->
+    <div class="mt-5">
+        <h2 class="h5 mb-3">URLs Salvati</h2>
+
+        {% if project_urls %}
+        <div class="website-card">
+            <div class="website-card-header">
+                <h5 class="website-card-title">
+                    <i class="bi bi-globe2"></i>
+                    URLs salvati nel progetto
+                </h5>
+                <div>
+                    <span class="badge bg-info">{{ project_urls|length }} URLs</span>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addUrlModal">
+                        <i class="bi bi-plus-lg"></i> Aggiungi URL
+                    </button>
+                </div>
+            </div>
+            <div class="website-links-grid">
+                {% for url in project_urls %}
+                    <div class="website-link-card" data-url-id="{{ url.id }}">
+                        <div class="website-link-title">
+                            {{ url.title|default:url.url }}
+                        </div>
+                        <small class="text-muted">{{ url.url|truncatechars:40 }}</small>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <!-- Toggle switch -->
+                            <div class="form-check form-switch">
+                                <input class="form-check-input include-url-check" type="checkbox"
+                                       id="include-url-{{ url.id }}" data-url-id="{{ url.id }}"
+                                       {% if url.is_included_in_rag %}checked{% endif %}>
+                                <label class="form-check-label small" for="include-url-{{ url.id }}">
+                                    AI
+                                </label>
+                            </div>
+                            <!-- Indicatore di stato -->
+                            <small class="text-muted">
+                                {% if url.is_indexed %}
+                                <span class="badge bg-success">Indicizzato</span>
+                                {% else %}
+                                <span class="badge bg-warning">In attesa</span>
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="website-link-actions mt-2">
+                            <button class="btn btn-sm btn-outline-primary view-url-btn"
+                                    data-bs-toggle="modal" data-bs-target="#urlContentModal"
+                                    data-url-id="{{ url.id }}"
+                                    data-url-title="{{ url.title|default:url.url }}"
+                                    data-url="{{ url.url }}"
+                                    data-project-id="{{ project.id }}">
+                                <i class="bi bi-eye"></i> Anteprima
+                            </button>
+                            <a href="{{ url.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-box-arrow-up-right"></i> Apri
+                            </a>
+                            <button class="btn btn-sm btn-outline-danger delete-url-btn"
+                                    data-url-id="{{ url.id }}"
+                                    data-url-title="{{ url.title|default:url.url }}">
+                                <i class="bi bi-trash"></i> Elimina
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-globe"></i>
+            <h3>Nessun URL salvato</h3>
+            <p class="text-muted">Aggiungi URLs al progetto per visualizzarli qui</p>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUrlModal">
+                <i class="bi bi-plus-lg me-1"></i> Aggiungi URL
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>

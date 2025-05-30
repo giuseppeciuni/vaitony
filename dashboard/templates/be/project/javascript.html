@@ -1,0 +1,1763 @@
+<script>
+// Quick Note System Functions
+function initQuickNoteSystem() {
+    const quickNoteInput = document.getElementById('quick-note-input');
+    const saveNoteBtn = document.getElementById('save-note-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const pasteBtn = document.getElementById('paste-btn');
+    const charCount = document.getElementById('char-count');
+    const toolbar = document.querySelector('.note-toolbar');
+    const dropZone = document.getElementById('drop-zone');
+    const includeInRag = document.getElementById('include-in-rag');
+
+    // Mostra/nascondi toolbar
+    quickNoteInput.addEventListener('focus', () => {
+        toolbar.classList.remove('d-none');
+        toolbar.classList.add('d-flex');
+        // Auto-resize textarea
+        quickNoteInput.style.height = 'auto';
+        quickNoteInput.style.height = quickNoteInput.scrollHeight + 'px';
+    });
+
+    // Update char count e abilita/disabilita save button
+    quickNoteInput.addEventListener('input', () => {
+        const count = quickNoteInput.value.length;
+        charCount.textContent = count;
+        saveNoteBtn.disabled = count === 0;
+
+        // Auto-resize
+        quickNoteInput.style.height = 'auto';
+        quickNoteInput.style.height = quickNoteInput.scrollHeight + 'px';
+    });
+
+    // Paste button
+    pasteBtn.addEventListener('click', async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            quickNoteInput.value += text;
+            quickNoteInput.dispatchEvent(new Event('input'));
+        } catch (err) {
+            console.error('Failed to read clipboard:', err);
+        }
+    });
+
+    // Clear button
+    clearBtn.addEventListener('click', () => {
+        quickNoteInput.value = '';
+        quickNoteInput.dispatchEvent(new Event('input'));
+        quickNoteInput.focus();
+    });
+
+    // Save note
+    saveNoteBtn.addEventListener('click', () => {
+        const content = quickNoteInput.value.trim();
+        if (!content) return;
+
+        // Disabilita i controlli durante il salvataggio
+        saveNoteBtn.disabled = true;
+        quickNoteInput.disabled = true;
+
+        fetch('{% url "project" project.id %}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'add_note',
+                'project_id': '{{ project.id }}',
+                'content': content,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Pulisci il campo
+                quickNoteInput.value = '';
+                quickNoteInput.dispatchEvent(new Event('input'));
+
+                // Mostra notifica di successo
+                showToast('Nota salvata con successo!', 'success');
+
+                // Aggiorna la lista delle note (per ora ricarica la pagina)
+                location.reload(); // In produzione, aggiornare dinamicamente
+            } else {
+                showToast('Errore: ' + (data.error || 'Impossibile salvare la nota'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di rete', 'danger');
+        })
+        .finally(() => {
+            // Riabilita i controlli
+            saveNoteBtn.disabled = false;
+            quickNoteInput.disabled = false;
+            quickNoteInput.focus();
+        });
+    });
+
+    // Keyboard shortcuts
+    quickNoteInput.addEventListener('keydown', (e) => {
+        // Ctrl/Cmd + Enter to save
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (!saveNoteBtn.disabled) {
+                saveNoteBtn.click();
+            }
+        }
+    });
+
+    // Drag and drop support
+    document.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('d-none');
+        dropZone.classList.add('dragover');
+    });
+
+    document.addEventListener('dragleave', (e) => {
+        if (!e.relatedTarget) {
+            dropZone.classList.add('d-none');
+            dropZone.classList.remove('dragover');
+        }
+    });
+
+    document.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('d-none');
+        dropZone.classList.remove('dragover');
+
+        const text = e.dataTransfer.getData('text/plain');
+        if (text) {
+            quickNoteInput.value += text;
+            quickNoteInput.dispatchEvent(new Event('input'));
+            quickNoteInput.focus();
+        }
+    });
+}
+
+// Toast notification function
+function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+    document.body.appendChild(container);
+    return container;
+}
+
+// Sistema di crawling del sito web
+function initWebsiteCrawler() {
+    const crawlForm = document.getElementById('website-crawl-form');
+    const startCrawlBtn = document.getElementById('start-crawl-btn');
+    const cancelCrawlBtn = document.getElementById('cancel-crawl-btn');
+    const crawlStatusArea = document.getElementById('crawl-status-area');
+    const crawlStatusMessage = document.getElementById('crawl-status-message');
+    const currentUrlDisplay = document.getElementById('current-url');
+    const processedLinksContainer = document.getElementById('processed-links-list');
+    const processedPagesCount = document.getElementById('processed-pages-count');
+    const queuedPagesCount = document.getElementById('queued-pages-count');
+    const failedPagesCount = document.getElementById('failed-pages-count');
+
+    // Variabili di stato del crawling
+    let crawlInProgress = false;
+    let crawlJob = null;
+    let processedPages = 0;
+    let queuedPages = 0;
+    let failedPages = 0;
+    let crawledLinks = [];
+    let monitorInterval = null;
+
+    if (crawlForm) {
+        crawlForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            if (crawlInProgress) {
+                showToast('C\'è già un processo di crawling in corso.', 'warning');
+                return;
+            }
+
+            // Raccogli i dati dal form
+            const formData = new FormData(crawlForm);
+            const websiteUrl = formData.get('website_url');
+            const maxDepth = formData.get('max_depth');
+            const maxPages = formData.get('max_pages');
+
+            // Verifica URL
+            if (!websiteUrl || (!websiteUrl.startsWith('http://') && !websiteUrl.startsWith('https://'))) {
+                showToast('Inserisci un URL valido che inizi con http:// o https://', 'danger');
+                return;
+            }
+
+            // Inizia il crawling
+            startCrawling(websiteUrl, maxDepth, maxPages, formData);
+        });
+    }
+
+    if (cancelCrawlBtn) {
+        cancelCrawlBtn.addEventListener('click', function() {
+            if (crawlInProgress && confirm('Sei sicuro di voler interrompere il processo di crawling?')) {
+                stopCrawling(true);
+            }
+        });
+    }
+
+    // Gestisci i pulsanti di visualizzazione, apertura e cancellazione
+    document.addEventListener('click', function(e) {
+        // Visualizza contenuto URL (correzione)
+        if (e.target.closest('.view-url-btn')) {
+            const btn = e.target.closest('.view-url-btn');
+            const urlId = btn.getAttribute('data-url-id');
+            const urlTitle = btn.getAttribute('data-url-title');
+            const url = btn.getAttribute('data-url');
+
+            // Aggiorna i dati nella modal
+            const modal = document.getElementById('urlContentModal');
+            const contentDisplay = document.getElementById('url-content-display');
+            const urlDisplay = document.getElementById('url-link');
+            const openLink = document.getElementById('open-url-link');
+
+            // Mostra informazioni iniziali
+            contentDisplay.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Caricamento...</span></div>';
+            urlDisplay.textContent = url;
+            urlDisplay.href = url;
+            openLink.href = url;
+            document.getElementById('urlContentModalLabel').textContent = `Contenuto: ${urlTitle}`;
+
+            // Carica contenuto dell'URL specifico per questo progetto
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'get_url_content',
+                    'url_id': urlId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    contentDisplay.innerHTML = data.content.replace(/\n/g, '<br>');
+
+                    if (data.url) {
+                        urlDisplay.textContent = data.url;
+                        urlDisplay.href = data.url;
+                        openLink.href = data.url;
+                    }
+
+                    if (data.title) {
+                        document.getElementById('urlContentModalLabel').textContent = `Contenuto: ${data.title}`;
+                    }
+                } else {
+                    contentDisplay.innerHTML = '<div class="alert alert-danger">Errore nel caricamento del contenuto: ' + (data.error || 'errore sconosciuto') + '</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                contentDisplay.innerHTML = '<div class="alert alert-danger">Errore di rete durante il caricamento del contenuto</div>';
+            });
+        }
+
+        // Gestione eliminazione URL
+        if (e.target.closest('.delete-url-btn')) {
+            const btn = e.target.closest('.delete-url-btn');
+            const urlId = btn.getAttribute('data-url-id');
+            const urlTitle = btn.getAttribute('data-url-title');
+
+            document.getElementById('delete-url-id').value = urlId;
+            document.getElementById('delete-url-title').textContent = urlTitle;
+
+            const deleteUrlModal = new bootstrap.Modal(document.getElementById('deleteUrlModal'));
+            deleteUrlModal.show();
+        }
+    });
+
+    // Gestione submit del form di eliminazione URL
+    const deleteUrlForm = document.getElementById('delete-url-form');
+    if (deleteUrlForm) {
+        deleteUrlForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const urlId = document.getElementById('delete-url-id').value;
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'delete_url',
+                    'url_id': urlId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('deleteUrlModal'));
+                modal.hide();
+
+                if (data.success) {
+                    const urlCard = document.querySelector(`.website-link-card[data-url-id="${urlId}"]`);
+                    if (urlCard) {
+                        urlCard.remove();
+                        showToast('URL eliminato con successo', 'success');
+                    }
+                } else {
+                    showToast('Errore durante l\'eliminazione: ' + (data.message || ''), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete durante l\'eliminazione', 'danger');
+            });
+        });
+    }
+
+    function startCrawling(websiteUrl, maxDepth, maxPages, formData) {
+        // Reset stato
+        processedPages = 0;
+        queuedPages = 1;
+        failedPages = 0;
+        crawledLinks = [];
+
+        // Aggiorna UI
+        crawlInProgress = true;
+        startCrawlBtn.disabled = true;
+        startCrawlBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Avvio...';
+        crawlStatusArea.style.display = 'block';
+        processedLinksContainer.innerHTML = '';
+        processedPagesCount.textContent = '0';
+        queuedPagesCount.textContent = '1';
+        failedPagesCount.textContent = '0';
+        currentUrlDisplay.textContent = websiteUrl;
+
+        fetch('{% url "website_crawl" project.id %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                crawlJob = data.job_id;
+                monitorCrawlProgress(websiteUrl);
+                showToast(`Crawling avviato per ${websiteUrl}`, 'info');
+            } else {
+                stopCrawling();
+                showToast(`Errore: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            stopCrawling();
+            showToast('Errore di rete durante l\'avvio del crawling: ' + error.message, 'danger');
+        });
+    }
+
+    function getCsrfToken() {
+        const name = 'csrftoken';
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
+
+    function monitorCrawlProgress(websiteUrl) {
+        if (monitorInterval) {
+            clearInterval(monitorInterval);
+        }
+
+        const checkStatus = () => {
+            if (!crawlInProgress) return;
+
+            fetch(`{% url "website_crawl" project.id %}?check_status=true`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    if (data.status === 'completed') {
+                        finishCrawling(data.stats, websiteUrl);
+                    } else if (data.status === 'failed') {
+                        stopCrawling();
+                        showToast(`Errore durante il crawling: ${data.error}`, 'danger');
+                    } else if (data.status === 'running') {
+                        if (data.stats) {
+                            updateCrawlStats(data.stats);
+                        }
+
+                        if (data.visited_urls && Array.isArray(data.visited_urls)) {
+                            data.visited_urls.forEach(url => {
+                                if (!crawledLinks.includes(url)) {
+                                    addProcessedLink(url);
+                                }
+                            });
+                        }
+                    }
+                } else {
+                    stopCrawling();
+                    showToast('Errore nel monitoraggio del crawling', 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+            });
+        };
+
+        monitorInterval = setInterval(checkStatus, 2000);
+        checkStatus();
+    }
+
+    function updateCrawlStats(stats) {
+        if (stats.processed_pages !== undefined) {
+            processedPages = stats.processed_pages;
+            processedPagesCount.textContent = processedPages;
+        }
+
+        if (stats.queued_pages !== undefined) {
+            queuedPages = stats.queued_pages;
+            queuedPagesCount.textContent = queuedPages;
+        }
+
+        if (stats.failed_pages !== undefined) {
+            failedPages = stats.failed_pages;
+            failedPagesCount.textContent = failedPages;
+        }
+
+        if (stats.current_url) {
+            currentUrlDisplay.textContent = stats.current_url;
+            addProcessedLink(stats.current_url);
+        }
+    }
+
+    function addProcessedLink(url) {
+        if (!crawledLinks.includes(url)) {
+            crawledLinks.push(url);
+
+            const linkItem = document.createElement('div');
+            linkItem.className = 'processed-link-item';
+            linkItem.textContent = url;
+
+            if (processedLinksContainer.childElementCount >= 10) {
+                processedLinksContainer.removeChild(processedLinksContainer.firstChild);
+            }
+
+            processedLinksContainer.appendChild(linkItem);
+            processedLinksContainer.scrollTop = processedLinksContainer.scrollHeight;
+        }
+    }
+
+    function stopCrawling(userRequested = false) {
+        if (userRequested && crawlJob) {
+            fetch(`{% url "website_crawl" project.id %}`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: new URLSearchParams({
+                    'action': 'cancel_crawl',
+                    'job_id': crawlJob,
+                    'csrfmiddlewaretoken': getCsrfToken()
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Processo di crawling interrotto con successo', 'success');
+                } else {
+                    showToast('Impossibile interrompere il processo: ' + (data.message || ''), 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Errore durante la cancellazione:', error);
+                showToast('Errore di rete durante la cancellazione', 'danger');
+            });
+        }
+
+        crawlInProgress = false;
+        startCrawlBtn.disabled = false;
+        startCrawlBtn.innerHTML = '<i class="bi bi-globe me-1"></i> Avvia Crawling';
+
+        if (monitorInterval) {
+            clearInterval(monitorInterval);
+            monitorInterval = null;
+        }
+
+        const spinner = document.getElementById('crawl-spinner');
+        if (spinner) {
+            spinner.classList.remove('spinner-border');
+            spinner.innerHTML = '<i class="bi bi-x-circle-fill text-danger"></i>';
+        }
+
+        if (crawlStatusMessage) {
+            if (userRequested) {
+                crawlStatusMessage.innerHTML = '<i class="bi bi-x-octagon-fill text-danger me-1"></i> Crawling interrotto dall\'utente';
+            } else {
+                crawlStatusMessage.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i> Crawling completato';
+            }
+        }
+
+        crawlJob = null;
+    }
+
+    function finishCrawling(stats, websiteUrl) {
+        stopCrawling();
+
+        updateCrawlStats(stats);
+        crawlStatusMessage.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i> Crawling completato: <strong>${stats.processed_pages}</strong> pagine elaborate, <strong>${stats.added_urls || stats.added_files || 0}</strong> contenuti aggiunti al progetto.`;
+
+        showToast(`Crawling completato per ${websiteUrl}: ${stats.processed_pages} pagine elaborate, ${stats.added_urls || stats.added_files || 0} contenuti aggiunti`, 'success');
+
+        setTimeout(() => {
+            location.reload();
+        }, 3000);
+    }
+}
+
+// Funzione separata per gestire il toggle degli URL
+function initUrlToggleSystem() {
+    // Gestione del toggle degli URL per inclusione/esclusione nel RAG
+    document.querySelectorAll('.include-url-check').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const urlId = this.getAttribute('data-url-id');
+            const isIncluded = this.checked;
+
+            this.disabled = true;
+
+            const label = this.nextElementSibling;
+            const originalLabelText = label.textContent;
+            label.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_url_inclusion',
+                    'url_id': urlId,
+                    'is_included': isIncluded ? 'true' : 'false',
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => {
+                const contentType = response.headers.get('content-type');
+
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json();
+                } else {
+                    return response.text().then(text => {
+                        console.error('Risposta non JSON ricevuta:', text.substring(0, 200));
+                        throw new Error('Il server ha restituito HTML invece di JSON');
+                    });
+                }
+            })
+            .then(data => {
+                if (data.success) {
+                    showToast(isIncluded ? 'URL incluso nella ricerca AI' : 'URL escluso dalla ricerca AI', 'success');
+
+                    const urlCard = this.closest('.website-link-card');
+                    if (urlCard) {
+                        if (isIncluded) {
+                            urlCard.classList.add('url-active');
+                            urlCard.classList.remove('url-inactive');
+                        } else {
+                            urlCard.classList.add('url-inactive');
+                            urlCard.classList.remove('url-active');
+                        }
+                    }
+                } else {
+                    this.checked = !isIncluded;
+                    showToast('Errore durante l\'aggiornamento: ' + (data.message || 'errore sconosciuto'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isIncluded;
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                this.disabled = false;
+                label.textContent = originalLabelText;
+            });
+        });
+    });
+
+    // Inizializza classi CSS per gli URL in base allo stato iniziale
+    document.querySelectorAll('.include-url-check').forEach(checkbox => {
+        const urlCard = checkbox.closest('.website-link-card');
+        if (urlCard) {
+            if (checkbox.checked) {
+                urlCard.classList.add('url-active');
+                urlCard.classList.remove('url-inactive');
+            } else {
+                urlCard.classList.add('url-inactive');
+                urlCard.classList.remove('url-active');
+            }
+        }
+    });
+}
+
+// DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // Inizializza il sistema di note rapide
+    initQuickNoteSystem();
+
+    // Gestione del form per la lingua del chatbot
+    const languageForm = document.getElementById('chatbot-language-form');
+    const saveLanguageBtn = document.getElementById('save-language-btn');
+    if (languageForm) {
+        languageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            saveLanguageBtn.classList.add('loading');
+            saveLanguageBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Salvando...';
+            saveLanguageBtn.disabled = true;
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams(new FormData(languageForm))
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Lingua del chatbot aggiornata con successo!', 'success');
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    showToast('Errore: ' + (data.message || 'Impossibile aggiornare la lingua'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete durante l\'aggiornamento', 'danger');
+            })
+            .finally(() => {
+                saveLanguageBtn.classList.remove('loading');
+                saveLanguageBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Salva Lingua';
+                saveLanguageBtn.disabled = false;
+            });
+        });
+    }
+
+    // Inizializza il sistema di crawling
+    initWebsiteCrawler();
+
+    // Inizializza il sistema di toggle URL
+    initUrlToggleSystem();
+
+    // Gestione della visibilità dell'input fisso in base al tab attivo
+    document.querySelectorAll('#projectTabs button').forEach(tabButton => {
+        tabButton.addEventListener('shown.bs.tab', function(event) {
+            const targetTab = event.target.getAttribute('data-bs-target');
+            const fixedInput = document.getElementById('fixed-chat-input');
+            fixedInput.style.display = targetTab === '#ask' ? 'block' : 'none';
+        });
+    });
+
+    // Persistenza del tab attivo
+    const triggerTabList = document.querySelectorAll('#projectTabs button');
+    const activeTab = document.querySelector('#projectTabs button.active');
+    if (activeTab && activeTab.getAttribute('data-bs-target') === '#ask') {
+        document.getElementById('fixed-chat-input').style.display = 'block';
+    }
+
+    // Salva il tab attivo nel localStorage
+    triggerTabList.forEach(tabEl => {
+        tabEl.addEventListener('shown.bs.tab', function(event) {
+            localStorage.setItem('activeProjectTab', event.target.getAttribute('data-bs-target'));
+        });
+    });
+
+    // Modal per la visualizzazione dei documenti
+    const documentModal = document.getElementById('documentModal');
+    if (documentModal) {
+        documentModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const fileId = button.getAttribute('data-file-id');
+            const fileName = button.getAttribute('data-file-name');
+            const fileSize = button.getAttribute('data-file-size');
+            const filePath = button.getAttribute('data-file-path');
+
+            document.getElementById('document-filename').textContent = fileName;
+            document.getElementById('document-filesize').textContent = fileSize || '';
+
+            const openDocumentLink = document.getElementById('open-document');
+            const downloadDocumentLink = document.getElementById('download-document');
+
+            if (openDocumentLink) openDocumentLink.href = filePath;
+            if (downloadDocumentLink) downloadDocumentLink.href = filePath + '?download=1';
+
+            const fileExtension = fileName.split('.').pop().toLowerCase();
+
+            const iframeContainer = document.getElementById('iframe-container');
+            const imageContainer = document.getElementById('image-container');
+            const unsupportedContainer = document.getElementById('unsupported-file-message');
+            const documentFrame = document.getElementById('document-frame');
+            const imagePreview = document.getElementById('image-preview');
+
+            iframeContainer.style.display = 'none';
+            imageContainer.style.display = 'none';
+            unsupportedContainer.style.display = 'none';
+
+            if (fileExtension === 'pdf') {
+                documentFrame.src = filePath;
+                documentFrame.style.display = 'block';
+                iframeContainer.style.display = 'block';
+            }
+            else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                imagePreview.src = filePath;
+                imageContainer.style.display = 'block';
+            }
+            else {
+                unsupportedContainer.style.display = 'block';
+            }
+        });
+    }
+
+    // Modal per l'eliminazione dei file
+    const deleteFileModal = document.getElementById('deleteFileModal');
+    if (deleteFileModal) {
+        deleteFileModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const fileId = button.getAttribute('data-file-id');
+            const fileName = button.getAttribute('data-file-name');
+
+            document.getElementById('delete-file-id').value = fileId;
+            document.getElementById('delete-file-name').textContent = fileName;
+        });
+
+        // Gestione del form di eliminazione
+        const deleteFileForm = document.getElementById('delete-file-form');
+        if (deleteFileForm) {
+            deleteFileForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const fileId = document.getElementById('delete-file-id').value;
+
+                fetch('{% url "project" project.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'action': 'delete_file',
+                        'project_id': '{{ project.id }}',
+                        'file_id': fileId,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    })
+                })
+                .then(response => {
+                    const modal = bootstrap.Modal.getInstance(deleteFileModal);
+                    modal.hide();
+
+                    const fileCard = document.querySelector(`.document-card[data-file-id="${fileId}"]`);
+                    if (fileCard) {
+                        fileCard.closest('.col').remove();
+                    }
+
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <strong>Successo!</strong> File eliminato correttamente.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    document.querySelector('.project-header').after(alertDiv);
+
+                    setTimeout(() => alertDiv.remove(), 3000);
+
+                    if (document.querySelectorAll('.document-card').length === 0) {
+                        const documentsTab = document.getElementById('documents');
+                        if (documentsTab) {
+                            documentsTab.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h2 class="h5 mb-0">Documenti del progetto</h2>
+                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                                        <i class="bi bi-plus-lg me-1"></i> Carica
+                                    </button>
+                                </div>
+                                <div class="empty-state">
+                                    <i class="bi bi-folder-x"></i>
+                                    <h3>Nessun documento</h3>
+                                    <p class="text-muted">Carica file per iniziare</p>
+                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                                        <i class="bi bi-upload me-1"></i> Carica file
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Errore:', error);
+                    alert('Errore durante l\'eliminazione del file. Riprova più tardi.');
+                });
+            });
+        }
+    }
+
+    // Modal per la modifica delle note
+    const editNoteModal = document.getElementById('editNoteModal');
+    if (editNoteModal) {
+        editNoteModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const noteId = button.getAttribute('data-note-id');
+            const noteContent = button.getAttribute('data-note-content');
+
+            document.getElementById('edit-note-id').value = noteId;
+            document.getElementById('edit-note-content').value = noteContent;
+        });
+    }
+
+    // Funzionalità di chat con l'AI
+    const sendButton = document.getElementById('send-question-btn');
+    const questionInput = document.getElementById('question-input');
+    const chatMessages = document.getElementById('chat-messages');
+
+    if (sendButton && questionInput && chatMessages) {
+        sendButton.addEventListener('click', sendQuestion);
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendQuestion();
+            }
+            if (e.key === '/' && questionInput.value === '') {
+                e.preventDefault();
+                showSuggestions();
+            }
+        });
+
+        // Focus automatico sull'input quando la tab è attiva
+        document.getElementById('ask-tab').addEventListener('shown.bs.tab', function() {
+            setTimeout(() => {
+                questionInput.focus();
+                setTimeout(() => {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 300);
+            }, 200);
+        });
+
+        // Gestione dei suggerimenti
+        document.querySelectorAll('.suggestion-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                questionInput.value = this.getAttribute('data-text');
+                questionInput.focus();
+            });
+        });
+
+        function showSuggestions() {
+            const suggestionsPopup = document.createElement('div');
+            suggestionsPopup.className = 'dropdown-menu show p-2';
+            suggestionsPopup.style.position = 'absolute';
+            suggestionsPopup.style.bottom = '60px';
+            suggestionsPopup.style.width = '100%';
+            suggestionsPopup.style.maxHeight = '200px';
+            suggestionsPopup.style.overflowY = 'auto';
+
+            const suggestions = [
+                { text: 'Riassumi il contenuto di tutti i documenti', icon: 'file-text' },
+                { text: 'Quali sono i punti chiave del progetto?', icon: 'key' },
+                { text: 'Estrai le informazioni più importanti dalle note', icon: 'journal-text' },
+                { text: 'Trova eventuali contraddizioni nei documenti', icon: 'exclamation-triangle' },
+                { text: 'Crea una lista di azioni da eseguire in base ai contenuti', icon: 'check2-square' },
+                { text: 'Analizza i contenuti estratti dai siti web', icon: 'globe' },
+                { text: 'Confronta i contenuti dei documenti con i siti web', icon: 'arrow-left-right' }
+            ];
+
+            suggestions.forEach(suggestion => {
+                const item = document.createElement('button');
+                item.className = 'dropdown-item d-flex align-items-center';
+                item.innerHTML = `<i class="bi bi-${suggestion.icon} me-2"></i> ${suggestion.text}`;
+                item.addEventListener('click', function() {
+                    questionInput.value = suggestion.text;
+                    suggestionsPopup.remove();
+                    questionInput.focus();
+                });
+                suggestionsPopup.appendChild(item);
+            });
+
+            document.querySelector('.chat-input-wrapper').appendChild(suggestionsPopup);
+
+            document.addEventListener('click', function closePopup(e) {
+                if (!suggestionsPopup.contains(e.target) && e.target !== questionInput) {
+                    suggestionsPopup.remove();
+                    document.removeEventListener('click', closePopup);
+                }
+            });
+        }
+
+        function getCurrentTimeString() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            // Rimuovi lo stato vuoto se presente
+            const emptyState = chatMessages.querySelector('.chat-empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            // Aggiunge il messaggio dell'utente
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message-container user-container';
+            userMsg.innerHTML = `
+                <div class="message-avatar user-avatar">
+                    <i class="bi bi-person-fill"></i>
+                </div>
+                <div class="user-message">
+                    ${question.replace(/\n/g, '<br>')}
+                    <span class="message-time">${getCurrentTimeString()}</span>
+                </div>
+            `;
+            chatMessages.appendChild(userMsg);
+
+            scrollToBottom();
+
+            // Reset input
+            questionInput.value = '';
+            questionInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+
+            // Aggiungi indicatore di digitazione
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'message-container';
+            typingIndicator.innerHTML = `
+                <div class="message-avatar ai-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            `;
+            chatMessages.appendChild(typingIndicator);
+            scrollToBottom();
+
+            // Timeout per la richiesta
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000);
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'ask_question',
+                    'project_id': '{{ project.id }}',
+                    'question': question,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                }),
+                signal: controller.signal
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`Errore HTTP! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                // Rimuovi indicatore di digitazione
+                typingIndicator.remove();
+
+                if (data.success) {
+                    // Aggiunge la risposta dell'AI
+                    const aiMsg = document.createElement('div');
+                    aiMsg.className = 'message-container';
+                    aiMsg.innerHTML = `
+                        <div class="message-avatar ai-avatar">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div class="ai-message">
+                            ${data.answer.replace(/\n/g, '<br>')}
+                            <span class="message-time">${getCurrentTimeString()}</span>
+                        </div>
+                    `;
+                    chatMessages.appendChild(aiMsg);
+
+                    // Aggiorna le fonti se presenti
+                    if (data.sources && data.sources.length > 0) {
+                        updateSourcesTab(data.sources);
+
+                        const sourcesNotice = document.createElement('div');
+                        sourcesNotice.className = 'text-center mt-3 mb-3';
+                        sourcesNotice.innerHTML = `
+                            <span class="badge bg-light text-primary shadow-sm">
+                                <i class="bi bi-info-circle me-1"></i>
+                                ${data.sources.length} fonti disponibili nel tab "Fonti"
+                            </span>
+                        `;
+                        chatMessages.appendChild(sourcesNotice);
+                    }
+                } else if (data.error === "api_auth_error") {
+                    showApiAuthErrorMessage();
+                } else {
+                    throw new Error(data.error || 'Errore sconosciuto dal server');
+                }
+            })
+            .catch(error => {
+                typingIndicator.remove();
+
+                if (error.message && (error.message.includes('invalid_api_key') ||
+                                     error.message.includes('authentication') ||
+                                     error.message.includes('api_auth_error'))) {
+                    showApiAuthErrorMessage();
+                } else {
+                    showError(`Errore: ${error.message}`);
+                }
+            })
+            .finally(() => {
+                questionInput.disabled = false;
+                sendButton.disabled = false;
+                sendButton.innerHTML = '<i class="bi bi-send-fill"></i>';
+                scrollToBottom();
+                questionInput.focus();
+                clearTimeout(timeout);
+            });
+        }
+
+        function scrollToBottom() {
+            setTimeout(() => {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 100);
+        }
+
+        function showApiAuthErrorMessage() {
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'message-container';
+            errorMsg.innerHTML = `
+                <div class="message-avatar ai-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="ai-message">
+                    <div class="alert alert-danger mb-2">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Problema con le chiavi API</strong>
+                    </div>
+                    <p>Non è stato possibile contattare il servizio AI a causa di un errore di autenticazione.</p>
+                    <div class="alert alert-light border">
+                        <h6 class="mb-2"><i class="bi bi-wrench me-1"></i> Come risolvere:</h6>
+                        <ol class="mb-2">
+                            <li>Vai alle <a href="{% url 'ia_engine' %}" class="fw-medium">Impostazioni del Motore IA</a></li>
+                            <li>Verifica che le chiavi API siano corrette</li>
+                            <li>Oppure passa alla modalità "Usa credito piattaforma"</li>
+                        </ol>
+                    </div>
+                    <span class="message-time">${getCurrentTimeString()}</span>
+                </div>
+            `;
+            chatMessages.appendChild(errorMsg);
+
+            showErrorToast('Errore di autenticazione API', 'Controlla le tue chiavi API nelle impostazioni del motore IA');
+        }
+
+        function showError(message) {
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'message-container';
+            errorMsg.innerHTML = `
+                <div class="message-avatar ai-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="ai-message">
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        ${message}
+                    </div>
+                    <span class="message-time">${getCurrentTimeString()}</span>
+                </div>
+            `;
+            chatMessages.appendChild(errorMsg);
+        }
+
+        function showErrorToast(title, message) {
+            const toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '1080';
+
+            const toastEl = document.createElement('div');
+            toastEl.className = 'toast show';
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+            toastEl.style.boxShadow = '0 0.5rem 1rem rgba(0,0,0,0.15)';
+            toastEl.style.borderRadius = '0.5rem';
+            toastEl.style.overflow = 'hidden';
+            toastEl.style.border = 'none';
+
+            toastEl.innerHTML = `
+                <div class="toast-header bg-danger text-white">
+                    <i class="bi bi-exclamation-circle me-2"></i>
+                    <strong class="me-auto">${title}</strong>
+                    <small>Adesso</small>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Chiudi"></button>
+                </div>
+                <div class="toast-body bg-white">
+                    <p class="mb-2">${message}</p>
+                    <div class="mt-2 pt-2 border-top d-flex justify-content-end">
+                        <a href="{% url 'ia_engine' %}" class="btn btn-sm btn-outline-primary me-2">
+                            <i class="bi bi-gear me-1"></i> Vai alle impostazioni
+                        </a>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="toast">
+                            Chiudi
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            toastContainer.appendChild(toastEl);
+            document.body.appendChild(toastContainer);
+
+            setTimeout(() => {
+                if (document.body.contains(toastContainer)) {
+                    toastContainer.remove();
+                }
+            }, 15000);
+
+            toastEl.querySelector('.btn-close').addEventListener('click', () => {
+                toastContainer.remove();
+            });
+            toastEl.querySelector('.btn-secondary').addEventListener('click', () => {
+                toastContainer.remove();
+            });
+        }
+
+        scrollToBottom();
+    }
+
+    // Aggiorna il tab delle fonti
+    function updateSourcesTab(sources) {
+        const sourcesTab = document.getElementById('sources');
+        if (!sourcesTab) return;
+
+        let sourcesHTML = `
+            <h2 class="h5 mb-3">Fonti di riferimento AI</h2>
+            <div class="list-group">
+        `;
+
+        sources.forEach(source => {
+            sourcesHTML += `
+                <div class="source-item mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="source-title">${source.filename || 'Documento'}</strong>
+                        <small class="text-muted">${source.metadata && source.metadata.page ? 'Pag. ' + (source.metadata.page + 1) : ''}</small>
+                    </div>
+                    <div class="source-content small p-2 bg-light rounded">
+                        ${source.content}
+                    </div>
+                </div>
+            `;
+        });
+
+        sourcesHTML += `</div>`;
+        sourcesTab.innerHTML = sourcesHTML;
+
+        const sourcesTabButton = document.getElementById('sources-tab');
+        if (sourcesTabButton) {
+            if (!sourcesTabButton.querySelector('.badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary ms-1';
+                badge.textContent = sources.length;
+                sourcesTabButton.appendChild(badge);
+            } else {
+                sourcesTabButton.querySelector('.badge').textContent = sources.length;
+            }
+        }
+    }
+
+    // Gestione eliminazione note
+    document.querySelectorAll('.delete-note-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('Eliminare questa nota?')) {
+                const noteId = this.getAttribute('data-note-id');
+                fetch('{% url "project" project.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'action': 'delete_note',
+                        'project_id': '{{ project.id }}',
+                        'note_id': noteId,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const noteCard = this.closest('.note-card');
+                        noteCard.style.animation = 'fadeOutUp 0.3s ease forwards';
+                        setTimeout(() => {
+                            noteCard.remove();
+                            const notesCount = document.querySelectorAll('.note-card').length;
+                            const badgeElement = document.querySelector('#notes-tab .badge');
+                            if (badgeElement) {
+                                badgeElement.textContent = notesCount + ' note';
+                            }
+                            if (notesCount === 0) {
+                                const notesGrid = document.querySelector('.notes-grid');
+                                if (notesGrid) {
+                                    notesGrid.innerHTML = `
+                                        <div class="empty-notes-state text-center py-5">
+                                            <i class="bi bi-journal-text fs-1 text-muted mb-3"></i>
+                                            <h3>Nessuna nota ancora</h3>
+                                            <p class="text-muted">Inizia aggiungendo la tua prima nota nel box sopra</p>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        }, 300);
+                        showToast('Nota eliminata con successo', 'success');
+                    } else {
+                        showToast('Errore: ' + (data.error || 'Impossibile eliminare la nota'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Errore:', error);
+                    showToast('Errore di rete. Riprova più tardi.', 'danger');
+                });
+            }
+        });
+    });
+
+    // Toggle per l'inclusione delle note nella ricerca AI
+    document.querySelectorAll('.include-note-check').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const noteId = this.getAttribute('data-note-id');
+            const isIncluded = this.checked;
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_note_inclusion',
+                    'project_id': '{{ project.id }}',
+                    'note_id': noteId,
+                    'is_included': isIncluded,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(isIncluded ? 'Nota inclusa nella ricerca AI' : 'Nota esclusa dalla ricerca AI', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isIncluded;
+                showToast('Errore durante l\'aggiornamento', 'danger');
+            });
+        });
+    });
+
+    // Gestione modifica note
+    const editNoteForm = document.querySelector('#editNoteModal form');
+    if (editNoteForm) {
+        editNoteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const noteId = document.getElementById('edit-note-id').value;
+            const content = document.getElementById('edit-note-content').value.trim();
+
+            if (!content) return;
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'edit_note',
+                    'project_id': '{{ project.id }}',
+                    'note_id': noteId,
+                    'content': content,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editNoteModal'));
+                    modal.hide();
+                    location.reload();
+                } else {
+                    showToast('Errore: ' + (data.error || 'Impossibile modificare la nota'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete. Riprova più tardi.', 'danger');
+            });
+        });
+    }
+
+    // Gestione hash URL per l'apertura automatica dei tab
+    if (window.location.hash) {
+        const hash = window.location.hash.substring(1);
+        const tabEl = document.querySelector(`button[data-bs-target="#${hash}"]`);
+        if (tabEl) {
+            setTimeout(() => {
+                new bootstrap.Tab(tabEl).show();
+            }, 100);
+        }
+    }
+
+    // Gestione toggle chatbot
+    const chatbotToggle = document.getElementById('chatbot-toggle');
+    if (chatbotToggle) {
+        chatbotToggle.addEventListener('change', function() {
+            const isEnabled = this.checked;
+
+            this.disabled = true;
+
+            const statusText = document.getElementById('chatbot-status-text');
+            const originalText = statusText.textContent;
+            statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_chatbot',
+                    'is_enabled': isEnabled,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const enabledContent = document.getElementById('chatbot-enabled-content');
+                    const disabledContent = document.getElementById('chatbot-disabled-content');
+                    const statusBadge = document.getElementById('chatbot-status-badge');
+
+                    if (isEnabled) {
+                        enabledContent.style.display = 'block';
+                        disabledContent.style.display = 'none';
+                        statusText.textContent = 'Attivo';
+                        statusBadge.textContent = 'ATTIVO';
+                        statusBadge.classList.remove('bg-secondary');
+                        statusBadge.classList.add('bg-success');
+                    } else {
+                        enabledContent.style.display = 'none';
+                        disabledContent.style.display = 'block';
+                        statusText.textContent = 'Disattivo';
+                        statusBadge.textContent = 'DISATTIVO';
+                        statusBadge.classList.remove('bg-success');
+                        statusBadge.classList.add('bg-secondary');
+                    }
+
+                    showToast(data.message || 'Stato del chatbot aggiornato con successo', 'success');
+                } else {
+                    this.checked = !isEnabled;
+                    statusText.textContent = originalText;
+                    showToast(data.message || 'Errore nell\'aggiornamento del chatbot', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isEnabled;
+                statusText.textContent = originalText;
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Gestione toggle Chatwoot
+    const chatwootToggle = document.getElementById('chatwoot-toggle');
+    if (chatwootToggle) {
+        chatwootToggle.addEventListener('change', function() {
+            const isEnabled = this.checked;
+
+            this.disabled = true;
+
+            const statusText = document.getElementById('chatwoot-status-text');
+            const originalText = statusText.textContent;
+            statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_chatwoot',
+                    'is_enabled': isEnabled,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const enabledContent = document.getElementById('chatwoot-enabled-content');
+                    const disabledContent = document.getElementById('chatwoot-disabled-content');
+
+                    if (isEnabled) {
+                        enabledContent.style.display = 'block';
+                        disabledContent.style.display = 'none';
+                        statusText.textContent = 'Attivo';
+                    } else {
+                        enabledContent.style.display = 'none';
+                        disabledContent.style.display = 'block';
+                        statusText.textContent = 'Disattivo';
+                    }
+
+                    showToast(data.message || 'Stato Chatwoot aggiornato con successo', 'success');
+                } else {
+                    this.checked = !isEnabled;
+                    statusText.textContent = originalText;
+                    showToast(data.message || 'Errore nell\'aggiornamento di Chatwoot', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isEnabled;
+                statusText.textContent = originalText;
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Funzione per creare un bot Chatwoot
+    function createChatwootBot() {
+        const button = document.getElementById('create-chatwoot-bot-btn');
+        if (!button) return;
+
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creazione in corso...';
+
+        fetch('{% url "project" project.id %}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'create_chatwoot_bot',
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Errore HTTP! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const enabledContent = document.getElementById('chatwoot-enabled-content');
+
+                let htmlContent = `
+                    <div class="alert alert-success mb-4">
+                        <i class="bi bi-check-circle me-2"></i>
+                        Il chatbot Chatwoot è <strong>attivo</strong> per questo progetto con Inbox ID: ${data.inbox_id}.
+                    </div>
+
+                    <h6 class="mb-3">Istruzioni di integrazione:</h6>
+                    <ol class="mb-4">
+                        <li>Accedi al tuo pannello Chatwoot (chatwoot.ciunix.com)</li>
+                        <li>Vai su Settings > Inboxes</li>
+                        <li>Trova l'inbox "${data.inbox_name || 'RAG Bot - ' + '{{ project.name }}'}" (ID: ${data.inbox_id})</li>
+                        <li>Clicca su "Widget Settings" e copia il codice di integrazione</li>
+                        <li>Incolla il codice nel tuo sito web</li>
+                    </ol>
+                `;
+
+                if (data.widget_code) {
+                    htmlContent += `
+                        <div class="card mb-4">
+                            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                                <h6 class="mb-0"><i class="bi bi-code-slash me-2"></i>Codice di integrazione</h6>
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyWidgetCode()">
+                                    <i class="bi bi-clipboard me-1"></i>Copia
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <pre class="bg-light p-3 mb-0 rounded"><code id="widget-code-display">${escapeHtml(data.widget_code)}</code></pre>
+                            </div>
+                            <div class="card-footer bg-white">
+                                <small class="text-muted">Token del sito: <span class="font-monospace">${data.website_token || ''}</span></small>
+                            </div>
+                        </div>
+                    `;
+                } else if (data.widget_error) {
+                    htmlContent += `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Nota:</strong> Non è stato possibile recuperare automaticamente il codice del widget.
+                            <p>Errore: ${data.widget_error}</p>
+                            <p>Usa l'interfaccia di Chatwoot per ottenere il codice.</p>
+                        </div>
+                    `;
+                } else {
+                    htmlContent += `
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Il bot è stato creato con successo. Accedi a Chatwoot per ottenere il codice di integrazione.
+                        </div>
+                    `;
+                }
+
+                htmlContent += `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Importante:</strong> Assicurati di aver configurato il webhook Chatwoot per ricevere le notifiche dei messaggi.
+                        <p class="mt-2 mb-0">URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/</p>
+                    </div>
+                `;
+
+                enabledContent.innerHTML = htmlContent;
+
+                window.copyWidgetCode = function() {
+                    const codeElement = document.getElementById('widget-code-display');
+                    if (codeElement) {
+                        const code = codeElement.textContent;
+                        navigator.clipboard.writeText(code)
+                            .then(() => showToast('Codice copiato negli appunti!', 'success'))
+                            .catch(err => showToast('Errore nel copiare il codice', 'danger'));
+                    }
+                };
+
+                showToast(data.message || 'Chatbot Chatwoot creato con successo!', 'success');
+            } else {
+                showToast(data.message || 'Errore nella creazione del chatbot Chatwoot', 'danger');
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot';
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di rete durante la creazione del chatbot: ' + error.message, 'danger');
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot';
+        });
+    }
+
+    function escapeHtml(html) {
+        return html
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    const createBotBtn = document.getElementById('create-chatwoot-bot-btn');
+    if (createBotBtn) {
+        createBotBtn.addEventListener('click', createChatwootBot);
+    }
+
+    // Carica tab salvato nel localStorage
+    const savedTab = localStorage.getItem('activeProjectTab');
+    if (savedTab) {
+        const tabEl = document.querySelector(`button[data-bs-target="${savedTab}"]`);
+        if (tabEl) {
+            setTimeout(() => {
+                new bootstrap.Tab(tabEl).show();
+            }, 100);
+        }
+    }
+
+    // Gestione aggiornamento delle note che mostra i dettagli completi
+    document.querySelectorAll('.note-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('.note-actions') || e.target.closest('.form-check')) return;
+
+            const contentDiv = this.querySelector('.note-content');
+            if (contentDiv.classList.contains('expanded')) {
+                contentDiv.classList.remove('expanded');
+                contentDiv.style.maxHeight = '4.5em';
+            } else {
+                contentDiv.classList.add('expanded');
+                contentDiv.style.maxHeight = 'none';
+            }
+        });
+    });
+
+    // Aggiungi CSS per l'animazione fadeOutUp
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeOutUp {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+        }
+
+        .note-content {
+            max-height: 4.5em;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            cursor: pointer;
+        }
+
+        .note-content.expanded {
+            max-height: none;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Collega il form per aggiungere manualmente un URL
+    const addUrlForm = document.getElementById('addUrlModal').querySelector('form');
+    if (addUrlForm) {
+        addUrlForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const urlInput = this.querySelector('input[name="url"]');
+            const url = urlInput.value.trim();
+
+            if (!url) {
+                showToast('Inserisci un URL valido', 'warning');
+                return;
+            }
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Aggiunta in corso...';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'add_url',
+                    'url': url,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addUrlModal'));
+                modal.hide();
+
+                if (data.success) {
+                    showToast('URL aggiunto con successo', 'success');
+                    location.reload();
+                } else {
+                    showToast('Errore nell\'aggiunta dell\'URL: ' + (data.message || ''), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di rete nell\'aggiunta dell\'URL', 'danger');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            });
+        });
+    }
+});
+
+// Funzione per copiare il codice di embed
+function copyEmbedCode() {
+    const embedCode = document.querySelector('#chatbot pre code').textContent;
+    navigator.clipboard.writeText(embedCode).then(() => {
+        showToast('Codice copiato negli appunti!', 'success');
+    }).catch(err => {
+        showToast('Errore nel copiare il codice', 'danger');
+        console.error('Errore clipboard:', err);
+    });
+}
+
+// Funzione per copiare il codice widget permanente
+window.copyWidgetCodePermanent = function() {
+    const codeElement = document.getElementById('widget-code-permanent');
+    if (codeElement) {
+        const code = codeElement.textContent;
+        navigator.clipboard.writeText(code)
+            .then(() => showToast('Codice widget copiato negli appunti!', 'success'))
+            .catch(err => showToast('Errore nel copiare il codice', 'danger'));
+    }
+};
+</script>

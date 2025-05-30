@@ -1,1 +1,33 @@
-{% include 'be/project/main.html' %}
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+    {% include 'be/project/styles.html' %}
+    {% include 'be/project/chat_styles.html' %}
+    {% include 'be/project/urls_styles.html' %}
+    {% include 'be/project/rag_config_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% include 'be/project/header.html' %}
+    {% include 'be/project/navigation.html' %}
+
+    <!-- Tab Content -->
+    <div class="tab-content py-3" id="projectTabsContent">
+        {% include 'be/project/documents_tab.html' %}
+        {% include 'be/project/ai_chat_tab.html' %}
+        {% include 'be/project/notes_tab.html' %}
+        {% include 'be/project/urls_tab.html' %}
+        {% include 'be/project/sources_tab.html' %}
+        {% include 'be/project/rag_config_tab.html' %}
+        {% include 'be/project/chatbot_tab.html' %}
+    </div>
+</div>
+
+{% include 'be/project/modals.html' %}
+{% endblock %}
+
+{% block extra_js %}
+    {% include 'be/project/javascript.html' %}
+{% endblock %}

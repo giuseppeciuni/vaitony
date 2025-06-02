@@ -149,7 +149,7 @@ CORS_ALLOW_METHODS = [
 DATABASES = {
     'default': {
        'ENGINE': 'django.db.backends.mysql',
-       'NAME': 'vaitony',
+       'NAME': 'vaitony_experiments',
        'USER': 'root',
        'PASSWORD': 'password',
        'HOST': 'localhost',
@@ -268,81 +268,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20
 }
-
-
-
-
-
-
-
-
-# Logging Configuration
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'formatters': {
-#         'verbose': {
-#             'format': '{levelname} {asctime} {message}',
-#             'style': '{',
-#         },
-#         'simple': {
-#             'format': '{levelname} {message}',
-#             'style': '{',
-#         },
-#     },
-#     'handlers': {
-#         'file': {
-#             'level': 'DEBUG',
-#             'class': 'logging.handlers.RotatingFileHandler',
-#             'filename': os.path.join(BASE_DIR, 'logs/vaitony.log'),
-#             'maxBytes': 1024*1024*5,
-#             'backupCount': 5,
-#             'formatter': 'verbose',
-#         },
-#         'console': {
-#             'level': 'DEBUG',
-#             'class': 'logging.StreamHandler',
-#             'formatter': 'simple',
-#         },
-#     },
-#     'loggers': {
-#         # Logger django principale - solo ERROR in console
-#         'django': {
-#             'handlers': ['file', 'console'],
-#             'level': 'ERROR',
-#             'propagate': False,
-#         },
-#         # Logger per le tue app - tutti i livelli in console
-#         'profiles': {
-#             'handlers': ['file', 'console'],
-#             'level': 'DEBUG',
-#             'propagate': False,
-#         },
-#         'dashboard': {
-#             'handlers': ['file', 'console'],
-#             'level': 'DEBUG',
-#             'propagate': False,
-#         },
-#         # Limita il log di autoreload
-#         'django.utils.autoreload': {
-#             'handlers': ['file'],
-#             'level': 'INFO',
-#             'propagate': False,
-#         },
-#         # Limita i log di accesso
-#         'django.server': {
-#             'handlers': ['file'],
-#             'level': 'INFO',
-#             'propagate': False,
-#         },
-#         # Limita i log delle query SQL
-#         'django.db.backends': {
-#             'handlers': ['file'],
-#             'level': 'INFO',
-#             'propagate': False,
-#         },
-#     },
-# }
 
 
 

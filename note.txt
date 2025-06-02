@@ -140,7 +140,16 @@ FLUSH PRIVILEGES;
 
 
 
-# Note
+-----------------------------------------------
+Come eseguire il command initialize_ai_platform.py
+# Inizializzazione completa
+python manage.py initialize_ai_platform
+
+# Salta sezioni specifiche
+python manage.py initialize_ai_platform --skip-prompts --skip-subscriptions
+
+# Aggiorna dati esistenti
+python manage.py initialize_ai_platform --update-existing
 
 
 
@@ -148,13 +157,17 @@ FLUSH PRIVILEGES;
 
 
 
-##################################  JAVASCRIPT PER CHATBOT ##################################
-<!-- Vaitony Chatbot Widget -->
-<script>
-(function(w,d,s,o,f,js,fjs){
-    w['VaitonyChatbot']=o;w[o]=w[o]||function(){
-    (w[o].q=w[o].q||[]).push(arguments)};w[o].l=1*new Date();
-    js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
-    js.id='vaitony-chatbot';js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
-}(window,document,'script','vchat','https://tuodominio.com/chatbot/nome-progetto/widget.js'));
-</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

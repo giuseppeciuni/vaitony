@@ -36,7 +36,7 @@ from dashboard.rag_document_utils import (
     update_project_index_status, get_cached_embedding, create_embedding_cache,
     copy_embedding_to_project_index
 )
-from profiles.models import ProjectRAGConfiguration, RagDefaultSettings, ProjectURL
+from profiles.models import ProjectURL
 
 # Configurazione logger
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ def get_project_LLM_settings(project=None):
                 'temperature': default_engine.default_temperature,
                 'max_tokens': default_engine.default_max_tokens,
                 'timeout': default_engine.default_timeout,
-                'type': 'openai'  # Aggiungiamo il tipo per riferimento
+                'type': 'openai'
             }
         except (LLMProvider.DoesNotExist, LLMEngine.DoesNotExist) as e:
             logger.error(f"Errore nel recuperare il motore predefinito: {str(e)}")
@@ -161,7 +161,7 @@ def get_project_LLM_settings(project=None):
             return {
                 'provider': None,
                 'engine': None,
-                'model': 'gpt-3.5-turbo',  # Il modello più economico come fallback
+                'model': 'gpt-3.5-turbo',
                 'temperature': 0.7,
                 'max_tokens': 4096,
                 'timeout': 60,
@@ -190,12 +190,12 @@ def get_project_LLM_settings(project=None):
 
     # Se arriviamo qui, il progetto non ha configurazioni LLM o non ha un engine associato
     # Utilizziamo le impostazioni predefinite globali
-    return get_project_LLM_settings(None)  # Richiama questa funzione senza progetto
+    return get_project_LLM_settings(None)
 
 
 def get_project_RAG_settings(project):
     """
-    Ottiene le impostazioni RAG specifiche per un progetto.
+    Ottiene le impostazioni RAG specifiche per un progetto dalla nuova tabella ProjectRAGConfig.
 
     Args:
         project: L'oggetto Project
@@ -203,86 +203,33 @@ def get_project_RAG_settings(project):
     Returns:
         dict: Dizionario con tutte le impostazioni RAG per il progetto
     """
+    from profiles.models import ProjectRAGConfig
+
     try:
         # Ottieni la configurazione RAG del progetto
-        project_config = ProjectRAGConfiguration.objects.get(project=project)
+        rag_config = ProjectRAGConfig.objects.get(project=project)
 
-        # Se non c'è un preset assegnato, usa il preset di default
-        if not project_config.rag_preset:
-            # Cerca il preset predefinito
-            default_preset = RagDefaultSettings.objects.filter(is_default=True).first()
-            if not default_preset:
-                # Se non c'è un preset predefinito, prendi il primo disponibile
-                default_preset = RagDefaultSettings.objects.first()
+        # Restituisci tutti i valori direttamente dalla configurazione
+        settings = {
+            'chunk_size': rag_config.chunk_size,
+            'chunk_overlap': rag_config.chunk_overlap,
+            'similarity_top_k': rag_config.similarity_top_k,
+            'mmr_lambda': rag_config.mmr_lambda,
+            'similarity_threshold': rag_config.similarity_threshold,
+            'retriever_type': rag_config.retriever_type,
+            'auto_citation': rag_config.auto_citation,
+            'prioritize_filenames': rag_config.prioritize_filenames,
+            'equal_notes_weight': rag_config.equal_notes_weight,
+            'strict_context': rag_config.strict_context,
+            'preset_name': rag_config.preset_name,
+            'preset_category': rag_config.preset_category,
+        }
 
-            if default_preset:
-                project_config.rag_preset = default_preset
-                project_config.save()
-                logger.info(f"Assegnato preset di default '{default_preset.name}' al progetto {project.id}")
-
-        # Costruisci il dizionario delle impostazioni
-        # Prima prendi i valori dal preset, poi sovrascrivi con eventuali personalizzazioni
-        settings = {}
-
-        if project_config.rag_preset:
-            # Valori base dal preset
-            settings = {
-                'chunk_size': project_config.rag_preset.chunk_size,
-                'chunk_overlap': project_config.rag_preset.chunk_overlap,
-                'similarity_top_k': project_config.rag_preset.similarity_top_k,
-                'mmr_lambda': project_config.rag_preset.mmr_lambda,
-                'similarity_threshold': project_config.rag_preset.similarity_threshold,
-                'retriever_type': project_config.rag_preset.retriever_type,
-                'system_prompt': project_config.rag_preset.system_prompt,
-                'auto_citation': project_config.rag_preset.auto_citation,
-                'prioritize_filenames': project_config.rag_preset.prioritize_filenames,
-                'equal_notes_weight': project_config.rag_preset.equal_notes_weight,
-                'strict_context': project_config.rag_preset.strict_context,
-            }
-        else:
-            # Valori di fallback se non c'è nessun preset
-            settings = {
-                'chunk_size': 500,
-                'chunk_overlap': 50,
-                'similarity_top_k': 6,
-                'mmr_lambda': 0.7,
-                'similarity_threshold': 0.7,
-                'retriever_type': 'mmr',
-                'system_prompt': "",
-                'auto_citation': True,
-                'prioritize_filenames': True,
-                'equal_notes_weight': True,
-                'strict_context': False,
-            }
-
-        # Sovrascrivi con eventuali personalizzazioni del progetto
-        if project_config.chunk_size is not None:
-            settings['chunk_size'] = project_config.chunk_size
-        if project_config.chunk_overlap is not None:
-            settings['chunk_overlap'] = project_config.chunk_overlap
-        if project_config.similarity_top_k is not None:
-            settings['similarity_top_k'] = project_config.similarity_top_k
-        if project_config.mmr_lambda is not None:
-            settings['mmr_lambda'] = project_config.mmr_lambda
-        if project_config.similarity_threshold is not None:
-            settings['similarity_threshold'] = project_config.similarity_threshold
-        if project_config.retriever_type:
-            settings['retriever_type'] = project_config.retriever_type
-        if project_config.system_prompt:
-            settings['system_prompt'] = project_config.system_prompt
-        if project_config.auto_citation is not None:
-            settings['auto_citation'] = project_config.auto_citation
-        if project_config.prioritize_filenames is not None:
-            settings['prioritize_filenames'] = project_config.prioritize_filenames
-        if project_config.equal_notes_weight is not None:
-            settings['equal_notes_weight'] = project_config.equal_notes_weight
-        if project_config.strict_context is not None:
-            settings['strict_context'] = project_config.strict_context
-
+        logger.debug(f"Configurazione RAG caricata per progetto {project.id}: {rag_config.get_preset_category_display()}")
         return settings
 
-    except ProjectRAGConfiguration.DoesNotExist:
-        logger.error(f"ProjectRAGConfiguration non trovata per il progetto {project.id}")
+    except ProjectRAGConfig.DoesNotExist:
+        logger.error(f"ProjectRAGConfig non trovata per il progetto {project.id}")
         # Restituisci valori di default se la configurazione non esiste
         return {
             'chunk_size': 500,
@@ -291,11 +238,56 @@ def get_project_RAG_settings(project):
             'mmr_lambda': 0.7,
             'similarity_threshold': 0.7,
             'retriever_type': 'mmr',
-            'system_prompt': "",
             'auto_citation': True,
             'prioritize_filenames': True,
             'equal_notes_weight': True,
             'strict_context': False,
+            'preset_name': 'balanced',
+            'preset_category': 'balanced',
+        }
+
+
+def get_project_prompt_settings(project):
+    """
+    Ottiene le impostazioni del prompt per un progetto dalla nuova tabella ProjectPromptConfig.
+
+    Args:
+        project: L'oggetto Project
+
+    Returns:
+        dict: Dizionario con le impostazioni del prompt
+    """
+    from profiles.models import ProjectPromptConfig
+
+    try:
+        # Ottieni la configurazione prompt del progetto
+        prompt_config = ProjectPromptConfig.objects.get(project=project)
+
+        # Restituisci le informazioni sul prompt
+        prompt_info = prompt_config.get_prompt_info()
+        effective_prompt = prompt_config.get_effective_prompt()
+
+        return {
+            'prompt_text': effective_prompt,
+            'prompt_type': prompt_info['type'],
+            'prompt_name': prompt_info['name'],
+            'prompt_description': prompt_info.get('description', ''),
+            'use_custom_prompt': prompt_config.use_custom_prompt,
+            'has_default_prompt': prompt_config.default_system_prompt is not None,
+            'has_custom_prompt': bool(prompt_config.custom_prompt_text.strip())
+        }
+
+    except ProjectPromptConfig.DoesNotExist:
+        logger.error(f"ProjectPromptConfig non trovata per il progetto {project.id}")
+        # Restituisci valori di default se la configurazione non esiste
+        return {
+            'prompt_text': "",
+            'prompt_type': 'none',
+            'prompt_name': 'Nessun prompt',
+            'prompt_description': 'Nessun prompt configurato',
+            'use_custom_prompt': False,
+            'has_default_prompt': False,
+            'has_custom_prompt': False
         }
 
 
@@ -329,7 +321,7 @@ def process_image(image_path, user=None):
         client = openai.OpenAI(api_key=api_key)
 
         response = client.chat.completions.create(
-            model="gpt-4-vision",  # Modello specifico per la visione
+            model="gpt-4-vision",
             messages=[
                 {
                     "role": "user",
@@ -477,438 +469,6 @@ def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_dela
     raise Exception("Impossibile creare gli embedding dopo ripetuti tentativi")
 
 
-# Modifica alla funzione create_project_rag_chain in rag_utils.py
-
-# def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
-#     """
-#     Crea o aggiorna la catena RAG per un progetto.
-#
-#     Questa funzione gestisce la creazione e l'aggiornamento dell'indice vettoriale FAISS per un progetto,
-#     includendo file, note e URL del progetto. Supporta la cache degli embedding per ottimizzare
-#     le prestazioni e ridurre le chiamate API.
-#
-#     Args:
-#         project: Oggetto Project (opzionale) - Il progetto per cui creare/aggiornare l'indice
-#         docs: Lista di documenti già caricati (opzionale) - Se forniti, verranno usati questi documenti
-#         force_rebuild: Flag per forzare la ricostruzione completa dell'indice
-#
-#     Returns:
-#         RetrievalQA: Catena RAG configurata, o None in caso di errore
-#     """
-#     # Importazione ritardata per evitare cicli di importazione
-#     from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache, ProjectURL
-#
-#     logger.debug(f"Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
-#
-#     # PARTE 1: INIZIALIZZAZIONE VARIABILI
-#     # -----------------------------------
-#     cached_files = []  # Lista dei file trovati nella cache
-#     document_ids = []  # ID dei documenti processati
-#     note_ids = []  # ID delle note processate
-#     url_ids = []  # ID degli URL processati
-#
-#     if project:
-#         # PARTE 2: CONFIGURAZIONE PERCORSI E RECUPERO DATI
-#         # ----------------------------------------------
-#         # Configurazione percorsi per il progetto
-#         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-#         index_name = "vector_index"
-#         index_path = os.path.join(project_dir, index_name)
-#
-#         # Assicura che la directory del progetto esista
-#         os.makedirs(project_dir, exist_ok=True)
-#
-#         # Recupera tutti i file, le note attive e gli URL del progetto
-#         all_files = ProjectFile.objects.filter(project=project)
-#         all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-#         all_urls = ProjectURL.objects.filter(project=project, is_included_in_rag=True)
-#
-#         # PARTE 3: GESTIONE RICOSTRUZIONE FORZATA
-#         # -------------------------------------
-#         if force_rebuild and os.path.exists(index_path):
-#             logger.info(f"Eliminazione forzata dell'indice precedente in {index_path}")
-#             shutil.rmtree(index_path)
-#
-#         # PARTE 4: CARICAMENTO DEI DOCUMENTI
-#         # ---------------------------------
-#         if docs is None:
-#             # Determina quali elementi devono essere elaborati
-#             if force_rebuild:
-#                 files_to_embed = all_files
-#                 urls_to_embed = all_urls
-#                 logger.info(
-#                     f"Ricostruendo indice con {files_to_embed.count()} file, {all_active_notes.count()} note e {urls_to_embed.count()} URL")
-#             else:
-#                 files_to_embed = all_files.filter(is_embedded=False)
-#                 urls_to_embed = all_urls.filter(is_indexed=False, is_included_in_rag=True)
-#                 logger.info(f"File da incorporare: {len(files_to_embed)}")
-#                 logger.info(f"URL da incorporare: {len(urls_to_embed)}")
-#                 logger.info(f"Note attive trovate: {all_active_notes.count()}")
-#
-#             # Inizializza la lista per i documenti
-#             docs = []
-#
-#             # Ottieni le impostazioni RAG per il chunking
-#             rag_settings = get_project_RAG_settings(project)
-#             chunk_size = rag_settings['chunk_size']
-#             chunk_overlap = rag_settings['chunk_overlap']
-#
-#             # PARTE 5: ELABORAZIONE DEI FILE
-#             # -----------------------------
-#             for doc_model in files_to_embed:
-#                 logger.debug(f"Caricamento documento per embedding: {doc_model.filename}")
-#
-#                 # Verifica se esiste già un embedding nella cache globale
-#                 cached_embedding = get_cached_embedding(
-#                     doc_model.file_hash,
-#                     chunk_size=chunk_size,
-#                     chunk_overlap=chunk_overlap
-#                 )
-#
-#                 if cached_embedding:
-#                     logger.info(
-#                         f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
-#                     cached_files.append({
-#                         'doc_model': doc_model,
-#                         'cache_info': cached_embedding
-#                     })
-#
-#                 # IMPORTANTE: Carichiamo SEMPRE il documento per l'indice
-#                 langchain_docs = load_document(doc_model.file_path)
-#
-#                 if langchain_docs:
-#                     # Aggiungi metadati necessari per il retrieval
-#                     for doc in langchain_docs:
-#                         doc.metadata['filename'] = doc_model.filename
-#                         doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
-#                         doc.metadata['source'] = doc_model.file_path
-#                         doc.metadata['type'] = 'file'  # Tipo esplicito per distinguere la fonte
-#
-#                     docs.extend(langchain_docs)
-#                     document_ids.append(doc_model.id)
-#                 else:
-#                     logger.warning(f"Nessun contenuto estratto dal file {doc_model.filename}")
-#
-#             # PARTE 6: ELABORAZIONE DEGLI URL
-#             # -------------------------------
-#             for url_model in urls_to_embed:
-#                 logger.debug(f"Aggiunta URL all'embedding: {url_model.url}")
-#
-#                 # CORREZIONE: Aggiungi sempre l'URL all'elenco degli URL da aggiornare
-#                 # anche se non ha contenuto
-#                 url_ids.append(url_model.id)
-#
-#                 if not url_model.content:
-#                     logger.warning(
-#                         f"URL senza contenuto: {url_model.url}, saltato per embedding ma verrà comunque marcato come indicizzato")
-#                     continue
-#
-#                 # Prepara il contenuto direttamente da ProjectURL
-#                 url_content = url_model.content
-#
-#                 # Se abbiamo informazioni estratte, le aggiungiamo al contenuto
-#                 if url_model.extracted_info:
-#                     try:
-#                         extracted_info = json.loads(url_model.extracted_info)
-#                         summary = extracted_info.get('summary', '')
-#                         key_points = extracted_info.get('key_points', [])
-#                         entities = extracted_info.get('entities', [])
-#                         content_type = extracted_info.get('content_type', 'unknown')
-#
-#                         # Costruisci un contenuto migliorato con le informazioni estratte
-#                         enhanced_content = f"URL: {url_model.url}\n"
-#                         enhanced_content += f"Titolo: {url_model.title or 'Nessun titolo'}\n"
-#                         enhanced_content += f"Tipo di contenuto: {content_type}\n\n"
-#
-#                         if summary:
-#                             enhanced_content += f"RIEPILOGO:\n{summary}\n\n"
-#
-#                         if key_points:
-#                             enhanced_content += "PUNTI CHIAVE:\n"
-#                             for idx, point in enumerate(key_points, 1):
-#                                 enhanced_content += f"{idx}. {point}\n"
-#                             enhanced_content += "\n"
-#
-#                         if entities:
-#                             enhanced_content += "ENTITÀ RILEVANTI:\n"
-#                             entity_text = ", ".join(entities[:10])  # Limita per non sovraccaricare
-#                             enhanced_content += f"{entity_text}\n\n"
-#
-#                         # Aggiungi il contenuto originale
-#                         enhanced_content += "CONTENUTO COMPLETO:\n" + url_content
-#
-#                         # Usa il contenuto migliorato
-#                         url_content = enhanced_content
-#                     except Exception as e:
-#                         logger.error(f"Errore nel processare le informazioni estratte per {url_model.url}: {str(e)}")
-#
-#                 # Crea il documento LangChain per l'URL direttamente dai dati in ProjectURL
-#                 url_doc = Document(
-#                     page_content=url_content,
-#                     metadata={
-#                         "source": f"url_{url_model.id}",
-#                         "type": "url",
-#                         "title": url_model.title or "URL senza titolo",
-#                         "url_id": url_model.id,
-#                         "url": url_model.url,
-#                         "domain": url_model.get_domain() if hasattr(url_model, 'get_domain') else urlparse(
-#                             url_model.url).netloc,
-#                         "filename": f"URL: {url_model.title or url_model.url}"
-#                     }
-#                 )
-#                 docs.append(url_doc)
-#                 # Non è più necessario aggiungere l'ID qui perché lo abbiamo già fatto sopra
-#
-#             # PARTE 7: ELABORAZIONE DELLE NOTE
-#             # -------------------------------
-#             for note in all_active_notes:
-#                 logger.debug(f"Aggiunta nota all'embedding: {note.title or 'Senza titolo'}")
-#
-#                 # Crea un documento LangChain per la nota
-#                 note_doc = Document(
-#                     page_content=note.content,
-#                     metadata={
-#                         "source": f"note_{note.id}",
-#                         "type": "note",
-#                         "title": note.title or "Nota senza titolo",
-#                         "note_id": note.id,
-#                         "filename": f"Nota: {note.title or 'Senza titolo'}"
-#                     }
-#                 )
-#                 docs.append(note_doc)
-#                 note_ids.append(note.id)
-#
-#             logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note e {len(url_ids)} sono URL)")
-#             logger.info(f"Documenti in cache: {len(cached_files)}")
-#     else:
-#         # PARTE 8: CONFIGURAZIONE DI FALLBACK SENZA PROGETTO
-#         # ------------------------------------------------
-#         index_name = "default_index"
-#         index_path = os.path.join(settings.MEDIA_ROOT, index_name)
-#         document_ids = None
-#         note_ids = None
-#         url_ids = None
-#         cached_files = []
-#
-#     # PARTE 9: INIZIALIZZAZIONE EMBEDDINGS
-#     # -----------------------------------
-#     embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user if project else None))
-#     vectordb = None
-#
-#     # PARTE 10: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS
-#     # ------------------------------------------------
-#     if docs and len(docs) > 0:
-#         logger.info(
-#             f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
-#
-#         # Ottieni le impostazioni RAG per il chunking
-#         rag_settings = get_project_RAG_settings(project)
-#         chunk_size = rag_settings['chunk_size']
-#         chunk_overlap = rag_settings['chunk_overlap']
-#
-#         # Dividi i documenti in chunk
-#         logger.info(f"Chunking con parametri: size={chunk_size}, overlap={chunk_overlap}")
-#         splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-#         split_docs = splitter.split_documents(docs)
-#
-#         # Filtra documenti vuoti
-#         split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
-#         logger.info(f"Documenti divisi in {len(split_docs)} chunk dopo splitting")
-#
-#         # Assicura che ogni chunk mantenga i metadati necessari
-#         for chunk in split_docs:
-#             # Assicura che i metadati di base siano presenti
-#             if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
-#                 filename = os.path.basename(chunk.metadata['source'])
-#                 chunk.metadata['filename'] = filename
-#                 chunk.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
-#
-#             # Assicura che il tipo di fonte sia specificato
-#             if 'type' not in chunk.metadata:
-#                 # Determina il tipo in base alla fonte
-#                 source = chunk.metadata.get('source', '')
-#                 if source.startswith('url_'):
-#                     chunk.metadata['type'] = 'url'
-#                 elif source.startswith('note_'):
-#                     chunk.metadata['type'] = 'note'
-#                 else:
-#                     chunk.metadata['type'] = 'file'
-#
-#         # PARTE 11: DECISIONE SU AGGIORNAMENTO O CREAZIONE NUOVO INDICE
-#         # -----------------------------------------------------------
-#
-#         else:
-#             # PARTE 12: CREAZIONE NUOVO INDICE
-#             # -------------------------------
-#             logger.info(f"Creazione di un nuovo indice FAISS")
-#             try:
-#                 vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
-#
-#                 # PARTE 13: SALVATAGGIO NELLA CACHE GLOBALE
-#                 # ---------------------------------------
-#                 if document_ids and project:
-#                     for doc_id in document_ids:
-#                         try:
-#                             doc = ProjectFile.objects.get(id=doc_id)
-#
-#                             # Controlla se il file è già nella cache
-#                             is_already_cached = any(cf['doc_model'].id == doc_id for cf in cached_files)
-#
-#                             if not is_already_cached:
-#                                 # Controlla se esiste già un record nella cache prima di salvare
-#                                 existing_cache = GlobalEmbeddingCache.objects.filter(file_hash=doc.file_hash).first()
-#
-#                                 if not existing_cache:
-#                                     file_info = {
-#                                         'file_type': doc.file_type,
-#                                         'filename': doc.filename,
-#                                         'file_size': doc.file_size,
-#                                         'chunk_size': chunk_size,
-#                                         'chunk_overlap': chunk_overlap,
-#                                         'embedding_model': 'OpenAIEmbeddings'
-#                                     }
-#                                     create_embedding_cache(doc.file_hash, vectordb, file_info)
-#                                     logger.info(f"Embedding salvato nella cache globale per {doc.filename}")
-#                                 else:
-#                                     logger.info(f"Embedding già presente nella cache per {doc.filename}")
-#                             else:
-#                                 logger.debug(f"File {doc.filename} già marcato come cached, skip salvataggio cache")
-#
-#                         except Exception as cache_error:
-#                             logger.error(f"Errore nel salvare l'embedding nella cache: {str(cache_error)}")
-#
-#             except Exception as e:
-#                 logger.error(f"Errore nella creazione dell'indice con retry: {str(e)}")
-#                 # Fallback ulteriore
-#                 vectordb = FAISS.from_documents(split_docs, embeddings)
-#
-#     # PARTE 14: CARICAMENTO INDICE ESISTENTE SE NON CI SONO NUOVI DOCUMENTI
-#     # -------------------------------------------------------------------
-#     elif not docs or len(docs) == 0:
-#         if os.path.exists(index_path):
-#             logger.info(f"Caricamento dell'indice FAISS esistente: {index_path}")
-#             try:
-#                 vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-#             except Exception as e:
-#                 logger.error(f"Errore nel caricare l'indice FAISS: {str(e)}")
-#                 return None
-#         else:
-#             logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
-#             return None
-#
-#     # PARTE 15: SALVATAGGIO DELL'INDICE E AGGIORNAMENTO STATO
-#     # -----------------------------------------------------
-#     if vectordb:
-#         # Assicura che la directory esista e salva l'indice
-#         os.makedirs(os.path.dirname(index_path), exist_ok=True)
-#         vectordb.save_local(index_path)
-#         logger.info(f"Indice FAISS salvato in {index_path}")
-#
-#         # Log per verificare il contenuto dell'indice
-#         logger.info(f"Indice FAISS creato/aggiornato con {len(vectordb.docstore._dict)} documenti")
-#
-#         # Verifica quali file sono nell'indice
-#         unique_sources = set()
-#         file_distribution = {}
-#         url_distribution = {}
-#         note_distribution = {}
-#
-#         for doc_id, doc in vectordb.docstore._dict.items():
-#             if hasattr(doc, 'metadata') and 'source' in doc.metadata:
-#                 source = doc.metadata['source']
-#                 source_type = doc.metadata.get('type', 'unknown')
-#                 unique_sources.add(source)
-#
-#                 if source_type == 'file':
-#                     filename = os.path.basename(source)
-#                     if filename not in file_distribution:
-#                         file_distribution[filename] = 0
-#                     file_distribution[filename] += 1
-#                 elif source_type == 'url':
-#                     url = doc.metadata.get('url', 'unknown_url')
-#                     if url not in url_distribution:
-#                         url_distribution[url] = 0
-#                     url_distribution[url] += 1
-#                 elif source_type == 'note':
-#                     note_title = doc.metadata.get('title', 'unknown_note')
-#                     if note_title not in note_distribution:
-#                         note_distribution[note_title] = 0
-#                     note_distribution[note_title] += 1
-#
-#         logger.info(f"Fonti uniche nell'indice: {len(unique_sources)}")
-#
-#         # Log della distribuzione dei documenti per tipo
-#         if file_distribution:
-#             logger.info(f"Distribuzione dei chunk per file:")
-#             for filename, count in file_distribution.items():
-#                 logger.info(f"  - {filename}: {count} chunk")
-#
-#         if url_distribution:
-#             logger.info(f"Distribuzione dei chunk per URL:")
-#             for url, count in url_distribution.items():
-#                 logger.info(f"  - {url[:50]}{'...' if len(url) > 50 else ''}: {count} chunk")
-#
-#         if note_distribution:
-#             logger.info(f"Distribuzione dei chunk per note:")
-#             for note_title, count in note_distribution.items():
-#                 logger.info(f"  - {note_title}: {count} chunk")
-#
-#         # PARTE 16: AGGIORNAMENTO STATO NEL DATABASE
-#         # -----------------------------------------
-#         if project:
-#             # Usa la versione aggiornata di update_project_index_status che supporta url_ids
-#             update_project_index_status(project, document_ids, note_ids, url_ids)
-#
-#             # CORREZIONE: Forza l'aggiornamento di tutti gli URL del progetto come indicizzati
-#             # se c'è stato almeno un URL processato
-#             if url_ids:
-#                 try:
-#                     # Aggiorna tutti gli URL del progetto come indicizzati
-#                     ProjectURL.objects.filter(project=project).update(
-#                         is_indexed=True,
-#                         last_indexed_at=timezone.now()
-#                     )
-#                     logger.info(f"Tutti gli URL del progetto {project.id} sono stati marcati come indicizzati")
-#                 except Exception as e:
-#                     logger.error(f"Errore nell'aggiornamento degli URL come indicizzati: {str(e)}")
-#
-#             # Aggiorna il flag embedded per i file processati
-#             if document_ids:
-#                 for doc_id in document_ids:
-#                     try:
-#                         doc = ProjectFile.objects.get(id=doc_id)
-#                         doc.is_embedded = True
-#                         doc.last_indexed_at = timezone.now()
-#                         doc.save(update_fields=['is_embedded', 'last_indexed_at'])
-#                     except ProjectFile.DoesNotExist:
-#                         logger.warning(f"File con ID {doc_id} non trovato durante l'aggiornamento")
-#
-#             # Aggiorna il flag indexed per gli URL processati
-#             if url_ids:
-#                 for url_id in url_ids:
-#                     try:
-#                         url = ProjectURL.objects.get(id=url_id)
-#                         url.is_indexed = True
-#                         url.last_indexed_at = timezone.now()
-#                         url.save(update_fields=['is_indexed', 'last_indexed_at'])
-#                     except ProjectURL.DoesNotExist:
-#                         logger.warning(f"URL con ID {url_id} non trovato durante l'aggiornamento")
-#
-#             # Aggiorna il timestamp per le note processate
-#             if note_ids:
-#                 for note_id in note_ids:
-#                     try:
-#                         note = ProjectNote.objects.get(id=note_id)
-#                         note.last_indexed_at = timezone.now()
-#                         note.save(update_fields=['last_indexed_at'])
-#                     except ProjectNote.DoesNotExist:
-#                         logger.warning(f"Nota con ID {note_id} non trovata durante l'aggiornamento")
-#
-#     # PARTE 17: CREAZIONE DELLA CATENA RAG
-#     # -----------------------------------
-#     return create_retrieval_qa_chain(vectordb, project)
-
-
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
     Crea o aggiorna la catena RAG per un progetto.
@@ -931,22 +491,18 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     logger.debug(f"Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
 
     # PARTE 1: INIZIALIZZAZIONE VARIABILI
-    # -----------------------------------
-    cached_files = []  # Lista dei file trovati nella cache
-    document_ids = []  # ID dei documenti processati
-    note_ids = []  # ID delle note processate
-    url_ids = []  # ID degli URL processati
-    any_content_available = False  # Flag per verificare se c'è contenuto disponibile
+    cached_files = []
+    document_ids = []
+    note_ids = []
+    url_ids = []
+    any_content_available = False
 
     if project:
         # PARTE 2: CONFIGURAZIONE PERCORSI E RECUPERO DATI
-        # ----------------------------------------------
-        # Configurazione percorsi per il progetto
         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-        index_name = f"vector_index_{project.id}" # Aggiungi l'ID del progetto al nome dell'indice
+        index_name = f"vector_index_{project.id}"
         index_path = os.path.join(project_dir, index_name)
 
-        # Assicura che la directory del progetto esista
         os.makedirs(project_dir, exist_ok=True)
 
         # Recupera tutti i file, le note attive e gli URL del progetto
@@ -957,47 +513,33 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         logger.info(f"📊 URL totali nel progetto: {ProjectURL.objects.filter(project=project).count()}")
         logger.info(f"✅ URL attive (is_included_in_rag=True): {all_urls.count()}")
         logger.info(f"❌ URL disattivate: {ProjectURL.objects.filter(project=project, is_included_in_rag=False).count()}")
-        logger.info(f"📋 Lista URL attive:")
-
-        for url in all_urls:
-            logger.info(f"   - {url.url}")
-        logger.info(f"📋 Lista URL disattivate:")
-
-        for url in ProjectURL.objects.filter(project=project, is_included_in_rag=False):
-            logger.info(f"   - {url.url}")
 
         # PARTE 3: GESTIONE RICOSTRUZIONE FORZATA
-        # -------------------------------------
         if force_rebuild and os.path.exists(index_path):
             logger.info(f"Eliminazione forzata dell'indice precedente in {index_path}")
             try:
                 shutil.rmtree(index_path)
-                # Aggiorna il flag nello stato dell'indice
                 index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                 index_status.index_exists = False
                 index_status.save(update_fields=['index_exists'])
                 logger.info(f"✅ Vecchio indice eliminato con successo")
             except Exception as e:
                 logger.error(f"Errore nell'eliminazione dell'indice: {str(e)}")
-                # Continua comunque, tenteremo di sovrascrivere l'indice
 
         # PARTE 4: CARICAMENTO DEI DOCUMENTI
-        # ---------------------------------
         if docs is None:
             # Determina quali elementi devono essere elaborati
             if force_rebuild:
                 files_to_embed = all_files
-                urls_to_embed = all_urls  # Usa all_urls che ha già il filtro is_included_in_rag=True
+                urls_to_embed = all_urls
                 logger.info(f"Ricostruendo indice con {files_to_embed.count()} file, {all_active_notes.count()} note e {urls_to_embed.count()} URL")
             else:
                 files_to_embed = all_files.filter(is_embedded=False)
-                # Processa solo gli URL attivi che non sono ancora indicizzati
                 urls_to_embed = all_urls.filter(Q(is_indexed=False) | Q(last_indexed_at__isnull=True))
                 logger.info(f"File da incorporare: {files_to_embed.count()}")
                 logger.info(f"URL da incorporare: {urls_to_embed.count()}")
                 logger.info(f"Note attive trovate: {all_active_notes.count()}")
 
-            # Inizializza la lista per i documenti
             docs = []
 
             # Ottieni le impostazioni RAG per il chunking
@@ -1006,7 +548,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             chunk_overlap = rag_settings['chunk_overlap']
 
             # PARTE 5: ELABORAZIONE DEI FILE
-            # -----------------------------
             for doc_model in files_to_embed:
                 logger.debug(f"Caricamento documento per embedding: {doc_model.filename}")
 
@@ -1018,24 +559,23 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 )
 
                 if cached_embedding:
-                    logger.info(
-                        f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
+                    logger.info(f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
                     cached_files.append({
                         'doc_model': doc_model,
                         'cache_info': cached_embedding
                     })
 
-                # IMPORTANTE: Carichiamo SEMPRE il documento per l'indice
+                # Carichiamo SEMPRE il documento per l'indice
                 langchain_docs = load_document(doc_model.file_path)
 
                 if langchain_docs:
-                    any_content_available = True  # Abbiamo trovato contenuto
+                    any_content_available = True
                     # Aggiungi metadati necessari per il retrieval
                     for doc in langchain_docs:
                         doc.metadata['filename'] = doc_model.filename
                         doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
                         doc.metadata['source'] = doc_model.file_path
-                        doc.metadata['type'] = 'file'  # Tipo esplicito per distinguere la fonte
+                        doc.metadata['type'] = 'file'
 
                     docs.extend(langchain_docs)
                     document_ids.append(doc_model.id)
@@ -1043,16 +583,11 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     logger.warning(f"Nessun contenuto estratto dal file {doc_model.filename}")
 
             # PARTE 6: ELABORAZIONE DEGLI URL
-            # -------------------------------
-            # PARTE 6: ELABORAZIONE DEGLI URL
-            # -------------------------------
             for url_model in urls_to_embed:
                 logger.debug(f"Aggiunta URL all'embedding: {url_model.url}")
 
-                # Aggiungi sempre l'URL all'elenco degli URL da aggiornare
                 url_ids.append(url_model.id)
 
-                # CORREZIONE: Se l'URL non è inclusa nel RAG, saltala
                 if not url_model.is_included_in_rag:
                     logger.info(f"❌ URL {url_model.url} esclusa dal RAG, saltata nell'indicizzazione")
                     continue
@@ -1061,7 +596,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
                 # Verifica se l'URL ha contenuto
                 if not url_model.content or len(url_model.content.strip()) < 10:
-                    # Se il contenuto è insufficiente, crea un contenuto minimo
                     logger.warning(f"URL senza contenuto sufficiente: {url_model.url}, creando contenuto minimo")
                     url_content = f"""
                     URL: {url_model.url}
@@ -1071,9 +605,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     URL: {url_model.url}
                     """
                 else:
-                    # Usa il contenuto esistente
                     url_content = url_model.content
-                    any_content_available = True  # Abbiamo trovato contenuto
+                    any_content_available = True
 
                 # Se abbiamo informazioni estratte, le aggiungiamo al contenuto
                 if url_model.extracted_info:
@@ -1100,18 +633,16 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
                         if entities:
                             enhanced_content += "ENTITÀ RILEVANTI:\n"
-                            entity_text = ", ".join(entities[:10])  # Limita per non sovraccaricare
+                            entity_text = ", ".join(entities[:10])
                             enhanced_content += f"{entity_text}\n\n"
 
                         # Aggiungi il contenuto originale
                         enhanced_content += "CONTENUTO COMPLETO:\n" + url_content
-
-                        # Usa il contenuto migliorato
                         url_content = enhanced_content
                     except Exception as e:
                         logger.error(f"Errore nel processare le informazioni estratte per {url_model.url}: {str(e)}")
 
-                # IMPORTANTE: Aggiungi l'ID del progetto ai metadata per isolamento
+                # Aggiungi l'ID del progetto ai metadata per isolamento
                 url_doc = Document(
                     page_content=url_content,
                     metadata={
@@ -1120,18 +651,16 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         "title": url_model.title or "URL senza titolo",
                         "url_id": url_model.id,
                         "url": url_model.url,
-                        "project_id": project.id,  # AGGIUNTO: ID del progetto per isolamento
+                        "project_id": project.id,
                         "domain": url_model.get_domain() if hasattr(url_model, 'get_domain') else urlparse(
                             url_model.url).netloc,
                         "filename": f"URL: {url_model.title or url_model.url}",
                         "last_crawled": url_model.updated_at.isoformat() if url_model.updated_at else None
-                        # CORRETTO: usa updated_at
                     }
                 )
                 docs.append(url_doc)
 
             # PARTE 7: ELABORAZIONE DELLE NOTE
-            # -------------------------------
             for note in all_active_notes:
                 logger.debug(f"Aggiunta nota all'embedding: {note.title or 'Senza titolo'}")
 
@@ -1140,7 +669,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     logger.warning(f"Nota senza contenuto sufficiente: ID {note.id}, saltata")
                     continue
 
-                # Contenuto trovato
                 any_content_available = True
 
                 # Crea un documento LangChain per la nota
@@ -1161,7 +689,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             logger.info(f"Documenti in cache: {len(cached_files)}")
     else:
         # PARTE 8: CONFIGURAZIONE DI FALLBACK SENZA PROGETTO
-        # ------------------------------------------------
         index_name = "default_index"
         index_path = os.path.join(settings.MEDIA_ROOT, index_name)
         document_ids = None
@@ -1170,27 +697,21 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         cached_files = []
 
     # PARTE 9: INIZIALIZZAZIONE EMBEDDINGS
-    # -----------------------------------
     embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user if project else None))
     vectordb = None
 
     # PARTE 10: GESTIONE CASO NESSUN DOCUMENTO DISPONIBILE
-    # ------------------------------------------------
     if not docs or len(docs) == 0 or not any_content_available:
         logger.warning(f"Nessun documento con contenuto disponibile per l'indicizzazione")
 
         # Verifica se esiste già un indice
         if os.path.exists(index_path):
-            # Decidiamo di non eliminare l'indice esistente se non ci sono nuovi documenti
-            # a meno che force_rebuild sia True (già gestito sopra)
             logger.info(f"Nessun nuovo documento da indicizzare, mantenimento dell'indice esistente")
 
             try:
-                # Tentiamo di caricare l'indice esistente
                 vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
                 logger.info(f"Indice esistente caricato con successo")
 
-                # Aggiorna lo stato dell'indice
                 if project:
                     index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                     index_status.index_exists = True
@@ -1206,15 +727,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     except ProjectURL.DoesNotExist:
                         logger.warning(f"URL con ID {url_id} non trovato durante l'aggiornamento")
 
-                # Crea la catena RAG con l'indice esistente
                 return create_retrieval_qa_chain(vectordb, project)
             except Exception as e:
                 logger.error(f"Errore nel caricare l'indice FAISS esistente: {str(e)}")
 
-                # Non abbiamo documenti e non siamo riusciti a caricare l'indice esistente
                 logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
 
-                # Aggiorna lo stato dell'indice
                 if project:
                     index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                     index_status.index_exists = False
@@ -1222,10 +740,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
                 return None
         else:
-            # Non esiste un indice e non abbiamo documenti
             logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
 
-            # Aggiorna lo stato dell'indice
             if project:
                 index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                 index_status.index_exists = False
@@ -1234,7 +750,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             return None
 
     # PARTE 11: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS
-    # ------------------------------------------------
     logger.info(f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
 
     # Ottieni le impostazioni RAG per il chunking
@@ -1253,15 +768,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
     # Assicura che ogni chunk mantenga i metadati necessari
     for chunk in split_docs:
-        # Assicura che i metadati di base siano presenti
         if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
             filename = os.path.basename(chunk.metadata['source'])
             chunk.metadata['filename'] = filename
             chunk.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
 
-        # Assicura che il tipo di fonte sia specificato
         if 'type' not in chunk.metadata:
-            # Determina il tipo in base alla fonte
             source = chunk.metadata.get('source', '')
             if source.startswith('url_'):
                 chunk.metadata['type'] = 'url'
@@ -1271,7 +783,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 chunk.metadata['type'] = 'file'
 
     # PARTE 12: DECISIONE SU AGGIORNAMENTO O CREAZIONE NUOVO INDICE
-    # -----------------------------------------------------------
     if os.path.exists(index_path) and not force_rebuild:
         try:
             logger.info(f"Aggiornamento dell'indice FAISS esistente: {index_path}")
@@ -1280,7 +791,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             vectordb = existing_vectordb
             logger.info(f"Documenti aggiunti all'indice esistente")
 
-            # Aggiorna lo stato dell'indice
             if project:
                 index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                 index_status.index_exists = True
@@ -1288,11 +798,9 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         except Exception as e:
             logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
             logger.info(f"Creazione di un nuovo indice FAISS come fallback")
-            # Tenta di creare un nuovo indice come fallback
             try:
                 vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
 
-                # Aggiorna lo stato dell'indice
                 if project:
                     index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                     index_status.index_exists = True
@@ -1302,19 +810,16 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 return None
     else:
         # PARTE 13: CREAZIONE NUOVO INDICE
-        # -------------------------------
         logger.info(f"Creazione di un nuovo indice FAISS")
         try:
             vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
 
-            # Aggiorna lo stato dell'indice
             if project:
                 index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                 index_status.index_exists = True
                 index_status.save(update_fields=['index_exists'])
 
             # PARTE 14: SALVATAGGIO NELLA CACHE GLOBALE
-            # ---------------------------------------
             if document_ids and project:
                 for doc_id in document_ids:
                     try:
@@ -1324,7 +829,6 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         is_already_cached = any(cf['doc_model'].id == doc_id for cf in cached_files)
 
                         if not is_already_cached:
-                            # Controlla se esiste già un record nella cache prima di salvare
                             existing_cache = GlobalEmbeddingCache.objects.filter(file_hash=doc.file_hash).first()
 
                             if not existing_cache:
@@ -1348,12 +852,10 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
         except Exception as e:
             logger.error(f"Errore nella creazione dell'indice con retry: {str(e)}")
-            # Fallback ulteriore
             try:
                 logger.info("Tentativo di fallback con FAISS.from_documents diretto")
                 vectordb = FAISS.from_documents(split_docs, embeddings)
 
-                # Aggiorna lo stato dell'indice
                 if project:
                     index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                     index_status.index_exists = True
@@ -1363,9 +865,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 return None
 
     # PARTE 15: SALVATAGGIO DELL'INDICE E AGGIORNAMENTO STATO
-    # -----------------------------------------------------
     if vectordb:
-        # AGGIUNTA: Verifica e elimina il vecchio indice se esiste
+        # Verifica e elimina il vecchio indice se esiste
         if os.path.exists(index_path):
             logger.info(f"🗑️ Eliminando vecchio indice in: {index_path}")
             try:
@@ -1380,14 +881,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             vectordb.save_local(index_path)
             logger.info(f"Indice FAISS salvato in {index_path}")
 
-            # Aggiorna lo stato dell'indice
             if project:
                 index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
                 index_status.index_exists = True
                 index_status.save(update_fields=['index_exists'])
         except Exception as save_error:
             logger.error(f"Errore nel salvare l'indice FAISS: {str(save_error)}")
-            # Continuiamo comunque, poiché l'indice è stato creato in memoria
 
         # Log per verificare il contenuto dell'indice
         logger.info(f"Indice FAISS creato/aggiornato con {len(vectordb.docstore._dict)} documenti")
@@ -1439,15 +938,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 logger.info(f"  - {note_title}: {count} chunk")
 
         # PARTE 16: AGGIORNAMENTO STATO NEL DATABASE
-        # -----------------------------------------
         if project:
-            # Usa la versione aggiornata di update_project_index_status che supporta url_ids
             update_project_index_status(project, document_ids, note_ids, url_ids)
 
-            # CORREZIONE: Aggiorna solo gli URL che abbiamo effettivamente processato come indicizzati
+            # Aggiorna solo gli URL che abbiamo effettivamente processato come indicizzati
             if url_ids:
                 try:
-                    # Aggiorna gli URL specificati come indicizzati
                     for url_id in url_ids:
                         try:
                             url = ProjectURL.objects.get(id=url_id)
@@ -1482,13 +978,11 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         logger.warning(f"Nota con ID {note_id} non trovata durante l'aggiornamento")
 
     # PARTE 17: CREAZIONE DELLA CATENA RAG
-    # -----------------------------------
     result = create_retrieval_qa_chain(vectordb, project)
     if result is None:
         logger.error("Impossibile creare la catena RAG, controllo dei componenti necessario")
     return result
 
-# Modifica alla funzione get_answer_from_project per risolvere i problemi di rilevamento note e URL
 
 def get_answer_from_project(project, question):
     """
@@ -1506,19 +1000,17 @@ def get_answer_from_project(project, question):
         dict: Dizionario con la risposta, le fonti utilizzate e metadati aggiuntivi
     """
     # Importazione ritardata per evitare cicli di importazione
-    from profiles.models import ProjectFile, ProjectNote, ProjectRAGConfiguration, ProjectURL, ProjectIndexStatus
+    from profiles.models import ProjectFile, ProjectNote, ProjectURL, ProjectIndexStatus
 
     logger.info(f"Elaborazione domanda RAG per progetto {project.id}: '{question[:50]}...'")
 
     try:
         # ===== STEP 1: OTTIENI TUTTI I CONTENUTI DEL PROGETTO SENZA FILTRI =====
-        # Ottieni tutti i file, le note e gli URL senza filtri
         all_project_files = ProjectFile.objects.filter(project=project)
         all_project_notes = ProjectNote.objects.filter(project=project)
         all_project_urls = ProjectURL.objects.filter(project=project)
 
         # ===== STEP 2: SINCRONIZZA I FLAG DI INCLUSIONE/INDICIZZAZIONE =====
-        # Verifica se ci sono URL non indicizzati e note non incluse
         unindexed_urls = all_project_urls.filter(is_indexed=False)
         unincluded_notes = all_project_notes.filter(is_included_in_rag=False)
 
@@ -1531,7 +1023,6 @@ def get_answer_from_project(project, question):
             all_project_notes.update(is_included_in_rag=True, last_indexed_at=timezone.now())
 
         # ===== STEP 3: VERIFICA L'INDICE VETTORIALE =====
-        # Usa ProjectIndexStatus per capire se l'indice esiste realmente
         index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
         index_exists = index_status.index_exists
         index_path = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id),
@@ -1539,24 +1030,19 @@ def get_answer_from_project(project, question):
 
         # Verifica fisica dell'indice
         if not index_exists and os.path.exists(index_path):
-            # Se l'indice esiste fisicamente ma non è registrato, aggiorna lo stato
             index_status.index_exists = True
             index_status.save()
             index_exists = True
 
         # ===== STEP 4: OTTIENI I CONTENUTI DA USARE PER LA RICERCA =====
-        # Ora ottieni i file, note e URL con i filtri appropriati
         project_files = ProjectFile.objects.filter(project=project, is_embedded=True)
         project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
         project_urls = ProjectURL.objects.filter(project=project, is_included_in_rag=True)
 
-        #: Log per verificare quali URL vengono effettivamente utilizzate
         logger.info(f"🔍 URL disponibili per la ricerca: {project_urls.count()}")
         for url in project_urls:
             logger.info(f"   - {url.url} (is_included_in_rag: {url.is_included_in_rag})")
 
-
-        # Logga i contenuti disponibili
         logger.info(
             f"Contenuti reali: {all_project_files.count()} file, {all_project_notes.count()} note, {all_project_urls.count()} URL totali")
         logger.info(
@@ -1565,7 +1051,6 @@ def get_answer_from_project(project, question):
         # ===== STEP 5: VERIFICA SE L'INDICE NECESSITA AGGIORNAMENTO =====
         update_needed = check_project_index_update_needed(project)
 
-        # Se non ci sono contenuti o l'indice necessita di aggiornamento o non esiste
         if (
                 not project_files.exists() and not project_notes.exists() and not project_urls.exists()) or update_needed or not index_exists:
             if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
@@ -1575,7 +1060,6 @@ def get_answer_from_project(project, question):
             else:
                 logger.info("Indice necessita aggiornamento, creando nuova catena RAG")
 
-            # Forza la creazione di un nuovo indice, includendo tutti i contenuti disponibili
             qa_chain = create_project_rag_chain(
                 project=project,
                 force_rebuild=not index_exists
@@ -1597,7 +1081,6 @@ def get_answer_from_project(project, question):
                         "sources": []}
 
         # ===== STEP 6: VERIFICA FINALE DEI CONTENUTI DISPONIBILI =====
-        # Verifica finale se il progetto ha contenuti dopo l'aggiornamento
         if not project_files.exists() and not project_notes.exists() and not project_urls.exists():
             return {
                 "answer": "Il progetto non contiene documenti, note attive o URL indicizzati. Aggiungi alcuni contenuti o prova ad aggiornare l'indice.",
@@ -1608,7 +1091,6 @@ def get_answer_from_project(project, question):
             f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note, {project_urls.count()} URL")
 
         # ===== STEP 7: CONFIGURAZIONE MOTORE LLM =====
-        # Ottieni informazioni sul motore LLM usato dal progetto
         try:
             engine_info = get_project_LLM_settings(project)
             logger.info(
@@ -1617,11 +1099,9 @@ def get_answer_from_project(project, question):
             )
         except Exception as e:
             logger.warning(f"Impossibile determinare il motore del progetto: {str(e)}")
-            # Usa engine_info di fallback
             engine_info = get_project_LLM_settings(None)
 
         # ===== STEP 8: ANALISI DEL TIPO DI DOMANDA =====
-        # Verifica se la domanda è generica
         is_generic_question = any(term in question.lower() for term in [
             'tutti i documenti', 'ogni documento', 'riassumi tutti',
             'riassumi i punti principali di tutti', 'all documents',
@@ -1631,21 +1111,18 @@ def get_answer_from_project(project, question):
             'tutti i siti', 'all websites', 'all urls', 'all pages'
         ])
 
-        # Verifica se la domanda è specifica per gli URL
         is_url_question = any(term in question.lower() for term in [
             'url', 'sito web', 'pagina web', 'website', 'web page',
             'link', 'http', 'https', 'www', 'siti internet', 'web',
             'navigato', 'navigati', 'crawlati', 'esplorati'
         ])
 
-        # Verifica se la domanda è specifica per le note
         is_note_question = any(term in question.lower() for term in [
             'nota', 'note', 'appunti', 'note personali', 'annotazioni',
             'memo', 'promemoria', 'testo', 'testi', 'contenuto personale'
         ])
 
         # ===== STEP 9: CONFIGURAZIONE TEMPORANEA PER LA QUERY =====
-        # Gestisci le domande specifiche con configurazioni temporanee
         original_config = None
         temp_config_modified = False
 
@@ -1660,7 +1137,8 @@ def get_answer_from_project(project, question):
 
             # Salva la configurazione originale e modifica temporaneamente
             try:
-                project_config = ProjectRAGConfiguration.objects.get(project=project)
+                from profiles.models import ProjectRAGConfig
+                project_config = ProjectRAGConfig.objects.get(project=project)
 
                 # Salva i valori originali
                 original_config = {
@@ -1672,20 +1150,20 @@ def get_answer_from_project(project, question):
 
                 # Modifica temporaneamente per domande specifiche
                 if is_generic_question:
-                    project_config.similarity_top_k = 20  # Più documenti per domande generiche
-                    project_config.mmr_lambda = 0.1  # Più diversità per domande generiche
-                    project_config.retriever_type = 'mmr'  # Forza l'uso di MMR per diversità
+                    project_config.similarity_top_k = 20
+                    project_config.mmr_lambda = 0.1
+                    project_config.retriever_type = 'mmr'
                     project_config.similarity_threshold = 0.6
                 elif is_url_question:
                     project_config.similarity_top_k = 12
                     project_config.mmr_lambda = 0.3
                     project_config.retriever_type = 'mmr'
-                    project_config.similarity_threshold = 0.5  # Più permissivo per URL
+                    project_config.similarity_threshold = 0.5
                 elif is_note_question:
                     project_config.similarity_top_k = 8
                     project_config.mmr_lambda = 0.4
                     project_config.retriever_type = 'mmr'
-                    project_config.similarity_threshold = 0.5  # Più permissivo per note
+                    project_config.similarity_threshold = 0.5
 
                 project_config.save()
 
@@ -1696,7 +1174,6 @@ def get_answer_from_project(project, question):
                 logger.error(f"Errore nella modifica della configurazione: {str(e)}")
 
         # ===== STEP 10: ESECUZIONE DELLA RICERCA =====
-        # Esegui la ricerca e ottieni la risposta
         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
         start_time = time.time()
 
@@ -1714,7 +1191,6 @@ def get_answer_from_project(project, question):
                 """
                 result = qa_chain.invoke(enhanced_question)
             elif is_url_question:
-                # Per domande specifiche sugli URL, enfatizza i contenuti web
                 enhanced_question = f"""
                 {question}
 
@@ -1725,7 +1201,6 @@ def get_answer_from_project(project, question):
                 """
                 result = qa_chain.invoke(enhanced_question)
             elif is_note_question:
-                # Per domande specifiche sulle note
                 enhanced_question = f"""
                 {question}
 
@@ -1736,7 +1211,6 @@ def get_answer_from_project(project, question):
                 """
                 result = qa_chain.invoke(enhanced_question)
             else:
-                # Migliora la query generale
                 enhanced_question = f"""
                 {question}
 
@@ -1749,13 +1223,12 @@ def get_answer_from_project(project, question):
             logger.info(f"Ricerca completata in {processing_time} secondi")
 
         except openai.AuthenticationError as auth_error:
-            # Gestione specifica dell'errore di autenticazione API
             error_message = str(auth_error)
             logger.error(f"Errore di autenticazione API {engine_info['type']}: {error_message}")
 
             if temp_config_modified and original_config:
-                # Ripristina la configurazione originale
-                project_config = ProjectRAGConfiguration.objects.get(project=project)
+                from profiles.models import ProjectRAGConfig
+                project_config = ProjectRAGConfig.objects.get(project=project)
                 for key, value in original_config.items():
                     setattr(project_config, key, value)
                 project_config.save()
@@ -1772,13 +1245,12 @@ def get_answer_from_project(project, question):
             logger.error(f"Errore durante l'esecuzione della query: {str(query_error)}")
 
             if temp_config_modified and original_config:
-                # Ripristina la configurazione originale
-                project_config = ProjectRAGConfiguration.objects.get(project=project)
+                from profiles.models import ProjectRAGConfig
+                project_config = ProjectRAGConfig.objects.get(project=project)
                 for key, value in original_config.items():
                     setattr(project_config, key, value)
                 project_config.save()
 
-            # Verifica se l'errore è di autenticazione API anche se non catturato direttamente
             if "invalid_api_key" in str(query_error) or "authentication" in str(query_error).lower():
                 return {
                     "answer": f"Si è verificato un errore di autenticazione con l'API {engine_info['type'].upper()}. " +
@@ -1792,14 +1264,14 @@ def get_answer_from_project(project, question):
                 "answer": f"Si è verificato un errore durante l'elaborazione della tua domanda: {str(query_error)}",
                 "sources": [],
                 "error": "query_error",
-                "engine_info": engine_info  # Includi info sul motore per debugging
+                "engine_info": engine_info
             }
 
         # ===== STEP 11: RIPRISTINO DELLA CONFIGURAZIONE ORIGINALE =====
-        # Ripristina la configurazione originale se era stata modificata
         if temp_config_modified and original_config:
             try:
-                project_config = ProjectRAGConfiguration.objects.get(project=project)
+                from profiles.models import ProjectRAGConfig
+                project_config = ProjectRAGConfig.objects.get(project=project)
                 for key, value in original_config.items():
                     setattr(project_config, key, value)
                 project_config.save()
@@ -1808,7 +1280,6 @@ def get_answer_from_project(project, question):
                 logger.error(f"Errore nel ripristinare la configurazione originale: {str(e)}")
 
         # ===== STEP 12: ANALISI DELLE FONTI TROVATE =====
-        # Log fonti trovate
         source_documents = result.get('source_documents', [])
         logger.info(f"Trovate {len(source_documents)} fonti pertinenti")
 
@@ -1846,17 +1317,14 @@ def get_answer_from_project(project, question):
                     source_notes[note_title] = 0
                 source_notes[note_title] += 1
 
-        # Log della distribuzione dei risultati per tipo
         logger.info(f"File unici nei risultati: {len(unique_files)}")
         logger.info(f"URL unici nei risultati: {len(unique_urls)}")
         logger.info(f"Note uniche nei risultati: {len(unique_notes)}")
 
         # ===== STEP 13: GESTIONE DI COPERTURA INCOMPLETA =====
-        # Verifica per domande generiche se abbiamo una buona copertura
         if is_generic_question:
             warning_msg = ""
 
-            # Verifica la copertura dei file
             if project_files.count() > 0 and len(unique_files) < project_files.count():
                 all_project_files = [f.filename for f in project_files]
                 missing_files = [f for f in all_project_files if f not in unique_files]
@@ -1865,7 +1333,6 @@ def get_answer_from_project(project, question):
                     warning_msg += f" Documenti non inclusi: {', '.join(missing_files[:5])}" + (
                         "..." if len(missing_files) > 5 else "")
 
-            # Verifica la copertura degli URL
             if project_urls.count() > 0 and len(unique_urls) < project_urls.count():
                 all_project_urls = [u.url for u in project_urls]
                 missing_urls = [u for u in all_project_urls if u not in unique_urls]
@@ -1874,7 +1341,6 @@ def get_answer_from_project(project, question):
                     warning_msg += f" URL non inclusi: {', '.join([u[:30] + '...' for u in missing_urls[:3]])}" + (
                         "..." if len(missing_urls) > 3 else "")
 
-            # Verifica la copertura delle note
             if project_notes.count() > 0 and len(unique_notes) < project_notes.count():
                 all_project_notes = [n.title or f"Nota {n.id}" for n in project_notes]
                 missing_notes = [n for n in all_project_notes if n not in unique_notes]
@@ -1883,32 +1349,26 @@ def get_answer_from_project(project, question):
                     warning_msg += f" Note non incluse: {', '.join(missing_notes[:3])}" + (
                         "..." if len(missing_notes) > 3 else "")
 
-            # Aggiorna la risposta se necessario
             if warning_msg and result.get('result'):
                 result['result'] = result['result'] + warning_msg
 
         # ===== STEP 14: AVVISI PER DOMANDE SPECIFICHE SENZA RISULTATI =====
-        # Se è una domanda URL, aggiungi un avviso se non sono stati trovati risultati da URL
         if is_url_question and not unique_urls and project_urls.count() > 0:
             url_warning = "\n\nNOTA: La tua domanda sembra riguardare contenuti web, ma non sono stati trovati URL pertinenti nella ricerca."
             if result.get('result'):
                 result['result'] = result['result'] + url_warning
 
-        # Se è una domanda sulle note, aggiungi un avviso se non sono state trovate note pertinenti
         if is_note_question and not unique_notes and project_notes.count() > 0:
             note_warning = "\n\nNOTA: La tua domanda sembra riguardare le note del progetto, ma non sono state trovate note pertinenti nella ricerca."
             if result.get('result'):
                 result['result'] = result['result'] + note_warning
 
         # ===== STEP 15: GESTIONE MANCANZA DI RISULTATI =====
-        # Nessun risultato? Fornisci una risposta più utile
         if not source_documents:
             if is_url_question and project_urls.exists():
-                # Se non troviamo fonti ma sappiamo che ci sono URL
                 custom_answer = f"Non ho trovato informazioni specifiche su '{question}' negli URL indicizzati. "
                 custom_answer += f"Ho trovato {project_urls.count()} URL nel progetto: "
 
-                # Elenca gli URL nel progetto
                 url_list = [f"- {url.url} ({url.title or 'Nessun titolo'})" for url in project_urls[:5]]
                 if project_urls.count() > 5:
                     url_list.append(f"... e altri {project_urls.count() - 5} URL")
@@ -1918,11 +1378,9 @@ def get_answer_from_project(project, question):
 
                 result = {"result": custom_answer, "source_documents": []}
             elif is_note_question and project_notes.exists():
-                # Se non troviamo fonti ma sappiamo che ci sono note
                 custom_answer = f"Non ho trovato informazioni specifiche su '{question}' nelle note del progetto. "
                 custom_answer += f"Ho trovato {project_notes.count()} note nel progetto: "
 
-                # Elenca le note nel progetto
                 note_list = [f"- {note.title or f'Nota {note.id}'}" for note in project_notes[:5]]
                 if project_notes.count() > 5:
                     note_list.append(f"... e altre {project_notes.count() - 5} note")
@@ -1937,7 +1395,6 @@ def get_answer_from_project(project, question):
                     "source_documents": []}
 
         # ===== STEP 16: FORMATTAZIONE DELLA RISPOSTA FINALE =====
-        # Formatta risposta
         response = {
             "answer": result.get('result', 'Nessuna risposta trovata.'),
             "sources": [],
@@ -1966,7 +1423,6 @@ def get_answer_from_project(project, question):
                 url = metadata.get('url', '')
                 title = metadata.get('title', url)
                 filename = f"URL: {title}"
-                # Aggiungi l'URL completo ai metadati per mostrarlo all'utente
                 metadata['display_url'] = url
             else:
                 source_type = "file"
@@ -2001,7 +1457,6 @@ def get_answer_from_project(project, question):
     except Exception as e:
         logger.exception(f"Errore in get_answer_from_project: {str(e)}")
 
-        # Verifica anche qui se l'errore è correlato all'autenticazione
         if "invalid_api_key" in str(e) or "authentication" in str(e).lower():
             return {
                 "answer": "Si è verificato un errore di autenticazione con l'API. " +
@@ -2018,7 +1473,6 @@ def get_answer_from_project(project, question):
         }
 
 
-
 def create_retrieval_qa_chain(vectordb, project=None):
     """
     Configura e crea una catena RetrievalQA con le impostazioni appropriate.
@@ -2026,21 +1480,20 @@ def create_retrieval_qa_chain(vectordb, project=None):
     # Ottieni le impostazioni del motore e RAG dal database
     engine_settings = get_project_LLM_settings(project)
     rag_settings = get_project_RAG_settings(project)
+    prompt_settings = get_project_prompt_settings(project)
 
     # Configurazione prompt di sistema
-    template = rag_settings['system_prompt']
+    template = prompt_settings['prompt_text']
     logger.info(f"Generazione prompt (lunghezza base: {len(template)} caratteri)")
 
-    # Aggiungi moduli al prompt in base alle impostazioni
+    # Aggiungi moduli al prompt in base alle impostazioni RAG
     modules_added = []
 
     if rag_settings['prioritize_filenames']:
-        # Modifica questo prompt per gestire meglio le domande generiche
         template += "\n\nSe l'utente menziona il nome di un documento specifico nella domanda, dai priorità ai contenuti di quel documento nella tua risposta. Se l'utente chiede di riassumere TUTTI i documenti o fa domande generiche, assicurati di includere informazioni da OGNI documento disponibile nel contesto, elencando esplicitamente i punti principali di ciascun documento."
         modules_added.append("prioritize_filenames")
 
     if rag_settings['auto_citation']:
-        # Modifica per incoraggiare citazioni da tutti i documenti
         template += "\n\nCita la fonte specifica (nome del documento o della nota) per ogni informazione che includi nella tua risposta. Quando rispondi a domande generiche su 'tutti i documenti', cita esplicitamente ogni documento da cui provengono le informazioni."
         modules_added.append("auto_citation")
 
@@ -2064,25 +1517,19 @@ def create_retrieval_qa_chain(vectordb, project=None):
         input_variables=["context", "question"]
     )
 
-    # Configurazione del retriever per domande generiche
+    # Configurazione del retriever
     logger.info(f"Configurazione retriever: {rag_settings['retriever_type']}")
 
-    # Aumenta il numero di documenti recuperati per domande generiche
     k_value = rag_settings['similarity_top_k']
-
-    # Se la domanda è generica (contiene parole come 'tutti', 'ogni', 'riassumi tutto'),
-    # aumenta il numero di documenti recuperati
-    # Questo dovrebbe essere gestito dinamicamente, ma per ora usiamo un valore più alto
-    k_value_for_generic = k_value * 2  # Raddoppia il numero di documenti per domande generiche
+    k_value_for_generic = k_value * 2
 
     if rag_settings['retriever_type'] == 'mmr':
-        # Modifica lambda_mult per aumentare la diversità nelle domande generiche
         retriever = vectordb.as_retriever(
             search_type="mmr",
             search_kwargs={
-                "k": k_value_for_generic,  # Usa più documenti
-                "fetch_k": k_value_for_generic * 3,  # Recupera ancora più documenti per la selezione MMR
-                "lambda_mult": 0.5  # Riduci lambda per maggiore diversità (era 0.7)
+                "k": k_value_for_generic,
+                "fetch_k": k_value_for_generic * 3,
+                "lambda_mult": rag_settings['mmr_lambda']
             }
         )
     elif rag_settings['retriever_type'] == 'similarity_score_threshold':
@@ -2090,7 +1537,7 @@ def create_retrieval_qa_chain(vectordb, project=None):
             search_type="similarity_score_threshold",
             search_kwargs={
                 "k": k_value_for_generic,
-                "score_threshold": rag_settings['similarity_threshold'] * 0.8  # Abbassa la soglia per domande generiche
+                "score_threshold": rag_settings['similarity_threshold']
             }
         )
     else:  # default: similarity
@@ -2160,7 +1607,6 @@ def handle_add_note(project, content):
     # Aggiorna indice vettoriale
     try:
         logger.info(f"Aggiornamento dell'indice vettoriale dopo aggiunta nota")
-        # Forza la ricostruzione dell'indice per includere la nuova nota
         create_project_rag_chain(project, force_rebuild=False)
         logger.info(f"Indice vettoriale aggiornato con successo")
     except Exception as e:
@@ -2201,7 +1647,6 @@ def handle_update_note(project, note_id, content):
         if note.is_included_in_rag:
             try:
                 logger.info(f"Aggiornamento dell'indice vettoriale dopo modifica nota")
-                # Aggiorna l'indice per riflettere i cambiamenti nella nota
                 create_project_rag_chain(project, force_rebuild=False)
                 logger.info(f"Indice vettoriale aggiornato con successo")
             except Exception as e:
@@ -2232,14 +1677,13 @@ def handle_delete_note(project, note_id):
 
     try:
         note = ProjectNote.objects.get(id=note_id, project=project)
-        was_included = note.is_included_in_rag  # Memorizza lo stato prima dell'eliminazione
+        was_included = note.is_included_in_rag
         note.delete()
 
         # Aggiorna indice solo se la nota era inclusa nel RAG
         if was_included:
             try:
                 logger.info(f"Aggiornamento dell'indice vettoriale dopo eliminazione nota")
-                # Forza la ricostruzione completa dell'indice poiché un documento è stato rimosso
                 create_project_rag_chain(project, force_rebuild=True)
                 logger.info(f"Indice vettoriale aggiornato con successo")
             except Exception as e:
@@ -2277,7 +1721,7 @@ def handle_toggle_note_inclusion(project, note_id, is_included):
         note.is_included_in_rag = is_included
         note.save()
 
-        # AGGIUNTA: Log di attivazione/disattivazione per debug
+        # Log di attivazione/disattivazione per debug
         if is_included:
             logger.info(f"✅ NOTA ATTIVATA per ricerca AI: {note.title or 'Senza titolo'} (ID: {note_id})")
         else:
@@ -2287,7 +1731,6 @@ def handle_toggle_note_inclusion(project, note_id, is_included):
         if state_changed:
             try:
                 logger.info(f"Aggiornamento dell'indice vettoriale dopo cambio stato nota")
-                # L'inclusione/esclusione richiede una ricostruzione completa dell'indice
                 create_project_rag_chain(project, force_rebuild=True)
                 logger.info(f"Indice vettoriale aggiornato con successo")
             except Exception as e:
@@ -2388,8 +1831,6 @@ def handle_project_file_upload(project, file, project_dir, file_path=None):
     return project_file
 
 
-
-
 def cleanup_duplicate_urls_in_index(project):
     """
     Rimuove gli URL duplicati o obsoleti dall'indice FAISS.
@@ -2448,7 +1889,7 @@ def remove_url_from_index(project, url_id):
     """
     try:
         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
-        index_name = "vector_index"
+        index_name = f"vector_index_{project.id}"
         index_path = os.path.join(project_dir, index_name)
 
         if not os.path.exists(index_path):

@@ -268,83 +268,6 @@ def copy_embedding_to_project_index(project, cache_info, project_index_path):
         logger.error(f"Errore nella copia dell'embedding dalla cache globale al progetto {project.id}: {str(e)}")
         return False
 
-# def check_project_index_update_needed(project):
-#     """
-#     Verifica se l'indice FAISS del progetto deve essere aggiornato.
-#
-#     Controlla vari fattori che potrebbero richiedere un aggiornamento dell'indice:
-#     - Documenti non ancora incorporati
-#     - Cambiamento nel numero di documenti o note
-#     - Note modificate dopo l'ultimo aggiornamento dell'indice
-#     - Cambio nel contenuto delle note (tramite hash)
-#
-#     Questa funzione fornisce un modo efficiente per determinare quando
-#     è necessario aggiornare l'indice vettoriale, evitando operazioni costose
-#     quando non sono necessarie.
-#
-#     Args:
-#         project: Oggetto Project
-#
-#     Returns:
-#         bool: True se l'indice deve essere aggiornato, False altrimenti
-#     """
-#     # Importa qui per evitare l'importazione circolare
-#     from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus
-#
-#     # Ottieni documenti e note attive del progetto
-#     documents = ProjectFile.objects.filter(project=project)
-#     active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-#
-#     logger.debug(f"Controllo aggiornamento indice per progetto {project.id}: "
-#                  f"{documents.count()} documenti, {active_notes.count()} note attive")
-#
-#     # Se non ci sono né documenti né note attive, non è necessario un indice
-#     if not documents.exists() and not active_notes.exists():
-#         logger.debug(f"Nessun documento o nota per il progetto {project.id}, indice non necessario")
-#         return False
-#
-#     # Verifica se esistono documenti non ancora incorporati
-#     non_embedded_docs = documents.filter(is_embedded=False)
-#     if non_embedded_docs.exists():
-#         logger.debug(f"Rilevati {non_embedded_docs.count()} documenti non embedded per il progetto {project.id}")
-#         return True
-#
-#     # Controlla lo stato dell'indice nel database
-#     try:
-#         index_status = ProjectIndexStatus.objects.get(project=project)
-#
-#         # Se il numero totale di documenti e note è cambiato
-#         total_count = documents.count() + active_notes.count()
-#         if index_status.documents_count != total_count:
-#             logger.debug(f"Numero di documenti/note cambiato: {index_status.documents_count} → {total_count}")
-#             return True
-#
-#         # Se una nota è stata modificata dopo l'ultimo aggiornamento dell'indice
-#         latest_note_update = active_notes.order_by('-updated_at').first()
-#         if latest_note_update and latest_note_update.updated_at > index_status.last_updated:
-#             logger.debug(f"Note modificate dopo l'ultimo aggiornamento dell'indice")
-#             return True
-#
-#         # Verifica hash delle note (cambio contenuto)
-#         current_notes_hash = ""
-#         for note in active_notes:
-#             note_hash = hashlib.sha256(f"{note.id}_{note.content}_{note.is_included_in_rag}".encode()).hexdigest()
-#             current_notes_hash += note_hash
-#
-#         current_hash = hashlib.sha256(current_notes_hash.encode()).hexdigest()
-#
-#         if hasattr(index_status, 'notes_hash') and index_status.notes_hash != current_hash:
-#             logger.debug(f"Hash delle note cambiato")
-#             return True
-#
-#         # Indice aggiornato
-#         logger.debug(f"Indice aggiornato per il progetto {project.id}")
-#         return False
-#
-#     except ProjectIndexStatus.DoesNotExist:
-#         # Se non esiste un record per lo stato dell'indice, è necessario crearlo
-#         logger.debug(f"Nessun record di stato dell'indice per il progetto {project.id}")
-#         return True
 
 
 def check_project_index_update_needed(project):
@@ -735,5 +658,4 @@ def clear_embedding_cache():
     GlobalEmbeddingCache.objects.all().delete()
 
     logger.info(f"Cache degli embedding cancellata: {file_count} file eliminati, {db_count} record DB eliminati")
-
     return file_count, db_count

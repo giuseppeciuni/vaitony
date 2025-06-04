@@ -123,6 +123,17 @@
         border-radius: 0.5rem;
         margin-bottom: 1rem;
         overflow: hidden;
+        transition: all 0.2s;
+    }
+
+    .provider-item:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+
+    .provider-item.selected {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
     }
 
     .provider-header {
@@ -148,10 +159,26 @@
         align-items: center;
         gap: 0.5rem;
         font-weight: 500;
+        flex-grow: 1;
     }
 
     .provider-icon {
         font-size: 1.25rem;
+    }
+
+    .provider-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .status-valid {
+        color: #198754;
+    }
+
+    .status-invalid {
+        color: #dc3545;
     }
 
     .engine-list {
@@ -167,6 +194,7 @@
         background: #ffffff;
         border: 1px solid #e9ecef;
         cursor: pointer;
+        transition: all 0.2s;
     }
 
     .engine-item:last-child {
@@ -181,6 +209,21 @@
     .engine-item.selected {
         border-color: #0d6efd;
         background: #e8f0fe;
+    }
+
+    .engine-name {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .engine-description {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin: 0;
+    }
+
+    .engine-badges {
+        margin-top: 0.5rem;
     }
 
     /* RAG Presets */
@@ -253,16 +296,6 @@
         color: #ffc107;
     }
 
-    .preset-max-precision .preset-header {
-        background: rgba(13, 202, 240, 0.1);
-        color: #0dcaf0;
-    }
-
-    .preset-max-speed .preset-header {
-        background: rgba(220, 53, 69, 0.1);
-        color: #dc3545;
-    }
-
     .preset-extended-context .preset-header {
         background: rgba(111, 66, 193, 0.1);
         color: #6f42c1;
@@ -282,6 +315,14 @@
         border-radius: 0.5rem;
         padding: 1.5rem;
         color: #842029;
+    }
+
+    .invalid-api-alert {
+        background: #fff3cd;
+        border: 1px solid #ffecb5;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        color: #664d03;
     }
 
     /* Loading spinner */
@@ -395,264 +436,276 @@
                 </div>
             </div>
 
-            {% if has_api_keys %}
-            <div class="advanced-section">
-                <div class="advanced-hint">
-                    <p>
-                        <i class="bi bi-info-circle me-2"></i>
-                        Le impostazioni predefinite sono ottimali per la maggior parte dei casi.
-                        Modifica solo se hai esigenze specifiche.
-                    </p>
+            {% if not has_api_keys %}
+                <div class="advanced-section">
+                    <div class="no-api-alert">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Nessuna Chiave API Configurata</h5>
+                        <p class="mb-3">
+                            Per creare un progetto, devi prima configurare almeno una chiave API per un provider LLM.
+                        </p>
+                        <a href="{% url 'ia_engine' %}" class="btn btn-primary">
+                            <i class="bi bi-key me-2"></i>Configura Chiavi API
+                        </a>
+                    </div>
                 </div>
+            {% elif not has_valid_api_keys %}
+                <div class="advanced-section">
+                    <div class="invalid-api-alert">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Nessuna Chiave API Valida</h5>
+                        <p class="mb-3">
+                            Hai configurato delle chiavi API ma nessuna risulta valida.
+                            Verifica e aggiorna le tue chiavi API nelle impostazioni.
+                        </p>
+                        <a href="{% url 'ia_engine' %}" class="btn btn-warning">
+                            <i class="bi bi-key me-2"></i>Verifica Chiavi API
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="advanced-section">
+                    <div class="advanced-hint">
+                        <p>
+                            <i class="bi bi-info-circle me-2"></i>
+                            Le impostazioni predefinite sono ottimali per la maggior parte dei casi.
+                            Modifica solo se hai esigenze specifiche.
+                        </p>
+                    </div>
 
-                <div class="accordion" id="advancedSettingsAccordion">
-                    <!-- Motore IA -->
-                    <div class="accordion-item custom-accordion mb-3">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#collapseEngine">
-                                <i class="bi bi-cpu me-2"></i>
-                                Motore IA
-                                <span class="ms-2 text-muted-sm" id="selected-engine-display">
-                                    (Default: {{ default_engine_name|default:"Auto" }})
-                                </span>
-                            </button>
-                        </h2>
-                        <div id="collapseEngine" class="accordion-collapse collapse"
-                             data-bs-parent="#advancedSettingsAccordion">
-                            <div class="accordion-body">
-                                <p class="text-muted mb-3">
-                                    Seleziona il motore IA che desideri utilizzare per questo progetto.
-                                </p>
+                    <div class="accordion" id="advancedSettingsAccordion">
+                        <!-- Motore IA -->
+                        <div class="accordion-item custom-accordion mb-3">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#collapseEngine">
+                                    <i class="bi bi-cpu me-2"></i>
+                                    Motore IA
+                                    <span class="ms-2 text-muted-sm" id="selected-engine-display">
+                                        {% if default_engine %}
+                                            (Default: {{ default_engine.name }})
+                                        {% else %}
+                                            (Nessun engine selezionato)
+                                        {% endif %}
+                                    </span>
+                                </button>
+                            </h2>
+                            <div id="collapseEngine" class="accordion-collapse collapse"
+                                 data-bs-parent="#advancedSettingsAccordion">
+                                <div class="accordion-body">
+                                    <p class="text-muted mb-3">
+                                        Seleziona il motore IA che desideri utilizzare per questo progetto.
+                                        Vengono mostrati solo i provider con chiavi API valide.
+                                    </p>
 
-                                <div class="provider-list">
-                                    {% for provider in available_providers %}
-                                    <div class="provider-item">
-                                        <div class="provider-header" onclick="toggleProvider({{ provider.id }})">
-                                            <input type="radio" name="provider" value="{{ provider.id }}"
-                                                   id="provider-{{ provider.id }}"
-                                                   {% if provider.has_default_engine %}checked{% endif %}>
-                                            <div class="provider-name">
-                                                {% if provider.logo %}
-                                                <img src="{{ provider.logo.url }}" alt="{{ provider.name }}"
-                                                     style="height: 24px;">
-                                                {% else %}
-                                                <i class="bi bi-cpu provider-icon"></i>
-                                                {% endif %}
-                                                {{ provider.name }}
-                                                {% if provider.has_default_engine %}
-                                                <span class="badge-default">Default</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        <div class="engine-list" id="engines-{{ provider.id }}">
-                                            {% for engine in provider.engines %}
-                                            <div class="engine-item {% if engine.is_default %}selected{% endif %}"
-                                                 onclick="selectEngine({{ engine.id }}, '{{ engine.name }}')">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio"
-                                                           name="engine_id" value="{{ engine.id }}"
-                                                           id="engine-{{ engine.id }}"
-                                                           {% if engine.is_default %}checked{% endif %}>
-                                                    <label class="form-check-label" for="engine-{{ engine.id }}">
-                                                        <strong>{{ engine.name }}</strong>
-                                                        {% if engine.supports_vision %}
-                                                        <span class="badge bg-info ms-2">Vision</span>
+                                    {% if valid_providers %}
+                                        <div class="provider-list">
+                                            {% for provider in valid_providers %}
+                                            <div class="provider-item" data-provider-id="{{ provider.id }}">
+                                                <div class="provider-header" onclick="toggleProvider({{ provider.id }})">
+                                                    <input type="radio" name="provider_id" value="{{ provider.id }}"
+                                                           id="provider-{{ provider.id }}"
+                                                           {% if forloop.first %}checked{% endif %}>
+                                                    <div class="provider-name">
+                                                        {% if provider.logo %}
+                                                        <img src="{{ provider.logo.url }}" alt="{{ provider.name }}"
+                                                             style="height: 24px;">
+                                                        {% else %}
+                                                        <i class="bi bi-cpu provider-icon"></i>
                                                         {% endif %}
-                                                        <p class="text-muted mb-0 small">{{ engine.description }}</p>
-                                                    </label>
+                                                        {{ provider.name }}
+                                                        {% if forloop.first %}
+                                                        <span class="badge-default">Default</span>
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="provider-status status-valid">
+                                                        <i class="bi bi-check-circle-fill"></i>
+                                                        Chiave Valida
+                                                    </div>
+                                                </div>
+                                                <div class="engine-list" id="engines-{{ provider.id }}"
+                                                     {% if forloop.first %}style="display: block;"{% endif %}>
+                                                    {% for engine in provider.engines %}
+                                                    <div class="engine-item {% if engine == provider.default_engine %}selected{% endif %}"
+                                                         onclick="selectEngine({{ engine.id }}, '{{ engine.name }}', {{ provider.id }})">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="radio"
+                                                                   name="engine_id" value="{{ engine.id }}"
+                                                                   id="engine-{{ engine.id }}"
+                                                                   {% if engine == provider.default_engine and forloop.parentloop.first %}checked{% endif %}>
+                                                            <label class="form-check-label w-100" for="engine-{{ engine.id }}">
+                                                                <div class="engine-name">
+                                                                    {{ engine.name }}
+                                                                    {% if engine.is_default %}
+                                                                    <span class="badge bg-primary ms-2">Default</span>
+                                                                    {% endif %}
+                                                                </div>
+                                                                {% if engine.description %}
+                                                                <p class="engine-description">{{ engine.description }}</p>
+                                                                {% endif %}
+                                                                <div class="engine-badges">
+                                                                    {% if engine.supports_vision %}
+                                                                    <span class="badge bg-info me-1">Vision</span>
+                                                                    {% endif %}
+                                                                    {% if engine.supports_functions %}
+                                                                    <span class="badge bg-success me-1">Functions</span>
+                                                                    {% endif %}
+                                                                    <span class="badge bg-secondary">{{ engine.context_window }} tokens</span>
+                                                                </div>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
                                                 </div>
                                             </div>
                                             {% endfor %}
                                         </div>
-                                    </div>
-                                    {% endfor %}
+                                    {% else %}
+                                        <div class="alert alert-warning">
+                                            <i class="bi bi-exclamation-triangle me-2"></i>
+                                            Nessun provider con chiavi API valide trovato.
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Configurazione RAG -->
-                    <div class="accordion-item custom-accordion">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#collapseRAG">
-                                <i class="bi bi-search me-2"></i>
-                                Configurazione RAG
-                                <span class="ms-2 text-muted-sm" id="selected-rag-display">
-                                    (Default: Bilanciato)
-                                </span>
-                            </button>
-                        </h2>
-                        <div id="collapseRAG" class="accordion-collapse collapse"
-                             data-bs-parent="#advancedSettingsAccordion">
-                            <div class="accordion-body">
-                                <div class="rag-info">
-                                    <h6><i class="bi bi-info-circle me-2"></i>Cos'è il RAG?</h6>
-                                    <p class="mb-0">
-                                        Il <strong>Retrieval Augmented Generation (RAG)</strong> è una tecnologia
-                                        che migliora le risposte dell'IA combinando la generazione di testo con
-                                        il recupero di informazioni dai tuoi documenti. Questo aumenta l'accuratezza
-                                        e la pertinenza delle risposte.
-                                    </p>
-                                </div>
+                        <!-- Configurazione RAG -->
+                        <div class="accordion-item custom-accordion">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#collapseRAG">
+                                    <i class="bi bi-search me-2"></i>
+                                    Configurazione RAG
+                                    <span class="ms-2 text-muted-sm" id="selected-rag-display">
+                                        (Default: Bilanciato)
+                                    </span>
+                                </button>
+                            </h2>
+                            <div id="collapseRAG" class="accordion-collapse collapse"
+                                 data-bs-parent="#advancedSettingsAccordion">
+                                <div class="accordion-body">
+                                    <div class="rag-info">
+                                        <h6><i class="bi bi-info-circle me-2"></i>Cos'è il RAG?</h6>
+                                        <p class="mb-0">
+                                            Il <strong>Retrieval Augmented Generation (RAG)</strong> è una tecnologia
+                                            che migliora le risposte dell'IA combinando la generazione di testo con
+                                            il recupero di informazioni dai tuoi documenti. Questo aumenta l'accuratezza
+                                            e la pertinenza delle risposte.
+                                        </p>
+                                    </div>
 
-                                <div class="rag-presets">
-                                    <!-- Preset Bilanciato -->
-                                    <div class="preset-card preset-balanced selected" id="preset-balanced">
-                                        <div class="preset-header">
-                                            Bilanciato
-                                            <span class="badge-default">Default</span>
-                                        </div>
-                                        <div class="preset-body">
-                                            <p class="small mb-2">Configurazione equilibrata per la maggior parte dei casi d'uso.</p>
-                                            <div class="preset-specs">
-                                                <div>Chunk: 500</div>
-                                                <div>Overlap: 50</div>
-                                                <div>Top K: 6</div>
-                                                <div>Similarità: 0.7</div>
+                                    <div class="rag-presets">
+                                        <!-- Preset Bilanciato -->
+                                        <div class="preset-card preset-balanced selected" id="preset-balanced">
+                                            <div class="preset-header">
+                                                Bilanciato
+                                                <span class="badge-default">Default</span>
                                             </div>
-                                            <input type="radio" name="rag_preset" value="balanced" checked hidden>
+                                            <div class="preset-body">
+                                                <p class="small mb-2">Configurazione equilibrata per la maggior parte dei casi d'uso.</p>
+                                                <div class="preset-specs">
+                                                    <div>Chunk: 500</div>
+                                                    <div>Overlap: 50</div>
+                                                    <div>Top K: 6</div>
+                                                    <div>Similarità: 0.7</div>
+                                                </div>
+                                                <input type="radio" name="rag_preset" value="balanced" checked hidden>
+                                            </div>
+                                        </div>
+
+                                        <!-- Preset Alta Precisione -->
+                                        <div class="preset-card preset-high-precision" id="preset-high_precision">
+                                            <div class="preset-header">
+                                                Alta Precisione
+                                            </div>
+                                            <div class="preset-body">
+                                                <p class="small mb-2">Ottimizzato per documenti tecnici e risposte precise.</p>
+                                                <div class="preset-specs">
+                                                    <div>Chunk: 300</div>
+                                                    <div>Overlap: 100</div>
+                                                    <div>Top K: 10</div>
+                                                    <div>Similarità: 0.8</div>
+                                                </div>
+                                                <input type="radio" name="rag_preset" value="high_precision" hidden>
+                                            </div>
+                                        </div>
+
+                                        <!-- Preset Velocità -->
+                                        <div class="preset-card preset-speed" id="preset-speed">
+                                            <div class="preset-header">
+                                                Velocità
+                                            </div>
+                                            <div class="preset-body">
+                                                <p class="small mb-2">Per risposte rapide con buona precisione.</p>
+                                                <div class="preset-specs">
+                                                    <div>Chunk: 800</div>
+                                                    <div>Overlap: 20</div>
+                                                    <div>Top K: 4</div>
+                                                    <div>Similarità: 0.6</div>
+                                                </div>
+                                                <input type="radio" name="rag_preset" value="speed" hidden>
+                                            </div>
+                                        </div>
+
+                                        <!-- Preset Contesto Esteso -->
+                                        <div class="preset-card preset-extended-context" id="preset-extended_context">
+                                            <div class="preset-header">
+                                                Contesto Esteso
+                                            </div>
+                                            <div class="preset-body">
+                                                <p class="small mb-2">Per connessioni ampie tra documenti diversi.</p>
+                                                <div class="preset-specs">
+                                                    <div>Chunk: 1000</div>
+                                                    <div>Overlap: 200</div>
+                                                    <div>Top K: 12</div>
+                                                    <div>Similarità: 0.6</div>
+                                                </div>
+                                                <input type="radio" name="rag_preset" value="extended_context" hidden>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- Preset Alta Precisione -->
-                                    <div class="preset-card preset-high-precision" id="preset-high-precision">
-                                        <div class="preset-header">
-                                            Alta Precisione
-                                        </div>
-                                        <div class="preset-body">
-                                            <p class="small mb-2">Ottimizzato per documenti tecnici e risposte precise.</p>
-                                            <div class="preset-specs">
-                                                <div>Chunk: 400</div>
-                                                <div>Overlap: 80</div>
-                                                <div>Top K: 8</div>
-                                                <div>Similarità: 0.8</div>
-                                            </div>
-                                            <input type="radio" name="rag_preset" value="high_precision" hidden>
-                                        </div>
-                                    </div>
+                                    <div class="mt-4">
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="collapse" data-bs-target="#ragGuide">
+                                            <i class="bi bi-question-circle me-1"></i>Guida alla scelta
+                                        </button>
 
-                                    <!-- Preset Velocità -->
-                                    <div class="preset-card preset-speed" id="preset-speed">
-                                        <div class="preset-header">
-                                            Velocità
-                                        </div>
-                                        <div class="preset-body">
-                                            <p class="small mb-2">Per risposte rapide con buona precisione.</p>
-                                            <div class="preset-specs">
-                                                <div>Chunk: 700</div>
-                                                <div>Overlap: 30</div>
-                                                <div>Top K: 4</div>
-                                                <div>Similarità: 0.6</div>
-                                            </div>
-                                            <input type="radio" name="rag_preset" value="speed" hidden>
-                                        </div>
-                                    </div>
-
-                                    <!-- Preset Massima Precisione -->
-                                    <div class="preset-card preset-max-precision" id="preset-max-precision">
-                                        <div class="preset-header">
-                                            Massima Precisione
-                                        </div>
-                                        <div class="preset-body">
-                                            <p class="small mb-2">Per massima accuratezza e dettaglio nelle risposte.</p>
-                                            <div class="preset-specs">
-                                                <div>Chunk: 300</div>
-                                                <div>Overlap: 100</div>
-                                                <div>Top K: 10</div>
-                                                <div>Similarità: 0.85</div>
-                                            </div>
-                                            <input type="radio" name="rag_preset" value="max_precision" hidden>
-                                        </div>
-                                    </div>
-
-                                    <!-- Preset Massima Velocità -->
-                                    <div class="preset-card preset-max-speed" id="preset-max-speed">
-                                        <div class="preset-header">
-                                            Massima Velocità
-                                        </div>
-                                        <div class="preset-body">
-                                            <p class="small mb-2">Configurazione per risposte estremamente rapide.</p>
-                                            <div class="preset-specs">
-                                                <div>Chunk: 800</div>
-                                                <div>Overlap: 20</div>
-                                                <div>Top K: 3</div>
-                                                <div>Similarità: 0.6</div>
-                                            </div>
-                                            <input type="radio" name="rag_preset" value="max_speed" hidden>
-                                        </div>
-                                    </div>
-
-                                    <!-- Preset Contesto Esteso -->
-                                    <div class="preset-card preset-extended-context" id="preset-extended-context">
-                                        <div class="preset-header">
-                                            Contesto Esteso
-                                        </div>
-                                        <div class="preset-body">
-                                            <p class="small mb-2">Per connessioni ampie tra documenti diversi.</p>
-                                            <div class="preset-specs">
-                                                <div>Chunk: 600</div>
-                                                <div>Overlap: 150</div>
-                                                <div>Top K: 12</div>
-                                                <div>Similarità: 0.5</div>
-                                            </div>
-                                            <input type="radio" name="rag_preset" value="extended_context" hidden>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="mt-4">
-                                    <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="collapse" data-bs-target="#ragGuide">
-                                        <i class="bi bi-question-circle me-1"></i>Guida alla scelta
-                                    </button>
-
-                                    <div class="collapse mt-3" id="ragGuide">
-                                        <div class="card">
-                                            <div class="card-body">
-                                                <h6>Come scegliere la configurazione RAG giusta?</h6>
-                                                <table class="table table-sm mt-3">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Configurazione</th>
-                                                            <th>Quando usarla</th>
-                                                            <th>Esempi di documenti</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <tr>
-                                                            <td>Bilanciato</td>
-                                                            <td>Uso generale</td>
-                                                            <td>Documenti misti, report</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td>Alta Precisione</td>
-                                                            <td>Accuratezza prioritaria</td>
-                                                            <td>Manuali tecnici, normative</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td>Velocità</td>
-                                                            <td>Risposte rapide</td>
-                                                            <td>Testi semplici, chat</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td>Massima Precisione</td>
-                                                            <td>Ogni dettaglio conta</td>
-                                                            <td>Contratti, ricerca scientifica</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td>Massima Velocità</td>
-                                                            <td>Velocità critica</td>
-                                                            <td>Documenti brevi, FAQ</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td>Contesto Esteso</td>
-                                                            <td>Collegamenti complessi</td>
-                                                            <td>Ricerche, analisi cross-documento</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
+                                        <div class="collapse mt-3" id="ragGuide">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <h6>Come scegliere la configurazione RAG giusta?</h6>
+                                                    <table class="table table-sm mt-3">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Configurazione</th>
+                                                                <th>Quando usarla</th>
+                                                                <th>Esempi di documenti</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>Bilanciato</td>
+                                                                <td>Uso generale</td>
+                                                                <td>Documenti misti, report</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>Alta Precisione</td>
+                                                                <td>Accuratezza prioritaria</td>
+                                                                <td>Manuali tecnici, normative</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>Velocità</td>
+                                                                <td>Risposte rapide</td>
+                                                                <td>Testi semplici, chat</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>Contesto Esteso</td>
+                                                                <td>Collegamenti complessi</td>
+                                                                <td>Ricerche, analisi cross-documento</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -661,19 +714,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-            {% else %}
-            <div class="advanced-section">
-                <div class="no-api-alert">
-                    <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Nessuna Chiave API Configurata</h5>
-                    <p class="mb-3">
-                        Per creare un progetto, devi prima configurare almeno una chiave API per un provider LLM.
-                    </p>
-                    <a href="{% url 'ia_engine' %}" class="btn btn-primary">
-                        <i class="bi bi-key me-2"></i>Configura Chiavi API
-                    </a>
-                </div>
-            </div>
             {% endif %}
 
             <div class="card-footer">
@@ -682,7 +722,7 @@
                         <i class="bi bi-arrow-left me-2"></i>Annulla
                     </a>
                     <button type="submit" class="btn btn-primary" id="create-btn"
-                            {% if not has_api_keys %}disabled{% endif %}>
+                            {% if not has_valid_api_keys %}disabled{% endif %}>
                         <i class="bi bi-plus-circle me-2"></i>Crea Progetto
                     </button>
                 </div>
@@ -711,7 +751,8 @@ class ProjectCreator {
         this.loadingOverlay = document.getElementById('loading-overlay');
 
         // Stato iniziale
-        this.hasApiKeys = {% if has_api_keys %}true{% else %}false{% endif %};
+        this.hasValidApiKeys = {% if has_valid_api_keys %}true{% else %}false{% endif %};
+        this.validProviders = {{ valid_providers|length|default:0 }};
 
         // Inizializza i gestori eventi
         this.initializeEventListeners();
@@ -743,8 +784,6 @@ class ProjectCreator {
         const accordionButtons = document.querySelectorAll('.accordion-button');
         accordionButtons.forEach(button => {
             button.addEventListener('click', () => {
-                // Bootstrap gestisce già l'apertura/chiusura
-                // Aggiorniamo solo il testo dei pulsanti se necessario
                 setTimeout(() => this.updateAccordionDisplay(), 300);
             });
         });
@@ -755,60 +794,70 @@ class ProjectCreator {
         this.validateForm();
 
         // Imposta lo stato iniziale dell'interfaccia
-        this.setupInitialProviders();
-        this.setupInitialEngine();
+        if (this.hasValidApiKeys && this.validProviders > 0) {
+            this.setupInitialProviders();
+            this.setupInitialEngine();
+        }
         this.setupInitialRAG();
     }
 
     setupInitialProviders() {
-        // Trova il provider di default selezionato
-        const defaultProvider = document.querySelector('input[name="provider"]:checked');
-        if (defaultProvider) {
-            const providerId = defaultProvider.value;
-            const providerHeader = defaultProvider.closest('.provider-header');
+        // Il primo provider è già selezionato e aperto dal template
+        const firstProvider = document.querySelector('.provider-item[data-provider-id]');
+        if (firstProvider) {
+            const providerId = firstProvider.dataset.providerId;
+            const providerHeader = firstProvider.querySelector('.provider-header');
             const engineList = document.getElementById(`engines-${providerId}`);
 
-            // Apri il provider di default
             if (providerHeader && engineList) {
                 providerHeader.classList.add('active');
-                engineList.style.display = 'block';
+                firstProvider.classList.add('selected');
             }
         }
     }
 
     setupInitialEngine() {
-        // Trova l'engine selezionato di default
+        // L'engine di default è già selezionato dal template
         const selectedEngine = document.querySelector('input[name="engine_id"]:checked');
         if (selectedEngine) {
             const engineItem = selectedEngine.closest('.engine-item');
-            const engineName = engineItem.querySelector('strong').textContent;
-
-            // Aggiorna il display
+            const engineName = engineItem.querySelector('.engine-name').textContent.trim();
             this.updateEngineDisplay(engineName);
         }
     }
 
     setupInitialRAG() {
         // Il preset di default è già selezionato nel HTML
-        const selectedPreset = document.querySelector('.preset-card.selected');
-        if (selectedPreset) {
-            const presetName = selectedPreset.querySelector('.preset-header').firstChild.textContent.trim();
-            this.updateRAGDisplay(presetName);
-        }
+        this.updateRAGDisplay('Bilanciato');
     }
 
     validateForm() {
         const projectName = this.projectNameInput.value.trim();
-        const isValid = projectName.length > 0 && this.hasApiKeys;
+        const isValid = projectName.length > 0 && this.hasValidApiKeys;
 
         this.createBtn.disabled = !isValid;
+
+        // Aggiorna il tooltip del pulsante
+        if (!projectName.length) {
+            this.createBtn.title = 'Inserisci un nome per il progetto';
+        } else if (!this.hasValidApiKeys) {
+            this.createBtn.title = 'Configura almeno una chiave API valida';
+        } else {
+            this.createBtn.title = '';
+        }
+
         return isValid;
     }
 
     handleFormSubmit(e) {
         if (!this.validateForm()) {
             e.preventDefault();
-            alert('Per favore, inserisci un nome per il progetto.');
+            if (!this.projectNameInput.value.trim()) {
+                alert('Per favore, inserisci un nome per il progetto.');
+                this.projectNameInput.focus();
+            } else if (!this.hasValidApiKeys) {
+                alert('Per favore, configura almeno una chiave API valida prima di creare il progetto.');
+            }
             return false;
         }
 
@@ -820,38 +869,67 @@ class ProjectCreator {
     }
 
     handleProviderClick(e) {
+        // Previeni il click se è sul radio button
+        if (e.target.type === 'radio') {
+            return;
+        }
+
         const header = e.currentTarget;
-        const providerId = header.querySelector('input[type="radio"]').value;
+        const providerItem = header.closest('.provider-item');
+        const providerId = providerItem.dataset.providerId;
+        const providerRadio = header.querySelector('input[type="radio"]');
         const engineList = document.getElementById(`engines-${providerId}`);
 
-        // Chiudi tutti gli altri provider
-        document.querySelectorAll('.provider-header').forEach(h => {
-            if (h !== header) {
-                h.classList.remove('active');
-                const otherId = h.querySelector('input[type="radio"]').value;
+        // Rimuovi selezione da tutti gli altri provider
+        document.querySelectorAll('.provider-item').forEach(item => {
+            if (item !== providerItem) {
+                item.classList.remove('selected');
+                const otherHeader = item.querySelector('.provider-header');
+                const otherId = item.dataset.providerId;
                 const otherEngineList = document.getElementById(`engines-${otherId}`);
-                if (otherEngineList) {
+
+                if (otherHeader && otherEngineList) {
+                    otherHeader.classList.remove('active');
                     otherEngineList.style.display = 'none';
                 }
             }
         });
 
         // Toggle del provider corrente
-        if (header.classList.contains('active')) {
+        const isActive = header.classList.contains('active');
+
+        if (isActive) {
+            // Chiudi se già aperto
             header.classList.remove('active');
+            providerItem.classList.remove('selected');
             engineList.style.display = 'none';
         } else {
+            // Apri e seleziona
             header.classList.add('active');
+            providerItem.classList.add('selected');
             engineList.style.display = 'block';
-            // Seleziona automaticamente il radio button del provider
-            header.querySelector('input[type="radio"]').checked = true;
+            providerRadio.checked = true;
+
+            // Seleziona automaticamente l'engine di default
+            const defaultEngine = engineList.querySelector('input[type="radio"]:checked');
+            if (defaultEngine) {
+                const engineItem = defaultEngine.closest('.engine-item');
+                const engineName = engineItem.querySelector('.engine-name').textContent.trim();
+                this.updateEngineDisplay(engineName);
+
+                // Rimuovi selezione da altri engine e seleziona questo
+                document.querySelectorAll('.engine-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                engineItem.classList.add('selected');
+            }
         }
     }
 
     handleEngineClick(e) {
         const engineItem = e.currentTarget;
         const engineRadio = engineItem.querySelector('input[type="radio"]');
-        const engineName = engineItem.querySelector('strong').textContent;
+        const engineName = engineItem.querySelector('.engine-name').textContent.trim();
 
         // Seleziona l'engine
         engineRadio.checked = true;
@@ -907,17 +985,15 @@ class ProjectCreator {
         const engineAccordion = document.querySelector('[data-bs-target="#collapseEngine"]');
         const ragAccordion = document.querySelector('[data-bs-target="#collapseRAG"]');
 
-        if (engineAccordion.classList.contains('collapsed')) {
-            // Accordion chiuso, mostra il valore selezionato
+        if (engineAccordion && engineAccordion.classList.contains('collapsed')) {
             const selectedEngine = document.querySelector('input[name="engine_id"]:checked');
             if (selectedEngine) {
-                const engineName = selectedEngine.closest('.engine-item').querySelector('strong').textContent;
+                const engineName = selectedEngine.closest('.engine-item').querySelector('.engine-name').textContent.trim();
                 this.updateEngineDisplay(engineName);
             }
         }
 
-        if (ragAccordion.classList.contains('collapsed')) {
-            // Accordion chiuso, mostra il valore selezionato
+        if (ragAccordion && ragAccordion.classList.contains('collapsed')) {
             const selectedPreset = document.querySelector('input[name="rag_preset"]:checked');
             if (selectedPreset) {
                 const presetCard = selectedPreset.closest('.preset-card');
@@ -925,6 +1001,24 @@ class ProjectCreator {
                 this.updateRAGDisplay(presetName);
             }
         }
+    }
+}
+
+// Funzioni globali per compatibilità con il template
+function toggleProvider(providerId) {
+    const providerItem = document.querySelector(`.provider-item[data-provider-id="${providerId}"]`);
+    if (providerItem) {
+        const header = providerItem.querySelector('.provider-header');
+        if (header) {
+            header.click();
+        }
+    }
+}
+
+function selectEngine(engineId, engineName, providerId) {
+    const engineItem = document.getElementById(`engine-${engineId}`).closest('.engine-item');
+    if (engineItem) {
+        engineItem.click();
     }
 }
 

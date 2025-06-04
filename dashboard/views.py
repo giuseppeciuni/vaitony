@@ -145,7 +145,7 @@ def new_project(request):
     Crea un nuovo progetto con opzioni di configurazione completa.
 
     Questa funzione:
-    1. Verifica che l'utente abbia configurato almeno una chiave API LLM
+    1. Verifica che l'utente abbia configurato almeno una chiave API LLM valida
     2. Permette la selezione del motore LLM da utilizzare
     3. Configura il preset RAG selezionato
     4. Crea tutte le configurazioni necessarie per il progetto
@@ -156,51 +156,67 @@ def new_project(request):
 	if request.user.is_authenticated:
 		# Prendo tutte le api_keys dell'utente
 		api_keys = UserAPIKey.objects.filter(user=request.user)
-		has_api_keys = api_keys.exists()
 
-		logger.debug(f"User has {api_keys.count()} API keys configured")
+		# Verifica la validità delle chiavi API e prepara i dati per i provider
+		valid_providers = []
+		has_valid_api_keys = False
 
-		# Prepara dati per template
+		if api_keys.exists():
+			logger.debug(f"User has {api_keys.count()} API keys configured")
+
+			# Per ogni chiave API, verifica se è valida e prepara i dati del provider
+			for api_key in api_keys:
+				provider = api_key.provider
+
+				# Verifica se il provider è attivo
+				if not provider.is_active:
+					logger.debug(f"Skipping inactive provider: {provider.name}")
+					continue
+
+				# Verifica se la chiave API è marcata come valida
+				if not api_key.is_valid:
+					logger.debug(f"Skipping invalid API key for provider: {provider.name}")
+					continue
+
+				# Ottieni gli engine attivi per questo provider
+				engines = LLMEngine.objects.filter(provider=provider, is_active=True).order_by('-is_default', 'name')
+
+				if engines.exists():
+					# Trova l'engine di default
+					default_engine = engines.filter(is_default=True).first()
+					if not default_engine:
+						default_engine = engines.first()
+
+					provider_data = {
+						'id': provider.id,
+						'name': provider.name,
+						'description': provider.description,
+						'logo': provider.logo,
+						'engines': engines,
+						'default_engine': default_engine,
+						'has_valid_key': True,
+						'key_last_validation': api_key.last_validation
+					}
+
+					valid_providers.append(provider_data)
+					has_valid_api_keys = True
+					logger.debug(f"Added valid provider: {provider.name} with {engines.count()} engines")
+
+		# Trova il provider di default (primo della lista o quello specificato)
+		default_provider = valid_providers[0] if valid_providers else None
+		default_engine = default_provider['default_engine'] if default_provider else None
+
+		logger.debug(f"User has {len(valid_providers)} valid providers")
+
+		# Prepara il contesto base
 		context = {
-			'has_api_keys': has_api_keys,
+			'has_api_keys': api_keys.exists(),
+			'has_valid_api_keys': has_valid_api_keys,
+			'valid_providers': valid_providers,
+			'default_provider': default_provider,
+			'default_engine': default_engine,
+			'default_engine_name': default_engine.name if default_engine else None,
 		}
-
-		# Se l'utente ha delle chiavi API, prepara i dati per la selezione dei motori LLM
-		if has_api_keys:
-			logger.debug("Preparing LLM providers data for user with API keys")
-
-			# Prendo tutti gli id dei Provider LLM associati alla chiave
-			provider_ids = []
-			for key in api_keys:
-				provider_ids.append(key.provider_id)
-				logger.debug(f"Found API key for provider ID: {key.provider_id} ({key.provider.name})")
-
-			# Prendo tutti i provider attivi per quella chiave
-			available_providers = []
-			for provider in LLMProvider.objects.all():
-				# verifico se il provider è presente nella lista dei provider associati alla chiave ed è contemporaneamente attivo
-				if provider.id in provider_ids and provider.is_active:
-					available_providers.append(provider)
-					logger.debug(f"Adding active provider: {provider.name}")
-
-			# crea la lista di tutti gli engine LLM con i parametri relativi di configurazione
-			provider_data = []
-			for provider in available_providers:
-				engines = LLMEngine.objects.filter(provider=provider, is_active=True).order_by('-is_default')
-				provider_data.append({
-					'id': provider.id,
-					'name': provider.name,
-					'logo': provider.logo,
-					'engines': engines
-				})
-				logger.debug(f"Provider {provider.name} has {engines.count()} active engines")
-
-			# Aggiungi dati al contesto
-			context.update({
-				'available_providers': provider_data,
-			})
-		else:
-			logger.warning(f"User {request.user.username} has no API keys configured")
 
 		if request.method == 'POST':
 			logger.info(f"Processing POST request for new project creation by user {request.user.username}")
@@ -208,7 +224,7 @@ def new_project(request):
 			project_name = request.POST.get('project_name')
 			description = request.POST.get('description')
 
-			logger.debug(f"Project name: '{project_name}', Description: '{description[:50]}...'")
+			logger.debug(f"Project name: '{project_name}', Description: '{description[:50] if description else ''}...'")
 
 			# Validazione input
 			if not project_name:
@@ -216,10 +232,10 @@ def new_project(request):
 				messages.error(request, "Il nome del progetto è obbligatorio.")
 				return render(request, 'be/new_project.html', context)
 
-			# Verifica presenza delle chiavi API
-			if not has_api_keys:
-				logger.warning(f"Project creation failed: user {request.user.username} has no API keys")
-				messages.error(request, "Devi configurare almeno una chiave API prima di creare un progetto.")
+			# Verifica presenza delle chiavi API valide
+			if not has_valid_api_keys:
+				logger.warning(f"Project creation failed: user {request.user.username} has no valid API keys")
+				messages.error(request, "Devi configurare almeno una chiave API valida prima di creare un progetto.")
 				return render(request, 'be/new_project.html', context)
 
 			logger.info(f"Creating new project '{project_name}' for user {request.user.username}")
@@ -246,22 +262,81 @@ def new_project(request):
 					llm_config = ProjectLLMConfiguration.objects.create(project=project)
 					logger.info(f"Manually created LLM configuration for project {project.id}")
 
-				# Se sono stati inviati parametri LLM, configurali
-				if request.POST.get('engine_id') and api_keys.exists():
-					engine_id = request.POST.get('engine_id')
-					logger.debug(f"Attempting to set LLM engine ID: {engine_id}")
+				# Gestisci la selezione dell'engine LLM
+				engine_id = request.POST.get('engine_id')
+				provider_id = request.POST.get('provider_id')
 
+				if engine_id:
+					logger.debug(f"Attempting to set LLM engine ID: {engine_id}")
 					try:
-						# Imposta il motore LLM
+						# Verifica che l'engine appartenga a un provider con chiave API valida
 						engine = LLMEngine.objects.get(id=engine_id)
-						llm_config.engine = engine
-						llm_config.save()
-						logger.info(
-							f"LLM engine '{engine.name}' (provider: {engine.provider.name}) set for project {project.id}")
+
+						# Verifica che l'utente abbia una chiave API valida per questo provider
+						user_api_key = UserAPIKey.objects.filter(
+							user=request.user,
+							provider=engine.provider,
+							is_valid=True
+						).first()
+
+						if user_api_key:
+							llm_config.engine = engine
+							llm_config.save()
+							logger.info(
+								f"LLM engine '{engine.name}' (provider: {engine.provider.name}) set for project {project.id}")
+						else:
+							logger.warning(f"No valid API key found for provider {engine.provider.name}, using default")
+							# Usa l'engine di default del primo provider valido
+							if default_engine:
+								llm_config.engine = default_engine
+								llm_config.save()
+								logger.info(f"Using default engine '{default_engine.name}' for project {project.id}")
+
 					except LLMEngine.DoesNotExist:
 						logger.warning(f"LLM engine with ID {engine_id} not found, using default")
+						if default_engine:
+							llm_config.engine = default_engine
+							llm_config.save()
+
+				elif provider_id:
+					# Se è specificato solo il provider, usa l'engine di default
+					logger.debug(f"Using default engine for provider ID: {provider_id}")
+					try:
+						provider = LLMProvider.objects.get(id=provider_id)
+
+						# Verifica che l'utente abbia una chiave API valida per questo provider
+						user_api_key = UserAPIKey.objects.filter(
+							user=request.user,
+							provider=provider,
+							is_valid=True
+						).first()
+
+						if user_api_key:
+							default_engine_for_provider = LLMEngine.objects.filter(
+								provider=provider,
+								is_default=True,
+								is_active=True
+							).first()
+
+							if not default_engine_for_provider:
+								default_engine_for_provider = LLMEngine.objects.filter(
+									provider=provider,
+									is_active=True
+								).first()
+
+							if default_engine_for_provider:
+								llm_config.engine = default_engine_for_provider
+								llm_config.save()
+								logger.info(
+									f"Set default engine '{default_engine_for_provider.name}' for provider {provider.name}")
+
+					except LLMProvider.DoesNotExist:
+						logger.warning(f"Provider with ID {provider_id} not found")
 				else:
-					logger.debug("No specific LLM engine requested, keeping default")
+					logger.debug("No specific LLM engine or provider requested, using system default")
+					if default_engine:
+						llm_config.engine = default_engine
+						llm_config.save()
 
 				# Gestisci la configurazione RAG - aggiornato per la nuova struttura
 				rag_preset = request.POST.get('rag_preset', 'balanced')
@@ -1652,656 +1727,6 @@ def project(request, project_id=None):
 		return redirect('login')
 
 
-def project_config(request, project_id):
-	"""
-    Gestisce la configurazione completa di un progetto, includendo sia le impostazioni RAG
-    che la configurazione del motore LLM, le chiavi API e i prompt di sistema.
-
-    Questa funzione multi-purpose:
-    1. Permette la configurazione completa del motore LLM e delle impostazioni RAG
-    2. Gestisce il salvataggio e la validazione delle chiavi API dei vari provider
-    3. Supporta la selezione e configurazione dei motori IA disponibili
-    4. Gestisce i prompt di sistema predefiniti e personalizzati
-    5. Fornisce feedback via AJAX per operazioni asincrone
-    """
-	logger.debug(f"---> project_config: {project_id}")
-	if request.user.is_authenticated:
-		try:
-			# Ottieni il progetto
-			project = get_object_or_404(Project, id=project_id, user=request.user)
-			logger.info(f"Accessing configuration for project {project.id} ({project.name})")
-
-			# Ottieni o crea la configurazione RAG del progetto (nuova struttura consolidata)
-			project_rag_config, rag_created = ProjectRAGConfig.objects.get_or_create(project=project)
-			if rag_created:
-				# Se appena creato, applica preset bilanciato
-				project_rag_config.apply_preset('balanced')
-				project_rag_config.save()
-				logger.info(f"Created new RAG configuration for project {project.id}")
-
-			# Ottieni o crea la configurazione Prompt del progetto (nuova struttura consolidata)
-			project_prompt_config, prompt_created = ProjectPromptConfig.objects.get_or_create(project=project)
-			if prompt_created:
-				logger.info(f"Created new Prompt configuration for project {project.id}")
-
-			# Ottieni o crea la configurazione LLM del progetto
-			llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(project=project)
-			if llm_created:
-				logger.info(f"Created new LLM configuration for project {project.id}")
-
-			# Ottieni i provider LLM disponibili
-			providers = LLMProvider.objects.filter(is_active=True).order_by('name')
-			logger.debug(f"Found {providers.count()} active LLM providers")
-
-			# Ottieni le chiavi API dell'utente
-			user_api_keys = UserAPIKey.objects.filter(user=request.user)
-			api_keys_dict = {key.provider_id: key for key in user_api_keys}
-			logger.debug(f"User has {len(api_keys_dict)} API keys configured")
-
-			# Prepara un dizionario con le chiavi API decifrate
-			decrypted_api_keys = {}
-			for provider_id, key_obj in api_keys_dict.items():
-				decrypted_api_keys[provider_id] = key_obj.get_api_key()
-
-			# Gestione delle richieste AJAX
-			if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-				# Gestione della richiesta di contenuto prompt
-				if request.GET.get('get_prompt'):
-					prompt_id = request.GET.get('get_prompt')
-					logger.debug(f"AJAX request for prompt content with ID: {prompt_id}")
-					try:
-						prompt = DefaultSystemPrompts.objects.get(id=prompt_id)
-						return JsonResponse({
-							'success': True,
-							'content': prompt.prompt_text,
-							'description': prompt.description
-						})
-					except DefaultSystemPrompts.DoesNotExist:
-						logger.warning(f"Prompt with ID {prompt_id} not found")
-						return JsonResponse({
-							'success': False,
-							'message': 'Prompt non trovato'
-						})
-
-			# Prepara il contesto iniziale - AGGIORNATO per nuova struttura
-			context = {
-				'project': project,
-				'project_rag_config': project_rag_config,
-				'project_prompt_config': project_prompt_config,
-				'llm_config': llm_config,
-				'created_project_rag_conf': rag_created,
-				'created_project_prompt_conf': prompt_created,
-				'created_llm': llm_created,
-				# Provider LLM e motori
-				'providers': providers,
-				'all_engines': LLMEngine.objects.filter(is_active=True).order_by('provider__name', 'name'),
-				# Prompt di sistema
-				'system_prompts': DefaultSystemPrompts.objects.all().order_by('-is_default', 'name'),
-				# API keys
-				'api_keys': api_keys_dict,
-				'decrypted_api_keys': decrypted_api_keys,
-				# Prompt personalizzato (dalla nuova struttura)
-				'custom_prompt_text': project_prompt_config.custom_prompt_text,
-				'use_custom_prompt': project_prompt_config.use_custom_prompt,
-			}
-
-			# Salva gli ID dei provider come variabili nel contesto
-			for provider in providers:
-				provider_id_var = f"{provider.name.lower()}_provider_id"
-				context[provider_id_var] = provider.id
-
-			# Gestione della richiesta POST
-			if request.method == 'POST':
-				action = request.POST.get('action', '')
-				logger.info(f"Processing POST request with action: {action}")
-
-				# ======= GESTIONE CHIAVI API =======
-				if action == 'save_api_key':
-					try:
-						provider_id = request.POST.get('provider_id')
-						api_key = request.POST.get('api_key')
-
-						if not provider_id:
-							logger.error("Provider ID not specified in save_api_key request")
-							if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-								return JsonResponse({'success': False, 'message': 'Provider non specificato'})
-							messages.error(request, "Provider non specificato")
-							return redirect('project_config', project_id=project.id)
-
-						provider = LLMProvider.objects.get(id=provider_id)
-						logger.info(f"Saving API key for provider: {provider.name}")
-
-						# Aggiorna o crea la chiave API
-						user_api_key, created = UserAPIKey.objects.update_or_create(
-							user=request.user,
-							provider=provider,
-							defaults={'api_key': api_key, 'is_valid': True}
-						)
-
-						action_type = "created" if created else "updated"
-						logger.info(f"API key {action_type} for provider {provider.name}")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': True,
-								'message': f'Chiave API per {provider.name} salvata con successo'
-							})
-
-						messages.success(request, f"Chiave API per {provider.name} salvata con successo")
-
-					except Exception as e:
-						logger.error(f"Error saving API key: {str(e)}")
-						logger.error(traceback.format_exc())
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# Sezione per gestire le impostazioni del chatbot
-				elif action == 'save_chatbot_settings':
-					try:
-						project.is_public_chat_enabled = request.POST.get('enable_public_chat') == 'on'
-
-						# Gestione domini permessi
-						allowed_domains = request.POST.get('allowed_domains', '')
-						if allowed_domains:
-							domains = [d.strip() for d in allowed_domains.split(',') if d.strip()]
-							project.allowed_domains = domains
-						else:
-							project.allowed_domains = []
-
-						project.save()
-
-						messages.success(request, "Impostazioni chatbot salvate con successo")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': True,
-								'message': 'Impostazioni chatbot salvate con successo',
-								'widget_url': request.build_absolute_uri(
-									reverse('chatbot_widget', kwargs={'project_slug': project.slug})),
-								'api_key': project.chat_bot_api_key
-							})
-
-					except Exception as e:
-						logger.error(f"Errore nel salvataggio delle impostazioni chatbot: {str(e)}")
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# ======= VALIDAZIONE CHIAVI API =======
-				elif action == 'validate_all_keys':
-					logger.info("Validating all API keys")
-					results = {}
-
-					# Lista dei provider e relative chiavi da validare
-					validation_pairs = [
-						('openai', 'openai_key'),
-						('claude', 'claude_key'),
-						('deepseek', 'deepseek_key'),
-						('gemini', 'gemini_key')
-					]
-
-					for provider_type, key_field in validation_pairs:
-						if key_field in request.POST:
-							api_key = request.POST.get(key_field)
-							logger.debug(f"Validating {provider_type} API key")
-							is_valid, error_msg = verify_api_key(provider_type, api_key)
-							results[provider_type] = {'valid': is_valid, 'message': error_msg}
-							logger.info(f"{provider_type} key validation result: {is_valid}")
-
-					return JsonResponse({
-						'success': True,
-						'results': results
-					})
-
-				# ======= SELEZIONE MOTORE =======
-				elif action == 'select_engine':
-					try:
-						confirmed_change = request.POST.get('confirmed_change') == 'true'
-						engine_name = request.POST.get('selected_engine')
-						model_version = request.POST.get('model_version')
-
-						logger.info(
-							f"Engine selection request: {engine_name}, model: {model_version}, confirmed: {confirmed_change}")
-
-						# Trova il provider corretto
-						provider = None
-						if engine_name == 'openai':
-							provider = LLMProvider.objects.filter(name__icontains='openai').first()
-						elif engine_name == 'claude':
-							provider = LLMProvider.objects.filter(
-								name__icontains='anthropic').first() or LLMProvider.objects.filter(
-								name__icontains='claude').first()
-						elif engine_name == 'deepseek':
-							provider = LLMProvider.objects.filter(name__icontains='deepseek').first()
-						elif engine_name == 'gemini':
-							provider = LLMProvider.objects.filter(
-								name__icontains='google').first() or LLMProvider.objects.filter(
-								name__icontains='gemini').first()
-
-						if not provider:
-							logger.error(f"Provider not found for engine: {engine_name}")
-							return JsonResponse({'success': False, 'message': 'Provider non trovato'})
-
-						# Trova il motore specifico in base alla versione
-						engine = None
-						if model_version:
-							engine = LLMEngine.objects.filter(provider=provider, model_id=model_version).first()
-
-						if not engine:
-							engine = LLMEngine.objects.filter(provider=provider, is_default=True).first()
-
-						if not engine:
-							logger.error(f"Engine not found for provider: {provider.name}")
-							return JsonResponse({'success': False, 'message': 'Motore non trovato'})
-
-						# Verifica se l'utente ha una chiave API per questo provider
-						try:
-							UserAPIKey.objects.get(user=request.user, provider=provider)
-						except UserAPIKey.DoesNotExist:
-							logger.warning(f"User has no API key for provider: {provider.name}")
-							return JsonResponse({
-								'success': False,
-								'message': 'Nessuna chiave API configurata per questo provider'
-							})
-
-						# Controlla se il motore è cambiato
-						engine_changed = llm_config.engine != engine
-
-						# Se c'è un cambio di motore e non è stato confermato, chiedi conferma
-						if engine_changed and not confirmed_change:
-							logger.info(f"Engine change requires confirmation: from {llm_config.engine} to {engine}")
-							return JsonResponse({
-								'success': False,
-								'require_confirmation': True,
-								'message': 'Il cambio di motore richiede conferma'
-							})
-
-						# Imposta il nuovo motore
-						old_engine = llm_config.engine
-						llm_config.engine = engine
-						llm_config.save()
-						logger.info(f"Engine changed from {old_engine} to {engine}")
-
-						# Se c'è stato un cambio di motore ed è stato confermato, procedi con la ri-vettorializzazione
-						if engine_changed and confirmed_change:
-							logger.info(f"Starting re-vectorization process for project {project.id}")
-
-							# Resetta lo stato degli embedding per tutti i file del progetto
-							ProjectFile.objects.filter(project=project).update(is_embedded=False, last_indexed_at=None)
-
-							# Resetta lo stato degli embedding per tutte le note del progetto
-							ProjectNote.objects.filter(project=project).update(last_indexed_at=None)
-
-							# Elimina l'indice corrente
-							project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id),
-													   str(project.id))
-							index_path = os.path.join(project_dir, "vector_index")
-							if os.path.exists(index_path):
-								import shutil
-								shutil.rmtree(index_path)
-								logger.info(f"Vector index deleted for re-vectorization: {index_path}")
-
-							# Forza la ricostruzione dell'indice con i nuovi parametri
-							try:
-								create_project_rag_chain(project=project, force_rebuild=True)
-								logger.info(f"Re-vectorization completed for project {project.id}")
-							except Exception as e:
-								logger.error(f"Error during re-vectorization: {str(e)}")
-								logger.error(traceback.format_exc())
-								return JsonResponse({
-									'success': False,
-									'message': f'Errore nella vettorializzazione: {str(e)}'
-								})
-
-						return JsonResponse({
-							'success': True,
-							'message': f'Motore {engine.name} selezionato con successo'
-						})
-
-					except Exception as e:
-						logger.error(f"Error selecting engine: {str(e)}")
-						logger.error(traceback.format_exc())
-						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-
-				# ======= SALVATAGGIO IMPOSTAZIONI LLM =======
-				elif action == 'save_llm_settings':
-					try:
-						engine_type = request.POST.get('selected_engine')
-						logger.info(f"Saving LLM settings for engine type: {engine_type}")
-
-						if engine_type == 'openai':
-							model = request.POST.get('gpt_model', 'gpt-4o')
-							temperature = float(request.POST.get('temperature', 0.7))
-							max_tokens = int(request.POST.get('gpt_max_tokens', 4096))
-							timeout = int(request.POST.get('gpt_timeout', 60))
-
-							provider = LLMProvider.objects.filter(name__icontains='openai').first()
-							engine = LLMEngine.objects.filter(provider=provider, model_id=model).first()
-
-						elif engine_type == 'claude':
-							model = request.POST.get('claude_model', 'claude-3-7-sonnet')
-							temperature = float(request.POST.get('temperature', 0.5))
-							max_tokens = int(request.POST.get('claude_max_tokens', 4096))
-							timeout = int(request.POST.get('claude_timeout', 90))
-
-							provider = LLMProvider.objects.filter(
-								name__icontains='anthropic').first() or LLMProvider.objects.filter(
-								name__icontains='claude').first()
-							engine = LLMEngine.objects.filter(provider=provider, model_id=model).first()
-
-						elif engine_type == 'deepseek':
-							model = request.POST.get('deepseek_model', 'deepseek-coder')
-							temperature = float(request.POST.get('temperature', 0.4))
-							max_tokens = int(request.POST.get('deepseek_max_tokens', 2048))
-							timeout = int(request.POST.get('deepseek_timeout', 30))
-
-							provider = LLMProvider.objects.filter(name__icontains='deepseek').first()
-							engine = LLMEngine.objects.filter(provider=provider, model_id=model).first()
-
-						elif engine_type == 'gemini':
-							model = request.POST.get('gemini_model', 'gemini-1.5-pro')
-							temperature = float(request.POST.get('temperature', 0.7))
-							max_tokens = int(request.POST.get('gemini_max_tokens', 8192))
-							timeout = int(request.POST.get('gemini_timeout', 60))
-
-							provider = LLMProvider.objects.filter(
-								name__icontains='google').first() or LLMProvider.objects.filter(
-								name__icontains='gemini').first()
-							engine = LLMEngine.objects.filter(provider=provider, model_id=model).first()
-
-						else:
-							raise ValueError(f"Unsupported engine type: {engine_type}")
-
-						if engine:
-							llm_config.engine = engine
-							llm_config.temperature = temperature
-							llm_config.max_tokens = max_tokens
-							llm_config.timeout = timeout
-							llm_config.save()
-
-							logger.info(f"LLM settings saved for engine: {engine.name}")
-							messages.success(request, f"Configurazione {engine_type.upper()} salvata con successo")
-						else:
-							logger.error(f"Engine not found for model: {model}")
-							messages.error(request, f"Motore {model} non trovato")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': engine is not None,
-								'message': f"Configurazione {engine_type.upper()} salvata con successo" if engine else f"Motore {model} non trovato"
-							})
-
-					except Exception as e:
-						logger.error(f"Error saving LLM settings: {str(e)}")
-						logger.error(traceback.format_exc())
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# ======= SALVATAGGIO PROMPT DI SISTEMA - AGGIORNATO per nuova struttura =======
-				elif action == 'save_prompt_settings':
-					try:
-						prompt_type = request.POST.get('prompt_type', 'default')
-						logger.info(f"Saving prompt settings, type: {prompt_type}")
-
-						if prompt_type == 'default':
-							# Prompt predefinito
-							default_prompt_id = request.POST.get('default_prompt_id')
-							if default_prompt_id:
-								default_prompt = DefaultSystemPrompts.objects.get(id=default_prompt_id)
-								project_prompt_config.default_system_prompt = default_prompt
-								project_prompt_config.use_custom_prompt = False
-								project_prompt_config.custom_prompt_text = ""  # Pulisci il prompt personalizzato
-								project_prompt_config.save()
-
-								logger.info(f"Default prompt '{default_prompt.name}' set for project {project.id}")
-								messages.success(request, "Prompt predefinito impostato con successo")
-							else:
-								logger.warning("No default prompt selected")
-								messages.error(request, "Nessun prompt predefinito selezionato")
-
-						elif prompt_type == 'custom':
-							# Prompt personalizzato
-							custom_prompt_text = request.POST.get('custom_prompt_text', '')
-
-							if custom_prompt_text.strip():
-								project_prompt_config.custom_prompt_text = custom_prompt_text
-								project_prompt_config.use_custom_prompt = True
-								project_prompt_config.save()
-
-								logger.info(f"Custom prompt set for project {project.id}")
-								messages.success(request, "Prompt personalizzato salvato con successo")
-							else:
-								logger.warning("Empty custom prompt provided")
-								messages.error(request, "Il prompt personalizzato non può essere vuoto")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': True,
-								'message': "Configurazione prompt salvata con successo"
-							})
-
-					except Exception as e:
-						logger.error(f"Error saving prompt settings: {str(e)}")
-						logger.error(traceback.format_exc())
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# ======= GESTIONE PRESET RAG - AGGIORNATO per nuova struttura =======
-				elif action == 'select_rag_preset':
-					try:
-						preset_name = request.POST.get('preset_name', 'balanced')
-						logger.info(f"Applying RAG preset: {preset_name}")
-
-						if project_rag_config.apply_preset(preset_name):
-							project_rag_config.save()
-							logger.info(f"RAG preset '{preset_name}' applied to project {project.id}")
-							messages.success(request, f"Preset RAG '{preset_name}' applicato con successo")
-						else:
-							logger.warning(f"RAG preset '{preset_name}' not found")
-							messages.error(request, f"Preset RAG '{preset_name}' non trovato")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': True,
-								'message': "Preset RAG applicato con successo"
-							})
-
-					except Exception as e:
-						logger.error(f"Error applying RAG preset: {str(e)}")
-						logger.error(traceback.format_exc())
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# ======= SALVATAGGIO IMPOSTAZIONI RAG - AGGIORNATO per nuova struttura =======
-				elif action == 'save_rag_settings':
-					try:
-						logger.info(f"Saving RAG settings for project {project.id}")
-
-						# Aggiorna i parametri RAG direttamente nel modello consolidato
-						project_rag_config.chunk_size = int(request.POST.get('chunk_size', 500))
-						project_rag_config.chunk_overlap = int(request.POST.get('chunk_overlap', 50))
-						project_rag_config.similarity_top_k = int(request.POST.get('similarity_top_k', 6))
-						project_rag_config.mmr_lambda = float(request.POST.get('mmr_lambda', 0.7))
-						project_rag_config.similarity_threshold = float(request.POST.get('similarity_threshold', 0.7))
-						project_rag_config.retriever_type = request.POST.get('retriever_type', 'mmr')
-
-						# Marca come personalizzato
-						project_rag_config.preset_name = 'Custom'
-						project_rag_config.preset_category = 'custom'
-						project_rag_config.save()
-
-						logger.info(f"RAG settings saved for project {project.id}")
-						messages.success(request, "Impostazioni RAG salvate con successo")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': True,
-								'message': "Impostazioni RAG salvate con successo"
-							})
-
-					except Exception as e:
-						logger.error(f"Error saving RAG settings: {str(e)}")
-						logger.error(traceback.format_exc())
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# ======= SALVATAGGIO IMPOSTAZIONI RAG AVANZATE - AGGIORNATO per nuova struttura =======
-				elif action == 'save_rag_advanced':
-					try:
-						logger.info(f"Saving advanced RAG settings for project {project.id}")
-
-						# Aggiorna le impostazioni avanzate RAG direttamente nel modello consolidato
-						project_rag_config.auto_citation = request.POST.get('auto_citation') == 'on'
-						project_rag_config.prioritize_filenames = request.POST.get('prioritize_filenames') == 'on'
-						project_rag_config.equal_notes_weight = request.POST.get('equal_notes_weight') == 'on'
-						project_rag_config.strict_context = request.POST.get('strict_context') == 'on'
-
-						# Marca come personalizzato se non ha già un preset specifico
-						if project_rag_config.preset_name == 'Custom':
-							project_rag_config.preset_category = 'custom'
-
-						project_rag_config.save()
-
-						logger.info(f"Advanced RAG settings saved for project {project.id}")
-						messages.success(request, "Impostazioni RAG avanzate salvate con successo")
-
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({
-								'success': True,
-								'message': "Impostazioni RAG avanzate salvate con successo"
-							})
-
-					except Exception as e:
-						logger.error(f"Error saving advanced RAG settings: {str(e)}")
-						logger.error(traceback.format_exc())
-						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
-						messages.error(request, f"Errore: {str(e)}")
-
-				# ----- Toggle inclusione URL nel RAG -----
-				elif action == 'toggle_url_inclusion':
-					# Toggle inclusione nella ricerca RAG
-					url_id = request.POST.get('url_id')
-					is_included = request.POST.get('is_included') == 'true'
-
-					logger.info(f"🔄 Richiesta toggle URL - ID: {url_id}, is_included: {is_included}")
-
-					if url_id:
-						try:
-							# Trova l'URL del progetto
-							url_obj = ProjectURL.objects.get(id=url_id, project=project)
-
-							# Valore precedente per verificare il cambiamento
-							previous_value = url_obj.is_included_in_rag
-
-							# Aggiorna lo stato di inclusione
-							url_obj.is_included_in_rag = is_included
-							url_obj.save(update_fields=['is_included_in_rag', 'updated_at'])
-
-							# AGGIUNTA: Log di attivazione/disattivazione per debug
-							if is_included:
-								logger.info(f"✅ URL ATTIVATA per ricerca AI: {url_obj.url} (ID: {url_id})")
-							else:
-								logger.info(f"❌ URL DISATTIVATA per ricerca AI: {url_obj.url} (ID: {url_id})")
-
-							# Forza la ricostruzione dell'indice se lo stato è cambiato
-							if previous_value != is_included:
-								try:
-									logger.info(
-										f"🔄 Avvio aggiornamento dell'indice vettoriale dopo toggle URL {url_obj.url} -> is_included_in_rag={is_included}")
-
-									# Forza un nuovo crawling dell'indice vettoriale
-									create_project_rag_chain(project=project, force_rebuild=True)
-									logger.info(f"✅ Ricostruzione indice completata")
-
-								except Exception as e:
-									logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
-									logger.error(traceback.format_exc())
-
-									return JsonResponse({
-										'success': False,
-										'message': f"URL {'incluso' if is_included else 'escluso'}, ma errore nella ricostruzione dell'indice: {str(e)}"
-									})
-
-							# IMPORTANTE: Restituisci sempre una risposta JSON per questa azione
-							return JsonResponse({
-								'success': True,
-								'message': f"URL {'incluso' if is_included else 'escluso'} nella ricerca AI"
-							})
-
-						except ProjectURL.DoesNotExist:
-							logger.error(f"URL con ID {url_id} non trovato")
-
-							return JsonResponse({
-								'success': False,
-								'message': "URL non trovato."
-							})
-
-						except Exception as e:
-							logger.error(f"Errore nel toggle URL: {str(e)}")
-							logger.error(traceback.format_exc())
-
-							return JsonResponse({
-								'success': False,
-								'message': f"Errore: {str(e)}"
-							})
-					else:
-						logger.error("URL ID non fornito nella richiesta")
-
-						return JsonResponse({
-							'success': False,
-							'message': "ID URL non fornito"
-						})
-
-				# contesto per il chatbot
-				context['chatbot_widget_url'] = request.build_absolute_uri(
-					reverse('chatbot_widget', kwargs={'project_slug': project.slug}))
-				return redirect('project_config', project_id=project.id)
-
-			# Recupera i valori effettivi RAG per il template (dalla nuova struttura consolidata)
-			context['effective_values'] = {
-				'chunk_size': project_rag_config.chunk_size,
-				'chunk_overlap': project_rag_config.chunk_overlap,
-				'similarity_top_k': project_rag_config.similarity_top_k,
-				'mmr_lambda': project_rag_config.mmr_lambda,
-				'similarity_threshold': project_rag_config.similarity_threshold,
-				'retriever_type': project_rag_config.retriever_type,
-				'auto_citation': project_rag_config.auto_citation,
-				'prioritize_filenames': project_rag_config.prioritize_filenames,
-				'equal_notes_weight': project_rag_config.equal_notes_weight,
-				'strict_context': project_rag_config.strict_context,
-			}
-
-			# Informazioni su preset attuale (dalla nuova struttura consolidata)
-			context['current_preset'] = {
-				'name': project_rag_config.preset_name,
-				'category': project_rag_config.preset_category
-			}
-
-			# Identifica se utilizza un preset o valori personalizzati
-			context['is_custom_preset'] = project_rag_config.preset_category == 'custom'
-
-			return render(request, 'be/project_config.html', context)
-
-		except Project.DoesNotExist:
-			logger.error(f"Project with ID {project_id} not found or access denied")
-			messages.error(request, "Progetto non trovato.")
-			return redirect('projects_list')
-		except Exception as e:
-			logger.error(f"Unexpected error in project_config: {str(e)}")
-			logger.error(traceback.format_exc())
-			messages.error(request, f"Errore imprevisto: {str(e)}")
-			return redirect('projects_list')
-	else:
-		logger.warning("Unauthenticated user attempted to access project configuration")
-		return redirect('login')
-
-
 def serve_project_file(request, file_id):
 	"""
     Serve un file di progetto all'utente per visualizzazione o download.
@@ -2898,148 +2323,6 @@ def verify_api_key(api_type, api_key):
 			return False, f"Errore: {str(e)[:100]}"
 
 
-
-def rag_settings(request):
-	"""
-    Gestisce le impostazioni RAG (Retrieval Augmented Generation) globali dell'utente.
-
-    Questa funzione:
-    1. Permette di selezionare preset RAG predefiniti (bilanciato, alta precisione, ecc.)
-    2. Consente la personalizzazione dei parametri di chunking, ricerca e comportamento AI
-    3. Mostra quali parametri sono stati personalizzati rispetto ai preset
-    4. Salva configurazioni dell'utente che verranno ereditate dai nuovi progetti
-
-    Centrale per definire il comportamento predefinito del sistema RAG
-    che verrà applicato a tutti i progetti dell'utente.
-    """
-	logger.debug("---> rag_settings")
-	if request.user.is_authenticated:
-		# Ottieni o crea un progetto "predefinito" per l'utente (nascosto) per le impostazioni globali
-		default_project, created = Project.objects.get_or_create(
-			user=request.user,
-			name="__DEFAULT_SETTINGS__",  # Nome speciale per identificarlo
-			defaults={
-				'description': 'Progetto nascosto per le impostazioni predefinite',
-				'is_active': False  # Non visibile normalmente
-			}
-		)
-
-		# Ottieni o crea la configurazione RAG per il progetto predefinito (usando nuova struttura)
-		user_config, created = ProjectRAGConfig.objects.get_or_create(project=default_project)
-
-		# Se è una nuova configurazione o non ha impostazioni correnti,
-		# imposta come predefinito il template bilanciato standard
-		if created or not user_config.preset_name:
-			try:
-				user_config.apply_preset('balanced')
-				user_config.save()
-			except Exception as e:
-				logger.error(f"Errore nell'impostare la configurazione predefinita: {str(e)}")
-
-		# Ottieni i valori correnti (dal modello consolidato)
-		current_values = {
-			'chunk_size': user_config.chunk_size,
-			'chunk_overlap': user_config.chunk_overlap,
-			'similarity_top_k': user_config.similarity_top_k,
-			'mmr_lambda': user_config.mmr_lambda,
-			'similarity_threshold': user_config.similarity_threshold,
-			'retriever_type': user_config.retriever_type,
-			'auto_citation': user_config.auto_citation,
-			'prioritize_filenames': user_config.prioritize_filenames,
-			'equal_notes_weight': user_config.equal_notes_weight,
-			'strict_context': user_config.strict_context,
-		}
-
-		# Gestione della richiesta POST
-		if request.method == 'POST':
-			action = request.POST.get('action', '')
-
-			if action == 'save_settings':
-				# Salva le impostazioni di base
-				try:
-					# Aggiorna i parametri dell'utente
-					user_config.chunk_size = int(request.POST.get('chunk_size'))
-					user_config.chunk_overlap = int(request.POST.get('chunk_overlap'))
-					user_config.similarity_top_k = int(request.POST.get('similarity_top_k'))
-					user_config.mmr_lambda = float(request.POST.get('mmr_lambda'))
-					user_config.similarity_threshold = float(request.POST.get('similarity_threshold'))
-					user_config.retriever_type = request.POST.get('retriever_type')
-
-					# Marca come personalizzato
-					user_config.preset_name = 'Custom'
-					user_config.preset_category = 'custom'
-					user_config.save()
-
-					messages.success(request, "Parametri RAG salvati con successo.")
-				except Exception as e:
-					logger.error(f"Errore nel salvataggio dei parametri RAG: {str(e)}")
-					messages.error(request, f"Errore nel salvataggio dei parametri: {str(e)}")
-
-				# Risposta per richieste AJAX
-				if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-					return JsonResponse({'success': True, 'message': 'Parametri RAG salvati con successo'})
-
-				return redirect('rag_settings')
-
-			elif action == 'save_advanced_settings':
-				# Salva le impostazioni avanzate
-				try:
-					user_config.auto_citation = request.POST.get('auto_citation') == 'on'
-					user_config.prioritize_filenames = request.POST.get('prioritize_filenames') == 'on'
-					user_config.equal_notes_weight = request.POST.get('equal_notes_weight') == 'on'
-					user_config.strict_context = request.POST.get('strict_context') == 'on'
-
-					# Marca come personalizzato se non ha già un preset specifico
-					if user_config.preset_name == 'Custom':
-						user_config.preset_category = 'custom'
-
-					user_config.save()
-
-					messages.success(request, "Impostazioni avanzate RAG salvate con successo.")
-				except Exception as e:
-					logger.error(f"Errore nel salvataggio delle impostazioni avanzate RAG: {str(e)}")
-					messages.error(request, f"Errore nel salvataggio delle impostazioni avanzate: {str(e)}")
-
-				# Risposta per richieste AJAX
-				if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-					return JsonResponse({'success': True, 'message': 'Impostazioni avanzate RAG salvate con successo'})
-
-				return redirect('rag_settings')
-
-			elif action == 'select_preset':
-				# Seleziona una configurazione predefinita
-				preset_name = request.POST.get('preset_name', 'balanced')
-				if preset_name:
-					try:
-						if user_config.apply_preset(preset_name):
-							user_config.save()
-							messages.success(request, f"Configurazione '{preset_name}' selezionata con successo.")
-						else:
-							messages.error(request, f"Configurazione '{preset_name}' non trovata.")
-					except Exception as e:
-						logger.error(f"Errore nella selezione della configurazione: {str(e)}")
-						messages.error(request, f"Errore nella selezione della configurazione: {str(e)}")
-
-				# Risposta per richieste AJAX
-				if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-					return JsonResponse({'success': True, 'message': f"Configurazione selezionata con successo."})
-
-				return redirect('rag_settings')
-
-		# Passa le impostazioni al template
-		context = {
-			'user_config': user_config,
-			'current_values': current_values,
-			'current_preset_name': user_config.preset_name,
-			'current_preset_category': user_config.preset_category,
-			'is_custom_preset': user_config.preset_category == 'custom',
-		}
-		return render(request, 'be/rag_settings.html', context)
-	else:
-		logger.warning("User not Authenticated!")
-		return redirect('login')
-
-
 def billing_settings(request):
 	"""
     Visualizza le impostazioni di fatturazione e l'utilizzo del servizio.
@@ -3061,7 +2344,6 @@ def billing_settings(request):
 	else:
 		logger.warning("User not Authenticated!")
 		return redirect('login')
-
 
 
 def website_crawl(request, project_id):
@@ -4259,3 +3541,935 @@ def create_chatwoot_bot_for_project(project, request=None):
 			})
 
 		return {'success': False, 'error': error_msg}
+
+
+def project_config(request, project_id):
+	"""
+	Gestisce la configurazione completa RAG e LLM per un progetto specifico.
+
+	Questa funzione permette di:
+	1. Selezionare preset RAG predefiniti o personalizzare i parametri manualmente
+	2. Scegliere il motore LLM tra quelli disponibili (con API key configurata)
+	3. Configurare tutti i parametri RAG supportati da rag_utils.py
+	4. Salvare le configurazioni specifiche del progetto
+
+	Args:
+		request: Oggetto HttpRequest di Django
+		project_id: ID del progetto da configurare
+
+	Returns:
+		HttpResponse: Pagina di configurazione o redirect in caso di errore
+	"""
+	logger.debug(f"---> project_config: {project_id}")
+
+	if not request.user.is_authenticated:
+		logger.warning("Unauthenticated user attempted to access project configuration")
+		return redirect('login')
+
+	try:
+		# Ottieni il progetto dell'utente
+		project = get_object_or_404(Project, id=project_id, user=request.user)
+		logger.info(f"Accessing complete configuration for project {project.id} ({project.name})")
+
+		# Ottieni o crea la configurazione RAG del progetto
+		project_rag_config, rag_created = ProjectRAGConfig.objects.get_or_create(project=project)
+		if rag_created:
+			# Se appena creato, applica preset bilanciato
+			project_rag_config.apply_preset('balanced')
+			project_rag_config.save()
+			logger.info(f"Created new RAG configuration for project {project.id} with balanced preset")
+
+		# Ottieni o crea la configurazione LLM del progetto
+		llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(project=project)
+		if llm_created:
+			# Assegna il motore predefinito se disponibile
+			default_engine = LLMEngine.objects.filter(is_default=True).first()
+			if default_engine:
+				llm_config.engine = default_engine
+				llm_config.save()
+			logger.info(f"Created new LLM configuration for project {project.id}")
+
+		# Ottieni tutti i provider LLM attivi
+		providers = LLMProvider.objects.filter(is_active=True).order_by('name')
+
+		# Ottieni le chiavi API dell'utente per determinare i motori disponibili
+		user_api_keys = UserAPIKey.objects.filter(user=request.user, is_valid=True)
+		available_provider_ids = [key.provider_id for key in user_api_keys]
+
+		# Filtra i motori disponibili (solo quelli con API key valida)
+		available_engines = LLMEngine.objects.filter(
+			provider_id__in=available_provider_ids,
+			is_active=True
+		).order_by('provider__name', 'name')
+
+		logger.info(f"Found {available_engines.count()} available engines for user {request.user.username}")
+
+		# Gestione delle richieste POST
+		if request.method == 'POST':
+			action = request.POST.get('action', '')
+			logger.info(f"Processing POST request with action: {action}")
+
+			# ======= APPLICAZIONE PRESET RAG =======
+			if action == 'apply_rag_preset':
+				try:
+					preset_name = request.POST.get('preset_name', 'balanced')
+					logger.info(f"Applying RAG preset '{preset_name}' to project {project.id}")
+
+					if project_rag_config.apply_preset(preset_name):
+						project_rag_config.save()
+
+						# Se c'è un cambio significativo nei parametri di chunking,
+						# potrebbe essere necessario ricostruire l'indice
+						logger.info(f"RAG preset '{preset_name}' applied successfully")
+
+						# Forza aggiornamento dell'indice per applicare i nuovi parametri
+						try:
+							from dashboard.rag_utils import create_project_rag_chain
+							create_project_rag_chain(project=project, force_rebuild=True)
+							logger.info(f"Vector index rebuilt with new RAG parameters")
+						except Exception as e:
+							logger.warning(f"Could not rebuild vector index: {str(e)}")
+
+						messages.success(request, f"Preset RAG '{preset_name}' applicato con successo.")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': f"Preset '{preset_name}' applicato con successo"
+							})
+					else:
+						logger.error(f"RAG preset '{preset_name}' not found")
+						messages.error(request, f"Preset RAG '{preset_name}' non trovato.")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f"Preset '{preset_name}' non trovato"
+							})
+
+				except Exception as e:
+					logger.error(f"Error applying RAG preset: {str(e)}")
+					logger.error(traceback.format_exc())
+					messages.error(request, f"Errore nell'applicazione del preset: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= SALVATAGGIO PARAMETRI RAG PERSONALIZZATI =======
+			elif action == 'save_custom_rag':
+				try:
+					logger.info(f"Saving custom RAG parameters for project {project.id}")
+
+					# Estrai e valida i parametri RAG dal form
+					chunk_size = int(request.POST.get('chunk_size', 500))
+					chunk_overlap = int(request.POST.get('chunk_overlap', 50))
+					similarity_top_k = int(request.POST.get('similarity_top_k', 6))
+					mmr_lambda = float(request.POST.get('mmr_lambda', 0.7))
+					similarity_threshold = float(request.POST.get('similarity_threshold', 0.7))
+					retriever_type = request.POST.get('retriever_type', 'mmr')
+
+					# Parametri comportamentali
+					auto_citation = request.POST.get('auto_citation') == 'on'
+					prioritize_filenames = request.POST.get('prioritize_filenames') == 'on'
+					equal_notes_weight = request.POST.get('equal_notes_weight') == 'on'
+					strict_context = request.POST.get('strict_context') == 'on'
+
+					# Validazione dei parametri
+					if chunk_size < 100 or chunk_size > 2000:
+						raise ValueError("Dimensione chunk deve essere tra 100 e 2000 caratteri")
+
+					if chunk_overlap < 0 or chunk_overlap >= chunk_size:
+						raise ValueError("Sovrapposizione deve essere tra 0 e dimensione chunk")
+
+					if similarity_top_k < 1 or similarity_top_k > 20:
+						raise ValueError("Top K deve essere tra 1 e 20")
+
+					if mmr_lambda < 0 or mmr_lambda > 1:
+						raise ValueError("Lambda MMR deve essere tra 0 e 1")
+
+					if similarity_threshold < 0 or similarity_threshold > 1:
+						raise ValueError("Soglia similarità deve essere tra 0 e 1")
+
+					if retriever_type not in ['mmr', 'similarity', 'similarity_score_threshold']:
+						raise ValueError("Tipo retriever non valido")
+
+					# Aggiorna la configurazione RAG
+					project_rag_config.chunk_size = chunk_size
+					project_rag_config.chunk_overlap = chunk_overlap
+					project_rag_config.similarity_top_k = similarity_top_k
+					project_rag_config.mmr_lambda = mmr_lambda
+					project_rag_config.similarity_threshold = similarity_threshold
+					project_rag_config.retriever_type = retriever_type
+					project_rag_config.auto_citation = auto_citation
+					project_rag_config.prioritize_filenames = prioritize_filenames
+					project_rag_config.equal_notes_weight = equal_notes_weight
+					project_rag_config.strict_context = strict_context
+
+					# Marca come configurazione personalizzata
+					project_rag_config.preset_name = 'Custom'
+					project_rag_config.preset_category = 'custom'
+					project_rag_config.save()
+
+					logger.info(f"Custom RAG parameters saved for project {project.id}")
+
+					# Ricostruisci l'indice se necessario
+					try:
+						from dashboard.rag_utils import create_project_rag_chain
+						create_project_rag_chain(project=project, force_rebuild=True)
+						logger.info(f"Vector index rebuilt with custom RAG parameters")
+					except Exception as e:
+						logger.warning(f"Could not rebuild vector index: {str(e)}")
+
+					messages.success(request, "Parametri RAG personalizzati salvati con successo.")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({
+							'success': True,
+							'message': 'Parametri RAG personalizzati salvati con successo'
+						})
+
+				except ValueError as e:
+					logger.error(f"Validation error in custom RAG parameters: {str(e)}")
+					messages.error(request, f"Errore di validazione: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore di validazione: {str(e)}'})
+
+				except Exception as e:
+					logger.error(f"Error saving custom RAG parameters: {str(e)}")
+					logger.error(traceback.format_exc())
+					messages.error(request, f"Errore nel salvataggio: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= SELEZIONE MOTORE LLM =======
+			elif action == 'select_llm_engine':
+				try:
+					engine_id = request.POST.get('engine_id')
+					confirmed_change = request.POST.get('confirmed_change') == 'true'
+
+					if not engine_id:
+						raise ValueError("ID motore non specificato")
+
+					# Verifica che il motore sia disponibile per l'utente
+					selected_engine = get_object_or_404(
+						LLMEngine,
+						id=engine_id,
+						provider_id__in=available_provider_ids,
+						is_active=True
+					)
+
+					logger.info(f"Selecting LLM engine '{selected_engine.name}' for project {project.id}")
+
+					# Controlla se c'è un cambio di motore
+					engine_changed = llm_config.engine != selected_engine
+
+					# Se c'è un cambio e non è stato confermato, chiedi conferma
+					if engine_changed and not confirmed_change:
+						logger.info(
+							f"Engine change requires confirmation: from {llm_config.engine} to {selected_engine}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'require_confirmation': True,
+								'message': 'Il cambio di motore richiederà la ricostruzione dell\'indice. Continuare?',
+								'new_engine_name': selected_engine.name
+							})
+
+					# Salva il nuovo motore
+					old_engine = llm_config.engine
+					llm_config.engine = selected_engine
+
+					# Resetta i parametri personalizzati per usare quelli del nuovo motore
+					llm_config.temperature = None
+					llm_config.max_tokens = None
+					llm_config.timeout = None
+					llm_config.save()
+
+					logger.info(f"LLM engine changed from {old_engine} to {selected_engine}")
+
+					# Se c'è stato un cambio di motore, ricostruisci l'indice
+					if engine_changed:
+						try:
+							logger.info(f"Rebuilding vector index for engine change")
+
+							# Resetta lo stato degli embedding
+							ProjectFile.objects.filter(project=project).update(
+								is_embedded=False,
+								last_indexed_at=None
+							)
+
+							# Ricostruisci l'indice
+							from dashboard.rag_utils import create_project_rag_chain
+							create_project_rag_chain(project=project, force_rebuild=True)
+
+							logger.info(f"Vector index rebuilt successfully for new engine")
+
+						except Exception as e:
+							logger.error(f"Error rebuilding index for engine change: {str(e)}")
+						# Non fallire per questo errore, il motore è comunque stato cambiato
+
+					messages.success(request, f"Motore '{selected_engine.name}' selezionato con successo.")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({
+							'success': True,
+							'message': f"Motore '{selected_engine.name}' selezionato con successo"
+						})
+
+				except Exception as e:
+					logger.error(f"Error selecting LLM engine: {str(e)}")
+					logger.error(traceback.format_exc())
+					messages.error(request, f"Errore nella selezione del motore: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= CONFIGURAZIONE PARAMETRI MOTORE LLM =======
+			elif action == 'save_llm_params':
+				try:
+					logger.info(f"Saving LLM parameters for project {project.id}")
+
+					# Estrai i parametri dal form
+					temperature = request.POST.get('temperature')
+					max_tokens = request.POST.get('max_tokens')
+					timeout = request.POST.get('timeout')
+
+					# Valida e converte i parametri
+					if temperature:
+						temperature = float(temperature)
+						if temperature < 0 or temperature > 2:
+							raise ValueError("Temperature deve essere tra 0 e 2")
+						llm_config.temperature = temperature
+					else:
+						llm_config.temperature = None
+
+					if max_tokens:
+						max_tokens = int(max_tokens)
+						if max_tokens < 1 or max_tokens > 32000:
+							raise ValueError("Max tokens deve essere tra 1 e 32000")
+						llm_config.max_tokens = max_tokens
+					else:
+						llm_config.max_tokens = None
+
+					if timeout:
+						timeout = int(timeout)
+						if timeout < 10 or timeout > 300:
+							raise ValueError("Timeout deve essere tra 10 e 300 secondi")
+						llm_config.timeout = timeout
+					else:
+						llm_config.timeout = None
+
+					llm_config.save()
+
+					logger.info(f"LLM parameters saved for project {project.id}")
+					messages.success(request, "Parametri motore LLM salvati con successo.")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({
+							'success': True,
+							'message': 'Parametri motore LLM salvati con successo'
+						})
+
+				except ValueError as e:
+					logger.error(f"Validation error in LLM parameters: {str(e)}")
+					messages.error(request, f"Errore di validazione: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore di validazione: {str(e)}'})
+
+				except Exception as e:
+					logger.error(f"Error saving LLM parameters: {str(e)}")
+					logger.error(traceback.format_exc())
+					messages.error(request, f"Errore nel salvataggio: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# Redirect dopo POST per evitare re-submit
+			return redirect('project_config', project_id=project.id)
+
+		# Prepara i preset RAG disponibili
+		rag_presets = [
+			{
+				'name': 'balanced',
+				'display_name': 'Bilanciato',
+				'description': 'Configurazione equilibrata adatta alla maggior parte dei casi d\'uso',
+				'recommended': True,
+				'params': {
+					'chunk_size': 500,
+					'chunk_overlap': 50,
+					'similarity_top_k': 6,
+					'mmr_lambda': 0.7,
+					'similarity_threshold': 0.7,
+					'retriever_type': 'mmr'
+				}
+			},
+			{
+				'name': 'high_precision',
+				'display_name': 'Alta Precisione',
+				'description': 'Ottimizzato per documenti tecnici e scientifici dove la precisione è fondamentale',
+				'recommended': False,
+				'params': {
+					'chunk_size': 300,
+					'chunk_overlap': 100,
+					'similarity_top_k': 10,
+					'mmr_lambda': 0.9,
+					'similarity_threshold': 0.8,
+					'retriever_type': 'similarity_score_threshold'
+				}
+			},
+			{
+				'name': 'speed',
+				'display_name': 'Velocità',
+				'description': 'Ottimizzato per risposte rapide quando la velocità è prioritaria',
+				'recommended': False,
+				'params': {
+					'chunk_size': 800,
+					'chunk_overlap': 20,
+					'similarity_top_k': 4,
+					'mmr_lambda': 0.5,
+					'similarity_threshold': 0.6,
+					'retriever_type': 'similarity'
+				}
+			},
+			{
+				'name': 'extended_context',
+				'display_name': 'Contesto Esteso',
+				'description': 'Massimizza il contesto e le relazioni tra informazioni per analisi approfondite',
+				'recommended': False,
+				'params': {
+					'chunk_size': 1000,
+					'chunk_overlap': 200,
+					'similarity_top_k': 12,
+					'mmr_lambda': 0.6,
+					'similarity_threshold': 0.6,
+					'retriever_type': 'mmr'
+				}
+			}
+		]
+
+		# Raggruppa i motori per provider per migliore visualizzazione
+		engines_by_provider = {}
+		for engine in available_engines:
+			provider_name = engine.provider.name
+			if provider_name not in engines_by_provider:
+				engines_by_provider[provider_name] = {
+					'provider': engine.provider,
+					'engines': []
+				}
+			engines_by_provider[provider_name]['engines'].append(engine)
+
+		# Prepara il contesto per il template
+		context = {
+			'project': project,
+			'project_rag_config': project_rag_config,
+			'llm_config': llm_config,
+			'rag_presets': rag_presets,
+			'current_preset_name': project_rag_config.preset_name,
+			'is_custom_config': project_rag_config.preset_category == 'custom',
+			'available_engines': available_engines,
+			'engines_by_provider': engines_by_provider,
+			'providers': providers,
+			'current_engine': llm_config.engine,
+			'engine_parameters': {
+				'temperature': llm_config.get_temperature(),
+				'max_tokens': llm_config.get_max_tokens(),
+				'timeout': llm_config.get_timeout()
+			},
+			# Valori RAG correnti per i form
+			'rag_values': {
+				'chunk_size': project_rag_config.chunk_size,
+				'chunk_overlap': project_rag_config.chunk_overlap,
+				'similarity_top_k': project_rag_config.similarity_top_k,
+				'mmr_lambda': project_rag_config.mmr_lambda,
+				'similarity_threshold': project_rag_config.similarity_threshold,
+				'retriever_type': project_rag_config.retriever_type,
+				'auto_citation': project_rag_config.auto_citation,
+				'prioritize_filenames': project_rag_config.prioritize_filenames,
+				'equal_notes_weight': project_rag_config.equal_notes_weight,
+				'strict_context': project_rag_config.strict_context,
+			}
+		}
+
+		logger.info(f"Rendering configuration page for project {project.id}")
+		return render(request, 'be/project_config.html', context)
+
+	except Project.DoesNotExist:
+		logger.error(f"Project with ID {project_id} not found or access denied")
+		messages.error(request, "Progetto non trovato.")
+		return redirect('projects_list')
+
+	except Exception as e:
+		logger.error(f"Unexpected error in project_config: {str(e)}")
+		logger.error(traceback.format_exc())
+		messages.error(request, f"Errore imprevisto: {str(e)}")
+		return redirect('projects_list')
+
+
+def project_prompts(request, project_id):
+	"""
+	Gestisce la configurazione dei prompt di sistema per un progetto specifico.
+
+	Questa funzione permette di:
+	1. Visualizzare tutti i prompt di sistema predefiniti disponibili
+	2. Selezionare un prompt predefinito per il progetto
+	3. Creare un prompt personalizzato specifico per il progetto
+	4. Modificare prompt personalizzati esistenti
+	5. Anteprima e test dei prompt prima del salvataggio
+
+	La configurazione dei prompt è fondamentale per definire il comportamento
+	dell'IA e lo stile delle risposte per il progetto specifico.
+
+	Args:
+		request: Oggetto HttpRequest di Django
+		project_id: ID del progetto per cui configurare i prompt
+
+	Returns:
+		HttpResponse: Pagina di gestione prompt o redirect in caso di errore
+	"""
+	logger.debug(f"---> project_prompts: {project_id}")
+
+	if not request.user.is_authenticated:
+		logger.warning("Unauthenticated user attempted to access project prompts")
+		return redirect('login')
+
+	try:
+		# Ottieni il progetto dell'utente
+		project = get_object_or_404(Project, id=project_id, user=request.user)
+		logger.info(f"Accessing prompt configuration for project {project.id} ({project.name})")
+
+		# Ottieni o crea la configurazione prompt del progetto
+		project_prompt_config, prompt_created = ProjectPromptConfig.objects.get_or_create(project=project)
+		if prompt_created:
+			# Se appena creato, assegna il prompt predefinito se disponibile
+			default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+			if default_prompt:
+				project_prompt_config.default_system_prompt = default_prompt
+				project_prompt_config.use_custom_prompt = False
+				project_prompt_config.save()
+			logger.info(f"Created new prompt configuration for project {project.id}")
+
+		# Ottieni tutti i prompt di sistema predefiniti
+		default_prompts = DefaultSystemPrompts.objects.all().order_by('-is_default', 'category', 'name')
+
+		# Raggruppa i prompt per categoria per migliore visualizzazione
+		prompts_by_category = {}
+		for prompt in default_prompts:
+			category = prompt.get_category_display()
+			if category not in prompts_by_category:
+				prompts_by_category[category] = []
+			prompts_by_category[category].append(prompt)
+
+		logger.info(f"Found {default_prompts.count()} default prompts across {len(prompts_by_category)} categories")
+
+		# Gestione delle richieste POST
+		if request.method == 'POST':
+			action = request.POST.get('action', '')
+			logger.info(f"Processing POST request with action: {action}")
+
+			# ======= SELEZIONE PROMPT PREDEFINITO =======
+			if action == 'select_default_prompt':
+				try:
+					prompt_id = request.POST.get('prompt_id')
+
+					if not prompt_id:
+						raise ValueError("ID prompt non specificato")
+
+					# Verifica che il prompt esista
+					selected_prompt = get_object_or_404(DefaultSystemPrompts, id=prompt_id)
+
+					logger.info(f"Selecting default prompt '{selected_prompt.name}' for project {project.id}")
+
+					# Aggiorna la configurazione del progetto
+					project_prompt_config.default_system_prompt = selected_prompt
+					project_prompt_config.use_custom_prompt = False
+					project_prompt_config.save()
+
+					logger.info(f"Default prompt '{selected_prompt.name}' assigned to project {project.id}")
+					messages.success(request, f"Prompt '{selected_prompt.name}' selezionato con successo.")
+
+					# Risposta AJAX
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({
+							'success': True,
+							'message': f"Prompt '{selected_prompt.name}' selezionato con successo",
+							'prompt_name': selected_prompt.name,
+							'prompt_description': selected_prompt.description
+						})
+
+				except Exception as e:
+					logger.error(f"Error selecting default prompt: {str(e)}")
+					logger.error(traceback.format_exc())
+					messages.error(request, f"Errore nella selezione del prompt: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= SALVATAGGIO PROMPT PERSONALIZZATO =======
+			elif action == 'save_custom_prompt':
+				try:
+					custom_prompt_text = request.POST.get('custom_prompt_text', '').strip()
+					prompt_name = request.POST.get('prompt_name', '').strip()
+					prompt_description = request.POST.get('prompt_description', '').strip()
+
+					# Validazione del contenuto
+					if not custom_prompt_text:
+						raise ValueError("Il testo del prompt non può essere vuoto")
+
+					if len(custom_prompt_text) < 50:
+						raise ValueError("Il prompt deve essere di almeno 50 caratteri")
+
+					if len(custom_prompt_text) > 10000:
+						raise ValueError("Il prompt non può superare i 10.000 caratteri")
+
+					# Nome opzionale per il prompt personalizzato
+					if not prompt_name:
+						prompt_name = f"Prompt personalizzato per {project.name}"
+
+					logger.info(f"Saving custom prompt for project {project.id}")
+
+					# Salva il prompt personalizzato
+					project_prompt_config.custom_prompt_text = custom_prompt_text
+					project_prompt_config.use_custom_prompt = True
+
+					# Opzionalmente salva nome e descrizione nei metadati
+					if not hasattr(project_prompt_config, 'metadata') or not project_prompt_config.metadata:
+						project_prompt_config.metadata = {}
+
+					project_prompt_config.metadata = {
+						'custom_name': prompt_name,
+						'custom_description': prompt_description,
+						'created_at': timezone.now().isoformat(),
+						'word_count': len(custom_prompt_text.split()),
+						'char_count': len(custom_prompt_text)
+					}
+
+					project_prompt_config.save()
+
+					logger.info(
+						f"Custom prompt saved for project {project.id} (length: {len(custom_prompt_text)} chars)")
+					messages.success(request, "Prompt personalizzato salvato con successo.")
+
+					# Risposta AJAX
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({
+							'success': True,
+							'message': 'Prompt personalizzato salvato con successo',
+							'prompt_stats': {
+								'char_count': len(custom_prompt_text),
+								'word_count': len(custom_prompt_text.split()),
+								'line_count': len(custom_prompt_text.split('\n'))
+							}
+						})
+
+				except ValueError as e:
+					logger.error(f"Validation error in custom prompt: {str(e)}")
+					messages.error(request, f"Errore di validazione: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore di validazione: {str(e)}'})
+
+				except Exception as e:
+					logger.error(f"Error saving custom prompt: {str(e)}")
+					logger.error(traceback.format_exc())
+					messages.error(request, f"Errore nel salvataggio: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= ANTEPRIMA PROMPT =======
+			elif action == 'preview_prompt':
+				try:
+					prompt_text = request.POST.get('prompt_text', '').strip()
+					prompt_type = request.POST.get('prompt_type', 'custom')
+
+					if prompt_type == 'default':
+						prompt_id = request.POST.get('prompt_id')
+						if prompt_id:
+							prompt_obj = get_object_or_404(DefaultSystemPrompts, id=prompt_id)
+							prompt_text = prompt_obj.prompt_text
+
+					if not prompt_text:
+						raise ValueError("Nessun testo prompt da visualizzare")
+
+					# Analizza il prompt
+					stats = {
+						'char_count': len(prompt_text),
+						'word_count': len(prompt_text.split()),
+						'line_count': len(prompt_text.split('\n')),
+						'estimated_tokens': len(prompt_text.split()) * 1.3,  # Stima approssimativa
+					}
+
+					# Trova parole chiave comuni
+					keywords = []
+					common_keywords = [
+						'assistente', 'aiuta', 'risponde', 'documenti', 'informazioni',
+						'preciso', 'dettagliato', 'contesto', 'fonte', 'citazione'
+					]
+
+					prompt_lower = prompt_text.lower()
+					for keyword in common_keywords:
+						if keyword in prompt_lower:
+							keywords.append(keyword)
+
+					return JsonResponse({
+						'success': True,
+						'prompt_text': prompt_text,
+						'stats': stats,
+						'keywords': keywords
+					})
+
+				except Exception as e:
+					logger.error(f"Error in prompt preview: {str(e)}")
+					return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= TEST PROMPT CON DOMANDA CAMPIONE =======
+			elif action == 'test_prompt':
+				try:
+					prompt_text = request.POST.get('prompt_text', '').strip()
+					test_question = request.POST.get('test_question',
+													 'Cosa puoi dirmi sui documenti di questo progetto?').strip()
+
+					if not prompt_text:
+						raise ValueError("Nessun prompt da testare")
+
+					# Simula il formato finale del prompt
+					final_prompt = f"""{prompt_text}
+
+CONTESTO:
+[Qui verrebbero inseriti i frammenti di documenti rilevanti trovati nella ricerca vettoriale]
+
+DOMANDA: {test_question}
+RISPOSTA:"""
+
+					# Analizza la qualità del prompt
+					quality_checks = {
+						'has_role_definition': any(
+							word in prompt_text.lower() for word in ['sei', 'sei un', 'agisci come', 'il tuo ruolo']),
+						'has_context_instruction': any(
+							word in prompt_text.lower() for word in ['contesto', 'documenti', 'informazioni']),
+						'has_response_format': any(
+							word in prompt_text.lower() for word in ['rispondi', 'formato', 'struttura']),
+						'has_source_citation': any(
+							word in prompt_text.lower() for word in ['cita', 'fonte', 'riferimento']),
+						'appropriate_length': 100 <= len(prompt_text) <= 2000
+					}
+
+					quality_score = sum(quality_checks.values()) / len(quality_checks) * 100
+
+					return JsonResponse({
+						'success': True,
+						'final_prompt': final_prompt,
+						'quality_score': round(quality_score),
+						'quality_checks': quality_checks,
+						'recommendations': get_prompt_recommendations(quality_checks)
+					})
+
+				except Exception as e:
+					logger.error(f"Error in prompt test: {str(e)}")
+					return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# ======= RESET AL PROMPT PREDEFINITO =======
+			elif action == 'reset_to_default':
+				try:
+					logger.info(f"Resetting prompt configuration to default for project {project.id}")
+
+					# Trova il prompt predefinito
+					default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+
+					if default_prompt:
+						project_prompt_config.default_system_prompt = default_prompt
+						project_prompt_config.use_custom_prompt = False
+						project_prompt_config.custom_prompt_text = ""
+						project_prompt_config.save()
+
+						logger.info(f"Reset to default prompt '{default_prompt.name}' for project {project.id}")
+						messages.success(request,
+										 f"Configurazione ripristinata al prompt predefinito '{default_prompt.name}'.")
+					else:
+						logger.warning("No default prompt found for reset")
+						messages.warning(request, "Nessun prompt predefinito trovato.")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({
+							'success': True,
+							'message': 'Configurazione ripristinata al prompt predefinito'
+						})
+
+				except Exception as e:
+					logger.error(f"Error resetting to default prompt: {str(e)}")
+					messages.error(request, f"Errore nel ripristino: {str(e)}")
+
+					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+			# Redirect dopo POST per evitare re-submit
+			return redirect('project_prompts', project_id=project.id)
+
+		# Gestione richieste AJAX GET per contenuto prompt
+		if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+			if request.GET.get('get_prompt_content'):
+				prompt_id = request.GET.get('prompt_id')
+				try:
+					prompt = DefaultSystemPrompts.objects.get(id=prompt_id)
+					return JsonResponse({
+						'success': True,
+						'content': prompt.prompt_text,
+						'name': prompt.name,
+						'description': prompt.description,
+						'category': prompt.get_category_display()
+					})
+				except DefaultSystemPrompts.DoesNotExist:
+					return JsonResponse({
+						'success': False,
+						'message': 'Prompt non trovato'
+					})
+
+		# Ottieni informazioni sul prompt attualmente attivo
+		current_prompt_info = project_prompt_config.get_prompt_info()
+		effective_prompt_text = project_prompt_config.get_effective_prompt()
+
+		# Prepara statistiche del prompt attuale
+		current_prompt_stats = None
+		if effective_prompt_text:
+			current_prompt_stats = {
+				'char_count': len(effective_prompt_text),
+				'word_count': len(effective_prompt_text.split()),
+				'line_count': len(effective_prompt_text.split('\n')),
+				'estimated_tokens': round(len(effective_prompt_text.split()) * 1.3)
+			}
+
+		# Prepara il contesto per il template
+		context = {
+			'project': project,
+			'project_prompt_config': project_prompt_config,
+			'default_prompts': default_prompts,
+			'prompts_by_category': prompts_by_category,
+			'current_prompt_info': current_prompt_info,
+			'effective_prompt_text': effective_prompt_text,
+			'current_prompt_stats': current_prompt_stats,
+			'is_using_custom': project_prompt_config.use_custom_prompt,
+			'has_custom_prompt': bool(project_prompt_config.custom_prompt_text.strip()),
+			'custom_prompt_metadata': getattr(project_prompt_config, 'metadata', {}),
+			# Template per prompt personalizzato
+			'prompt_template': get_custom_prompt_template(),
+			# Suggerimenti per migliorare i prompt
+			'prompt_tips': get_prompt_writing_tips()
+		}
+
+		logger.info(f"Rendering prompt configuration page for project {project.id}")
+		return render(request, 'be/project_prompts.html', context)
+
+	except Project.DoesNotExist:
+		logger.error(f"Project with ID {project_id} not found or access denied")
+		messages.error(request, "Progetto non trovato.")
+		return redirect('projects_list')
+
+	except Exception as e:
+		logger.error(f"Unexpected error in project_prompts: {str(e)}")
+		logger.error(traceback.format_exc())
+		messages.error(request, f"Errore imprevisto: {str(e)}")
+		return redirect('projects_list')
+
+
+def get_prompt_recommendations(quality_checks):
+	"""
+	Genera raccomandazioni per migliorare un prompt basandosi sui controlli di qualità.
+
+	Args:
+		quality_checks: Dict con i risultati dei controlli di qualità
+
+	Returns:
+		List: Lista di raccomandazioni
+	"""
+	recommendations = []
+
+	if not quality_checks.get('has_role_definition'):
+		recommendations.append("Definisci chiaramente il ruolo dell'assistente (es: 'Sei un esperto di...')")
+
+	if not quality_checks.get('has_context_instruction'):
+		recommendations.append("Includi istruzioni su come utilizzare il contesto e i documenti")
+
+	if not quality_checks.get('has_response_format'):
+		recommendations.append("Specifica il formato desiderato per le risposte")
+
+	if not quality_checks.get('has_source_citation'):
+		recommendations.append("Richiedi la citazione delle fonti per aumentare l'affidabilità")
+
+	if not quality_checks.get('appropriate_length'):
+		recommendations.append("Mantieni il prompt tra 100 e 2000 caratteri per un equilibrio ottimale")
+
+	if not recommendations:
+		recommendations.append("Il prompt sembra ben strutturato! Considera di testarlo con domande specifiche.")
+
+	return recommendations
+
+
+def get_custom_prompt_template():
+	"""
+	Restituisce un template di base per prompt personalizzati.
+
+	Returns:
+		str: Template del prompt
+	"""
+	return """Sei un assistente esperto che analizza documenti per [DESCRIVI IL DOMINIO/ARGOMENTO].
+
+Il tuo compito è fornire risposte precise e dettagliate utilizzando ESCLUSIVAMENTE le informazioni contenute nei documenti forniti.
+
+Quando rispondi:
+1. Analizza attentamente tutti i documenti rilevanti nel contesto
+2. Fornisci risposte complete e ben strutturate
+3. Cita sempre le fonti specifiche (nome del documento, pagina se disponibile)
+4. Se l'informazione richiesta non è presente nei documenti, dichiaralo chiaramente
+5. Mantieni un tono [PROFESSIONALE/AMICHEVOLE/TECNICO] appropriato al contesto
+
+Formato delle risposte:
+- Inizia con un riassunto diretto della risposta
+- Sviluppa i dettagli nelle sezioni successive
+- Concludi con i riferimenti alle fonti utilizzate
+
+Non aggiungere informazioni che non sono presenti nei documenti forniti."""
+
+
+def get_prompt_writing_tips():
+	"""
+	Restituisce consigli per scrivere prompt efficaci.
+
+	Returns:
+		List: Lista di consigli
+	"""
+	return [
+		{
+			'title': 'Definisci il ruolo',
+			'description': 'Inizia specificando chiaramente chi è l\'assistente e qual è la sua competenza',
+			'example': 'Sei un assistente esperto in analisi finanziaria...'
+		},
+		{
+			'title': 'Specifica il compito',
+			'description': 'Descrivi chiaramente cosa deve fare l\'assistente con i documenti',
+			'example': 'Il tuo compito è analizzare i documenti e fornire risposte precise...'
+		},
+		{
+			'title': 'Istruzioni comportamentali',
+			'description': 'Includi regole su come comportarsi, cosa fare e cosa evitare',
+			'example': 'Rispondi SOLO basandoti sui documenti. Se non trovi l\'informazione, dichiaralo...'
+		},
+		{
+			'title': 'Formato risposta',
+			'description': 'Specifica come strutturare le risposte per maggiore chiarezza',
+			'example': 'Struttura la risposta in: 1) Risposta diretta, 2) Dettagli, 3) Fonti'
+		},
+		{
+			'title': 'Gestione fonti',
+			'description': 'Richiedi sempre la citazione delle fonti per aumentare l\'affidabilità',
+			'example': 'Cita sempre il documento specifico da cui proviene ogni informazione'
+		},
+		{
+			'title': 'Tono e stile',
+			'description': 'Definisci il tono appropriato per il tuo caso d\'uso specifico',
+			'example': 'Mantieni un tono professionale ma accessibile...'
+		}
+	]

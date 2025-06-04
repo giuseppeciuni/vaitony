@@ -26,8 +26,9 @@ urlpatterns = [
     path('projects', views.project, name='project'),  # Supporto per POST senza ID
     path('project/<int:project_id>/details/', views.project_details, name='project_details'),
     path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
-    path('project/<int:project_id>/config/', views.project_config, name='project_config'),
+    #path('project/<int:project_id>/config/', views.project_config, name='project_config'),
     path('api/projects/<int:project_id>/urls/<int:url_id>/toggle-inclusion/', views.toggle_url_inclusion, name='toggle_url_inclusion'),
+
 
     # Crawler
     path('projects/<int:project_id>/website_crawl/', views.website_crawl, name='website_crawl'),
@@ -35,7 +36,6 @@ urlpatterns = [
 
     # Nuove URL per le impostazioni
     path('settings/ia-engine/', views.ia_engine, name='ia_engine'),
-    path('settings/rag/', views.rag_settings, name='rag_settings'),
     path('settings/billing/', views.billing_settings, name='billing_settings'),
     #path('settings/templates/', views.rag_templates, name='rag_templates'),
 
@@ -48,6 +48,10 @@ urlpatterns = [
     path('chatwoot-webhook/', views.chatwoot_webhook, name='chatwoot_webhook'),
 
     path('api/execute-command/', execute_management_command, name='execute_management_command'),
+
+    #ora
+    path('project/<int:project_id>/config/', views.project_config, name='project_config'),
+    path('project/<int:project_id>/prompts/', views.project_prompts, name='project_prompts'),
 ]
 
 if settings.DEBUG:

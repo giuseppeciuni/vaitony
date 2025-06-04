@@ -1,0 +1,1164 @@
+{% extends 'be/base.html' %}
+{% load static %}
+
+{% block title %}Gestione Prompt - {{ project.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Stili generali */
+    .prompt-section {
+        margin-bottom: 2rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background: white;
+    }
+
+    .prompt-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.25rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .prompt-body {
+        padding: 1.5rem;
+    }
+
+    /* Stili per le card dei prompt */
+    .prompt-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        height: 100%;
+        position: relative;
+        border: 2px solid transparent;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .prompt-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .prompt-card.selected {
+        border-color: #0d6efd;
+        box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.25);
+    }
+
+    .prompt-badge {
+        position: absolute;
+        right: -5px;
+        top: -5px;
+        background: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        transform: scale(0);
+        transition: transform 0.3s ease;
+    }
+
+    .prompt-card.selected .prompt-badge {
+        transform: scale(1);
+    }
+
+    /* Stili per l'editor prompt */
+    .prompt-editor {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .prompt-textarea {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        border-radius: 0.5rem;
+        border: 1px solid #ced4da;
+        resize: vertical;
+    }
+
+    .prompt-textarea:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* Stili per statistiche prompt */
+    .prompt-stats {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 0.5rem;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #0d6efd;
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Indicatori di stato */
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .status-default {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+
+    .status-custom {
+        background-color: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+
+    .status-none {
+        background-color: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+    }
+
+    /* Stili per categorie */
+    .category-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+        border-radius: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .category-balanced { background-color: rgba(13, 110, 253, 0.1); color: #0d6efd; }
+    .category-precision { background-color: rgba(40, 167, 69, 0.1); color: #28a745; }
+    .category-speed { background-color: rgba(255, 193, 7, 0.1); color: #ffc107; }
+    .category-creative { background-color: rgba(220, 53, 69, 0.1); color: #dc3545; }
+    .category-technical { background-color: rgba(108, 117, 125, 0.1); color: #6c757d; }
+
+    /* Anteprima prompt */
+    .prompt-preview {
+        background-color: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 0.5rem 0.5rem 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    /* Qualità prompt */
+    .quality-score {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        font-weight: bold;
+        font-size: 1.2rem;
+        color: white;
+        margin-right: 1rem;
+    }
+
+    .quality-excellent { background-color: #28a745; }
+    .quality-good { background-color: #17a2b8; }
+    .quality-fair { background-color: #ffc107; }
+    .quality-poor { background-color: #dc3545; }
+
+    .quality-check {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+    }
+
+    .quality-check.passed {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+
+    .quality-check.failed {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    /* Tips e suggerimenti */
+    .tip-card {
+        border-left: 4px solid #17a2b8;
+        background-color: #f8f9fa;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+    }
+
+    .tip-title {
+        font-weight: bold;
+        color: #17a2b8;
+        margin-bottom: 0.5rem;
+    }
+
+    .tip-example {
+        font-style: italic;
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .prompt-header {
+            padding: 1rem;
+        }
+
+        .prompt-body {
+            padding: 1rem;
+        }
+
+        .prompt-card {
+            margin-bottom: 1rem;
+        }
+
+        .stat-item {
+            padding: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+        }
+    }
+
+    /* Animazioni */
+    .fade-in {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Evidenziazione sintassi per prompt */
+    .syntax-highlight .variable {
+        color: #e83e8c;
+        font-weight: bold;
+    }
+
+    .syntax-highlight .instruction {
+        color: #17a2b8;
+        font-weight: 500;
+    }
+
+    .syntax-highlight .example {
+        color: #28a745;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header della pagina -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-chat-quote-fill text-primary me-2"></i>
+                Gestione Prompt di Sistema
+            </h1>
+            <p class="text-muted mb-0">
+                <strong>{{ project.name }}</strong> - Configura il comportamento dell'IA
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'project' project.id %}" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-arrow-left me-1"></i> Torna al progetto
+            </a>
+            <a href="{% url 'project_config_completo' project.id %}" class="btn btn-outline-primary">
+                <i class="bi bi-gear me-1"></i> Configurazione completa
+            </a>
+        </div>
+    </div>
+
+    <!-- Messaggi di feedback -->
+    {% if messages %}
+    <div class="messages mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Stato attuale del prompt -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-info-circle text-info me-2"></i>
+                        Prompt Attivo
+                    </h6>
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="status-indicator {% if is_using_custom %}status-custom{% elif current_prompt_info.type == 'default' %}status-default{% else %}status-none{% endif %}">
+                            {% if is_using_custom %}
+                                <i class="bi bi-gear me-1"></i> Personalizzato
+                            {% elif current_prompt_info.type == 'default' %}
+                                <i class="bi bi-check-circle me-1"></i> {{ current_prompt_info.name }}
+                            {% else %}
+                                <i class="bi bi-exclamation-triangle me-1"></i> Nessun prompt
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% if current_prompt_info.description %}
+                    <p class="text-muted small mb-2">{{ current_prompt_info.description }}</p>
+                    {% endif %}
+                    {% if current_prompt_stats %}
+                    <small class="text-muted">
+                        {{ current_prompt_stats.char_count }} caratteri •
+                        {{ current_prompt_stats.word_count }} parole •
+                        ~{{ current_prompt_stats.estimated_tokens }} token
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title">
+                        <i class="bi bi-tools text-warning me-2"></i>
+                        Azioni Rapide
+                    </h6>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#preview-modal">
+                            <i class="bi bi-eye me-1"></i> Anteprima
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#test-modal">
+                            <i class="bi bi-play-circle me-1"></i> Test
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="reset-to-default">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs principali -->
+    <ul class="nav nav-tabs mb-4" id="promptTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="default-prompts-tab" data-bs-toggle="tab" data-bs-target="#default-prompts" type="button" role="tab">
+                <i class="bi bi-collection me-1"></i> Prompt Predefiniti
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="custom-prompt-tab" data-bs-toggle="tab" data-bs-target="#custom-prompt" type="button" role="tab">
+                <i class="bi bi-pencil-square me-1"></i> Prompt Personalizzato
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="help-tab" data-bs-toggle="tab" data-bs-target="#help" type="button" role="tab">
+                <i class="bi bi-question-circle me-1"></i> Guida
+            </button>
+        </li>
+    </ul>
+
+    <!-- Contenuto delle tabs -->
+    <div class="tab-content" id="promptTabsContent">
+
+        <!-- Tab Prompt Predefiniti -->
+        <div class="tab-pane fade show active" id="default-prompts" role="tabpanel">
+            <div class="prompt-section">
+                <div class="prompt-header">
+                    <h5 class="mb-1">
+                        <i class="bi bi-collection text-primary me-2"></i>
+                        Seleziona un Prompt Predefinito
+                    </h5>
+                    <p class="text-muted mb-0">Scegli tra i prompt ottimizzati per diversi casi d'uso</p>
+                </div>
+                <div class="prompt-body">
+                    {% for category, prompts in prompts_by_category.items %}
+                    <div class="mb-4">
+                        <h6 class="text-secondary mb-3">
+                            <i class="bi bi-tag me-2"></i>
+                            {{ category }}
+                        </h6>
+                        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+                            {% for prompt in prompts %}
+                            <div class="col">
+                                <div class="card prompt-card {% if not is_using_custom and current_prompt_info.name == prompt.name %}selected{% endif %}"
+                                     data-prompt-id="{{ prompt.id }}">
+                                    <div class="prompt-badge">
+                                        <i class="bi bi-check"></i>
+                                    </div>
+                                    <div class="card-header d-flex justify-content-between align-items-start">
+                                        <h6 class="mb-0">{{ prompt.name }}</h6>
+                                        <div>
+                                            {% if prompt.is_default %}
+                                            <span class="badge bg-success">Default</span>
+                                            {% endif %}
+                                            <span class="category-badge category-{{ prompt.category }}">
+                                                {{ prompt.get_category_display }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="card-text small">{{ prompt.description|truncatechars:120 }}</p>
+
+                                        <!-- Anteprima contenuto -->
+                                        <div class="small text-muted">
+                                            <strong>Anteprima:</strong>
+                                            <div class="mt-1" style="max-height: 60px; overflow: hidden; font-size: 0.75rem;">
+                                                {{ prompt.prompt_text|truncatechars:150 }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                {{ prompt.prompt_text|length }} caratteri
+                                            </small>
+                                            <div>
+                                                <button type="button" class="btn btn-outline-info btn-sm me-1 preview-prompt"
+                                                        data-prompt-id="{{ prompt.id }}">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button type="button"
+                                                        class="btn {% if not is_using_custom and current_prompt_info.name == prompt.name %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm select-prompt"
+                                                        data-prompt-id="{{ prompt.id }}">
+                                                    {% if not is_using_custom and current_prompt_info.name == prompt.name %}
+                                                        <i class="bi bi-check-circle me-1"></i> Attivo
+                                                    {% else %}
+                                                        <i class="bi bi-play-circle me-1"></i> Seleziona
+                                                    {% endif %}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-collection text-muted" style="font-size: 3rem;"></i>
+                        <h4 class="mt-3 text-muted">Nessun prompt predefinito disponibile</h4>
+                        <p class="text-muted">Contatta l'amministratore per aggiungere prompt predefiniti.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Prompt Personalizzato -->
+        <div class="tab-pane fade" id="custom-prompt" role="tabpanel">
+            <div class="prompt-section">
+                <div class="prompt-header">
+                    <h5 class="mb-1">
+                        <i class="bi bi-pencil-square text-warning me-2"></i>
+                        Crea Prompt Personalizzato
+                    </h5>
+                    <p class="text-muted mb-0">Definisci un prompt specifico per le esigenze del tuo progetto</p>
+                </div>
+                <div class="prompt-body">
+                    <form id="custom-prompt-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_custom_prompt">
+
+                        <!-- Informazioni prompt -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="prompt-name" class="form-label">Nome del prompt (opzionale)</label>
+                                <input type="text" class="form-control" id="prompt-name" name="prompt_name"
+                                       placeholder="Es: Assistente specializzato in..."
+                                       value="{% if custom_prompt_metadata.custom_name %}{{ custom_prompt_metadata.custom_name }}{% endif %}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="prompt-description" class="form-label">Descrizione (opzionale)</label>
+                                <input type="text" class="form-control" id="prompt-description" name="prompt_description"
+                                       placeholder="Breve descrizione del prompt..."
+                                       value="{% if custom_prompt_metadata.custom_description %}{{ custom_prompt_metadata.custom_description }}{% endif %}">
+                            </div>
+                        </div>
+
+                        <!-- Editor prompt -->
+                        <div class="prompt-editor">
+                            <label for="custom-prompt-text" class="form-label">
+                                <strong>Testo del Prompt</strong>
+                                <small class="text-muted">(minimo 50 caratteri, massimo 10.000)</small>
+                            </label>
+                            <textarea class="form-control prompt-textarea" id="custom-prompt-text" name="custom_prompt_text"
+                                      rows="12" placeholder="Inserisci il tuo prompt personalizzato...">{% if project_prompt_config.custom_prompt_text %}{{ project_prompt_config.custom_prompt_text }}{% else %}{{ prompt_template }}{% endif %}</textarea>
+
+                            <!-- Statistiche in tempo reale -->
+                            <div class="prompt-stats">
+                                <div class="row">
+                                    <div class="col-3">
+                                        <div class="stat-item">
+                                            <div class="stat-value" id="char-count">0</div>
+                                            <div class="stat-label">Caratteri</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="stat-item">
+                                            <div class="stat-value" id="word-count">0</div>
+                                            <div class="stat-label">Parole</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="stat-item">
+                                            <div class="stat-value" id="line-count">0</div>
+                                            <div class="stat-label">Righe</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="stat-item">
+                                            <div class="stat-value" id="token-estimate">0</div>
+                                            <div class="stat-label">~Token</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pulsanti di controllo -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <div>
+                                <button type="button" class="btn btn-outline-secondary me-2" id="load-template">
+                                    <i class="bi bi-file-text me-1"></i> Carica template
+                                </button>
+                                <button type="button" class="btn btn-outline-info me-2" id="preview-custom">
+                                    <i class="bi bi-eye me-1"></i> Anteprima
+                                </button>
+                                <button type="button" class="btn btn-outline-warning" id="test-custom">
+                                    <i class="bi bi-play-circle me-1"></i> Test
+                                </button>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i> Salva prompt personalizzato
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Guida -->
+        <div class="tab-pane fade" id="help" role="tabpanel">
+            <div class="prompt-section">
+                <div class="prompt-header">
+                    <h5 class="mb-1">
+                        <i class="bi bi-question-circle text-info me-2"></i>
+                        Guida alla Scrittura di Prompt Efficaci
+                    </h5>
+                    <p class="text-muted mb-0">Consigli e best practice per creare prompt di alta qualità</p>
+                </div>
+                <div class="prompt-body">
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <h6 class="text-primary mb-3">Principi Fondamentali</h6>
+                            {% for tip in prompt_tips %}
+                            <div class="tip-card">
+                                <div class="tip-title">{{ tip.title }}</div>
+                                <div>{{ tip.description }}</div>
+                                {% if tip.example %}
+                                <div class="tip-example">"{{ tip.example }}"</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-lightbulb text-warning me-2"></i>
+                                        Esempi Pratici
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <strong>Per documenti legali:</strong>
+                                        <small class="d-block text-muted">Enfatizza precisione, citazioni e terminologia appropriata</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Per contenuti creativi:</strong>
+                                        <small class="d-block text-muted">Permetti più libertà interpretativa e tono più colloquiale</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Per analisi tecniche:</strong>
+                                        <small class="d-block text-muted">Richiedi struttura logica e spiegazioni dettagliate</small>
+                                    </div>
+                                    <div>
+                                        <strong>Per customer support:</strong>
+                                        <small class="d-block text-muted">Mantieni tono professionale e soluzioni pratiche</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                        Errori Comuni
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="mb-0 small">
+                                        <li>Prompt troppo generici o vaghi</li>
+                                        <li>Mancanza di istruzioni sul formato</li>
+                                        <li>Non specificare come gestire casi limite</li>
+                                        <li>Dimenticare di richiedere citazioni</li>
+                                        <li>Prompt troppo lunghi e complessi</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Anteprima Prompt -->
+<div class="modal fade" id="preview-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-eye me-2"></i>
+                    Anteprima Prompt
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="preview-content">
+                    <div class="prompt-preview" id="preview-text"></div>
+                    <div class="row mt-3" id="preview-stats">
+                        <!-- Statistiche dinamiche -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Test Prompt -->
+<div class="modal fade" id="test-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-play-circle me-2"></i>
+                    Test Prompt
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="test-question" class="form-label">Domanda di test:</label>
+                    <input type="text" class="form-control" id="test-question"
+                           value="Cosa puoi dirmi sui documenti di questo progetto?"
+                           placeholder="Inserisci una domanda di esempio...">
+                </div>
+                <div id="test-results">
+                    <!-- Risultati del test -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary" id="run-test">
+                    <i class="bi bi-play me-1"></i> Esegui test
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Variabili globali
+    let previewModal = null;
+    let testModal = null;
+
+    // Inizializza modal
+    previewModal = new bootstrap.Modal(document.getElementById('preview-modal'));
+    testModal = new bootstrap.Modal(document.getElementById('test-modal'));
+
+    // ======= GESTIONE PROMPT PREDEFINITI =======
+
+    // Selezione prompt predefinito
+    document.querySelectorAll('.select-prompt').forEach(button => {
+        button.addEventListener('click', function() {
+            const promptId = this.getAttribute('data-prompt-id');
+            selectDefaultPrompt(promptId, this);
+        });
+    });
+
+    function selectDefaultPrompt(promptId, button) {
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Selezionando...';
+
+        const formData = new FormData();
+        formData.append('action', 'select_default_prompt');
+        formData.append('prompt_id', promptId);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+
+            if (data.success) {
+                showToast(data.message, 'success');
+                updatePromptSelection(promptId);
+
+                // Ricarica la pagina per aggiornare lo stato
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+            console.error('Errore:', error);
+            showToast('Errore di comunicazione', 'danger');
+        });
+    }
+
+    function updatePromptSelection(selectedPromptId) {
+        // Rimuovi selezione da tutte le card
+        document.querySelectorAll('.prompt-card').forEach(card => {
+            card.classList.remove('selected');
+            const btn = card.querySelector('.select-prompt');
+            if (btn) {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-primary');
+                btn.innerHTML = '<i class="bi bi-play-circle me-1"></i> Seleziona';
+            }
+        });
+
+        // Seleziona la card corrente
+        const selectedCard = document.querySelector(`[data-prompt-id="${selectedPromptId}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+            const selectedBtn = selectedCard.querySelector('.select-prompt');
+            if (selectedBtn) {
+                selectedBtn.classList.remove('btn-outline-primary');
+                selectedBtn.classList.add('btn-primary');
+                selectedBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Attivo';
+            }
+        }
+    }
+
+    // Anteprima prompt predefinito
+    document.querySelectorAll('.preview-prompt').forEach(button => {
+        button.addEventListener('click', function() {
+            const promptId = this.getAttribute('data-prompt-id');
+            previewPrompt(promptId, 'default');
+        });
+    });
+
+    // ======= GESTIONE PROMPT PERSONALIZZATO =======
+
+    const customPromptTextarea = document.getElementById('custom-prompt-text');
+
+    // Aggiorna statistiche in tempo reale
+    if (customPromptTextarea) {
+        customPromptTextarea.addEventListener('input', updatePromptStats);
+        updatePromptStats(); // Aggiorna al caricamento
+    }
+
+    function updatePromptStats() {
+        const text = customPromptTextarea.value;
+        const charCount = text.length;
+        const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+        const lineCount = text.split('\n').length;
+        const tokenEstimate = Math.round(wordCount * 1.3);
+
+        document.getElementById('char-count').textContent = charCount;
+        document.getElementById('word-count').textContent = wordCount;
+        document.getElementById('line-count').textContent = lineCount;
+        document.getElementById('token-estimate').textContent = tokenEstimate;
+    }
+
+    // Salva prompt personalizzato
+    document.getElementById('custom-prompt-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+
+        const formData = new FormData(this);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+
+            if (data.success) {
+                showToast(data.message, 'success');
+
+                // Ricarica per aggiornare stato
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+            console.error('Errore:', error);
+            showToast('Errore di comunicazione', 'danger');
+        });
+    });
+
+    // Carica template
+    document.getElementById('load-template').addEventListener('click', function() {
+        if (confirm('Sostituire il contenuto attuale con il template predefinito?')) {
+            const template = `{{ prompt_template|escapejs }}`;
+            customPromptTextarea.value = template;
+            updatePromptStats();
+        }
+    });
+
+    // Anteprima prompt personalizzato
+    document.getElementById('preview-custom').addEventListener('click', function() {
+        const promptText = customPromptTextarea.value.trim();
+        if (!promptText) {
+            showToast('Inserisci del testo nel prompt prima dell\'anteprima', 'warning');
+            return;
+        }
+        previewPrompt(null, 'custom', promptText);
+    });
+
+    // Test prompt personalizzato
+    document.getElementById('test-custom').addEventListener('click', function() {
+        const promptText = customPromptTextarea.value.trim();
+        if (!promptText) {
+            showToast('Inserisci del testo nel prompt prima del test', 'warning');
+            return;
+        }
+        testPrompt(promptText);
+    });
+
+    // ======= FUNZIONI MODAL =======
+
+    function previewPrompt(promptId = null, type = 'default', customText = null) {
+        const formData = new FormData();
+        formData.append('action', 'preview_prompt');
+        formData.append('prompt_type', type);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        if (type === 'default' && promptId) {
+            formData.append('prompt_id', promptId);
+        } else if (type === 'custom' && customText) {
+            formData.append('prompt_text', customText);
+        }
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('preview-text').textContent = data.prompt_text;
+
+                // Mostra statistiche
+                const statsHtml = `
+                    <div class="col-3">
+                        <div class="stat-item">
+                            <div class="stat-value">${data.stats.char_count}</div>
+                            <div class="stat-label">Caratteri</div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="stat-item">
+                            <div class="stat-value">${data.stats.word_count}</div>
+                            <div class="stat-label">Parole</div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="stat-item">
+                            <div class="stat-value">${data.stats.line_count}</div>
+                            <div class="stat-label">Righe</div>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="stat-item">
+                            <div class="stat-value">${Math.round(data.stats.estimated_tokens)}</div>
+                            <div class="stat-label">~Token</div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('preview-stats').innerHTML = statsHtml;
+
+                previewModal.show();
+            } else {
+                showToast(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di comunicazione', 'danger');
+        });
+    }
+
+    function testPrompt(promptText) {
+        document.getElementById('test-results').innerHTML = '';
+        testModal.show();
+    }
+
+    // Esegui test
+    document.getElementById('run-test').addEventListener('click', function() {
+        const promptText = customPromptTextarea.value.trim();
+        const testQuestion = document.getElementById('test-question').value.trim();
+
+        if (!promptText) {
+            showToast('Nessun prompt da testare', 'warning');
+            return;
+        }
+
+        const button = this;
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testando...';
+
+        const formData = new FormData();
+        formData.append('action', 'test_prompt');
+        formData.append('prompt_text', promptText);
+        formData.append('test_question', testQuestion);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+
+            if (data.success) {
+                displayTestResults(data);
+            } else {
+                showToast(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+            console.error('Errore:', error);
+            showToast('Errore di comunicazione', 'danger');
+        });
+    });
+
+    function displayTestResults(data) {
+        const qualityClass = getQualityClass(data.quality_score);
+
+        let checksHtml = '';
+        for (const [check, passed] of Object.entries(data.quality_checks)) {
+            const checkLabel = getCheckLabel(check);
+            checksHtml += `
+                <div class="quality-check ${passed ? 'passed' : 'failed'}">
+                    <i class="bi bi-${passed ? 'check-circle' : 'x-circle'} me-2"></i>
+                    ${checkLabel}
+                </div>
+            `;
+        }
+
+        let recommendationsHtml = '';
+        if (data.recommendations && data.recommendations.length > 0) {
+            recommendationsHtml = `
+                <h6 class="mt-3">Raccomandazioni:</h6>
+                <ul>
+                    ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+            `;
+        }
+
+        const resultsHtml = `
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="quality-score ${qualityClass}">${data.quality_score}%</div>
+                        <div>
+                            <h6 class="mb-0">Qualità Prompt</h6>
+                            <small class="text-muted">Punteggio di qualità</small>
+                        </div>
+                    </div>
+
+                    <h6>Controlli Qualità:</h6>
+                    ${checksHtml}
+
+                    ${recommendationsHtml}
+                </div>
+                <div class="col-md-8">
+                    <h6>Anteprima Prompt Finale:</h6>
+                    <div class="prompt-preview">${data.final_prompt}</div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('test-results').innerHTML = resultsHtml;
+    }
+
+    function getQualityClass(score) {
+        if (score >= 80) return 'quality-excellent';
+        if (score >= 60) return 'quality-good';
+        if (score >= 40) return 'quality-fair';
+        return 'quality-poor';
+    }
+
+    function getCheckLabel(check) {
+        const labels = {
+            'has_role_definition': 'Definizione del ruolo',
+            'has_context_instruction': 'Istruzioni sul contesto',
+            'has_response_format': 'Formato della risposta',
+            'has_source_citation': 'Citazione delle fonti',
+            'appropriate_length': 'Lunghezza appropriata'
+        };
+        return labels[check] || check;
+    }
+
+    // ======= AZIONI RAPIDE =======
+
+    // Reset al prompt predefinito
+    document.getElementById('reset-to-default').addEventListener('click', function() {
+        if (confirm('Ripristinare la configurazione al prompt predefinito?')) {
+            const formData = new FormData();
+            formData.append('action', 'reset_to_default');
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showToast(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                showToast('Errore di comunicazione', 'danger');
+            });
+        }
+    });
+
+    // ======= FUNZIONI UTILITY =======
+
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+               document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    }
+
+    function showToast(message, type = 'info', autoHide = 3000) {
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+
+        toastEl.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+
+        toastContainer.appendChild(toastEl);
+
+        const toast = new bootstrap.Toast(toastEl, {
+            autohide: autoHide > 0,
+            delay: autoHide
+        });
+        toast.show();
+
+        toastEl.addEventListener('hidden.bs.toast', function() {
+            toastEl.remove();
+        });
+
+        return toast;
+    }
+});
+</script>
+{% endblock %}

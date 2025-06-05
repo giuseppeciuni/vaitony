@@ -2,17 +2,14 @@ import json
 import logging
 import time
 import traceback
-from django.shortcuts import render, get_object_or_404
+from django.conf import settings
 from django.http import JsonResponse, HttpResponse
+from django.shortcuts import render, get_object_or_404
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
-
 from dashboard.rag_utils import get_answer_from_project, create_project_rag_chain
 from profiles.chatwoot_client import ChatwootClient
 from profiles.models import Project, ProjectConversation, ProjectURL
-from django.urls import reverse
-from django.conf import settings
-from django.contrib import messages
-
 
 logger = logging.getLogger(__name__)
 

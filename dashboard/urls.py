@@ -3,14 +3,14 @@ from django.conf.urls.static import static
 from django.urls import path
 from dashboard.api import external_chat_api
 from dashboard.dashboard_console import execute_management_command
-from dashboard.views.chatbot_views import chatbot_widget, chatbot_widget_js, chatwoot_webhook, toggle_url_inclusion
-from dashboard.views.config_views import project_config, project_prompts
-from dashboard.views.crawling_views import website_crawl
-from dashboard.views.dashboard_views import dashboard, documents_uploaded
-from dashboard.views.document_views import serve_project_file
-from dashboard.views.ia_engine_views import ia_engine
-from dashboard.views.project_views import new_project, projects_list, project_details, project
-from dashboard.views.user_views import user_profile, billing_settings
+from dashboard.views.chatbot import chatbot_widget, chatbot_widget_js, chatwoot_webhook, toggle_url_inclusion
+from dashboard.views.project_config import project_config, project_prompts
+from dashboard.views.crawler import website_crawl
+from dashboard.views.dashboard import dashboard
+from dashboard.views.documents import serve_project_file, documents_uploaded
+from dashboard.views.ia_engine import ia_engine
+from dashboard.views.project import new_project, projects_list, project_details, project
+from dashboard.views.user_manager import user_profile, billing_settings
 from profiles.views import user_login
 
 urlpatterns = [

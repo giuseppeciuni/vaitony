@@ -3,16 +3,7 @@ import traceback
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
-from profiles.models import (
-    Project,
-    ProjectRAGConfig,
-    ProjectLLMConfiguration,
-    LLMEngine,
-    UserAPIKey,
-    ProjectFile,
-    ProjectPromptConfig,  # Verifica che sia incluso
-    DefaultSystemPrompts
-)
+from profiles.models import Project, ProjectRAGConfig, ProjectLLMConfiguration, LLMEngine, UserAPIKey, ProjectFile, ProjectPromptConfig, DefaultSystemPrompts
 
 logger = logging.getLogger(__name__)
 

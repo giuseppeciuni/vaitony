@@ -488,7 +488,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     # Importazione ritardata per evitare cicli di importazione
     from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache, ProjectURL
 
-    logger.debug(f"Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
+    logger.debug(f"---> create_project_rag_chain: Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
 
     # PARTE 1: INIZIALIZZAZIONE VARIABILI
     cached_files = []

@@ -12,12 +12,11 @@ from django.urls import reverse
 from django.utils import timezone
 from dashboard.rag_utils import handle_delete_note, get_answer_from_project, handle_project_file_upload, \
 	create_project_rag_chain, handle_add_note, handle_update_note
-from dashboard.views.chatbot_views import create_chatwoot_bot_for_project
+from dashboard.views.chatbot import create_chatwoot_bot_for_project
 from profiles.chatwoot_client import ChatwootClient
-from profiles.models import (Project, UserAPIKey, ProjectLLMConfiguration, LLMEngine, LLMProvider,
-							 ProjectRAGConfig, ProjectIndexStatus, ProjectPromptConfig, AnswerSource, ProjectFile,
-							 ProjectURL, ProjectNote, ProjectConversation
-							 )
+from profiles.models import Project, UserAPIKey, ProjectLLMConfiguration, LLMEngine, LLMProvider, ProjectRAGConfig, \
+	ProjectIndexStatus, ProjectPromptConfig, AnswerSource, ProjectFile, ProjectURL, ProjectNote, ProjectConversation
+
 
 logger = logging.getLogger(__name__)
 

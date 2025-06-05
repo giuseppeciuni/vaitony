@@ -917,7 +917,7 @@ def update_index_on_file_change(sender, instance, created, **kwargs):
 	if kwargs.get('update_fields') is not None and 'is_embedded' in kwargs.get('update_fields'):
 		return
 
-	logger.info(f"📣 Segnale attivato: File {'creato' if created else 'modificato'} - {instance.filename}")
+	logger.info(f" ---> Models ---> update_index_on_file_change: 📣 Segnale attivato: File {'creato' if created else 'modificato'} - {instance.filename}")
 
 	try:
 		supported_extensions = ['.pdf', '.docx', '.doc', '.txt']
@@ -948,13 +948,13 @@ def update_index_on_note_change(sender, instance, created, **kwargs):
 	"""
     Segnale che aggiorna l'indice vettoriale quando una nota viene aggiunta o modificata.
     """
+	logger.info("---> Models ---> update_index_on_note_change")
 	if kwargs.get('update_fields') is not None and 'last_indexed_at' in kwargs.get('update_fields'):
 		return
 
 	from dashboard.rag_utils import create_project_rag_chain
 
-	logger.info(
-		f"📣 Segnale attivato: Nota {'creata' if created else 'modificata'} - {instance.title or 'Senza titolo'}")
+	logger.info(f"📣 Segnale attivato: Nota {'creata' if created else 'modificata'} - {instance.title or 'Senza titolo'}")
 
 	try:
 		if instance.is_included_in_rag:

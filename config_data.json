@@ -1,0 +1,485 @@
+IMPORTED LOCAL SETTINGS
+[
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 1,
+  "fields": {
+    "name": "RAG Standard",
+    "description": "Prompt per sistema RAG standard. Bilanciato per la maggior parte dei casi d'uso.",
+    "prompt_text": "Sei un assistente esperto che analizza documenti, note e pagine web, fornendo risposte dettagliate e complete.\n\nPer rispondere alla domanda dell'utente, utilizza ESCLUSIVAMENTE le informazioni fornite nel contesto seguente.\nSe l'informazione non è presente nel contesto, indica chiaramente che non puoi rispondere in base ai documenti forniti.\n\nIl contesto contiene documenti, note e URL web, insieme ai titoli dei file e agli indirizzi delle pagine web. Considera tutti questi elementi nelle tue risposte.\n\nQuando rispondi:\n1. Fornisci una risposta dettagliata e approfondita analizzando tutte le informazioni disponibili\n2. Se l'utente chiede informazioni su un file o documento specifico per nome, controlla i titoli dei file nel contesto\n3. Organizza le informazioni in modo logico e strutturato\n4. Cita fatti specifici e dettagli presenti nei documenti, nelle note e nelle pagine web\n5. Se pertinente, evidenzia le relazioni tra le diverse informazioni nelle varie fonti\n6. Rispondi solo in base alle informazioni contenute nelle fonti, senza aggiungere conoscenze esterne\n7. Se utilizzi informazioni da una pagina web, INCLUDI SEMPRE alla fine della risposta una riga nel formato 'fonte: [URL completo]'",
+    "category": "balanced",
+    "is_default": true,
+    "created_at": "2025-06-02T11:13:27.601Z",
+    "updated_at": "2025-06-02T11:13:27.601Z"
+  }
+},
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 2,
+  "fields": {
+    "name": "RAG Alta Precisione",
+    "description": "Prompt per sistema RAG con alta precisione. Ideale per documenti tecnici o complessi.",
+    "prompt_text": "Sei un assistente analitico di alta precisione che utilizza documenti, note e pagine web per fornire risposte estremamente accurate e dettagliate.\n\nIMPORTANTE: Basa la tua risposta ESCLUSIVAMENTE sulle informazioni presenti nel contesto fornito.\nSe non trovi informazioni sufficienti, specifica chiaramente quali aspetti della domanda non possono essere risposti con le fonti disponibili.\n\nIl contesto contiene una collezione di documenti, note e URL web con i relativi titoli. Analizza attentamente ogni fonte.\n\nLinee guida per la risposta:\n1. Analizza ogni fonte rilevante con estrema attenzione ai dettagli\n2. Cita esplicitamente le fonti specifiche per ogni informazione (es. \"Secondo il documento X...\" o \"Come riportato nella pagina web Y...\")\n3. Evidenzia eventuali discrepanze o contraddizioni tra diverse fonti\n4. Mantieni un tono neutrale e oggettivo, basato sui fatti\n5. Usa una struttura logica che separi chiaramente i diversi aspetti della risposta\n6. Se la domanda menziona un documento specifico, concentrati principalmente su quel documento\n7. Sii preciso nella terminologia e utilizza il linguaggio tecnico presente nelle fonti\n8. Non aggiungere interpretazioni o conoscenze che non sono direttamente supportate dalle fonti\n9. Se utilizzi informazioni da una pagina web, CONCLUDI SEMPRE la risposta con 'fonte: [URL completo della fonte]'",
+    "category": "precision",
+    "is_default": false,
+    "created_at": "2025-06-02T11:13:27.604Z",
+    "updated_at": "2025-06-02T11:13:27.604Z"
+  }
+},
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 3,
+  "fields": {
+    "name": "RAG Veloce",
+    "description": "Prompt per sistema RAG ottimizzato per la velocità. Ideale per domande semplici o progetti con molti documenti.",
+    "prompt_text": "Sei un assistente efficiente che fornisce risposte concise basate su documenti, note e pagine web.\n\nUtilizza SOLO le informazioni nel contesto fornito per rispondere alla domanda. Se l'informazione non è disponibile, dillo chiaramente.\n\nLinee guida:\n1. Fornisci risposte brevi e dirette\n2. Concentrati sui punti principali e più rilevanti\n3. Evita dettagli non essenziali per la domanda specifica\n4. Se possibile, riassumi informazioni complesse in punti chiave\n5. Identifica rapidamente le fonti più pertinenti per la domanda\n6. Rispondi solo con informazioni presenti nelle fonti fornite\n7. Se le informazioni provengono da una pagina web, termina SEMPRE la risposta con una riga nel formato 'fonte: [URL completo]'",
+    "category": "speed",
+    "is_default": false,
+    "created_at": "2025-06-02T11:13:27.607Z",
+    "updated_at": "2025-06-02T11:13:27.607Z"
+  }
+},
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 4,
+  "fields": {
+    "name": "Coding Assistant",
+    "description": "Prompt per assistente di programmazione. Ideale per progetti di sviluppo software.",
+    "prompt_text": "Sei un assistente di programmazione esperto che aiuta a risolvere problemi di codice, implementare funzionalità e migliorare la qualità del codice.\n\nQuando rispondi:\n1. Fornisci sempre codice funzionante, testabile e ben documentato\n2. Segui le best practice di sviluppo software e del linguaggio specifico\n3. Spiega la logica del tuo approccio e le scelte implementative\n4. Se pertinente, evidenzia potenziali problemi di sicurezza, prestazioni o manutenibilità\n5. Quando possibile, suggerisci test per verificare la correttezza del codice\n6. Adatta lo stile di codifica a quello esistente nei documenti forniti\n7. Se utilizzi esempi o soluzioni da una risorsa web, cita sempre la fonte alla fine della risposta con 'fonte: [URL della fonte]'\n\nSe la richiesta non è chiara o mancano informazioni essenziali, chiedi chiarimenti invece di fare troppe supposizioni.",
+    "category": "technical",
+    "is_default": false,
+    "created_at": "2025-06-02T11:13:27.609Z",
+    "updated_at": "2025-06-02T11:13:27.609Z"
+  }
+},
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 5,
+  "fields": {
+    "name": "Assistente Generale",
+    "description": "Prompt per assistente generale. Utile per progetti generici.",
+    "prompt_text": "Sei un assistente AI utile, rispettoso e onesto. Rispondi sempre nel modo più utile possibile.\n\nQuando rispondi:\n1. Rispondi in modo chiaro, conciso e ben strutturato\n2. Sii obiettivo e basati sui fatti quando fornisci informazioni\n3. Se una domanda non è chiara, chiedi cortesemente chiarimenti\n4. Se non conosci la risposta, ammettilo invece di inventare informazioni\n5. Adatta il tuo linguaggio al contesto e al livello di complessità appropriato\n6. Mantieni un tono professionale ma amichevole\n7. Se utilizzi informazioni da pagine web, termina la risposta con il link alla fonte nel formato 'fonte: [URL completo]'\n\nIl tuo obiettivo è aiutare l'utente a raggiungere i suoi obiettivi nel modo più efficace possibile.",
+    "category": "balanced",
+    "is_default": false,
+    "created_at": "2025-06-02T11:13:27.613Z",
+    "updated_at": "2025-06-02T11:13:27.613Z"
+  }
+},
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 6,
+  "fields": {
+    "name": "Assistente Ricette e Cucina",
+    "description": "Prompt ottimizzato per ricette e informazioni culinarie",
+    "prompt_text": "Sei un assistente specializzato in cucina e ricette, in grado di aiutare con informazioni culinarie, suggerimenti per ricette e tecniche di cottura.\n\nQuando rispondi a domande relative a cibo e ricette:\n1. Fornisci informazioni dettagliate e pratiche sulle ricette richieste\n2. Indica chiaramente ingredienti, quantità e passaggi di preparazione\n3. Offri suggerimenti su varianti o modifiche possibili alla ricetta\n4. Se esistono versioni regionali o tradizionali, evidenziale\n5. Menziona eventuali suggerimenti per servire o accompagnare il piatto\n6. Indica tempi di preparazione e cottura quando disponibili\n7. Segnala eventuali tecniche particolari o accorgimenti importanti\n\nIMPORTANTE: Quando fornisci informazioni da una pagina web di ricette, CONCLUDI SEMPRE la risposta con una riga nel formato 'fonte: [URL completo della ricetta]' per permettere all'utente di visualizzare la fonte originale.\n\nRispondi solo basandoti sulle informazioni effettivamente presenti nelle fonti disponibili nel contesto.",
+    "category": "creative",
+    "is_default": false,
+    "created_at": "2025-06-02T11:13:27.616Z",
+    "updated_at": "2025-06-02T11:13:27.616Z"
+  }
+},
+{
+  "model": "profiles.defaultsystemprompts",
+  "pk": 7,
+  "fields": {
+    "name": "Assistente Navigazione Web",
+    "description": "Prompt ottimizzato per la ricerca e analisi di contenuti web",
+    "prompt_text": "Sei un assistente esperto in ricerca e analisi di contenuti web, specializzato nel fornire informazioni accurate estratte da pagine web.\n\nQuando rispondi a domande che coinvolgono contenuti web:\n1. Analizza attentamente le informazioni contenute nelle pagine web nel contesto\n2. Estrai i dati più rilevanti e pertinenti alla domanda dell'utente\n3. Organizza la risposta in modo chiaro, logico e ben strutturato\n4. Utilizza solo le informazioni effettivamente presenti nelle fonti web fornite\n5. Segnala eventuali discrepanze tra diverse fonti web\n6. Se più fonti contengono informazioni rilevanti, integrale in modo coerente\n7. Mantieni un tono obiettivo e basato sui fatti\n\nCRUCIALE: INCLUDI SEMPRE alla fine della risposta la fonte dell'informazione nel formato 'fonte: [URL completo]'. Se hai utilizzato più fonti web, specifica la fonte principale da cui proviene la maggior parte delle informazioni.\n\nSe la domanda riguarda informazioni non presenti nelle fonti web disponibili, indicalo chiaramente all'utente e suggerisci possibili fonti alternative da consultare.",
+    "category": "technical",
+    "is_default": false,
+    "created_at": "2025-06-02T11:13:27.619Z",
+    "updated_at": "2025-06-02T11:13:27.619Z"
+  }
+},
+{
+  "model": "profiles.llmprovider",
+  "pk": 1,
+  "fields": {
+    "name": "OpenAI",
+    "description": "Provider di OpenAI, include i modelli GPT-3.5, GPT-4 e GPT-4o.",
+    "api_url": "https://api.openai.com/v1/chat/completions",
+    "is_active": true,
+    "logo": "",
+    "created_at": "2025-06-02T11:13:27.488Z",
+    "updated_at": "2025-06-02T11:13:27.488Z"
+  }
+},
+{
+  "model": "profiles.llmprovider",
+  "pk": 2,
+  "fields": {
+    "name": "Anthropic",
+    "description": "Provider di Anthropic, include i modelli Claude 3 e Claude 4 in varie dimensioni.",
+    "api_url": "https://api.anthropic.com/v1/messages",
+    "is_active": true,
+    "logo": "",
+    "created_at": "2025-06-02T11:13:27.492Z",
+    "updated_at": "2025-06-02T11:13:27.492Z"
+  }
+},
+{
+  "model": "profiles.llmprovider",
+  "pk": 3,
+  "fields": {
+    "name": "Google",
+    "description": "Provider di Google, include i modelli Gemini in varie dimensioni.",
+    "api_url": "https://generativelanguage.googleapis.com/v1beta/models",
+    "is_active": true,
+    "logo": "",
+    "created_at": "2025-06-02T11:13:27.495Z",
+    "updated_at": "2025-06-02T11:13:27.495Z"
+  }
+},
+{
+  "model": "profiles.llmprovider",
+  "pk": 4,
+  "fields": {
+    "name": "DeepSeek",
+    "description": "Provider di DeepSeek, include modelli generali e specializzati per la programmazione.",
+    "api_url": "https://api.deepseek.com/v1/chat/completions",
+    "is_active": true,
+    "logo": "",
+    "created_at": "2025-06-02T11:13:27.501Z",
+    "updated_at": "2025-06-02T11:13:27.501Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 1,
+  "fields": {
+    "name": "GPT-4o",
+    "provider": 1,
+    "model_id": "gpt-4o",
+    "description": "Modello multimodale avanzato con capacità di visione.",
+    "default_temperature": 0.7,
+    "default_max_tokens": 4096,
+    "default_timeout": 60,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 128000,
+    "is_default": true,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.514Z",
+    "updated_at": "2025-06-02T11:13:27.514Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 2,
+  "fields": {
+    "name": "GPT-4 Turbo",
+    "provider": 1,
+    "model_id": "gpt-4-turbo",
+    "description": "Versione ottimizzata di GPT-4 con bilanciamento tra costo e prestazioni.",
+    "default_temperature": 0.7,
+    "default_max_tokens": 4096,
+    "default_timeout": 60,
+    "supports_vision": false,
+    "supports_functions": true,
+    "context_window": 128000,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.518Z",
+    "updated_at": "2025-06-02T11:13:27.519Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 3,
+  "fields": {
+    "name": "GPT-3.5 Turbo",
+    "provider": 1,
+    "model_id": "gpt-3.5-turbo",
+    "description": "Modello economico per attività standard.",
+    "default_temperature": 0.7,
+    "default_max_tokens": 4096,
+    "default_timeout": 30,
+    "supports_vision": false,
+    "supports_functions": true,
+    "context_window": 16385,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.523Z",
+    "updated_at": "2025-06-02T11:13:27.523Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 4,
+  "fields": {
+    "name": "Claude 4 Sonnet",
+    "provider": 2,
+    "model_id": "claude-4-sonnet",
+    "description": "La nuova generazione Claude 4 Sonnet - modello di punta per prestazioni bilanciate.",
+    "default_temperature": 0.5,
+    "default_max_tokens": 4096,
+    "default_timeout": 90,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 200000,
+    "is_default": true,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.560Z",
+    "updated_at": "2025-06-02T11:13:27.560Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 5,
+  "fields": {
+    "name": "Claude 4 Opus",
+    "provider": 2,
+    "model_id": "claude-4-opus",
+    "description": "Claude 4 Opus - il modello più potente di Anthropic per le attività più complesse.",
+    "default_temperature": 0.5,
+    "default_max_tokens": 4096,
+    "default_timeout": 120,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 200000,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.564Z",
+    "updated_at": "2025-06-02T11:13:27.564Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 6,
+  "fields": {
+    "name": "Claude 3.7 Sonnet",
+    "provider": 2,
+    "model_id": "claude-3-7-sonnet",
+    "description": "Versione più recente e avanzata del modello Claude 3.",
+    "default_temperature": 0.5,
+    "default_max_tokens": 4096,
+    "default_timeout": 90,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 200000,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.568Z",
+    "updated_at": "2025-06-02T11:13:27.568Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 7,
+  "fields": {
+    "name": "Claude 3 Opus",
+    "provider": 2,
+    "model_id": "claude-3-opus",
+    "description": "Il modello più potente di Claude 3 per attività complesse.",
+    "default_temperature": 0.5,
+    "default_max_tokens": 4096,
+    "default_timeout": 120,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 200000,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.572Z",
+    "updated_at": "2025-06-02T11:13:27.572Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 8,
+  "fields": {
+    "name": "Claude 3 Haiku",
+    "provider": 2,
+    "model_id": "claude-3-haiku",
+    "description": "Versione compatta e veloce di Claude 3.",
+    "default_temperature": 0.5,
+    "default_max_tokens": 4096,
+    "default_timeout": 30,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 200000,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.576Z",
+    "updated_at": "2025-06-02T11:13:27.576Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 9,
+  "fields": {
+    "name": "Gemini 1.5 Pro",
+    "provider": 3,
+    "model_id": "gemini-1.5-pro",
+    "description": "Modello multimodale avanzato di Google.",
+    "default_temperature": 0.7,
+    "default_max_tokens": 8192,
+    "default_timeout": 60,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 1000000,
+    "is_default": true,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.581Z",
+    "updated_at": "2025-06-02T11:13:27.581Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 10,
+  "fields": {
+    "name": "Gemini 1.5 Flash",
+    "provider": 3,
+    "model_id": "gemini-1.5-flash",
+    "description": "Versione veloce ed economica di Gemini 1.5.",
+    "default_temperature": 0.7,
+    "default_max_tokens": 8192,
+    "default_timeout": 30,
+    "supports_vision": true,
+    "supports_functions": true,
+    "context_window": 1000000,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.584Z",
+    "updated_at": "2025-06-02T11:13:27.584Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 11,
+  "fields": {
+    "name": "DeepSeek Coder",
+    "provider": 4,
+    "model_id": "deepseek-coder",
+    "description": "Specializzato in generazione e comprensione di codice.",
+    "default_temperature": 0.4,
+    "default_max_tokens": 2048,
+    "default_timeout": 30,
+    "supports_vision": false,
+    "supports_functions": true,
+    "context_window": 32768,
+    "is_default": true,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.589Z",
+    "updated_at": "2025-06-02T11:13:27.589Z"
+  }
+},
+{
+  "model": "profiles.llmengine",
+  "pk": 12,
+  "fields": {
+    "name": "DeepSeek Chat",
+    "provider": 4,
+    "model_id": "deepseek-chat",
+    "description": "Modello conversazionale generale.",
+    "default_temperature": 0.4,
+    "default_max_tokens": 2048,
+    "default_timeout": 30,
+    "supports_vision": false,
+    "supports_functions": true,
+    "context_window": 32768,
+    "is_default": false,
+    "is_active": true,
+    "created_at": "2025-06-02T11:13:27.594Z",
+    "updated_at": "2025-06-02T11:13:27.594Z"
+  }
+},
+{
+  "model": "profiles.projectragconfig",
+  "pk": 1,
+  "fields": {
+    "project": 1,
+    "chunk_size": 300,
+    "chunk_overlap": 100,
+    "similarity_top_k": 10,
+    "mmr_lambda": 0.9,
+    "similarity_threshold": 0.8,
+    "retriever_type": "similarity_score_threshold",
+    "auto_citation": true,
+    "prioritize_filenames": true,
+    "equal_notes_weight": true,
+    "strict_context": true,
+    "preset_name": "high_precision",
+    "preset_category": "precision",
+    "created_at": "2025-06-02T12:51:24.287Z",
+    "updated_at": "2025-06-04T14:51:09.748Z"
+  }
+},
+{
+  "model": "profiles.projectragconfig",
+  "pk": 2,
+  "fields": {
+    "project": 2,
+    "chunk_size": 300,
+    "chunk_overlap": 100,
+    "similarity_top_k": 10,
+    "mmr_lambda": 0.9,
+    "similarity_threshold": 0.8,
+    "retriever_type": "similarity_score_threshold",
+    "auto_citation": true,
+    "prioritize_filenames": true,
+    "equal_notes_weight": true,
+    "strict_context": true,
+    "preset_name": "high_precision",
+    "preset_category": "precision",
+    "created_at": "2025-06-02T15:56:49.741Z",
+    "updated_at": "2025-06-02T19:18:03.857Z"
+  }
+},
+{
+  "model": "profiles.projectragconfig",
+  "pk": 3,
+  "fields": {
+    "project": 3,
+    "chunk_size": 800,
+    "chunk_overlap": 20,
+    "similarity_top_k": 4,
+    "mmr_lambda": 0.5,
+    "similarity_threshold": 0.6,
+    "retriever_type": "similarity",
+    "auto_citation": false,
+    "prioritize_filenames": false,
+    "equal_notes_weight": true,
+    "strict_context": false,
+    "preset_name": "speed",
+    "preset_category": "speed",
+    "created_at": "2025-06-03T15:24:49.617Z",
+    "updated_at": "2025-06-04T15:32:25.904Z"
+  }
+},
+{
+  "model": "profiles.projectpromptconfig",
+  "pk": 1,
+  "fields": {
+    "project": 1,
+    "default_system_prompt": 1,
+    "custom_prompt_text": "",
+    "use_custom_prompt": false,
+    "created_at": "2025-06-02T12:51:24.306Z",
+    "updated_at": "2025-06-02T12:51:24.319Z"
+  }
+},
+{
+  "model": "profiles.projectpromptconfig",
+  "pk": 2,
+  "fields": {
+    "project": 2,
+    "default_system_prompt": 1,
+    "custom_prompt_text": "",
+    "use_custom_prompt": false,
+    "created_at": "2025-06-02T15:56:49.762Z",
+    "updated_at": "2025-06-02T15:56:49.770Z"
+  }
+},
+{
+  "model": "profiles.projectpromptconfig",
+  "pk": 3,
+  "fields": {
+    "project": 3,
+    "default_system_prompt": 1,
+    "custom_prompt_text": "",
+    "use_custom_prompt": false,
+    "created_at": "2025-06-03T15:24:49.631Z",
+    "updated_at": "2025-06-03T15:24:49.634Z"
+  }
+}
+]

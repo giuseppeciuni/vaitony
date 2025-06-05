@@ -1,43 +1,44 @@
-from django.urls import path
-from . import views
-from dashboard.dashboard_console import execute_management_command
-from profiles.views import user_login
 from django.conf import settings
 from django.conf.urls.static import static
-from dashboard.views import chatbot_widget, chatbot_widget_js
+from django.urls import path
 from dashboard.api import external_chat_api
+from dashboard.dashboard_console import execute_management_command
+from dashboard.views.chatbot_views import chatbot_widget, chatbot_widget_js, chatwoot_webhook, toggle_url_inclusion
+from dashboard.views.config_views import project_config, project_prompts
+from dashboard.views.crawling_views import website_crawl
+from dashboard.views.dashboard_views import dashboard, documents_uploaded
+from dashboard.views.document_views import serve_project_file
+from dashboard.views.ia_engine_views import ia_engine
+from dashboard.views.project_views import new_project, projects_list, project_details, project
+from dashboard.views.user_views import user_profile, billing_settings
+from profiles.views import user_login
 
 urlpatterns = [
     path('', user_login, name='login'),
-    path('dashboard', views.dashboard, name='dashboard'),
+    path('dashboard', dashboard, name='dashboard'),
 
     # Gestione Profilo
-    path('profile/', views.user_profile, name='user_profile'),
-
+    path('profile/', user_profile, name='user_profile'),
 
     # Gestione Documenti caricati
-    path('documents', views.documents_uploaded, name='documents_uploaded'),
+    path('documents', documents_uploaded, name='documents_uploaded'),
 
-
-    # percorsi per projects - aggiornati
-    path('projects/new', views.new_project, name='new_project'),
-    path('projects/list', views.projects_list, name='projects_list'),
-    path('projects/<int:project_id>', views.project, name='project'),
-    path('projects', views.project, name='project'),  # Supporto per POST senza ID
-    path('project/<int:project_id>/details/', views.project_details, name='project_details'),
-    path('serve_project_file/<int:file_id>/', views.serve_project_file, name='serve_project_file'),
-    #path('project/<int:project_id>/config/', views.project_config, name='project_config'),
-    path('api/projects/<int:project_id>/urls/<int:url_id>/toggle-inclusion/', views.toggle_url_inclusion, name='toggle_url_inclusion'),
-
+    # percorsi per projects
+    path('projects/new', new_project, name='new_project'),
+    path('projects/list', projects_list, name='projects_list'),
+    path('projects/<int:project_id>', project, name='project'),
+    path('projects', project, name='project'),  # Supporto per POST senza ID
+    path('project/<int:project_id>/details/', project_details, name='project_details'),
+    path('serve_project_file/<int:file_id>/', serve_project_file, name='serve_project_file'),
+    path('api/projects/<int:project_id>/urls/<int:url_id>/toggle-inclusion/', toggle_url_inclusion, name='toggle_url_inclusion'),
 
     # Crawler
-    path('projects/<int:project_id>/website_crawl/', views.website_crawl, name='website_crawl'),
-    path('website_crawl/<int:project_id>/', views.website_crawl, name='website_crawl'),
+    path('projects/<int:project_id>/website_crawl/', website_crawl, name='website_crawl'),
+    path('website_crawl/<int:project_id>/', website_crawl, name='website_crawl'),
 
-    # Nuove URL per le impostazioni
-    path('settings/ia-engine/', views.ia_engine, name='ia_engine'),
-    path('settings/billing/', views.billing_settings, name='billing_settings'),
-    #path('settings/templates/', views.rag_templates, name='rag_templates'),
+    # Impostazioni
+    path('settings/ia-engine/', ia_engine, name='ia_engine'),
+    path('settings/billing/', billing_settings, name='billing_settings'),
 
     # URLs per il chatbot esterno
     path('api/chat/<slug:project_slug>/', external_chat_api, name='external_chat_api'),
@@ -45,13 +46,14 @@ urlpatterns = [
     path('chatbot/<slug:project_slug>/widget.js', chatbot_widget_js, name='chatbot_widget_js'),
 
     # URL per il webhook di Chatwoot
-    path('chatwoot-webhook/', views.chatwoot_webhook, name='chatwoot_webhook'),
+    path('chatwoot-webhook/', chatwoot_webhook, name='chatwoot_webhook'),
 
+    # API per comandi management
     path('api/execute-command/', execute_management_command, name='execute_management_command'),
 
-    #ora
-    path('project/<int:project_id>/config/', views.project_config, name='project_config'),
-    path('project/<int:project_id>/prompts/', views.project_prompts, name='project_prompts'),
+    # Configurazione progetti
+    path('project/<int:project_id>/config/', project_config, name='project_config'),
+    path('project/<int:project_id>/prompts/', project_prompts, name='project_prompts'),
 ]
 
 if settings.DEBUG:

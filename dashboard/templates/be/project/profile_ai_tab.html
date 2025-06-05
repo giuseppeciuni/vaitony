@@ -1,0 +1,962 @@
+<!-- Profilo IA Tab -->
+<div class="tab-pane fade" id="rag-config" role="tabpanel" aria-labelledby="rag-config-tab">
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <!-- Card Provider LLM e Engine -->
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cpu me-2"></i>Motore IA del Progetto
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if project.llm_config.engine %}
+                        <div class="engine-info">
+                            <div class="provider-logo">
+                                {% if project.llm_config.engine.provider.logo %}
+                                    <img src="{{ project.llm_config.engine.provider.logo.url }}"
+                                         alt="{{ project.llm_config.engine.provider.name }}"
+                                         style="max-height: 40px;">
+                                {% else %}
+                                    {% if project.llm_config.engine.provider.name == 'OpenAI' %}
+                                        <i class="bi bi-cpu-fill fs-3" style="color: #10a37f;"></i>
+                                    {% elif project.llm_config.engine.provider.name == 'Anthropic' %}
+                                        <i class="bi bi-chat-square-heart-fill fs-3" style="color: #b83280;"></i>
+                                    {% elif project.llm_config.engine.provider.name == 'Google' %}
+                                        <i class="bi bi-google fs-3" style="color: #4285F4;"></i>
+                                    {% elif project.llm_config.engine.provider.name == 'DeepSeek' %}
+                                        <i class="bi bi-braces fs-3" style="color: #0066cc;"></i>
+                                    {% else %}
+                                        <i class="bi bi-robot fs-3" style="color: #6c757d;"></i>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h6 class="mb-1">{{ project.llm_config.engine.provider.name }}</h6>
+                                <h5 class="mb-0 text-primary">{{ project.llm_config.engine.name }}</h5>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <p class="text-muted mb-0">
+                                {{ project.llm_config.engine.description }}
+                            </p>
+                        </div>
+
+                        <hr>
+
+                        <div class="config-params">
+                            <h6 class="mb-3">Parametri Configurati</h6>
+                            <div class="params-grid">
+                                <div class="param-item">
+                                    <div class="param-label">Temperatura</div>
+                                    <div class="param-value">{{ project.llm_config.get_temperature }}</div>
+                                </div>
+                                <div class="param-item">
+                                    <div class="param-label">Max Tokens</div>
+                                    <div class="param-value">{{ project.llm_config.get_max_tokens }}</div>
+                                </div>
+                                <div class="param-item">
+                                    <div class="param-label">Timeout</div>
+                                    <div class="param-value">{{ project.llm_config.get_timeout }}s</div>
+                                </div>
+                                {% if project.llm_config.engine.supports_vision %}
+                                <div class="param-item">
+                                    <div class="param-label">Supporto Visione</div>
+                                    <div class="param-value">
+                                        <i class="bi bi-check-circle-fill text-success"></i> Attivo
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Nessun motore IA configurato per questo progetto.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="{% url 'project_config' project.id %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-gear me-1"></i>Modifica Configurazione
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <!-- Card Preset RAG Selezionato -->
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-search me-2"></i>Profilo RAG Attivo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if current_preset %}
+                        <!-- Determina la classe CSS e il nome da visualizzare basati sul preset -->
+                        {% if current_preset.name == 'balanced' %}
+                            <div class="selected-preset-card preset-balanced">
+                                <div class="selected-preset-header">
+                                    <span>Bilanciato</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione equilibrata tra precisione e velocità, ideale per la maggior parte dei casi d'uso.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'high_precision' %}
+                            <div class="selected-preset-card preset-high-precision">
+                                <div class="selected-preset-header">
+                                    <span>Alta Precisione</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione ottimizzata per alta precisione, adatta per documenti tecnici e analisi dettagliate.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'speed' %}
+                            <div class="selected-preset-card preset-speed">
+                                <div class="selected-preset-header">
+                                    <span>Velocità</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione ottimizzata per velocità, ideale per risposte rapide.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'max_precision' %}
+                            <div class="selected-preset-card preset-max-precision">
+                                <div class="selected-preset-header">
+                                    <span>Massima Precisione</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Massima precisione possibile, per documenti complessi che richiedono analisi approfondite.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'max_speed' %}
+                            <div class="selected-preset-card preset-max-speed">
+                                <div class="selected-preset-header">
+                                    <span>Massima Velocità</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Massima velocità possibile, per interazioni in tempo reale.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'extended_context' %}
+                            <div class="selected-preset-card preset-extended-context">
+                                <div class="selected-preset-header">
+                                    <span>Contesto Esteso</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Contesto esteso per documenti lunghi e complessi.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="selected-preset-card preset-balanced">
+                                <div class="selected-preset-header">
+                                    <span>Configurazione Personalizzata</span>
+                                    <span class="customized-badge">Personalizzato</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione personalizzata con parametri adattati alle specifiche esigenze del progetto.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <hr>
+
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Impostazioni RAG Comportamentali</h6>
+                                <small class="text-muted">Modifica diretta</small>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="autoCitationToggle" data-param="auto_citation"
+                                               {% if rag_values.auto_citation %}checked{% endif %}>
+                                        <label class="form-check-label" for="autoCitationToggle">
+                                            <small><strong>Auto Citazione</strong></small>
+                                        </label>
+                                        <div class="form-text small">Includi automaticamente le fonti nelle risposte</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="prioritizeFilenamesToggle" data-param="prioritize_filenames"
+                                               {% if rag_values.prioritize_filenames %}checked{% endif %}>
+                                        <label class="form-check-label" for="prioritizeFilenamesToggle">
+                                            <small><strong>Priorità Nome File</strong></small>
+                                        </label>
+                                        <div class="form-text small">Dai priorità ai file menzionati nella domanda</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="equalNotesWeightToggle" data-param="equal_notes_weight"
+                                               {% if rag_values.equal_notes_weight %}checked{% endif %}>
+                                        <label class="form-check-label" for="equalNotesWeightToggle">
+                                            <small><strong>Note con Peso Uguale</strong></small>
+                                        </label>
+                                        <div class="form-text small">Tratta note e documenti con uguale importanza. Se
+                                            disattivato hanno prima priorità documenti e Url. In questo caso le note
+                                            vengono usate per integrare le informazioni dai documenti principali
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="strictContextToggle" data-param="strict_context"
+                                               {% if rag_values.strict_context %}checked{% endif %}>
+                                        <label class="form-check-label" for="strictContextToggle">
+                                            <small><strong>Contesto Stretto</strong></small>
+                                        </label>
+                                        <div class="form-text small">Risposte SOLO basate sui documenti disponibili</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Indicatore di stato salvataggio -->
+                            <div class="mt-2">
+                                <div id="rag-save-status" class="alert alert-info d-none" style="padding: 0.5rem;">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <span id="rag-save-message">Le modifiche vengono salvate automaticamente</span>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Nessun profilo RAG configurato per questo progetto.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="{% url 'project_config' project.id %}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-gear me-1"></i>Modifica Configurazione
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sezione Prompt di Sistema -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <!-- Card Prompt di Sistema -->
+            <div class="card h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-chat-quote-fill me-2"></i>Prompt di Sistema Attivo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if project_prompt_config %}
+                        <!-- Informazioni sul prompt attivo -->
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="d-flex align-items-center mb-3">
+                                    <span class="status-indicator {% if project_prompt_config.use_custom_prompt %}status-custom{% else %}status-default{% endif %}">
+                                        {% if project_prompt_config.use_custom_prompt %}
+                                            <i class="bi bi-gear me-1"></i> Prompt Personalizzato
+                                        {% else %}
+                                            <i class="bi bi-check-circle me-1"></i>
+                                            {% if project_prompt_config.default_system_prompt %}
+                                                {{ project_prompt_config.default_system_prompt.name }}
+                                            {% else %}
+                                                Prompt Predefinito
+                                            {% endif %}
+                                        {% endif %}
+                                    </span>
+                                </div>
+
+                                <!-- Descrizione del prompt -->
+                                {% if not project_prompt_config.use_custom_prompt and project_prompt_config.default_system_prompt %}
+                                    <p class="text-muted mb-2">
+                                        {{ project_prompt_config.default_system_prompt.description|truncatechars:120 }}
+                                    </p>
+                                    {% if project_prompt_config.default_system_prompt.category %}
+                                    <div class="small">
+                                        <span class="category-badge category-{{ project_prompt_config.default_system_prompt.category }}">
+                                            {{ project_prompt_config.default_system_prompt.get_category_display }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                {% elif project_prompt_config.use_custom_prompt %}
+                                    <p class="text-muted mb-2">
+                                        Prompt personalizzato creato specificamente per questo progetto.
+                                    </p>
+                                {% endif %}
+
+                                <!-- Anteprima prompt (contenuto completo) -->
+                                {% if project_prompt_config.use_custom_prompt and project_prompt_config.custom_prompt_text %}
+                                    <div class="mt-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="small text-secondary mb-0">Contenuto Prompt Personalizzato:</h6>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-outline-secondary btn-sm prompt-toggle-btn" type="button" data-bs-toggle="collapse" data-bs-target="#promptPreview" aria-expanded="false">
+                                                    <i class="bi bi-eye"></i> <span class="toggle-text">Mostra</span>
+                                                </button>
+                                                <button class="btn btn-outline-info btn-sm copy-prompt-btn" type="button" data-prompt-text="{{ project_prompt_config.custom_prompt_text|striptags|escapejs }}" title="Copia prompt">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="collapse" id="promptPreview">
+                                            <div class="prompt-preview-full">
+                                                <div class="prompt-type-badge">Personalizzato</div>
+                                                {{ project_prompt_config.custom_prompt_text|striptags|linebreaks }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% elif not project_prompt_config.use_custom_prompt and project_prompt_config.default_system_prompt and project_prompt_config.default_system_prompt.prompt_text %}
+                                    <div class="mt-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="small text-secondary mb-0">Contenuto Prompt Predefinito:</h6>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-outline-secondary btn-sm prompt-toggle-btn" type="button" data-bs-toggle="collapse" data-bs-target="#promptPreview" aria-expanded="false">
+                                                    <i class="bi bi-eye"></i> <span class="toggle-text">Mostra</span>
+                                                </button>
+                                                <button class="btn btn-outline-info btn-sm copy-prompt-btn" type="button" data-prompt-text="{{ project_prompt_config.default_system_prompt.prompt_text|escapejs }}" title="Copia prompt">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="collapse" id="promptPreview">
+                                            <div class="prompt-preview-full">
+                                                <div class="prompt-type-badge">{{ project_prompt_config.default_system_prompt.name }}</div>
+                                                {{ project_prompt_config.default_system_prompt.prompt_text }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-4">
+                                <!-- Statistiche del prompt -->
+                                <div class="config-params">
+                                    <h6 class="mb-3">Statistiche Prompt</h6>
+                                    {% if project_prompt_config.use_custom_prompt and project_prompt_config.custom_prompt_text %}
+                                        <div class="params-grid" style="grid-template-columns: 1fr 1fr;">
+                                            <div class="param-item">
+                                                <div class="param-label">Caratteri</div>
+                                                <div class="param-value">{{ project_prompt_config.custom_prompt_text|length }}</div>
+                                            </div>
+                                            <div class="param-item">
+                                                <div class="param-label">Parole</div>
+                                                <div class="param-value">{{ project_prompt_config.custom_prompt_text|wordcount }}</div>
+                                            </div>
+                                            <div class="param-item">
+                                                <div class="param-label">Righe</div>
+                                                <div class="param-value">{{ project_prompt_config.custom_prompt_text|linebreaksbr|length }}</div>
+                                            </div>
+                                            <div class="param-item">
+                                                <div class="param-label">~Token</div>
+                                                <div class="param-value">{{ project_prompt_config.custom_prompt_text|wordcount|floatformat:0|add:"30" }}</div>
+                                            </div>
+                                        </div>
+                                    {% elif not project_prompt_config.use_custom_prompt and project_prompt_config.default_system_prompt %}
+                                        <div class="params-grid" style="grid-template-columns: 1fr 1fr;">
+                                            <div class="param-item">
+                                                <div class="param-label">Caratteri</div>
+                                                <div class="param-value">{{ project_prompt_config.default_system_prompt.prompt_text|length }}</div>
+                                            </div>
+                                            <div class="param-item">
+                                                <div class="param-label">Parole</div>
+                                                <div class="param-value">{{ project_prompt_config.default_system_prompt.prompt_text|wordcount }}</div>
+                                            </div>
+                                            <div class="param-item">
+                                                <div class="param-label">Categoria</div>
+                                                <div class="param-value text-capitalize">{{ project_prompt_config.default_system_prompt.get_category_display|default:"N/A" }}</div>
+                                            </div>
+                                            <div class="param-item">
+                                                <div class="param-label">Default</div>
+                                                <div class="param-value">
+                                                    {% if project_prompt_config.default_system_prompt.is_default %}
+                                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                                    {% else %}
+                                                        <i class="bi bi-dash-circle text-muted"></i>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="text-muted text-center">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            Nessun prompt configurato
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info border-0">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle-fill me-2"></i>
+                                <div>
+                                    <strong>Configurazione prompt non ancora inizializzata</strong>
+                                    <div class="text-muted small">Clicca su "Gestisci Prompt" per configurare il prompt di sistema per questo progetto.</div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            {% if project_prompt_config %}
+                                <span class="small text-muted">
+                                    Ultima modifica: {{ project_prompt_config.updated_at|date:"d/m/Y H:i" }}
+                                </span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <a href="{% url 'project_prompts' project.id %}" class="btn btn-outline-info btn-sm me-2">
+                                <i class="bi bi-eye me-1"></i>Visualizza
+                            </a>
+                            <a href="{% url 'project_prompts' project.id %}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-gear me-1"></i>Gestisci Prompt
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sezione Parametri RAG Personalizzati (se presenti) -->
+    {% if customized_values and customized_values.preset_name == 'Custom' %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-sliders me-2"></i>Parametri Personalizzati Attivi
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Questo progetto utilizza una configurazione RAG completamente personalizzata.
+                    </div>
+                    <div class="params-grid">
+                        <div class="param-item">
+                            <div class="param-label">Chunk Size <span class="customized-badge">Personalizzato</span></div>
+                            <div class="param-value">{{ rag_values.chunk_size }}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">Overlap <span class="customized-badge">Personalizzato</span></div>
+                            <div class="param-value">{{ rag_values.chunk_overlap }}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">Top K <span class="customized-badge">Personalizzato</span></div>
+                            <div class="param-value">{{ rag_values.similarity_top_k }}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">Threshold <span class="customized-badge">Personalizzato</span></div>
+                            <div class="param-value">{{ rag_values.similarity_threshold }}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">MMR Lambda <span class="customized-badge">Personalizzato</span></div>
+                            <div class="param-value">{{ rag_values.mmr_lambda }}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">Retriever Type <span class="customized-badge">Personalizzato</span></div>
+                            <div class="param-value">{{ rag_values.retriever_type|upper }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- JavaScript per gestione toggle RAG -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ======= GESTIONE TOGGLE RAG COMPORTAMENTALI =======
+
+    const ragToggles = document.querySelectorAll('.rag-behavior-toggle');
+    const saveStatus = document.getElementById('rag-save-status');
+    const saveMessage = document.getElementById('rag-save-message');
+
+    // Funzione per mostrare stato di salvataggio
+    function showSaveStatus(type, message, autoHide = true) {
+        saveStatus.className = `alert d-block alert-${type}`;
+        saveMessage.textContent = message;
+
+        if (autoHide) {
+            setTimeout(() => {
+                saveStatus.classList.add('d-none');
+            }, 3000);
+        }
+    }
+
+    // Funzione per ottenere il token CSRF
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+               document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+               document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+    }
+
+    // Gestione cambiamenti sui toggle
+    ragToggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const param = this.getAttribute('data-param');
+            const isChecked = this.checked;
+            const toggleContainer = this.closest('.form-check');
+
+            // Mostra stato di caricamento
+            toggleContainer.classList.add('toggle-loading');
+            showSaveStatus('info', 'Salvando modifiche...', false);
+
+            // Prepara dati per la richiesta
+            const formData = new FormData();
+            formData.append('action', 'update_rag_behavior');
+            formData.append('parameter', param);
+            formData.append('value', isChecked ? 'true' : 'false');
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            // Effettua la richiesta AJAX
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                toggleContainer.classList.remove('toggle-loading');
+
+                if (data.success) {
+                    showSaveStatus('success', '✓ Impostazione salvata correttamente');
+                    console.log(`RAG parameter ${param} updated to ${isChecked}`);
+                } else {
+                    toggle.checked = !isChecked;
+                    showSaveStatus('danger', `Errore: ${data.message || 'Impossibile salvare'}`);
+                }
+            })
+            .catch(error => {
+                toggleContainer.classList.remove('toggle-loading');
+                toggle.checked = !isChecked;
+                showSaveStatus('danger', 'Errore di comunicazione con il server');
+                console.error('Error updating RAG parameter:', error);
+            });
+        });
+    });
+
+    // Funzione di utilità per mostrare toast notifications
+    function showToast(message, type = 'info') {
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+
+        toastEl.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+
+        toastContainer.appendChild(toastEl);
+
+        const toast = new bootstrap.Toast(toastEl, {
+            autohide: true,
+            delay: 3000
+        });
+        toast.show();
+
+        toastEl.addEventListener('hidden.bs.toast', function() {
+            toastEl.remove();
+        });
+
+        return toast;
+    }
+
+    console.log(`Initialized ${ragToggles.length} RAG behavior toggles`);
+
+    // ======= GESTIONE ANTEPRIMA PROMPT =======
+
+    const promptToggleBtn = document.querySelector('.prompt-toggle-btn');
+    const promptPreview = document.getElementById('promptPreview');
+
+    if (promptToggleBtn && promptPreview) {
+        promptPreview.addEventListener('show.bs.collapse', function() {
+            const toggleText = promptToggleBtn.querySelector('.toggle-text');
+            if (toggleText) {
+                toggleText.textContent = 'Nascondi';
+            }
+            promptToggleBtn.setAttribute('aria-expanded', 'true');
+        });
+
+        promptPreview.addEventListener('hide.bs.collapse', function() {
+            const toggleText = promptToggleBtn.querySelector('.toggle-text');
+            if (toggleText) {
+                toggleText.textContent = 'Mostra';
+            }
+            promptToggleBtn.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    // Gestione copia prompt
+    const copyPromptBtns = document.querySelectorAll('.copy-prompt-btn');
+
+    copyPromptBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const promptText = this.getAttribute('data-prompt-text');
+            const originalIcon = this.querySelector('i');
+            const originalClass = originalIcon.className;
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(promptText)
+                    .then(() => {
+                        originalIcon.className = 'bi bi-check-circle';
+                        this.classList.remove('btn-outline-info');
+                        this.classList.add('btn-success');
+
+                        showToast('Prompt copiato negli appunti', 'success');
+
+                        setTimeout(() => {
+                            originalIcon.className = originalClass;
+                            this.classList.remove('btn-success');
+                            this.classList.add('btn-outline-info');
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Errore nella copia:', err);
+                        showToast('Errore nella copia negli appunti', 'danger');
+                    });
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = promptText;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        originalIcon.className = 'bi bi-check-circle';
+                        this.classList.remove('btn-outline-info');
+                        this.classList.add('btn-success');
+
+                        showToast('Prompt copiato negli appunti', 'success');
+
+                        setTimeout(() => {
+                            originalIcon.className = originalClass;
+                            this.classList.remove('btn-success');
+                            this.classList.add('btn-outline-info');
+                        }, 2000);
+                    } else {
+                        showToast('Impossibile copiare negli appunti', 'warning');
+                    }
+                } catch (err) {
+                    console.error('Errore nel fallback di copia:', err);
+                    showToast('Errore nella copia negli appunti', 'danger');
+                }
+
+                document.body.removeChild(textArea);
+            }
+        });
+    });
+
+    // Evidenziazione di sintassi CORRETTA per i prompt
+    function highlightPromptSyntax() {
+        const promptPreviews = document.querySelectorAll('.prompt-preview-full');
+
+        promptPreviews.forEach(preview => {
+            // Controlla se l'evidenziazione è già stata applicata
+            if (preview.getAttribute('data-highlighted') === 'true') {
+                return;
+            }
+
+            // Ottieni il contenuto testuale puro (senza HTML già presenti)
+            let content = preview.textContent || preview.innerText || '';
+
+            // Preserva il badge se presente
+            const badge = preview.querySelector('.prompt-type-badge');
+            let badgeHTML = '';
+            if (badge) {
+                badgeHTML = badge.outerHTML;
+                // Rimuovi il testo del badge dal contenuto da processare
+                content = content.replace(badge.textContent || badge.innerText || '', '').trim();
+            }
+
+            // Applica le evidenziazioni
+            // Escape HTML per sicurezza prima di applicare le evidenziazioni
+            content = content
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            // Evidenzia variabili tra parentesi quadre [VARIABILE]
+            content = content.replace(/\[([A-Z_]+)\]/g, '<span style="color: #e83e8c; font-weight: bold; background-color: #f8f9fa; padding: 2px 4px; border-radius: 3px;">[$1]</span>');
+
+            // Evidenzia istruzioni numerate (solo all'inizio di riga)
+            content = content.replace(/^(\d+\.\s)/gm, '<span style="color: #17a2b8; font-weight: 600;">$1</span>');
+
+            // Evidenzia testo tra virgolette
+            content = content.replace(/"([^"]+)"/g, '<span style="color: #28a745; font-style: italic; background-color: #f0f9f0; padding: 1px 3px; border-radius: 2px;">"$1"</span>');
+
+            // Evidenzia parole chiave importanti
+            const keywords = ['ESCLUSIVAMENTE', 'SEMPRE', 'INCLUDI SEMPRE', 'DEVE', 'NON DEVE', 'OBBLIGATORIO'];
+            keywords.forEach(keyword => {
+                const regex = new RegExp(`\\b(${keyword})\\b`, 'gi');
+                content = content.replace(regex, '<strong style="color: #dc3545; background-color: #fff5f5; padding: 1px 3px; border-radius: 2px;">$1</strong>');
+            });
+
+            // Applica formattazione per le righe che iniziano con numeri seguiti da punto
+            content = content.replace(/^(\d+\.)(.+)$/gm, '<div style="margin: 8px 0; padding: 6px 12px; border-left: 3px solid #17a2b8; background-color: #f8f9fa;"><span style="color: #17a2b8; font-weight: 600;">$1</span>$2</div>');
+
+            // Converte i line break in <br> per il resto del testo
+            content = content.replace(/\n/g, '<br>');
+
+            // Ricostruisci il contenuto finale
+            preview.innerHTML = badgeHTML + '<div style="line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif;">' + content + '</div>';
+
+            // Marca come già evidenziato
+            preview.setAttribute('data-highlighted', 'true');
+        });
+    }
+
+    // Applica evidenziazione quando l'anteprima si apre
+    if (promptPreview) {
+        promptPreview.addEventListener('shown.bs.collapse', function() {
+            // Piccolo ritardo per assicurarsi che il contenuto sia completamente caricato
+            setTimeout(highlightPromptSyntax, 100);
+        });
+    }
+});
+</script>
+
+<!-- Aggiungi anche questo CSS per migliorare la visualizzazione -->
+<style>
+.prompt-preview-full {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 10px;
+    font-size: 14px;
+    max-height: 400px;
+    overflow-y: auto;
+    position: relative;
+}
+
+.prompt-type-badge {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background-color: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.toggle-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.toggle-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Miglioramenti per la leggibilità del prompt */
+.prompt-preview-full div[style*="border-left"] {
+    margin: 12px 0 !important;
+    padding: 10px 16px !important;
+    background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%) !important;
+    border-radius: 0 6px 6px 0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.prompt-preview-full div[style*="border-left"]:hover {
+    background: linear-gradient(90deg, #e9ecef 0%, #f8f9fa 100%) !important;
+    transition: background 0.2s ease;
+}
+</style>

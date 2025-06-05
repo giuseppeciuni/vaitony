@@ -7,17 +7,16 @@ Questo modulo gestisce:
 - Gestione delle query e recupero delle risposte
 - Operazioni sulle note e sui file dei progetti
 """
-import json
 import base64
-import hashlib
+import json
 import logging
 import os
+import shutil
 import time
 from urllib.parse import urlparse
-
 import openai
 from django.conf import settings
-from django.db.models import F, Q
+from django.db.models import Q
 from django.utils import timezone
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
@@ -28,13 +27,11 @@ from langchain_community.document_loaders import PyMuPDFLoader, UnstructuredWord
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
-import shutil
 
 # Importa le funzioni utility per la gestione dei documenti
 from dashboard.rag_document_utils import (
     compute_file_hash, check_project_index_update_needed,
-    update_project_index_status, get_cached_embedding, create_embedding_cache,
-    copy_embedding_to_project_index
+    update_project_index_status, get_cached_embedding, create_embedding_cache
 )
 from profiles.models import ProjectURL
 
@@ -477,6 +474,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     includendo file, note e URL del progetto. Supporta la cache degli embedding per ottimizzare
     le prestazioni e ridurre le chiamate API.
 
+    MODIFICHE PER "NOTE CON PESO UGUALE":
+    - Aggiunge metadata di priorità ai documenti basati sul parametro equal_notes_weight
+    - priority: 0 = Alta priorità (documenti e URL quando equal_notes_weight=False)
+    - priority: 1 = Priorità normale (tutti quando equal_notes_weight=True, note quando equal_notes_weight=False)
+    - priority: 2 = Bassa priorità (note quando equal_notes_weight=False)
+
     Args:
         project: Oggetto Project (opzionale) - Il progetto per cui creare/aggiornare l'indice
         docs: Lista di documenti già caricati (opzionale) - Se forniti, verranno usati questi documenti
@@ -488,7 +491,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     # Importazione ritardata per evitare cicli di importazione
     from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache, ProjectURL
 
-    logger.debug(f"---> create_project_rag_chain: Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
+    logger.debug(
+        f"---> create_project_rag_chain: Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
 
     # PARTE 1: INIZIALIZZAZIONE VARIABILI
     cached_files = []
@@ -512,7 +516,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
         logger.info(f"📊 URL totali nel progetto: {ProjectURL.objects.filter(project=project).count()}")
         logger.info(f"✅ URL attive (is_included_in_rag=True): {all_urls.count()}")
-        logger.info(f"❌ URL disattivate: {ProjectURL.objects.filter(project=project, is_included_in_rag=False).count()}")
+        logger.info(
+            f"❌ URL disattivate: {ProjectURL.objects.filter(project=project, is_included_in_rag=False).count()}")
 
         # PARTE 3: GESTIONE RICOSTRUZIONE FORZATA
         if force_rebuild and os.path.exists(index_path):
@@ -532,7 +537,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
             if force_rebuild:
                 files_to_embed = all_files
                 urls_to_embed = all_urls
-                logger.info(f"Ricostruendo indice con {files_to_embed.count()} file, {all_active_notes.count()} note e {urls_to_embed.count()} URL")
+                logger.info(
+                    f"Ricostruendo indice con {files_to_embed.count()} file, {all_active_notes.count()} note e {urls_to_embed.count()} URL")
             else:
                 files_to_embed = all_files.filter(is_embedded=False)
                 urls_to_embed = all_urls.filter(Q(is_indexed=False) | Q(last_indexed_at__isnull=True))
@@ -542,10 +548,18 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
 
             docs = []
 
-            # Ottieni le impostazioni RAG per il chunking
+            # *** NOVITÀ: Ottieni le impostazioni RAG per il chunking E per la priorità ***
             rag_settings = get_project_RAG_settings(project)
             chunk_size = rag_settings['chunk_size']
             chunk_overlap = rag_settings['chunk_overlap']
+            # *** PARAMETRO CHIAVE: Determina se note e documenti hanno peso uguale ***
+            equal_notes_weight = rag_settings.get('equal_notes_weight', True)
+
+            logger.info(f"🎯 Impostazione equal_notes_weight: {equal_notes_weight}")
+            if not equal_notes_weight:
+                logger.info("📚 MODALITÀ PRIORITÀ DOCUMENTI: I documenti e URL avranno priorità rispetto alle note")
+            else:
+                logger.info("⚖️ MODALITÀ PESO UGUALE: Tutti i contenuti hanno la stessa importanza")
 
             # PARTE 5: ELABORAZIONE DEI FILE
             for doc_model in files_to_embed:
@@ -559,7 +573,8 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 )
 
                 if cached_embedding:
-                    logger.info(f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
+                    logger.info(
+                        f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
                     cached_files.append({
                         'doc_model': doc_model,
                         'cache_info': cached_embedding
@@ -576,6 +591,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
                         doc.metadata['source'] = doc_model.file_path
                         doc.metadata['type'] = 'file'
+
+                        # *** NOVITÀ: Aggiungi priorità basata su equal_notes_weight ***
+                        # Se equal_notes_weight è True: tutti hanno priorità 1 (normale)
+                        # Se equal_notes_weight è False: file hanno priorità 0 (alta)
+                        doc.metadata['priority'] = 1 if equal_notes_weight else 0
+                        logger.debug(f"File {doc_model.filename} - priorità impostata a: {doc.metadata['priority']}")
 
                     docs.extend(langchain_docs)
                     document_ids.append(doc_model.id)
@@ -655,9 +676,15 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         "domain": url_model.get_domain() if hasattr(url_model, 'get_domain') else urlparse(
                             url_model.url).netloc,
                         "filename": f"URL: {url_model.title or url_model.url}",
-                        "last_crawled": url_model.updated_at.isoformat() if url_model.updated_at else None
+                        "last_crawled": url_model.updated_at.isoformat() if url_model.updated_at else None,
+
+                        # *** NOVITÀ: Aggiungi priorità per URL ***
+                        # Se equal_notes_weight è True: priorità normale (1)
+                        # Se equal_notes_weight è False: priorità alta (0) come i file
+                        "priority": 1 if equal_notes_weight else 0
                     }
                 )
+                logger.debug(f"URL {url_model.url} - priorità impostata a: {url_doc.metadata['priority']}")
                 docs.append(url_doc)
 
             # PARTE 7: ELABORAZIONE DELLE NOTE
@@ -679,14 +706,29 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         "type": "note",
                         "title": note.title or "Nota senza titolo",
                         "note_id": note.id,
-                        "filename": f"Nota: {note.title or 'Senza titolo'}"
+                        "filename": f"Nota: {note.title or 'Senza titolo'}",
+
+                        # *** NOVITÀ: Aggiungi priorità per note ***
+                        # Se equal_notes_weight è True: priorità normale (1) come tutti gli altri
+                        # Se equal_notes_weight è False: priorità bassa (2) rispetto a file e URL
+                        "priority": 1 if equal_notes_weight else 2
                     }
                 )
+                logger.debug(
+                    f"Nota '{note.title or 'Senza titolo'}' - priorità impostata a: {note_doc.metadata['priority']}")
                 docs.append(note_doc)
                 note_ids.append(note.id)
 
             logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note e {len(url_ids)} sono URL)")
             logger.info(f"Documenti in cache: {len(cached_files)}")
+
+            # *** NOVITÀ: Log del riepilogo delle priorità ***
+            if not equal_notes_weight:
+                high_priority_count = sum(1 for doc in docs if doc.metadata.get('priority', 1) == 0)
+                normal_priority_count = sum(1 for doc in docs if doc.metadata.get('priority', 1) == 1)
+                low_priority_count = sum(1 for doc in docs if doc.metadata.get('priority', 1) == 2)
+                logger.info(
+                    f"🎯 Distribuzione priorità: Alta({high_priority_count}) Normale({normal_priority_count}) Bassa({low_priority_count})")
     else:
         # PARTE 8: CONFIGURAZIONE DI FALLBACK SENZA PROGETTO
         index_name = "default_index"
@@ -695,6 +737,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         note_ids = None
         url_ids = None
         cached_files = []
+        equal_notes_weight = True  # Default per progetti senza configurazione
 
     # PARTE 9: INIZIALIZZAZIONE EMBEDDINGS
     embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user if project else None))
@@ -752,10 +795,13 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     # PARTE 11: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS
     logger.info(f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
 
-    # Ottieni le impostazioni RAG per il chunking
-    rag_settings = get_project_RAG_settings(project)
-    chunk_size = rag_settings['chunk_size']
-    chunk_overlap = rag_settings['chunk_overlap']
+    # Ottieni le impostazioni RAG per il chunking (già ottenute sopra se project è definito)
+    if project:
+        # Già ottenute sopra
+        pass
+    else:
+        chunk_size = 500
+        chunk_overlap = 50
 
     # Dividi i documenti in chunk
     logger.info(f"Chunking con parametri: size={chunk_size}, overlap={chunk_overlap}")
@@ -766,7 +812,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
     logger.info(f"Documenti divisi in {len(split_docs)} chunk dopo splitting")
 
-    # Assicura che ogni chunk mantenga i metadati necessari
+    # Assicura che ogni chunk mantenga i metadati necessari (INCLUSA LA PRIORITÀ)
     for chunk in split_docs:
         if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
             filename = os.path.basename(chunk.metadata['source'])
@@ -781,6 +827,17 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                 chunk.metadata['type'] = 'note'
             else:
                 chunk.metadata['type'] = 'file'
+
+        # *** NOVITÀ: Assicura che la priorità sia preservata durante il chunking ***
+        if 'priority' not in chunk.metadata:
+            # Se manca la priorità, assegna in base al tipo e al setting equal_notes_weight
+            if project:
+                if chunk.metadata.get('type') == 'note':
+                    chunk.metadata['priority'] = 1 if equal_notes_weight else 2
+                else:  # file o url
+                    chunk.metadata['priority'] = 1 if equal_notes_weight else 0
+            else:
+                chunk.metadata['priority'] = 1  # Default
 
     # PARTE 12: DECISIONE SU AGGIORNAMENTO O CREAZIONE NUOVO INDICE
     if os.path.exists(index_path) and not force_rebuild:
@@ -891,17 +948,22 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         # Log per verificare il contenuto dell'indice
         logger.info(f"Indice FAISS creato/aggiornato con {len(vectordb.docstore._dict)} documenti")
 
-        # Verifica quali file sono nell'indice
+        # Verifica quali file sono nell'indice E la distribuzione delle priorità
         unique_sources = set()
         file_distribution = {}
         url_distribution = {}
         note_distribution = {}
+        priority_distribution = {0: 0, 1: 0, 2: 0}  # *** NOVITÀ: Conteggio per priorità ***
 
         for doc_id, doc in vectordb.docstore._dict.items():
             if hasattr(doc, 'metadata') and 'source' in doc.metadata:
                 source = doc.metadata['source']
                 source_type = doc.metadata.get('type', 'unknown')
+                priority = doc.metadata.get('priority', 1)  # *** NOVITÀ ***
                 unique_sources.add(source)
+
+                # *** NOVITÀ: Conta distribuzione priorità ***
+                priority_distribution[priority] += 1
 
                 if source_type == 'file':
                     filename = os.path.basename(source)
@@ -920,6 +982,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                     note_distribution[note_title] += 1
 
         logger.info(f"Fonti uniche nell'indice: {len(unique_sources)}")
+
+        # *** NOVITÀ: Log della distribuzione delle priorità ***
+        logger.info(f"🎯 Distribuzione priorità nell'indice:")
+        logger.info(f"  - Priorità ALTA (0): {priority_distribution[0]} chunk")
+        logger.info(f"  - Priorità NORMALE (1): {priority_distribution[1]} chunk")
+        logger.info(f"  - Priorità BASSA (2): {priority_distribution[2]} chunk")
 
         # Log della distribuzione dei documenti per tipo
         if file_distribution:
@@ -991,6 +1059,11 @@ def get_answer_from_project(project, question):
     Gestisce l'intero processo di query RAG per un progetto: verifica se l'indice
     deve essere aggiornato, esegue la query, gestisce le fonti ed eventuali errori,
     inclusi errori di autenticazione API.
+
+    MODIFICHE PER "NOTE CON PESO UGUALE":
+    - Post-processa i risultati per riordinare le fonti in base alla priorità
+    - Modifica i prompt per includere istruzioni sulla priorità delle fonti
+    - Aggiunge log dettagliati sulla distribuzione delle priorità nei risultati
 
     Args:
         project: Oggetto Project
@@ -1066,8 +1139,9 @@ def get_answer_from_project(project, question):
             )
 
             if qa_chain is None:
-                return {"answer": "Non è stato possibile creare un indice per i contenuti di questo progetto: Bisogna caricare file, note o URL indicizzati.",
-                        "sources": []}
+                return {
+                    "answer": "Non è stato possibile creare un indice per i contenuti di questo progetto: Bisogna caricare file, note o URL indicizzati.",
+                    "sources": []}
 
             # Dopo l'aggiornamento, rileggi i contenuti disponibili
             project_files = ProjectFile.objects.filter(project=project, is_embedded=True)
@@ -1177,8 +1251,16 @@ def get_answer_from_project(project, question):
         logger.info(f"Eseguendo ricerca su indice vettoriale del progetto {project.id}")
         start_time = time.time()
 
+        # *** NOVITÀ: Ottieni le impostazioni RAG per la priorità ***
+        rag_settings = get_project_RAG_settings(project)
+        equal_notes_weight = rag_settings.get('equal_notes_weight', True)
+        logger.info(f"🎯 Impostazione equal_notes_weight per questa query: {equal_notes_weight}")
+
         try:
-            # Modifica la query in base al tipo di domanda
+            # *** NOVITÀ: Modifica la query in base al tipo di domanda E alla priorità ***
+            # Stringa di istruzione priorità da aggiungere ai prompt
+            priority_instruction = '' if equal_notes_weight else '\n🎯 PRIORITÀ: Dai precedenza alle informazioni da DOCUMENTI e URL rispetto alle note personali'
+
             if is_generic_question:
                 enhanced_question = f"""
                 {question}
@@ -1187,7 +1269,7 @@ def get_answer_from_project(project, question):
                 1. Identificare TUTTI i documenti disponibili nel contesto (file, note e URL)
                 2. Riassumere i punti principali di CIASCUNA fonte
                 3. Citare esplicitamente il nome/URL di ogni fonte quando presenti le sue informazioni
-                4. Organizzare la risposta per fonte, non per argomento
+                4. Organizzare la risposta per fonte, non per argomento{priority_instruction}
                 """
                 result = qa_chain.invoke(enhanced_question)
             elif is_url_question:
@@ -1197,7 +1279,7 @@ def get_answer_from_project(project, question):
                 IMPORTANTE: Questa domanda riguarda contenuti web/URL. Per favore:
                 1. Presta particolare attenzione alle fonti di tipo URL nel contesto
                 2. Quando citi informazioni da URL, indica esplicitamente il link della fonte
-                3. Se la domanda si riferisce a un URL specifico, concentrati principalmente su quello
+                3. Se la domanda si riferisce a un URL specifico, concentrati principalmente su quello{priority_instruction}
                 """
                 result = qa_chain.invoke(enhanced_question)
             elif is_note_question:
@@ -1215,12 +1297,43 @@ def get_answer_from_project(project, question):
                 {question}
 
                 Cerca le informazioni più rilevanti nel contesto fornito. 
-                Se trovi informazioni nelle note o negli URL inclusi nel contesto, includili nella risposta.
+                Se trovi informazioni nelle note o negli URL inclusi nel contesto, includili nella risposta.{priority_instruction}
                 """
                 result = qa_chain.invoke(enhanced_question)
 
             processing_time = round(time.time() - start_time, 2)
             logger.info(f"Ricerca completata in {processing_time} secondi")
+
+            # *** NOVITÀ: Post-processare i risultati per applicare la priorità se equal_notes_weight è False ***
+            if not equal_notes_weight and result.get('source_documents'):
+                source_documents = result['source_documents']
+
+                # Funzione helper per ottenere la priorità di un documento
+                def get_priority(doc):
+                    return doc.metadata.get('priority', 1)
+
+                # Separa i documenti per priorità
+                high_priority_docs = [doc for doc in source_documents if get_priority(doc) <= 1]  # Priorità 0 e 1
+                low_priority_docs = [doc for doc in source_documents if get_priority(doc) > 1]  # Priorità 2+
+
+                # Riordina: prima i documenti ad alta priorità, poi quelli a bassa priorità
+                reordered_docs = high_priority_docs + low_priority_docs
+                result['source_documents'] = reordered_docs
+
+                logger.info(
+                    f"🎯 Applicata priorità documenti: {len(high_priority_docs)} ad alta priorità, {len(low_priority_docs)} a bassa priorità")
+
+                # *** NOVITÀ: Log dettagliato della distribuzione delle priorità nei risultati ***
+                priority_counts = {}
+                for doc in source_documents:
+                    priority = get_priority(doc)
+                    doc_type = doc.metadata.get('type', 'unknown')
+                    key = f"Priorità {priority} ({doc_type})"
+                    priority_counts[key] = priority_counts.get(key, 0) + 1
+
+                logger.info("📊 Distribuzione risultati per priorità e tipo:")
+                for key, count in priority_counts.items():
+                    logger.info(f"  - {key}: {count} documenti")
 
         except openai.AuthenticationError as auth_error:
             error_message = str(auth_error)
@@ -1407,7 +1520,10 @@ def get_answer_from_project(project, question):
                 "files": len(unique_files),
                 "urls": len(unique_urls),
                 "notes": len(unique_notes)
-            }
+            },
+            # *** NOVITÀ: Aggiungi informazioni sulla priorità alla risposta ***
+            "priority_applied": not equal_notes_weight,
+            "equal_notes_weight": equal_notes_weight
         }
 
         # Aggiungi fonti alla risposta
@@ -1439,7 +1555,9 @@ def get_answer_from_project(project, question):
                 "metadata": metadata,
                 "score": getattr(doc, 'score', None),
                 "type": source_type,
-                "filename": f"{filename}{page_info}"
+                "filename": f"{filename}{page_info}",
+                # *** NOVITÀ: Includi informazioni sulla priorità ***
+                "priority": metadata.get('priority', 1)
             }
             response["sources"].append(source)
 
@@ -1476,11 +1594,27 @@ def get_answer_from_project(project, question):
 def create_retrieval_qa_chain(vectordb, project=None):
     """
     Configura e crea una catena RetrievalQA con le impostazioni appropriate.
+
+    MODIFICHE PER "NOTE CON PESO UGUALE":
+    - Aggiunge istruzioni sulla priorità delle fonti al prompt di sistema
+    - Include moduli specifici per la gestione della priorità quando equal_notes_weight=False
+    - Modifica il comportamento del retriever per supportare la priorità
+
+    Args:
+        vectordb: Database vettoriale FAISS con i documenti
+        project: Oggetto Project (opzionale)
+
+    Returns:
+        RetrievalQA: Catena RAG configurata
     """
     # Ottieni le impostazioni del motore e RAG dal database
     engine_settings = get_project_LLM_settings(project)
     rag_settings = get_project_RAG_settings(project)
     prompt_settings = get_project_prompt_settings(project)
+
+    # *** NOVITÀ: Ottieni il parametro equal_notes_weight ***
+    equal_notes_weight = rag_settings.get('equal_notes_weight', True)
+    logger.info(f"🎯 Creazione prompt con equal_notes_weight: {equal_notes_weight}")
 
     # Configurazione prompt di sistema
     template = prompt_settings['prompt_text']
@@ -1501,12 +1635,22 @@ def create_retrieval_qa_chain(vectordb, project=None):
         template += "\n\nRispondi SOLO in base al contesto fornito. Se il contesto non contiene informazioni sufficienti per rispondere alla domanda, di' chiaramente che l'informazione non è disponibile nei documenti forniti."
         modules_added.append("strict_context")
 
+    # *** NOVITÀ: Aggiungi istruzioni sulla priorità se equal_notes_weight è False ***
+    if not equal_notes_weight:
+        template += "\n\n🎯 IMPORTANTE - PRIORITÀ DELLE FONTI: Quando fornisci risposte, dai PRIORITÀ alle informazioni provenienti da DOCUMENTI CARICATI (PDF, Word, etc.) e URL rispetto alle note personali. Le note dovrebbero essere utilizzate principalmente per integrare o chiarire le informazioni dei documenti principali, non come fonte primaria. Organizza la tua risposta mettendo in primo piano le informazioni da documenti e URL, seguite dalle note come supporto aggiuntivo."
+        modules_added.append("document_priority")
+        logger.info("✅ Aggiunto modulo priorità documenti al prompt")
+
     # Aggiungi istruzioni specifiche per domande generiche
     template += "\n\nQUANDO L'UTENTE CHIEDE INFORMAZIONI SU 'TUTTI I DOCUMENTI':\n"
     template += "1. Identifica TUTTI i documenti unici presenti nel contesto\n"
     template += "2. Riassumi i punti principali di CIASCUN documento separatamente\n"
     template += "3. Formatta la risposta in modo strutturato, con una sezione per ogni documento\n"
     template += "4. Cita esplicitamente il nome di ogni documento quando presenti le sue informazioni\n"
+
+    # *** NOVITÀ: Aggiungi priorità se necessario ***
+    if not equal_notes_weight:
+        template += "5. Organizza la risposta dando PRIORITÀ ai DOCUMENTI e URL, seguiti dalle note\n"
 
     # Aggiungi la parte finale del prompt per indicare il contesto e la domanda
     template += "\n\nCONTESTO:\n{context}\n\nDOMANDA: {question}\nRISPOSTA:"
@@ -1517,11 +1661,18 @@ def create_retrieval_qa_chain(vectordb, project=None):
         input_variables=["context", "question"]
     )
 
+    # Log dei moduli aggiunti al prompt
+    logger.info(f"Moduli aggiunti al prompt: {', '.join(modules_added)}")
+
     # Configurazione del retriever
     logger.info(f"Configurazione retriever: {rag_settings['retriever_type']}")
 
     k_value = rag_settings['similarity_top_k']
     k_value_for_generic = k_value * 2
+
+    # *** NOVITÀ: Configurazione retriever con supporto per priorità ***
+    # Nota: Il riordinamento per priorità avviene in post-processing in get_answer_from_project()
+    # Il retriever funziona normalmente, ma i risultati vengono poi riorganizzati
 
     if rag_settings['retriever_type'] == 'mmr':
         retriever = vectordb.as_retriever(
@@ -1544,6 +1695,8 @@ def create_retrieval_qa_chain(vectordb, project=None):
         retriever = vectordb.as_retriever(
             search_kwargs={"k": k_value_for_generic}
         )
+
+    logger.info(f"Retriever configurato con k={k_value_for_generic} per supportare priorità documenti")
 
     # Ottieni la chiave API appropriata
     if project and engine_settings['provider'] and engine_settings['provider'].name.lower() == 'openai':
@@ -1570,6 +1723,14 @@ def create_retrieval_qa_chain(vectordb, project=None):
         chain_type_kwargs={"prompt": PROMPT},
         return_source_documents=True
     )
+
+    # *** NOVITÀ: Log finale della configurazione ***
+    logger.info(
+        f"✅ Catena RAG creata con priorità documenti: {'ATTIVATA' if not equal_notes_weight else 'DISATTIVATA'}")
+    if not equal_notes_weight:
+        logger.info("📚 Le risposte privilegeranno documenti e URL rispetto alle note")
+    else:
+        logger.info("⚖️ Tutti i tipi di contenuto hanno peso uguale")
 
     return qa
 

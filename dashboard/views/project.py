@@ -1123,6 +1123,87 @@ def project(request, project_id=None):
 							'message': "ID URL non fornito"
 						})
 
+				# ----- Aggiornamento parametri comportamentali RAG -----
+				elif action == 'update_rag_behavior':
+					logger.debug(f'action: {action}, project_id: {project.id}')
+					try:
+						parameter = request.POST.get('parameter')
+						value = request.POST.get('value', 'false').lower() == 'true'
+
+						logger.info(
+							f"Updating RAG behavior parameter '{parameter}' to {value} for project {project.id}")
+
+						# Verifica che il parametro sia valido
+						valid_parameters = ['auto_citation', 'prioritize_filenames', 'equal_notes_weight',
+											'strict_context']
+						if parameter not in valid_parameters:
+							raise ValueError(f"Parametro non valido: {parameter}")
+
+						# Ottieni la configurazione RAG del progetto
+						try:
+							project_rag_config = ProjectRAGConfig.objects.get(project=project)
+						except ProjectRAGConfig.DoesNotExist:
+							# Crea configurazione se non esiste
+							project_rag_config = ProjectRAGConfig.objects.create(project=project)
+							project_rag_config.apply_preset('balanced')
+							logger.info(f"Created new RAG configuration for project {project.id}")
+
+						# Aggiorna il parametro specifico
+						if parameter == 'auto_citation':
+							project_rag_config.auto_citation = value
+						elif parameter == 'prioritize_filenames':
+							project_rag_config.prioritize_filenames = value
+						elif parameter == 'equal_notes_weight':
+							project_rag_config.equal_notes_weight = value
+						elif parameter == 'strict_context':
+							project_rag_config.strict_context = value
+
+						# Salva le modifiche
+						project_rag_config.save()
+
+						logger.info(f"RAG parameter '{parameter}' updated to {value} for project {project.id}")
+
+						# I parametri comportamentali non richiedono la ricostruzione dell'indice
+						# ma influenzano il comportamento delle ricerche
+						logger.debug(f"RAG behavior update completed, no index rebuild required")
+
+						# Risposta AJAX di successo
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': f'Parametro {parameter} aggiornato con successo',
+								'parameter': parameter,
+								'value': value
+							})
+
+						messages.success(request, f"Impostazione RAG aggiornata con successo.")
+						return redirect('project', project_id=project.id)
+
+					except ValueError as e:
+						logger.error(f"Validation error updating RAG behavior: {str(e)}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f'Errore di validazione: {str(e)}'
+							})
+
+						messages.error(request, f"Errore di validazione: {str(e)}")
+						return redirect('project', project_id=project.id)
+
+					except Exception as e:
+						logger.error(f"Error updating RAG behavior parameter: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f'Errore: {str(e)}'
+							})
+
+						messages.error(request, f"Errore nell'aggiornamento: {str(e)}")
+						return redirect('project', project_id=project.id)
+
 				# ----- Toggle Attivazione ChatBot ----
 				elif action == 'toggle_chatbot':
 					try:
@@ -1214,6 +1295,7 @@ def project(request, project_id=None):
 
 				# ----- Aggiornamento lingua chatbot -----
 				elif action == 'update_chatbot_language':
+					logger.debug(f"project ---> action: {action}")
 					try:
 						new_language = request.POST.get('chatbot_language', 'it')
 
@@ -1551,19 +1633,58 @@ def project(request, project_id=None):
 				'customized_values': customized_values,
 			})
 
-			# Ottieni anche informazioni sul motore LLM utilizzato
+			# ======= GESTIONE CONFIGURAZIONE PROMPT =======
+			# Ottieni o crea la configurazione prompt del progetto
 			try:
-				project_llm_config, llm_created = ProjectLLMConfiguration.objects.get_or_create(project=project)
-				engine = project_llm_config.engine
+				from profiles.models import ProjectPromptConfig, DefaultSystemPrompts
 
-				# Aggiungi informazioni sul motore al context
+				project_prompt_config, prompt_created = ProjectPromptConfig.objects.select_related(
+					'default_system_prompt'
+				).get_or_create(project=project)
+
+				# Se appena creato, assegna il prompt predefinito
+				if prompt_created:
+					default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+					if default_prompt:
+						project_prompt_config.default_system_prompt = default_prompt
+						project_prompt_config.use_custom_prompt = False
+						project_prompt_config.save()
+						logger.info(f"Assigned default prompt '{default_prompt.name}' to new project {project.id}")
+
+				# Aggiungi informazioni sui prompt al context
 				context.update({
-					'llm_config': project_llm_config,
-					'engine': engine,
-					'provider': engine.provider if engine else None,
+					'project_prompt_config': project_prompt_config,
 				})
+
+				logger.debug(f"Added prompt configuration to context for project {project.id}")
+
 			except Exception as e:
-				logger.error(f"Errore nel recuperare la configurazione LLM: {str(e)}")
+				logger.error(f"Errore nel recuperare/creare la configurazione prompt: {str(e)}")
+				context.update({
+					'project_prompt_config': None,
+				})
+			# ======= FINE GESTIONE PROMPT =======
+
+			# Ottieni informazioni sulla configurazione prompt del progetto
+			try:
+				from profiles.models import ProjectPromptConfig
+
+				project_prompt_config = ProjectPromptConfig.objects.select_related(
+					'default_system_prompt'
+				).filter(project=project).first()
+
+				# Aggiungi informazioni sui prompt al context
+				context.update({
+					'project_prompt_config': project_prompt_config,
+				})
+
+				logger.debug(f"Added prompt configuration to context for project {project.id}")
+
+			except Exception as e:
+				logger.error(f"Errore nel recuperare la configurazione prompt: {str(e)}")
+				context.update({
+					'project_prompt_config': None,
+				})
 
 			# Aggiungi informazioni sul crawling web se disponibili
 			try:

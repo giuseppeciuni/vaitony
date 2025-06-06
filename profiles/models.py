@@ -556,6 +556,12 @@ class ProjectPromptConfig(models.Model):
         Restituisce il prompt effettivo da utilizzare.
         La priorità è: prompt personalizzato (se abilitato) > prompt predefinito > prompt vuoto
         """
+
+		logger.debug(f"get_effective_prompt per progetto {self.project.id}:")
+		logger.debug(f"  - use_custom_prompt: {self.use_custom_prompt}")
+		logger.debug(f"  - custom_prompt_text presente: {bool(self.custom_prompt_text and self.custom_prompt_text.strip())}")
+		logger.debug(f"  - default_system_prompt presente: {bool(self.default_system_prompt)}")
+
 		if self.use_custom_prompt and self.custom_prompt_text.strip():
 			return self.custom_prompt_text
 

@@ -1204,6 +1204,217 @@ def project(request, project_id=None):
 						messages.error(request, f"Errore nell'aggiornamento: {str(e)}")
 						return redirect('project', project_id=project.id)
 
+				# ----- Selezione prompt predefinito -----
+				elif action == 'select_default_prompt':
+					try:
+						prompt_id = request.POST.get('prompt_id')
+
+						if not prompt_id:
+							raise ValueError("ID prompt non specificato")
+
+						# Verifica che il prompt esista nel database
+						from profiles.models import DefaultSystemPrompts, ProjectPromptConfig
+						selected_prompt = get_object_or_404(DefaultSystemPrompts, id=prompt_id)
+
+						logger.info(f"Selecting default prompt '{selected_prompt.name}' for project {project.id}")
+
+						# Ottieni o crea la configurazione prompt del progetto
+						project_prompt_config, created = ProjectPromptConfig.objects.get_or_create(project=project)
+
+						# Aggiorna la configurazione del progetto
+						project_prompt_config.default_system_prompt = selected_prompt
+						project_prompt_config.use_custom_prompt = False
+						project_prompt_config.save()
+
+						logger.info(f"Default prompt '{selected_prompt.name}' assigned to project {project.id}")
+
+						# Risposta AJAX
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': f"Prompt '{selected_prompt.name}' selezionato con successo",
+								'prompt_name': selected_prompt.name,
+								'prompt_description': selected_prompt.description
+							})
+
+						messages.success(request, f"Prompt '{selected_prompt.name}' selezionato con successo.")
+
+					except Exception as e:
+						logger.error(f"Error selecting default prompt: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+						messages.error(request, f"Errore nella selezione del prompt: {str(e)}")
+
+				# ----- Salvataggio prompt personalizzato -----
+				elif action == 'save_custom_prompt':
+					try:
+						custom_prompt_text = request.POST.get('custom_prompt_text', '').strip()
+						prompt_name = request.POST.get('prompt_name', '').strip()
+
+						# *** AGGIUNTA: Debug logging ***
+						logger.info(f"🔧 SALVATAGGIO PROMPT CUSTOM - Progetto {project.id}:")
+						logger.info(f"   - custom_prompt_text length: {len(custom_prompt_text)}")
+						logger.info(f"   - prompt_name: '{prompt_name}'")
+						logger.info(f"   - custom_prompt_text primi 100 char: {custom_prompt_text[:100]}...")
+
+						# Validazione del contenuto
+						if not custom_prompt_text:
+							raise ValueError("Il testo del prompt non può essere vuoto")
+
+						if len(custom_prompt_text) < 50:
+							raise ValueError("Il prompt deve essere di almeno 50 caratteri")
+
+						if len(custom_prompt_text) > 10000:
+							raise ValueError("Il prompt non può superare i 10.000 caratteri")
+
+						# Nome opzionale per il prompt personalizzato
+						if not prompt_name:
+							prompt_name = f"Prompt personalizzato per {project.name}"
+
+						logger.info(f"Saving custom prompt for project {project.id}")
+
+						# Ottieni o crea la configurazione prompt del progetto
+						from profiles.models import ProjectPromptConfig
+						project_prompt_config, created = ProjectPromptConfig.objects.get_or_create(project=project)
+
+						# *** AGGIUNTA: Log stato prima del salvataggio ***
+						logger.info(f"   - Config esistente: {not created}")
+						logger.info(f"   - use_custom_prompt prima: {project_prompt_config.use_custom_prompt}")
+						logger.info(
+							f"   - custom_prompt_text prima length: {len(project_prompt_config.custom_prompt_text) if project_prompt_config.custom_prompt_text else 0}")
+
+						# Salva il prompt personalizzato
+						project_prompt_config.custom_prompt_text = custom_prompt_text
+						project_prompt_config.use_custom_prompt = True  # *** IMPORTANTE: Assicurati che sia True ***
+						project_prompt_config.save()
+
+						# *** AGGIUNTA: Verifica che sia stato salvato correttamente ricaricando l'oggetto ***
+						saved_config = ProjectPromptConfig.objects.get(project=project)
+						logger.info(f"   - DOPO SALVATAGGIO:")
+						logger.info(f"   - use_custom_prompt dopo: {saved_config.use_custom_prompt}")
+						logger.info(f"   - custom_prompt_text dopo length: {len(saved_config.custom_prompt_text)}")
+						logger.info(f"   - effective_prompt: {saved_config.get_effective_prompt()[:100]}...")
+
+						logger.info(
+							f"Custom prompt saved for project {project.id} (length: {len(custom_prompt_text)} chars)")
+
+						# Risposta AJAX
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': 'Prompt personalizzato salvato con successo',
+								'prompt_stats': {
+									'char_count': len(custom_prompt_text),
+									'word_count': len(custom_prompt_text.split()),
+									'line_count': len(custom_prompt_text.split('\n'))
+								},
+								'debug_info': {
+									'use_custom_prompt': saved_config.use_custom_prompt,
+									'custom_text_length': len(saved_config.custom_prompt_text),
+									'effective_prompt_length': len(saved_config.get_effective_prompt())
+								}
+							})
+
+						messages.success(request, "Prompt personalizzato salvato con successo.")
+
+					except ValueError as e:
+						logger.error(f"Validation error in custom prompt: {str(e)}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': f'Errore di validazione: {str(e)}'})
+
+						messages.error(request, f"Errore di validazione: {str(e)}")
+
+					except Exception as e:
+						logger.error(f"Error saving custom prompt: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+						messages.error(request, f"Errore nel salvataggio: {str(e)}")
+
+				# ----- Reset prompt al predefinito -----
+				elif action == 'reset_prompt_to_default':
+					try:
+						logger.info(f"Resetting prompt configuration to default for project {project.id}")
+
+						# Ottieni o crea la configurazione prompt del progetto
+						from profiles.models import ProjectPromptConfig, DefaultSystemPrompts
+						project_prompt_config, created = ProjectPromptConfig.objects.get_or_create(project=project)
+
+						# Trova il prompt predefinito dal database
+						default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
+
+						if default_prompt:
+							project_prompt_config.default_system_prompt = default_prompt
+							project_prompt_config.use_custom_prompt = False
+							project_prompt_config.custom_prompt_text = ""
+							project_prompt_config.save()
+
+							logger.info(f"Reset to default prompt '{default_prompt.name}' for project {project.id}")
+							message = f"Configurazione ripristinata al prompt predefinito '{default_prompt.name}'"
+						else:
+							project_prompt_config.use_custom_prompt = False
+							project_prompt_config.custom_prompt_text = ""
+							project_prompt_config.save()
+
+							logger.warning("No default prompt found in database for reset")
+							message = "Prompt personalizzato rimosso (nessun prompt predefinito disponibile)"
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': message
+							})
+
+						messages.success(request, message)
+
+					except Exception as e:
+						logger.error(f"Error resetting prompt: {str(e)}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+						messages.error(request, f"Errore nel ripristino: {str(e)}")
+
+				# ----- Anteprima prompt -----
+				elif action == 'preview_prompt':
+					try:
+						prompt_text = request.POST.get('prompt_text', '').strip()
+						prompt_type = request.POST.get('prompt_type', 'custom')
+
+						if prompt_type == 'default':
+							prompt_id = request.POST.get('prompt_id')
+							if prompt_id:
+								from profiles.models import DefaultSystemPrompts
+								prompt_obj = get_object_or_404(DefaultSystemPrompts, id=prompt_id)
+								prompt_text = prompt_obj.prompt_text
+
+						if not prompt_text:
+							raise ValueError("Nessun testo prompt da visualizzare")
+
+						# Analizza il prompt
+						stats = {
+							'char_count': len(prompt_text),
+							'word_count': len(prompt_text.split()),
+							'line_count': len(prompt_text.split('\n')),
+							'estimated_tokens': round(len(prompt_text.split()) * 1.3),
+						}
+
+						return JsonResponse({
+							'success': True,
+							'prompt_text': prompt_text,
+							'stats': stats
+						})
+
+					except Exception as e:
+						logger.error(f"Error in prompt preview: {str(e)}")
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
 				# ----- Toggle Attivazione ChatBot ----
 				elif action == 'toggle_chatbot':
 					try:
@@ -1633,7 +1844,6 @@ def project(request, project_id=None):
 				'customized_values': customized_values,
 			})
 
-			# ======= GESTIONE CONFIGURAZIONE PROMPT =======
 			# Ottieni o crea la configurazione prompt del progetto
 			try:
 				from profiles.models import ProjectPromptConfig, DefaultSystemPrompts
@@ -1651,21 +1861,35 @@ def project(request, project_id=None):
 						project_prompt_config.save()
 						logger.info(f"Assigned default prompt '{default_prompt.name}' to new project {project.id}")
 
+				# Ottieni tutti i prompt predefiniti disponibili
+				default_prompts = DefaultSystemPrompts.objects.all().order_by('-is_default', 'category', 'name')
+
+				# Raggruppa i prompt per categoria
+				prompts_by_category = {}
+				for prompt in default_prompts:
+					category = prompt.get_category_display()
+					if category not in prompts_by_category:
+						prompts_by_category[category] = []
+					prompts_by_category[category].append(prompt)
+
 				# Aggiungi informazioni sui prompt al context
 				context.update({
 					'project_prompt_config': project_prompt_config,
+					'default_prompts': default_prompts,
+					'prompts_by_category': prompts_by_category,
 				})
 
-				logger.debug(f"Added prompt configuration to context for project {project.id}")
+				logger.debug(
+					f"Added prompt configuration and {default_prompts.count()} default prompts to context for project {project.id}")
 
 			except Exception as e:
 				logger.error(f"Errore nel recuperare/creare la configurazione prompt: {str(e)}")
 				context.update({
 					'project_prompt_config': None,
+					'default_prompts': [],
+					'prompts_by_category': {},
 				})
-			# ======= FINE GESTIONE PROMPT =======
 
-			# Ottieni informazioni sulla configurazione prompt del progetto
 			try:
 				from profiles.models import ProjectPromptConfig
 

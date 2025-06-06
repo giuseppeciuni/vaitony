@@ -472,20 +472,20 @@ IMPORTED LOCAL SETTINGS
   "pk": 5,
   "fields": {
     "project": 5,
-    "chunk_size": 300,
-    "chunk_overlap": 100,
-    "similarity_top_k": 10,
-    "mmr_lambda": 0.9,
-    "similarity_threshold": 0.8,
-    "retriever_type": "similarity_score_threshold",
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "similarity_top_k": 6,
+    "mmr_lambda": 0.7,
+    "similarity_threshold": 0.7,
+    "retriever_type": "mmr",
     "auto_citation": true,
     "prioritize_filenames": true,
     "equal_notes_weight": true,
-    "strict_context": true,
-    "preset_name": "high_precision",
-    "preset_category": "precision",
+    "strict_context": false,
+    "preset_name": "balanced",
+    "preset_category": "balanced",
     "created_at": "2025-06-05T17:49:29.229Z",
-    "updated_at": "2025-06-05T18:28:34.207Z"
+    "updated_at": "2025-06-05T22:34:35.251Z"
   }
 },
 {
@@ -542,10 +542,10 @@ IMPORTED LOCAL SETTINGS
   "fields": {
     "project": 5,
     "default_system_prompt": 1,
-    "custom_prompt_text": "",
-    "use_custom_prompt": false,
+    "custom_prompt_text": "Sei un assistente esperto che analizza documenti per [DESCRIVI IL DOMINIO/ARGOMENTO].\r\n\r\nIl tuo compito è fornire risposte precise e dettagliate utilizzando ESCLUSIVAMENTE le informazioni contenute nei documenti forniti.\r\n\r\nQuando rispondi:\r\n1. Analizza attentamente tutti i documenti rilevanti nel contesto\r\n2. Fornisci risposte complete e ben strutturate\r\n3. Cita sempre le fonti specifiche (nome del documento, pagina se disponibile)\r\n4. Se l'informazione richiesta non è presente nei documenti, dichiaralo chiaramente\r\n5. Mantieni un tono [PROFESSIONALE/AMICHEVOLE/TECNICO] appropriato al contesto\r\n\r\nFormato delle risposte:\r\n- Inizia con un riassunto diretto della risposta\r\n- Sviluppa i dettagli nelle sezioni successive\r\n- Concludi con i riferimenti alle fonti utilizzate\r\n\r\nNon aggiungere informazioni che non sono presenti nei documenti forniti. Ma aggiungi anche un po di fantasia tipo guerre stellari",
+    "use_custom_prompt": true,
     "created_at": "2025-06-05T17:49:29.246Z",
-    "updated_at": "2025-06-05T17:49:29.254Z"
+    "updated_at": "2025-06-05T22:52:51.331Z"
   }
 }
 ]

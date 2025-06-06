@@ -260,9 +260,22 @@ def get_project_prompt_settings(project):
         # Ottieni la configurazione prompt del progetto
         prompt_config = ProjectPromptConfig.objects.get(project=project)
 
+        logger.info(f"🎯 DEBUG PROMPT - Progetto {project.id}:")
+        logger.info(f"   - use_custom_prompt: {prompt_config.use_custom_prompt}")
+        logger.info(f"   - ha custom_prompt_text: {bool(prompt_config.custom_prompt_text.strip())}")
+        logger.info(f"   - lunghezza custom_prompt_text: {len(prompt_config.custom_prompt_text) if prompt_config.custom_prompt_text else 0}")
+        logger.info(f"   - default_system_prompt: {prompt_config.default_system_prompt.name if prompt_config.default_system_prompt else 'None'}")
+
+
         # Restituisci le informazioni sul prompt
         prompt_info = prompt_config.get_prompt_info()
         effective_prompt = prompt_config.get_effective_prompt()
+
+        logger.info(f"   - prompt_info type: {prompt_info['type']}")
+        logger.info(f"   - prompt_info name: {prompt_info['name']}")
+        logger.info(f"   - effective_prompt lunghezza: {len(effective_prompt)}")
+        logger.info(f"   - effective_prompt primi 100 char: {effective_prompt[:100]}...")
+
 
         return {
             'prompt_text': effective_prompt,
@@ -1612,13 +1625,23 @@ def create_retrieval_qa_chain(vectordb, project=None):
     rag_settings = get_project_RAG_settings(project)
     prompt_settings = get_project_prompt_settings(project)
 
+    logger.info(f"🔧 CREAZIONE CATENA RAG - Progetto {project.id if project else 'None'}:")
+    logger.info(f"   - Prompt type: {prompt_settings['prompt_type']}")
+    logger.info(f"   - Prompt name: {prompt_settings['prompt_name']}")
+    logger.info(f"   - Use custom prompt: {prompt_settings['use_custom_prompt']}")
+    logger.info(f"   - Template length: {len(prompt_settings['prompt_text'])}")
+
+
     # *** NOVITÀ: Ottieni il parametro equal_notes_weight ***
     equal_notes_weight = rag_settings.get('equal_notes_weight', True)
     logger.info(f"🎯 Creazione prompt con equal_notes_weight: {equal_notes_weight}")
 
     # Configurazione prompt di sistema
     template = prompt_settings['prompt_text']
+
+    logger.info(f"📝 Template base (primi 200 char): {template[:200]}...")
     logger.info(f"Generazione prompt (lunghezza base: {len(template)} caratteri)")
+
 
     # Aggiungi moduli al prompt in base alle impostazioni RAG
     modules_added = []

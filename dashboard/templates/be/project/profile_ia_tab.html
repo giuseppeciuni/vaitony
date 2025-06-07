@@ -1,0 +1,698 @@
+<!-- Profilo IA Tab -->
+<div class="tab-pane fade" id="profile-ia" role="tabpanel" aria-labelledby="profile-ia-tab">
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <!-- Card Provider LLM e Engine -->
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cpu me-2"></i>Motore IA del Progetto
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if project.llm_config.engine %}
+                        <div class="engine-info">
+                            <div class="provider-logo">
+                                {% if project.llm_config.engine.provider.logo %}
+                                    <img src="{{ project.llm_config.engine.provider.logo.url }}"
+                                         alt="{{ project.llm_config.engine.provider.name }}"
+                                         style="max-height: 40px;">
+                                {% else %}
+                                    {% if project.llm_config.engine.provider.name == 'OpenAI' %}
+                                        <i class="bi bi-cpu-fill fs-3" style="color: #10a37f;"></i>
+                                    {% elif project.llm_config.engine.provider.name == 'Anthropic' %}
+                                        <i class="bi bi-chat-square-heart-fill fs-3" style="color: #b83280;"></i>
+                                    {% elif project.llm_config.engine.provider.name == 'Google' %}
+                                        <i class="bi bi-google fs-3" style="color: #4285F4;"></i>
+                                    {% elif project.llm_config.engine.provider.name == 'DeepSeek' %}
+                                        <i class="bi bi-braces fs-3" style="color: #0066cc;"></i>
+                                    {% else %}
+                                        <i class="bi bi-robot fs-3" style="color: #6c757d;"></i>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h6 class="mb-1">{{ project.llm_config.engine.provider.name }}</h6>
+                                <h5 class="mb-0 text-primary">{{ project.llm_config.engine.name }}</h5>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <p class="text-muted mb-0">
+                                {{ project.llm_config.engine.description }}
+                            </p>
+                        </div>
+
+                        <hr>
+
+                        <div class="config-params">
+                            <h6 class="mb-3">Parametri Configurati</h6>
+                            <div class="params-grid">
+                                <div class="param-item">
+                                    <div class="param-label">Temperatura</div>
+                                    <div class="param-value">{{ project.llm_config.get_temperature }}</div>
+                                </div>
+                                <div class="param-item">
+                                    <div class="param-label">Max Tokens</div>
+                                    <div class="param-value">{{ project.llm_config.get_max_tokens }}</div>
+                                </div>
+                                <div class="param-item">
+                                    <div class="param-label">Timeout</div>
+                                    <div class="param-value">{{ project.llm_config.get_timeout }}s</div>
+                                </div>
+                                {% if project.llm_config.engine.supports_vision %}
+                                <div class="param-item">
+                                    <div class="param-label">Supporto Visione</div>
+                                    <div class="param-value">
+                                        <i class="bi bi-check-circle-fill text-success"></i> Attivo
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="card-footer bg-transparent">
+                            <a href="{% url 'project_config' project.id %}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-gear me-1"></i>Configurazione Avanzata
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Nessun motore IA configurato per questo progetto.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <!-- Card Preset RAG Selezionato -->
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-search me-2"></i>Profilo RAG Attivo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if current_preset %}
+                        <!-- Determina la classe CSS e il nome da visualizzare basati sul preset -->
+                        {% if current_preset.name == 'balanced' %}
+                            <div class="selected-preset-card preset-balanced">
+                                <div class="selected-preset-header">
+                                    <span>Bilanciato</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione equilibrata tra precisione e velocità, ideale per la maggior parte dei casi d'uso.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'high_precision' %}
+                            <div class="selected-preset-card preset-high-precision">
+                                <div class="selected-preset-header">
+                                    <span>Alta Precisione</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione ottimizzata per alta precisione, adatta per documenti tecnici e analisi dettagliate.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'speed' %}
+                            <div class="selected-preset-card preset-speed">
+                                <div class="selected-preset-header">
+                                    <span>Velocità</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione ottimizzata per velocità, ideale per risposte rapide.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif current_preset.name == 'extended_context' %}
+                            <div class="selected-preset-card preset-extended-context">
+                                <div class="selected-preset-header">
+                                    <span>Contesto Esteso</span>
+                                    <span class="badge-default">{{ current_preset.category|title }}</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Contesto esteso per documenti lunghi e complessi.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="selected-preset-card preset-balanced">
+                                <div class="selected-preset-header">
+                                    <span>Configurazione Personalizzata</span>
+                                    <span class="customized-badge">Personalizzato</span>
+                                </div>
+                                <div class="selected-preset-body">
+                                    <p class="mb-3">
+                                        Configurazione personalizzata con parametri adattati alle specifiche esigenze del progetto.
+                                    </p>
+                                    <div class="selected-preset-specs">
+                                        <div>
+                                            <strong>Chunk Size</strong>
+                                            <div>{{ rag_values.chunk_size }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Overlap</strong>
+                                            <div>{{ rag_values.chunk_overlap }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Top K</strong>
+                                            <div>{{ rag_values.similarity_top_k }}</div>
+                                        </div>
+                                        <div>
+                                            <strong>Similarità</strong>
+                                            <div>{{ rag_values.similarity_threshold }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <hr>
+
+                        <!-- Selezione Preset RAG -->
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Seleziona Preset RAG</h6>
+                                <small class="text-muted">Cambia configurazione</small>
+                            </div>
+
+                            <div class="preset-selector">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <button type="button" class="btn btn-outline-primary w-100 preset-btn {% if current_preset.name == 'balanced' %}active{% endif %}"
+                                                data-preset="balanced">
+                                            <i class="bi bi-balance-scale me-2"></i>Bilanciato
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button type="button" class="btn btn-outline-success w-100 preset-btn {% if current_preset.name == 'high_precision' %}active{% endif %}"
+                                                data-preset="high_precision">
+                                            <i class="bi bi-crosshair me-2"></i>Alta Precisione
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button type="button" class="btn btn-outline-warning w-100 preset-btn {% if current_preset.name == 'speed' %}active{% endif %}"
+                                                data-preset="speed">
+                                            <i class="bi bi-lightning me-2"></i>Velocità
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button type="button" class="btn btn-outline-info w-100 preset-btn {% if current_preset.name == 'extended_context' %}active{% endif %}"
+                                                data-preset="extended_context">
+                                            <i class="bi bi-arrows-expand me-2"></i>Contesto Esteso
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Impostazioni RAG Comportamentali -->
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Impostazioni Comportamentali</h6>
+                                <small class="text-muted">Personalizza il comportamento</small>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="autoCitationToggle" data-param="auto_citation"
+                                               {% if rag_values.auto_citation %}checked{% endif %}>
+                                        <label class="form-check-label" for="autoCitationToggle">
+                                            <small><strong>Auto Citazione</strong></small>
+                                        </label>
+                                        <div class="form-text small">Includi automaticamente le fonti nelle risposte</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="prioritizeFilenamesToggle" data-param="prioritize_filenames"
+                                               {% if rag_values.prioritize_filenames %}checked{% endif %}>
+                                        <label class="form-check-label" for="prioritizeFilenamesToggle">
+                                            <small><strong>Priorità Nome File</strong></small>
+                                        </label>
+                                        <div class="form-text small">Dai priorità ai file menzionati nella domanda</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="equalNotesWeightToggle" data-param="equal_notes_weight"
+                                               {% if rag_values.equal_notes_weight %}checked{% endif %}>
+                                        <label class="form-check-label" for="equalNotesWeightToggle">
+                                            <small><strong>Note con Peso Uguale</strong></small>
+                                        </label>
+                                        <div class="form-text small">Tratta note e documenti con uguale importanza</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input rag-behavior-toggle" type="checkbox"
+                                               id="strictContextToggle" data-param="strict_context"
+                                               {% if rag_values.strict_context %}checked{% endif %}>
+                                        <label class="form-check-label" for="strictContextToggle">
+                                            <small><strong>Contesto Stretto</strong></small>
+                                        </label>
+                                        <div class="form-text small">Risposte SOLO basate sui documenti disponibili</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Indicatore di stato salvataggio -->
+                            <div class="mt-2">
+                                <div id="rag-save-status" class="alert alert-info d-none" style="padding: 0.5rem;">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <span id="rag-save-message">Le modifiche vengono salvate automaticamente</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Nessun profilo RAG configurato per questo progetto.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="{% url 'project_config' project.id %}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-gear me-1"></i>Configurazione Avanzata
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Stili per la visualizzazione dei preset */
+.selected-preset-card {
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #007bff;
+}
+
+.preset-balanced {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+    border-left-color: #2196f3;
+}
+
+.preset-high-precision {
+    background: linear-gradient(135deg, #e8f5e8 0%, #f8f9fa 100%);
+    border-left-color: #4caf50;
+}
+
+.preset-speed {
+    background: linear-gradient(135deg, #fff8e1 0%, #f8f9fa 100%);
+    border-left-color: #ff9800;
+}
+
+.preset-extended-context {
+    background: linear-gradient(135deg, #f3e5f5 0%, #f8f9fa 100%);
+    border-left-color: #9c27b0;
+}
+
+.selected-preset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.selected-preset-header span:first-child {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.badge-default {
+    background: #007bff;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.customized-badge {
+    background: #6c757d;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.selected-preset-specs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.selected-preset-specs > div {
+    text-align: center;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+}
+
+.selected-preset-specs strong {
+    display: block;
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.selected-preset-specs div > div {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Stili per i parametri del motore */
+.engine-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.provider-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.config-params .params-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.param-item {
+    text-align: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.param-label {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.param-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Stili per la selezione preset */
+.preset-selector .btn {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.preset-btn.active {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: white;
+}
+
+.preset-btn:hover:not(.active) {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+}
+
+/* Toggle loading state */
+.toggle-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.toggle-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .selected-preset-specs {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .config-params .params-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .engine-info {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ======= GESTIONE SELEZIONE PRESET RAG =======
+    const presetButtons = document.querySelectorAll('.preset-btn');
+    const ragToggles = document.querySelectorAll('.rag-behavior-toggle');
+    const saveStatus = document.getElementById('rag-save-status');
+    const saveMessage = document.getElementById('rag-save-message');
+
+    // Funzione per mostrare stato di salvataggio
+    function showSaveStatus(type, message, autoHide = true) {
+        saveStatus.className = `alert d-block alert-${type}`;
+        saveMessage.textContent = message;
+
+        if (autoHide) {
+            setTimeout(() => {
+                saveStatus.classList.add('d-none');
+            }, 3000);
+        }
+    }
+
+    // Gestione selezione preset
+    presetButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const preset = this.getAttribute('data-preset');
+            const originalText = this.innerHTML;
+
+            // Disabilita tutti i bottoni
+            presetButtons.forEach(btn => btn.disabled = true);
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Applicando...';
+
+            // Prepara dati per la richiesta
+            const formData = new FormData();
+            formData.append('action', 'apply_rag_preset');
+            formData.append('preset', preset);
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            // Effettua la richiesta AJAX
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Riabilita i bottoni
+                presetButtons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.classList.remove('active');
+                });
+                this.innerHTML = originalText;
+
+                if (data.success) {
+                    // Seleziona il nuovo preset
+                    this.classList.add('active');
+                    showSaveStatus('success', '✓ Preset RAG applicato con successo');
+
+                    // Ricarica la pagina dopo un breve delay per mostrare le modifiche
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showSaveStatus('danger', `Errore: ${data.message || 'Impossibile applicare il preset'}`);
+                }
+            })
+            .catch(error => {
+                // Riabilita i bottoni
+                presetButtons.forEach(btn => btn.disabled = false);
+                this.innerHTML = originalText;
+                showSaveStatus('danger', 'Errore di comunicazione con il server');
+                console.error('Error applying RAG preset:', error);
+            });
+        });
+    });
+
+    // ======= GESTIONE TOGGLE RAG COMPORTAMENTALI =======
+    // Gestione cambiamenti sui toggle
+    ragToggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const param = this.getAttribute('data-param');
+            const isChecked = this.checked;
+            const toggleContainer = this.closest('.form-check');
+
+            // Mostra stato di caricamento
+            toggleContainer.classList.add('toggle-loading');
+            showSaveStatus('info', 'Salvando modifiche...', false);
+
+            // Prepara dati per la richiesta
+            const formData = new FormData();
+            formData.append('action', 'update_rag_behavior');
+            formData.append('parameter', param);
+            formData.append('value', isChecked ? 'true' : 'false');
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            // Effettua la richiesta AJAX
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                toggleContainer.classList.remove('toggle-loading');
+
+                if (data.success) {
+                    showSaveStatus('success', '✓ Impostazione salvata correttamente');
+                    console.log(`RAG parameter ${param} updated to ${isChecked}`);
+                } else {
+                    toggle.checked = !isChecked;
+                    showSaveStatus('danger', `Errore: ${data.message || 'Impossibile salvare'}`);
+                }
+            })
+            .catch(error => {
+                toggleContainer.classList.remove('toggle-loading');
+                toggle.checked = !isChecked;
+                showSaveStatus('danger', 'Errore di comunicazione con il server');
+                console.error('Error updating RAG parameter:', error);
+            });
+        });
+    });
+
+    // Funzione per ottenere il token CSRF
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+               document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+               document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+    }
+
+    console.log(`Initialized RAG configuration with ${presetButtons.length} preset buttons and ${ragToggles.length} behavior toggles`);
+});
+</script>

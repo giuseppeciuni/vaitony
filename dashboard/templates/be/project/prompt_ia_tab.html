@@ -1,5 +1,5 @@
 <!-- Profilo IA Tab -->
-<div class="tab-pane fade" id="rag-config" role="tabpanel" aria-labelledby="rag-config-tab">
+<div class="tab-pane fade" id="prompt" role="tabpanel" aria-labelledby="prompt-tab">
     <!-- Sezione Configurazione Prompt di Sistema -->
     <div class="ai-prompt-configuration">
     <!-- Header con stato attuale -->
@@ -49,21 +49,21 @@
         <!-- Tab Navigation -->
         <ul class="nav nav-pills nav-fill mb-4" id="promptTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="predefined-tab" data-bs-toggle="pill" data-bs-target="#predefined-prompts" type="button" role="tab">
+                <button class="nav-link active" id="predefined-prompts-tab" data-bs-toggle="pill" data-bs-target="#predefined-prompts" type="button" role="tab">
                     <i class="bi bi-collection me-2"></i>
                     <span>Prompt Predefiniti</span>
                     <small class="d-block text-muted">Scegli tra template pronti</small>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="custom-tab" data-bs-toggle="pill" data-bs-target="#custom-prompt" type="button" role="tab">
+                <button class="nav-link" id="custom-prompt-tab" data-bs-toggle="pill" data-bs-target="#custom-prompt" type="button" role="tab">
                     <i class="bi bi-pencil-square me-2"></i>
                     <span>Prompt Personalizzato</span>
                     <small class="d-block text-muted">Crea il tuo prompt</small>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="preview-tab" data-bs-toggle="pill" data-bs-target="#prompt-preview" type="button" role="tab">
+                <button class="nav-link" id="prompt-preview-tab" data-bs-toggle="pill" data-bs-target="#prompt-preview" type="button" role="tab">
                     <i class="bi bi-eye me-2"></i>
                     <span>Anteprima</span>
                     <small class="d-block text-muted">Visualizza prompt attivo</small>
@@ -422,7 +422,7 @@
 
 .prompt-card-header {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 1rem;
 }

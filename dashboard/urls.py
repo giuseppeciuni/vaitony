@@ -37,7 +37,7 @@ urlpatterns = [
     path('website_crawl/<int:project_id>/', website_crawl, name='website_crawl'),
 
     # Impostazioni
-    path('settings/ia-engine/', ia_engine, name='ia_engine'),
+    path('settings/ia-engine/', ia_engine, name='ia_engine'),   #Gestione chiavi dei vari LLM
     path('settings/billing/', billing_settings, name='billing_settings'),
 
     # URLs per il chatbot esterno

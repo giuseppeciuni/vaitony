@@ -63,13 +63,7 @@
                         <li class="nav-item">
                             <a href="{% url 'ia_engine' %}" class="nav-link {% if 'ia_engine' in request.resolver_match.url_name %}active{% endif %}">
                                 <i class="nav-icon bi bi-cpu"></i>
-                                <p>Motore IA</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="" class="nav-link {% if 'rag_settings' in request.resolver_match.url_name %}active{% endif %}">
-                                <i class="nav-icon bi bi-sliders"></i>
-                                <p>Parametri RAG</p>
+                                <p>Configurazioni LLM</p>
                             </a>
                         </li>
                     </ul>

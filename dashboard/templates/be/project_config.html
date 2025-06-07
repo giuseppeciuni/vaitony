@@ -599,55 +599,6 @@
                             </div>
                         </div>
 
-                        <!-- Parametri Comportamentali -->
-                        <h6 class="text-primary mb-3 mt-4">
-                            <i class="bi bi-toggles me-2"></i>
-                            Comportamento dell'IA
-                        </h6>
-
-                        <div class="advanced-section">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="auto-citation" name="auto_citation"
-                                               {% if rag_values.auto_citation %}checked{% endif %}>
-                                        <label class="form-check-label" for="auto-citation">
-                                            <strong>Citazioni automatiche</strong>
-                                        </label>
-                                        <div class="form-text">Includi riferimenti alle fonti nelle risposte</div>
-                                    </div>
-
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="prioritize-filenames" name="prioritize_filenames"
-                                               {% if rag_values.prioritize_filenames %}checked{% endif %}>
-                                        <label class="form-check-label" for="prioritize_filenames">
-                                            <strong>Priorità nomi file</strong>
-                                        </label>
-                                        <div class="form-text">Dai priorità ai documenti menzionati nella domanda</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="equal-notes-weight" name="equal_notes_weight"
-                                               {% if rag_values.equal_notes_weight %}checked{% endif %}>
-                                        <label class="form-check-label" for="equal-notes-weight">
-                                            <strong>Stesso peso note/documenti</strong>
-                                        </label>
-                                        <div class="form-text">Tratta note e documenti con uguale importanza</div>
-                                    </div>
-
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="strict-context" name="strict_context"
-                                               {% if rag_values.strict_context %}checked{% endif %}>
-                                        <label class="form-check-label" for="strict-context">
-                                            <strong>Contesto rigoroso</strong>
-                                        </label>
-                                        <div class="form-text">Risposte SOLO basate sui documenti disponibili</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Pulsanti di controllo -->
                         <div class="d-flex justify-content-between mt-4">
                             <button type="button" class="btn btn-outline-secondary" id="reset-to-preset">

@@ -2,76 +2,229 @@
 {% load static %}
 
 {% block user_content %}
-
     {% if form.errors %}
-        <div class="alert alert-danger" role="alert">
+        <div class="vaitony-alert vaitony-alert-error">
+            <i class="bi bi-exclamation-triangle" style="margin-right: 0.5rem;"></i>
+            <strong>Errore di attivazione:</strong>
             {% for key, value in form.errors.items %}
-                {{ key }}: {{ value.0 }}<br/>
+                <br/>{{ key }}: {{ value.0 }}
             {% endfor %}
         </div>
     {% endif %}
 
-    <body class="register-page bg-body-secondary">
-        <div class="container d-flex justify-content-center align-items-center vh-100">
-            <div class="register-box w-50"> <!-- Cambiato da register-box a register-box w-50 per allargare la card -->
-                <!-- Logo e titolo -->
-                <div class="card card-outline card-primary">
-                    <div class="card-header text-center">
-                        <a href="#" class="link-dark link-offset-2 link-opacity-100 link-opacity-50-hover">
-                            <img src="{% static 'dist/img/logo/logo_ASM.png' %}" alt="Logo" height="60" width="60" />
-                            <h1 class="mt-2"><b>Project Name</b></h1>
+    <div class="vaitony-auth-container">
+        <div class="vaitony-auth-box">
+            <div class="vaitony-auth-card">
+                <!-- Header con branding VAITony -->
+                <div class="vaitony-auth-header" style="background: linear-gradient(135deg, var(--vaitony-success) 0%, var(--vaitony-cyber-cyan) 100%);">
+                    <div class="vaitony-logo vaitony-ai-pulse" style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px);">
+                        <i class="bi bi-person-check-fill" style="font-size: 2rem; color: white;"></i>
+                    </div>
+                    <h1 class="vaitony-brand vaitony-mb-sm" style="color: white;">VAITony</h1>
+                    <p class="vaitony-mb-xs" style="opacity: 0.9; font-size: 1rem; color: white;">Account Attivato</p>
+                </div>
+
+                <!-- Body del messaggio -->
+                <div class="vaitony-auth-body vaitony-text-center">
+                    <div class="vaitony-page-header vaitony-mb-lg">
+                        <div style="width: 100px; height: 100px; background: var(--vaitony-success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; position: relative;">
+                            <i class="bi bi-check-circle-fill" style="font-size: 3rem; color: white;"></i>
+                            <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; background: var(--vaitony-success); opacity: 0.3; animation: aiPulse 2s infinite;"></div>
+                        </div>
+
+                        <h2 class="vaitony-mb-sm vaitony-ai-text" style="color: var(--vaitony-success); font-size: 2rem; font-weight: 700;">
+                            {{ response }}
+                        </h2>
+                        <p style="color: var(--vaitony-gray-600); font-size: 1.1rem; line-height: 1.6; max-width: 400px; margin: 0 auto;">
+                            Benvenuto nella piattaforma di Intelligenza Artificiale più avanzata per professionisti!
+                        </p>
+                    </div>
+
+                    <!-- Welcome Benefits -->
+                    <div style="background: var(--vaitony-gray-50); padding: 1.5rem; border-radius: var(--vaitony-radius-xl); margin-bottom: 1.5rem;">
+                        <h3 style="color: var(--vaitony-dark); font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem;">
+                            <i class="bi bi-gift" style="margin-right: 0.5rem; color: var(--vaitony-primary);"></i>
+                            Cosa puoi fare ora
+                        </h3>
+                        <div style="display: grid; gap: 1rem; text-align: left;">
+                            <div style="display: flex; align-items: center; padding: 0.75rem; background: white; border-radius: var(--vaitony-radius-lg); box-shadow: var(--vaitony-shadow-sm);">
+                                <div style="width: 40px; height: 40px; background: var(--vaitony-ai-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 1rem;">
+                                    <i class="bi bi-robot" style="color: white; font-size: 1.2rem;"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--vaitony-dark);">Chatbot AI Avanzato</h4>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--vaitony-gray-600);">Assistente intelligente per il tuo lavoro</p>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; padding: 0.75rem; background: white; border-radius: var(--vaitony-radius-lg); box-shadow: var(--vaitony-shadow-sm);">
+                                <div style="width: 40px; height: 40px; background: var(--vaitony-ai-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 1rem;">
+                                    <i class="bi bi-lightning-charge" style="color: white; font-size: 1.2rem;"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--vaitony-dark);">Automazione Intelligente</h4>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--vaitony-gray-600);">Ottimizza i tuoi processi di lavoro</p>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; padding: 0.75rem; background: white; border-radius: var(--vaitony-radius-lg); box-shadow: var(--vaitony-shadow-sm);">
+                                <div style="width: 40px; height: 40px; background: var(--vaitony-ai-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 1rem;">
+                                    <i class="bi bi-graph-up-arrow" style="color: white; font-size: 1.2rem;"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--vaitony-dark);">Analytics Avanzati</h4>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--vaitony-gray-600);">Insights basati su AI per decisioni smart</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main CTA -->
+                    <div style="display: grid; gap: 0.75rem; margin-bottom: 1.5rem;">
+                        <a
+                            href="{% url 'login' %}"
+                            class="vaitony-btn vaitony-btn-gradient vaitony-ai-pulse"
+                            style="padding: 1.2rem; font-size: 1.1rem; font-weight: 600;"
+                        >
+                            <i class="bi bi-rocket-takeoff" style="margin-right: 0.75rem; font-size: 1.2rem;"></i>
+                            Inizia con VAITony AI
                         </a>
                     </div>
 
-                    <!-- Corpo della carta -->
-                    <div class="card-body register-card-body asm-radius-10 text-center">
-                        <h3 class="auth-title asm-bd">{{ response }}</h3>
-                        <p class="register-box-msg text-gray-600 asm-black mb-5 mt-5">
-                            Clicca sul pulsante qui sotto per accedere alla piattaforma.
-                        </p>
-                        <a href="{% url 'login' %}" class="btn btn-asm-bd btn-block">
-                            <button type="button" class="btn btn-primary w-100">Login</button>
+                    <!-- Quick Actions -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.5rem;">
+                        <a
+                            href="#"
+                            class="vaitony-btn"
+                            style="background: var(--vaitony-white); color: var(--vaitony-primary); border: 2px solid var(--vaitony-primary); text-decoration: none; padding: 0.75rem; font-size: 0.9rem;"
+                        >
+                            <i class="bi bi-book" style="margin-right: 0.5rem;"></i>
+                            Guida Rapida
                         </a>
+                        <a
+                            href="#"
+                            class="vaitony-btn"
+                            style="background: var(--vaitony-gray-100); color: var(--vaitony-gray-700); text-decoration: none; padding: 0.75rem; font-size: 0.9rem;"
+                        >
+                            <i class="bi bi-play-circle" style="margin-right: 0.5rem;"></i>
+                            Demo Video
+                        </a>
+                    </div>
 
-                        <!-- Link a registrazione -->
-                        <div class="text-center mt-5 text-md">
-                            <p class="text-gray-600">
-                                Non hai ancora un account?
-                                <a href="{% url 'register' %}" class="font-bold asm-bd">Registrati subito</a>.
-                            </p>
+                    <!-- Footer Info -->
+                    <div class="vaitony-text-center" style="padding-top: 1.5rem; border-top: 1px solid var(--vaitony-gray-200);">
+                        <p style="color: var(--vaitony-gray-600); font-size: 0.85rem; margin-bottom: 0.5rem;">
+                            Non hai ancora un account?
+                            <a
+                                href="{% url 'register' %}"
+                                style="color: var(--vaitony-primary); text-decoration: none; font-weight: 600; margin-left: 0.25rem;"
+                            >
+                                Registrati subito
+                            </a>
+                        </p>
+                        <p style="color: var(--vaitony-gray-500); font-size: 0.75rem; margin: 0;">
+                            <i class="bi bi-shield-check" style="margin-right: 0.25rem;"></i>
+                            La tua privacy è protetta con crittografia avanzata
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Welcome Statistics -->
+            <div class="vaitony-text-center vaitony-mt-lg">
+                <div style="background: rgba(37, 99, 235, 0.1); padding: 1.5rem; border-radius: var(--vaitony-radius-xl); max-width: 450px; margin: 0 auto;">
+                    <h4 style="color: var(--vaitony-dark); font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">
+                        <i class="bi bi-graph-up" style="margin-right: 0.5rem; color: var(--vaitony-primary);"></i>
+                        Unisciti a migliaia di professionisti
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center;">
+                        <div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--vaitony-primary);">25K+</div>
+                            <div style="font-size: 0.75rem; color: var(--vaitony-gray-600);">Utenti Attivi</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--vaitony-success);">98%</div>
+                            <div style="font-size: 0.75rem; color: var(--vaitony-gray-600);">Soddisfazione</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--vaitony-warning);">24/7</div>
+                            <div style="font-size: 0.75rem; color: var(--vaitony-gray-600);">Supporto AI</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Success celebration animation
+            setTimeout(() => {
+                createCelebrationEffect();
+            }, 500);
 
-        <!-- Script opzionali per UI e scroll -->
-        <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js" crossorigin="anonymous"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" crossorigin="anonymous"></script>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" crossorigin="anonymous"></script>
-        <script src="{% static 'dist/js/adminlte.js' %}"></script>
+            // Typing effect for main title
+            const titleElement = document.querySelector('.vaitony-ai-text');
+            if (titleElement) {
+                const originalText = titleElement.textContent;
+                titleElement.textContent = '';
+                let i = 0;
+                const typeWriter = () => {
+                    if (i < originalText.length) {
+                        titleElement.textContent += originalText.charAt(i);
+                        i++;
+                        setTimeout(typeWriter, 100);
+                    }
+                };
+                setTimeout(typeWriter, 1000);
+            }
+        });
 
-        <script>
-            const SELECTOR_SIDEBAR_WRAPPER = ".sidebar-wrapper";
-            const Default = {
-                scrollbarTheme: "os-theme-light",
-                scrollbarAutoHide: "leave",
-                scrollbarClickScroll: true,
-            };
-            document.addEventListener("DOMContentLoaded", function() {
-                const sidebarWrapper = document.querySelector(SELECTOR_SIDEBAR_WRAPPER);
-                if (sidebarWrapper && typeof OverlayScrollbarsGlobal?.OverlayScrollbars !== "undefined") {
-                    OverlayScrollbarsGlobal.OverlayScrollbars(sidebarWrapper, {
-                        scrollbars: {
-                            theme: Default.scrollbarTheme,
-                            autoHide: Default.scrollbarAutoHide,
-                            clickScroll: Default.scrollbarClickScroll,
-                        },
-                    });
+        function createCelebrationEffect() {
+            const colors = ['#2563eb', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b'];
+            const emojis = ['🎉', '✨', '🚀', '🎊', '⭐'];
+
+            for (let i = 0; i < 30; i++) {
+                const particle = document.createElement('div');
+                const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                particle.innerHTML = emoji;
+                particle.style.cssText = `
+                    position: fixed;
+                    font-size: 1.5rem;
+                    opacity: 0;
+                    pointer-events: none;
+                    z-index: 1000;
+                    animation: celebrationFloat 4s ease-out ${i * 0.1}s;
+                    left: ${Math.random() * 100}%;
+                    top: ${Math.random() * 50 + 25}%;
+                `;
+                document.body.appendChild(particle);
+                setTimeout(() => particle.remove(), 4000);
+            }
+        }
+
+        // Add celebration animation CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes celebrationFloat {
+                0% {
+                    opacity: 1;
+                    transform: translateY(0) scale(0) rotate(0deg);
                 }
-            });
-        </script>
-    </body>
-
+                25% {
+                    opacity: 1;
+                    transform: translateY(-50px) scale(1) rotate(180deg);
+                }
+                75% {
+                    opacity: 0.8;
+                    transform: translateY(-100px) scale(1.2) rotate(360deg);
+                }
+                100% {
+                    opacity: 0;
+                    transform: translateY(-150px) scale(0) rotate(540deg);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 {% endblock %}

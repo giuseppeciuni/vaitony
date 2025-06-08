@@ -1,0 +1,455 @@
+<!-- VAITony Professional Styles -->
+<style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    /* CSS Custom Properties */
+    :root {
+        /* Primary Brand Colors */
+        --vaitony-primary: #2563eb;
+        --vaitony-primary-dark: #1d4ed8;
+        --vaitony-primary-light: #3b82f6;
+        --vaitony-secondary: #8b5cf6;
+        --vaitony-accent: #06b6d4;
+
+        /* Neutral Colors */
+        --vaitony-dark: #0f172a;
+        --vaitony-dark-soft: #1e293b;
+        --vaitony-gray-900: #111827;
+        --vaitony-gray-800: #1f2937;
+        --vaitony-gray-700: #374151;
+        --vaitony-gray-600: #4b5563;
+        --vaitony-gray-500: #6b7280;
+        --vaitony-gray-400: #9ca3af;
+        --vaitony-gray-300: #d1d5db;
+        --vaitony-gray-200: #e5e7eb;
+        --vaitony-gray-100: #f3f4f6;
+        --vaitony-gray-50: #f9fafb;
+        --vaitony-white: #ffffff;
+
+        /* Status Colors */
+        --vaitony-success: #10b981;
+        --vaitony-warning: #f59e0b;
+        --vaitony-error: #ef4444;
+        --vaitony-info: #06b6d4;
+
+        /* AI Theme Colors */
+        --vaitony-ai-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --vaitony-neural-blue: #4f46e5;
+        --vaitony-cyber-cyan: #06d6a0;
+        --vaitony-electric-purple: #8b5cf6;
+
+        /* Typography */
+        --vaitony-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --vaitony-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+        /* Spacing */
+        --vaitony-space-xs: 0.25rem;
+        --vaitony-space-sm: 0.5rem;
+        --vaitony-space-md: 1rem;
+        --vaitony-space-lg: 1.5rem;
+        --vaitony-space-xl: 2rem;
+        --vaitony-space-2xl: 3rem;
+
+        /* Border Radius */
+        --vaitony-radius-sm: 0.375rem;
+        --vaitony-radius-md: 0.5rem;
+        --vaitony-radius-lg: 0.75rem;
+        --vaitony-radius-xl: 1rem;
+        --vaitony-radius-2xl: 1.5rem;
+
+        /* Shadows */
+        --vaitony-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --vaitony-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --vaitony-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --vaitony-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        --vaitony-shadow-glow: 0 0 20px rgba(37, 99, 235, 0.3);
+
+        /* Transitions */
+        --vaitony-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        --vaitony-transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Global Styles */
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: var(--vaitony-font-family);
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--vaitony-gray-700);
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* VAITony Specific Classes */
+    .vaitony-brand {
+        background: var(--vaitony-ai-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+        font-size: 2rem;
+        line-height: 1.2;
+    }
+
+    .vaitony-card {
+        background: var(--vaitony-white);
+        border-radius: var(--vaitony-radius-xl);
+        box-shadow: var(--vaitony-shadow-lg);
+        border: 1px solid var(--vaitony-gray-200);
+        transition: var(--vaitony-transition);
+        overflow: hidden;
+    }
+
+    .vaitony-card:hover {
+        box-shadow: var(--vaitony-shadow-xl);
+        transform: translateY(-2px);
+    }
+
+    .vaitony-card-glass {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .vaitony-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--vaitony-radius-lg);
+        font-weight: 500;
+        font-size: 0.875rem;
+        text-decoration: none;
+        transition: var(--vaitony-transition);
+        border: none;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .vaitony-btn-primary {
+        background: var(--vaitony-primary);
+        color: var(--vaitony-white);
+        box-shadow: var(--vaitony-shadow-md);
+    }
+
+    .vaitony-btn-primary:hover {
+        background: var(--vaitony-primary-dark);
+        box-shadow: var(--vaitony-shadow-lg);
+        transform: translateY(-1px);
+    }
+
+    .vaitony-btn-gradient {
+        background: var(--vaitony-ai-gradient);
+        color: var(--vaitony-white);
+        position: relative;
+        z-index: 1;
+    }
+
+    .vaitony-btn-gradient::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, #5a67d8 0%, #667eea 100%);
+        opacity: 0;
+        transition: var(--vaitony-transition);
+        z-index: -1;
+    }
+
+    .vaitony-btn-gradient:hover::before {
+        opacity: 1;
+    }
+
+    .vaitony-input {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        border: 2px solid var(--vaitony-gray-300);
+        border-radius: var(--vaitony-radius-lg);
+        font-size: 0.875rem;
+        transition: var(--vaitony-transition);
+        background: var(--vaitony-white);
+    }
+
+    .vaitony-input:focus {
+        outline: none;
+        border-color: var(--vaitony-primary);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .vaitony-logo {
+        width: 60px;
+        height: 60px;
+        border-radius: var(--vaitony-radius-lg);
+        background: var(--vaitony-ai-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--vaitony-white);
+        font-weight: 700;
+        font-size: 1.5rem;
+        box-shadow: var(--vaitony-shadow-lg);
+        margin-bottom: var(--vaitony-space-md);
+    }
+
+    .vaitony-page-header {
+        text-align: center;
+        margin-bottom: var(--vaitony-space-2xl);
+    }
+
+    .vaitony-page-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--vaitony-dark);
+        margin-bottom: var(--vaitony-space-sm);
+    }
+
+    .vaitony-page-subtitle {
+        font-size: 1.125rem;
+        color: var(--vaitony-gray-600);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    /* Auth Pages Specific */
+    .vaitony-auth-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--vaitony-space-md);
+        background: linear-gradient(135deg,
+            rgba(37, 99, 235, 0.1) 0%,
+            rgba(139, 92, 246, 0.1) 25%,
+            rgba(6, 182, 212, 0.1) 50%,
+            rgba(16, 185, 129, 0.1) 75%,
+            rgba(245, 158, 11, 0.1) 100%);
+    }
+
+    .vaitony-auth-box {
+        width: 100%;
+        max-width: 420px;
+        padding: 0;
+    }
+
+    .vaitony-auth-card {
+        background: var(--vaitony-white);
+        border-radius: var(--vaitony-radius-2xl);
+        box-shadow: var(--vaitony-shadow-xl);
+        border: 1px solid var(--vaitony-gray-200);
+        overflow: hidden;
+        animation: slideUp 0.6s ease-out;
+    }
+
+    .vaitony-auth-header {
+        background: var(--vaitony-ai-gradient);
+        padding: var(--vaitony-space-xl);
+        text-align: center;
+        color: var(--vaitony-white);
+    }
+
+    .vaitony-auth-body {
+        padding: var(--vaitony-space-xl);
+    }
+
+    .vaitony-form-group {
+        margin-bottom: var(--vaitony-space-lg);
+    }
+
+    .vaitony-form-label {
+        display: block;
+        font-weight: 500;
+        color: var(--vaitony-gray-700);
+        margin-bottom: var(--vaitony-space-sm);
+        font-size: 0.875rem;
+    }
+
+    .vaitony-input-group {
+        position: relative;
+    }
+
+    .vaitony-input-icon {
+        position: absolute;
+        right: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--vaitony-gray-400);
+        font-size: 1.125rem;
+    }
+
+    .vaitony-alert {
+        padding: var(--vaitony-space-md);
+        border-radius: var(--vaitony-radius-lg);
+        font-size: 0.875rem;
+        margin-bottom: var(--vaitony-space-lg);
+        border-left: 4px solid;
+    }
+
+    .vaitony-alert-error {
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--vaitony-error);
+        border-left-color: var(--vaitony-error);
+    }
+
+    .vaitony-alert-success {
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--vaitony-success);
+        border-left-color: var(--vaitony-success);
+    }
+
+    .vaitony-alert-info {
+        background: rgba(6, 182, 212, 0.1);
+        color: var(--vaitony-info);
+        border-left-color: var(--vaitony-info);
+    }
+
+    /* AI Elements */
+    .vaitony-ai-pulse {
+        position: relative;
+    }
+
+    .vaitony-ai-pulse::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--vaitony-primary);
+        opacity: 0.3;
+        transform: translate(-50%, -50%) scale(1);
+        animation: aiPulse 2s infinite;
+    }
+
+    .vaitony-neural-network {
+        background:
+            radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 40% 60%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .vaitony-auth-box {
+            max-width: 100%;
+            margin: 0 var(--vaitony-space-md);
+        }
+
+        .vaitony-page-title {
+            font-size: 2rem;
+        }
+
+        .vaitony-btn {
+            width: 100%;
+        }
+    }
+
+    /* Animations */
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes aiPulse {
+        0% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.3;
+        }
+        50% {
+            transform: translate(-50%, -50%) scale(1.1);
+            opacity: 0.1;
+        }
+        100% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.3;
+        }
+    }
+
+    @keyframes glow {
+        0%, 100% {
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+        }
+        50% {
+            box-shadow: 0 0 30px rgba(37, 99, 235, 0.6);
+        }
+    }
+
+    /* Utility Classes */
+    .vaitony-text-center { text-align: center; }
+    .vaitony-text-left { text-align: left; }
+    .vaitony-text-right { text-align: right; }
+
+    .vaitony-mb-xs { margin-bottom: var(--vaitony-space-xs); }
+    .vaitony-mb-sm { margin-bottom: var(--vaitony-space-sm); }
+    .vaitony-mb-md { margin-bottom: var(--vaitony-space-md); }
+    .vaitony-mb-lg { margin-bottom: var(--vaitony-space-lg); }
+    .vaitony-mb-xl { margin-bottom: var(--vaitony-space-xl); }
+
+    .vaitony-mt-xs { margin-top: var(--vaitony-space-xs); }
+    .vaitony-mt-sm { margin-top: var(--vaitony-space-sm); }
+    .vaitony-mt-md { margin-top: var(--vaitony-space-md); }
+    .vaitony-mt-lg { margin-top: var(--vaitony-space-lg); }
+    .vaitony-mt-xl { margin-top: var(--vaitony-space-xl); }
+
+    .vaitony-w-full { width: 100%; }
+    .vaitony-h-full { height: 100%; }
+
+    .vaitony-flex { display: flex; }
+    .vaitony-flex-col { flex-direction: column; }
+    .vaitony-items-center { align-items: center; }
+    .vaitony-justify-center { justify-content: center; }
+    .vaitony-justify-between { justify-content: space-between; }
+
+    /* Dark Mode Support */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --vaitony-gray-50: #0f172a;
+            --vaitony-gray-100: #1e293b;
+            --vaitony-gray-200: #334155;
+            --vaitony-gray-300: #475569;
+            --vaitony-white: #1e293b;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+        }
+    }
+
+    /* AdminLTE Integration */
+    .card.vaitony-card {
+        border: 1px solid var(--vaitony-gray-200);
+        box-shadow: var(--vaitony-shadow-lg);
+    }
+
+    .btn.vaitony-btn-primary {
+        background: var(--vaitony-primary);
+        border-color: var(--vaitony-primary);
+    }
+
+    .form-control.vaitony-input {
+        border: 2px solid var(--vaitony-gray-300);
+    }
+
+    .form-control.vaitony-input:focus {
+        border-color: var(--vaitony-primary);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+</style>

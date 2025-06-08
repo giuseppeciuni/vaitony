@@ -1,23 +1,143 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-        <title>AdminLTE 4 | Login Page</title><!--begin::Primary Meta Tags-->
+        <title>VAITony | Piattaforma AI Professionale</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="title" content="AdminLTE 4 | Login Page v2">
-        <meta name="author" content="ColorlibHQ">
-        <meta name="description" content="AdminLTE is a Free Bootstrap 5 Admin Dashboard, 30 example pages using Vanilla JS.">
-        <meta name="keywords" content="bootstrap 5, bootstrap, bootstrap 5 admin dashboard, bootstrap 5 dashboard, bootstrap 5 charts, bootstrap 5 calendar, bootstrap 5 datepicker, bootstrap 5 tables, bootstrap 5 datatable, vanilla js datatable, colorlibhq, colorlibhq dashboard, colorlibhq admin dashboard"><!--end::Primary Meta Tags--><!--begin::Fonts-->
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css" integrity="sha256-tXJfXfp6Ewt1ilPzLDtQnJV4hclT9XuaZUKyUvmyr+Q=" crossorigin="anonymous"><!--end::Fonts--><!--begin::Third Party Plugin(OverlayScrollbars)-->
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/styles/overlayscrollbars.min.css" integrity="sha256-dSokZseQNT08wYEWiz5iLI8QPlKxG+TswNRD8k35cpg=" crossorigin="anonymous"><!--end::Third Party Plugin(OverlayScrollbars)--><!--begin::Third Party Plugin(Bootstrap Icons)-->
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css" integrity="sha256-Qsx5lrStHZyR9REqhUF8iQt73X06c8LGIUPzpOhwRrI=" crossorigin="anonymous"><!--end::Third Party Plugin(Bootstrap Icons)--><!--begin::Required Plugin(AdminLTE)-->
-        <link rel="stylesheet" href="{% static 'dist/css/adminlte.css' %}"><!--end::Required Plugin(AdminLTE)-->
+        <meta name="title" content="VAITony | Intelligenza Artificiale per Professionisti">
+        <meta name="author" content="VAITony Team">
+        <meta name="description" content="VAITony è la piattaforma AI avanzata per professionisti. Chatbot intelligente e strumenti di automazione per il tuo business.">
+        <meta name="keywords" content="ai, artificial intelligence, chatbot, automazione, professionisti, business, vaitony">
+
+        <!-- Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+        <!-- Third Party Plugins -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/styles/overlayscrollbars.min.css" integrity="sha256-dSokZseQNT08wYEWiz5iLI8QPlKxG+TswNRD8k35cpg=" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css" integrity="sha256-Qsx5lrStHZyR9REqhUF8iQt73X06c8LGIUPzpOhwRrI=" crossorigin="anonymous">
+
+        <!-- AdminLTE -->
+        <link rel="stylesheet" href="{% static 'dist/css/adminlte.css' %}">
+
+        <!-- VAITony Styles -->
+        {% include 'users/styles.html' %}
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='url(%23gradient)'></rect><defs><linearGradient id='gradient' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%232563eb'></stop><stop offset='100%25' stop-color='%238b5cf6'></stop></linearGradient></defs><text x='50' y='60' text-anchor='middle' fill='white' font-family='Inter' font-weight='700' font-size='28'>AI</text></svg>">
     </head>
 
+    <body class="vaitony-neural-network">
+        {% block user_content %}
+            <!-- User management pages content (login/register/forgot password etc) -->
+        {% endblock %}
 
-    {% block user_content %}
-        <!-- user management pages content (login/register/forgot password etc) -->
-    {% endblock%}
+        <!-- Scripts -->
+        <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" crossorigin="anonymous"></script>
+        <script src="{% static 'dist/js/adminlte.js' %}"></script>
 
+        <!-- VAITony Enhanced Scripts -->
+        <script>
+            // Enhanced OverlayScrollbars with VAITony theme
+            const SELECTOR_SIDEBAR_WRAPPER = ".sidebar-wrapper";
+            const VAITonyScrollbarDefaults = {
+                scrollbarTheme: "os-theme-light",
+                scrollbarAutoHide: "leave",
+                scrollbarClickScroll: true,
+            };
+
+            document.addEventListener("DOMContentLoaded", function() {
+                const sidebarWrapper = document.querySelector(SELECTOR_SIDEBAR_WRAPPER);
+                if (sidebarWrapper && typeof OverlayScrollbarsGlobal?.OverlayScrollbars !== "undefined") {
+                    OverlayScrollbarsGlobal.OverlayScrollbars(sidebarWrapper, {
+                        scrollbars: {
+                            theme: VAITonyScrollbarDefaults.scrollbarTheme,
+                            autoHide: VAITonyScrollbarDefaults.scrollbarAutoHide,
+                            clickScroll: VAITonyScrollbarDefaults.scrollbarClickScroll,
+                        },
+                    });
+                }
+
+                // VAITony Enhanced Interactions
+                initVAITonyEffects();
+            });
+
+            function initVAITonyEffects() {
+                // Add subtle hover effects to cards
+                const cards = document.querySelectorAll('.vaitony-card');
+                cards.forEach(card => {
+                    card.addEventListener('mouseenter', function() {
+                        this.style.transform = 'translateY(-4px) scale(1.02)';
+                    });
+                    card.addEventListener('mouseleave', function() {
+                        this.style.transform = 'translateY(0) scale(1)';
+                    });
+                });
+
+                // Add ripple effect to buttons
+                const buttons = document.querySelectorAll('.vaitony-btn');
+                buttons.forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        const ripple = document.createElement('span');
+                        const rect = this.getBoundingClientRect();
+                        const size = Math.max(rect.width, rect.height);
+                        const x = e.clientX - rect.left - size / 2;
+                        const y = e.clientY - rect.top - size / 2;
+
+                        ripple.style.cssText = `
+                            position: absolute;
+                            width: ${size}px;
+                            height: ${size}px;
+                            left: ${x}px;
+                            top: ${y}px;
+                            background: rgba(255, 255, 255, 0.3);
+                            border-radius: 50%;
+                            transform: scale(0);
+                            animation: ripple 0.6s ease-out;
+                            pointer-events: none;
+                        `;
+
+                        this.appendChild(ripple);
+                        setTimeout(() => ripple.remove(), 600);
+                    });
+                });
+
+                // Add typing effect for AI elements
+                const aiElements = document.querySelectorAll('.vaitony-ai-text');
+                aiElements.forEach(element => {
+                    const text = element.textContent;
+                    element.textContent = '';
+                    let i = 0;
+                    const typeWriter = () => {
+                        if (i < text.length) {
+                            element.textContent += text.charAt(i);
+                            i++;
+                            setTimeout(typeWriter, 50);
+                        }
+                    };
+                    setTimeout(typeWriter, 500);
+                });
+            }
+
+            // Add ripple animation CSS
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes ripple {
+                    to {
+                        transform: scale(2);
+                        opacity: 0;
+                    }
+                }
+                .vaitony-btn {
+                    position: relative;
+                    overflow: hidden;
+                }
+            `;
+            document.head.appendChild(style);
+        </script>
+    </body>
 </html>

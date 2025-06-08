@@ -2,37 +2,225 @@
 {% load static %}
 
 {% block user_content %}
-
     {% if form.errors %}
-        <div class="alert alert-danger" role="alert">
+        <div class="vaitony-alert vaitony-alert-error">
+            <i class="bi bi-exclamation-triangle" style="margin-right: 0.5rem;"></i>
+            <strong>Errore:</strong>
             {% for key, value in form.errors.items %}
-                {{ key }}: {{ value.0 }}<br/>
+                <br/>{{ key }}: {{ value.0 }}
             {% endfor %}
         </div>
     {% endif %}
 
-    <body class="login-page bg-body-secondary">
-        <div class="login-box">
-            <div class="card card-outline card-primary">
-                <div class="card-header">
-                    <a href="{% url 'login' %}" class="link-dark text-center link-offset-2 link-opacity-100 link-opacity-50-hover">
-                        <img src="{% static 'dist/img/logodefinitivo.png' %}" alt="Logo" class="mb-0">
-                    </a>
+    <div class="vaitony-auth-container">
+        <div class="vaitony-auth-box">
+            <div class="vaitony-auth-card">
+                <!-- Header con branding VAITony -->
+                <div class="vaitony-auth-header" style="background: linear-gradient(135deg, var(--vaitony-gray-700) 0%, var(--vaitony-gray-800) 100%);">
+                    <div class="vaitony-logo" style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px);">
+                        <i class="bi bi-box-arrow-right" style="font-size: 2rem; color: white;"></i>
+                    </div>
+                    <h1 class="vaitony-brand vaitony-mb-sm" style="color: white;">VAITony</h1>
+                    <p class="vaitony-mb-xs" style="opacity: 0.9; font-size: 1rem; color: white;">Disconnessione</p>
                 </div>
-                <div class="card-body login-card-body">
-                    <h1 class="auth-title">Log out</h1>
-                    <p class="auth-subtitle mb-5">Vuoi effettuare il logout dalla piattaforma?</p>
 
+                <!-- Body del messaggio -->
+                <div class="vaitony-auth-body vaitony-text-center">
+                    <div class="vaitony-page-header vaitony-mb-lg">
+                        <div style="width: 80px; height: 80px; background: var(--vaitony-warning); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                            <i class="bi bi-person-dash" style="font-size: 2.2rem; color: white;"></i>
+                        </div>
+                        <h2 class="vaitony-mb-sm" style="color: var(--vaitony-dark); font-size: 1.6rem; font-weight: 700;">
+                            Conferma Logout
+                        </h2>
+                        <p style="color: var(--vaitony-gray-600); font-size: 1rem; line-height: 1.6;">
+                            Sei sicuro di voler uscire dalla piattaforma VAITony?
+                        </p>
+                    </div>
+
+                    <!-- Session Info -->
+                    <div style="background: var(--vaitony-gray-50); padding: 1.5rem; border-radius: var(--vaitony-radius-lg); margin-bottom: 1.5rem;">
+                        <h3 style="color: var(--vaitony-dark); font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">
+                            <i class="bi bi-info-circle" style="margin-right: 0.5rem; color: var(--vaitony-info);"></i>
+                            Informazioni Sessione
+                        </h3>
+                        <div style="display: grid; gap: 0.75rem; text-align: left; font-size: 0.875rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--vaitony-gray-600);">
+                                    <i class="bi bi-person" style="margin-right: 0.5rem;"></i>Utente:
+                                </span>
+                                <span style="color: var(--vaitony-dark); font-weight: 600;">{{ user.username|default:"Guest" }}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--vaitony-gray-600);">
+                                    <i class="bi bi-clock" style="margin-right: 0.5rem;"></i>Sessione attiva:
+                                </span>
+                                <span style="color: var(--vaitony-success); font-weight: 600;">
+                                    <i class="bi bi-circle-fill" style="font-size: 0.5rem; margin-right: 0.25rem;"></i>
+                                    Online
+                                </span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--vaitony-gray-600);">
+                                    <i class="bi bi-shield-check" style="margin-right: 0.5rem;"></i>Sicurezza:
+                                </span>
+                                <span style="color: var(--vaitony-success); font-weight: 600;">Protetta</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logout Consequences -->
+                    <div class="vaitony-alert vaitony-alert-info vaitony-mb-lg">
+                        <i class="bi bi-exclamation-circle" style="margin-right: 0.5rem;"></i>
+                        <strong>Dopo il logout:</strong>
+                        <ul style="margin: 0.5rem 0 0 0; padding-left: 1.2rem; text-align: left; font-size: 0.85rem;">
+                            <li>La sessione corrente verrà terminata</li>
+                            <li>Dovrai inserire nuovamente le credenziali</li>
+                            <li>I dati non salvati potrebbero essere persi</li>
+                            <li>Le conversazioni AI in corso saranno interrotte</li>
+                        </ul>
+                    </div>
+
+                    <!-- Logout Actions -->
                     <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary btn-block btn-lg shadow-lg mt-5">Logout</button>
+                        <div style="display: grid; gap: 0.75rem; margin-bottom: 1.5rem;">
+                            <button
+                                type="submit"
+                                class="vaitony-btn"
+                                style="background: var(--vaitony-error); color: white; padding: 1rem; font-size: 1rem; font-weight: 600;"
+                            >
+                                <i class="bi bi-box-arrow-right" style="margin-right: 0.75rem;"></i>
+                                Sì, Esci da VAITony
+                            </button>
+
+                            <a
+                                href="javascript:history.back()"
+                                class="vaitony-btn"
+                                style="background: var(--vaitony-gray-100); color: var(--vaitony-gray-700); text-decoration: none; padding: 1rem; font-size: 1rem;"
+                            >
+                                <i class="bi bi-arrow-left" style="margin-right: 0.75rem;"></i>
+                                Annulla e Torna Indietro
+                            </a>
                         </div>
                     </form>
+
+                    <!-- Quick Actions -->
+                    <div style="background: rgba(37, 99, 235, 0.1); padding: 1rem; border-radius: var(--vaitony-radius-lg); margin-bottom: 1.5rem;">
+                        <h4 style="color: var(--vaitony-dark); font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;">
+                            <i class="bi bi-lightning" style="margin-right: 0.5rem; color: var(--vaitony-primary);"></i>
+                            Azioni Rapide
+                        </h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem;">
+                            <a
+                                href="#"
+                                style="display: flex; align-items: center; padding: 0.5rem; background: white; border-radius: var(--vaitony-radius-md); text-decoration: none; color: var(--vaitony-gray-700);"
+                            >
+                                <i class="bi bi-download" style="margin-right: 0.5rem; color: var(--vaitony-primary);"></i>
+                                Salva Dati
+                            </a>
+                            <a
+                                href="#"
+                                style="display: flex; align-items: center; padding: 0.5rem; background: white; border-radius: var(--vaitony-radius-md); text-decoration: none; color: var(--vaitony-gray-700);"
+                            >
+                                <i class="bi bi-bookmark" style="margin-right: 0.5rem; color: var(--vaitony-primary);"></i>
+                                Segnalibri
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Footer Info -->
+                    <div class="vaitony-text-center" style="padding-top: 1rem; border-top: 1px solid var(--vaitony-gray-200);">
+                        <p style="color: var(--vaitony-gray-600); font-size: 0.8rem; margin-bottom: 0.5rem;">
+                            <i class="bi bi-shield-lock" style="margin-right: 0.25rem;"></i>
+                            La tua sessione è sempre protetta con crittografia end-to-end
+                        </p>
+                        <a
+                            href="{% url 'login' %}"
+                            style="color: var(--vaitony-primary); text-decoration: none; font-size: 0.85rem; font-weight: 500;"
+                        >
+                            <i class="bi bi-box-arrow-in-right" style="margin-right: 0.25rem;"></i>
+                            Accedi con un altro account
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Notice -->
+            <div class="vaitony-text-center vaitony-mt-lg">
+                <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: var(--vaitony-radius-lg); max-width: 350px; margin: 0 auto;">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 1.2rem; color: var(--vaitony-error); margin-bottom: 0.5rem;"></i>
+                    <p style="color: var(--vaitony-gray-600); font-size: 0.75rem; margin: 0; line-height: 1.4;">
+                        <strong>Sicurezza:</strong><br/>
+                        Se non sei tu a voler uscire, contatta immediatamente il supporto.
+                    </p>
                 </div>
             </div>
         </div>
-    </body>
+    </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add logout confirmation with delay
+            const logoutForm = document.querySelector('form');
+            const logoutButton = logoutForm.querySelector('button[type="submit"]');
+
+            logoutForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // Change button state
+                logoutButton.innerHTML = '<i class="bi bi-hourglass-split" style="margin-right: 0.75rem;"></i>Disconnessione in corso...';
+                logoutButton.style.background = 'var(--vaitony-gray-500)';
+                logoutButton.disabled = true;
+
+                // Show logout animation
+                showLogoutAnimation();
+
+                // Submit after animation
+                setTimeout(() => {
+                    this.submit();
+                }, 2000);
+            });
+        });
+
+        function showLogoutAnimation() {
+            const animation = document.createElement('div');
+            animation.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.5s ease-out;
+            `;
+            animation.innerHTML = `
+                <div style="text-align: center; color: white;">
+                    <div style="width: 60px; height: 60px; border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid white; border-radius: 50%; margin: 0 auto 1rem; animation: spin 1s linear infinite;"></div>
+                    <h3 style="margin: 0; font-size: 1.2rem;">Disconnessione in corso...</h3>
+                    <p style="margin: 0.5rem 0 0; opacity: 0.8; font-size: 0.9rem;">Arrivederci e grazie per aver usato VAITony</p>
+                </div>
+            `;
+            document.body.appendChild(animation);
+        }
+
+        // Add animation styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 {% endblock %}
-

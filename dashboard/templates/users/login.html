@@ -2,79 +2,116 @@
 {% load static %}
 
 {% block user_content %}
+    <div class="vaitony-auth-container">
+        <div class="vaitony-auth-box">
+            <div class="vaitony-auth-card">
+                <!-- Header con branding VAITony -->
+                <div class="vaitony-auth-header">
+                    <div class="vaitony-logo vaitony-ai-pulse">AI</div>
+                    <h1 class="vaitony-brand vaitony-mb-sm">VAITony</h1>
+                    <p class="vaitony-mb-xs" style="opacity: 0.9; font-size: 1rem;">Intelligenza Artificiale per Professionisti</p>
+                </div>
 
-    <body class="login-page bg-body-secondary">
-        <div class="login-box">
-            <div class="card card-outline card-primary">
-                <div class="card-header"> <a href="../index2.html" class="link-dark text-center link-offset-2 link-opacity-100 link-opacity-50-hover">
-                        <h1 class="mb-0"> <b>Admin</b>LTE
-                        </h1>
-                    </a> </div>
-                <div class="card-body login-card-body">
-                    <p class="login-box-msg">Sign in to start your session</p>
+                <!-- Body del form -->
+                <div class="vaitony-auth-body">
+                    <div class="vaitony-page-header vaitony-mb-lg">
+                        <h2 class="vaitony-text-center vaitony-mb-sm" style="color: var(--vaitony-dark); font-size: 1.5rem; font-weight: 600;">
+                            Accedi alla Piattaforma
+                        </h2>
+                        <p class="vaitony-text-center" style="color: var(--vaitony-gray-600); font-size: 0.95rem;">
+                            Inserisci le tue credenziali per continuare
+                        </p>
+                    </div>
+
                     <form action="{% url 'login' %}" method="post">
                         {% csrf_token %}
-                        <div class="input-group mb-1">
-                            <div class="form-floating"> <input id="userName" type="text" name="username"  class="form-control" value="" placeholder=""> <label for="userName">Username</label> </div>
-                            <div class="input-group-text"> <span class="bi bi-envelope"></span> </div>
+
+                        <div class="vaitony-form-group">
+                            <label class="vaitony-form-label" for="userName">
+                                <i class="bi bi-person vaitony-mr-sm"></i>Username
+                            </label>
+                            <div class="vaitony-input-group">
+                                <input
+                                    id="userName"
+                                    type="text"
+                                    name="username"
+                                    class="vaitony-input"
+                                    placeholder="Inserisci il tuo username"
+                                    required
+                                />
+                                <i class="bi bi-person vaitony-input-icon"></i>
+                            </div>
                         </div>
-                        <div class="input-group mb-1">
-                            <div class="form-floating"> <input id="loginPassword" type="password"  name="password" class="form-control" placeholder=""> <label for="loginPassword">Password</label> </div>
-                            <div class="input-group-text"> <span class="bi bi-lock-fill"></span> </div>
-                        </div> <!--begin::Row-->
-                        <div class="row">
-                            <div class="col-8 d-inline-flex align-items-center">
-                                <div class="form-check"> <input class="form-check-input" type="checkbox" value="" id="flexCheckDefault"> <label class="form-check-label" for="flexCheckDefault">
-                                        Remember Me
-                                    </label> </div>
-                            </div> <!-- /.col -->
-                            <div class="col-4">
-                                <div class="d-grid gap-2"> <button type="submit" class="btn btn-primary">Sign In</button> </div>
-                            </div> <!-- /.col -->
-                        </div> <!--end::Row-->
+
+                        <div class="vaitony-form-group">
+                            <label class="vaitony-form-label" for="loginPassword">
+                                <i class="bi bi-lock-fill vaitony-mr-sm"></i>Password
+                            </label>
+                            <div class="vaitony-input-group">
+                                <input
+                                    id="loginPassword"
+                                    type="password"
+                                    name="password"
+                                    class="vaitony-input"
+                                    placeholder="Inserisci la tua password"
+                                    required
+                                />
+                                <i class="bi bi-lock-fill vaitony-input-icon"></i>
+                            </div>
+                        </div>
+
+                        <div class="vaitony-flex vaitony-justify-between vaitony-items-center vaitony-mb-lg">
+                            <div class="vaitony-flex vaitony-items-center">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    value=""
+                                    id="rememberMe"
+                                    style="margin-right: 0.5rem;"
+                                />
+                                <label class="form-check-label" for="rememberMe" style="font-size: 0.875rem; color: var(--vaitony-gray-600);">
+                                    Ricordami
+                                </label>
+                            </div>
+                            <a
+                                href="{% url 'password_reset' %}"
+                                style="color: var(--vaitony-primary); text-decoration: none; font-size: 0.875rem; font-weight: 500;"
+                                onmouseover="this.style.color='var(--vaitony-primary-dark)'"
+                                onmouseout="this.style.color='var(--vaitony-primary)'"
+                            >
+                                Password dimenticata?
+                            </a>
+                        </div>
+
+                        <button type="submit" class="vaitony-btn vaitony-btn-gradient vaitony-w-full vaitony-mb-lg">
+                            <i class="bi bi-box-arrow-in-right" style="margin-right: 0.5rem;"></i>
+                            Accedi con VAITony
+                        </button>
                     </form>
-                    <div class="social-auth-links text-center mb-3 d-grid gap-2">
-                        <p>- OR -</p> <a href="#" class="btn btn-primary"> <i class="bi bi-facebook me-2"></i> Sign in using Facebook
-                        </a> <a href="#" class="btn btn-danger"> <i class="bi bi-google me-2"></i> Sign in using Google+
-                        </a>
-                    </div> <!-- /.social-auth-links -->
-                    <p class="mb-1"> <a href="{% url 'password_reset' %}">I forgot my Password</a> </p>
-                    <p class="mb-0"> <a href="{% url 'register' %}" class="text-center">
-                            Register a new User
-                        </a> </p>
-                </div> <!-- /.login-card-body -->
+
+                    <!-- Footer -->
+                    <div class="vaitony-text-center" style="padding-top: 1.5rem; border-top: 1px solid var(--vaitony-gray-200);">
+                        <p style="color: var(--vaitony-gray-600); font-size: 0.875rem; margin-bottom: 0;">
+                            Non hai ancora un account?
+                            <a
+                                href="{% url 'register' %}"
+                                style="color: var(--vaitony-primary); text-decoration: none; font-weight: 600; margin-left: 0.25rem;"
+                                onmouseover="this.style.color='var(--vaitony-primary-dark)'"
+                                onmouseout="this.style.color='var(--vaitony-primary)'"
+                            >
+                                Registrati ora
+                            </a>
+                        </p>
+                    </div>
+                </div>
             </div>
-        </div> <!-- /.login-box --> <!--begin::Third Party Plugin(OverlayScrollbars)-->
 
-
-        <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js" integrity="sha256-H2VM7BKda+v2Z4+DRy69uknwxjyDRhszjXFhsL4gD3w=" crossorigin="anonymous"></script> <!--end::Third Party Plugin(OverlayScrollbars)--><!--begin::Required Plugin(popperjs for Bootstrap 5)-->
-        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha256-whL0tQWoY1Ku1iskqPFvmZ+CHsvmRWx/PIoEvIeWh4I=" crossorigin="anonymous"></script> <!--end::Required Plugin(popperjs for Bootstrap 5)--><!--begin::Required Plugin(Bootstrap 5)-->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" integrity="sha256-YMa+wAM6QkVyz999odX7lPRxkoYAan8suedu4k2Zur8=" crossorigin="anonymous"></script> <!--end::Required Plugin(Bootstrap 5)--><!--begin::Required Plugin(AdminLTE)-->
-        <script src="{% static 'dist/js/adminlte.js' %}"></script> <!--end::Required Plugin(AdminLTE)--><!--begin::OverlayScrollbars Configure-->
-
-        <script>
-            const SELECTOR_SIDEBAR_WRAPPER = ".sidebar-wrapper";
-            const Default = {
-                scrollbarTheme: "os-theme-light",
-                scrollbarAutoHide: "leave",
-                scrollbarClickScroll: true,
-            };
-            document.addEventListener("DOMContentLoaded", function() {
-                const sidebarWrapper = document.querySelector(SELECTOR_SIDEBAR_WRAPPER);
-                if (
-                    sidebarWrapper &&
-                    typeof OverlayScrollbarsGlobal?.OverlayScrollbars !== "undefined"
-                ) {
-                    OverlayScrollbarsGlobal.OverlayScrollbars(sidebarWrapper, {
-                        scrollbars: {
-                            theme: Default.scrollbarTheme,
-                            autoHide: Default.scrollbarAutoHide,
-                            clickScroll: Default.scrollbarClickScroll,
-                        },
-                    });
-                }
-            });
-        </script> <!--end::OverlayScrollbars Configure--> <!--end::Script-->
-    </body><!--end::Body-->
-
+            <!-- Subtle AI Animation -->
+            <div class="vaitony-text-center vaitony-mt-lg">
+                <p style="color: var(--vaitony-gray-500); font-size: 0.75rem; opacity: 0.8;">
+                    Powered by Advanced AI Technology
+                </p>
+            </div>
+        </div>
+    </div>
 {% endblock %}

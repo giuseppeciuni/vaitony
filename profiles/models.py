@@ -53,6 +53,7 @@ class Profile(models.Model):
 	agreement_terms = models.BooleanField(default=True, blank=False)
 	picture = models.ImageField(null=True, blank=True)
 	profile_type = models.ForeignKey(Profile_type, on_delete=models.CASCADE, default=1)
+	metadata = models.JSONField(default=dict, blank=True, null=True)
 	timestamp = models.DateTimeField(auto_now_add=True)
 
 	def __str__(self):

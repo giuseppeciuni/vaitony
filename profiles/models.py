@@ -144,7 +144,7 @@ class ProjectFile(models.Model):
 	uploaded_at = models.DateTimeField(auto_now_add=True)
 	last_modified = models.DateTimeField(auto_now=True)
 	last_indexed_at = models.DateTimeField(null=True, blank=True)
-	#metadata = models.JSONField(default=dict, blank=True, null=True)
+	metadata = models.JSONField(default=dict, blank=True, null=True)
 
 	class Meta:
 		unique_together = ('project', 'file_path')

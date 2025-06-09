@@ -27,7 +27,7 @@ class Command(BaseCommand):
 # Initialize user types in platform (if types exist skip them)
 def setup_user_types():
 	logger.debug("Creating initial user types in platform")
-	user_types = ["NORMAL_USER", "COMPANY_USER", "COMPANY_MANAGER_USER", "ADMIN_COMPANY_USER", "ADMIN_USER"]
+	user_types = ["NORMAL_USER", "COMPANY_USER", "COMPANY_MANAGER_USER", "ADMIN_COMPANY_USER", "ADMIN_USER", "TRIAL_USER"]
 	for user_type in user_types:
 		obj, created = Profile_type.objects.get_or_create(type=user_type)
 		if created:

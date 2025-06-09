@@ -3,8 +3,7 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.models import User
 from profiles.models import (
-	Profile_type, LLMProvider, LLMEngine, DefaultSystemPrompts,
-	SubscriptionPlan, ProjectRAGConfig, ProjectPromptConfig, ProjectLLMConfiguration
+	Profile_type, LLMProvider, LLMEngine, DefaultSystemPrompts, ProjectRAGConfig, ProjectPromptConfig, ProjectLLMConfiguration
 )
 import logging
 
@@ -65,11 +64,6 @@ class Command(BaseCommand):
 				self.stdout.write('💬 Creazione prompt di sistema predefiniti...')
 				self.create_default_system_prompts(options['update_existing'])
 
-			# Inizializza i piani di abbonamento
-			if not options['skip_subscriptions']:
-				self.stdout.write('💳 Creazione piani di abbonamento...')
-				self.create_subscription_plans(options['update_existing'])
-
 			# Configura i progetti esistenti
 			self.stdout.write('🔧 Configurazione progetti esistenti...')
 			self.configure_existing_projects()
@@ -82,27 +76,9 @@ class Command(BaseCommand):
 
 	def create_profile_types(self, update_existing):
 		"""Crea i tipi di profilo utente predefiniti"""
-		profile_types = [
-			"Utente Standard",
-			"Utente Premium",
-			"Amministratore",
-			"Utente Aziendale",
-			"Sviluppatore",
-			"Ricercatore",
-			"Studente",
-			"Utente Trial"
-		]
-
-		for type_name in profile_types:
-			obj, created = Profile_type.objects.get_or_create(
-				type=type_name
-			)
-			if created:
-				logger.debug(f"✨ Creato tipo di profilo: {type_name}")
-			elif update_existing:
-				logger.debug(f"🔄 Tipo di profilo esistente: {type_name}")
-			else:
-				logger.debug(f"⚠️ Tipo di profilo già esistente: {type_name}")
+		# Profile types list has been removed - method now does nothing
+		# You can either remove this method completely or add custom logic here
+		pass
 
 	def create_llm_providers(self, update_existing):
 		"""Crea i provider LLM predefiniti"""
@@ -428,24 +404,6 @@ Linee guida:
 				"is_default": False
 			},
 			{
-				"name": "Coding Assistant",
-				"description": "Prompt per assistente di programmazione. Ideale per progetti di sviluppo software.",
-				"prompt_text": """Sei un assistente di programmazione esperto che aiuta a risolvere problemi di codice, implementare funzionalità e migliorare la qualità del codice.
-
-Quando rispondi:
-1. Fornisci sempre codice funzionante, testabile e ben documentato
-2. Segui le best practice di sviluppo software e del linguaggio specifico
-3. Spiega la logica del tuo approccio e le scelte implementative
-4. Se pertinente, evidenzia potenziali problemi di sicurezza, prestazioni o manutenibilità
-5. Quando possibile, suggerisci test per verificare la correttezza del codice
-6. Adatta lo stile di codifica a quello esistente nei documenti forniti
-7. Se utilizzi esempi o soluzioni da una risorsa web, cita sempre la fonte alla fine della risposta con 'fonte: [URL della fonte]'
-
-Se la richiesta non è chiara o mancano informazioni essenziali, chiedi chiarimenti invece di fare troppe supposizioni.""",
-				"category": "technical",
-				"is_default": False
-			},
-			{
 				"name": "Assistente Generale",
 				"description": "Prompt per assistente generale. Utile per progetti generici.",
 				"prompt_text": """Sei un assistente AI utile, rispettoso e onesto. Rispondi sempre nel modo più utile possibile.
@@ -461,26 +419,6 @@ Quando rispondi:
 
 Il tuo obiettivo è aiutare l'utente a raggiungere i suoi obiettivi nel modo più efficace possibile.""",
 				"category": "balanced",
-				"is_default": False
-			},
-			{
-				"name": "Assistente Ricette e Cucina",
-				"description": "Prompt ottimizzato per ricette e informazioni culinarie",
-				"prompt_text": """Sei un assistente specializzato in cucina e ricette, in grado di aiutare con informazioni culinarie, suggerimenti per ricette e tecniche di cottura.
-
-Quando rispondi a domande relative a cibo e ricette:
-1. Fornisci informazioni dettagliate e pratiche sulle ricette richieste
-2. Indica chiaramente ingredienti, quantità e passaggi di preparazione
-3. Offri suggerimenti su varianti o modifiche possibili alla ricetta
-4. Se esistono versioni regionali o tradizionali, evidenziale
-5. Menziona eventuali suggerimenti per servire o accompagnare il piatto
-6. Indica tempi di preparazione e cottura quando disponibili
-7. Segnala eventuali tecniche particolari o accorgimenti importanti
-
-IMPORTANTE: Quando fornisci informazioni da una pagina web di ricette, CONCLUDI SEMPRE la risposta con una riga nel formato 'fonte: [URL completo della ricetta]' per permettere all'utente di visualizzare la fonte originale.
-
-Rispondi solo basandoti sulle informazioni effettivamente presenti nelle fonti disponibili nel contesto.""",
-				"category": "creative",
 				"is_default": False
 			},
 			{
@@ -525,78 +463,6 @@ Se la domanda riguarda informazioni non presenti nelle fonti web disponibili, in
 				else:
 					logger.debug(f"⚠️ Prompt di sistema già esistente: {obj.name}")
 
-	def create_subscription_plans(self, update_existing):
-		"""Crea i piani di abbonamento predefiniti"""
-		plans = [
-			{
-				"name": "Free",
-				"description": "Piano gratuito con funzionalità di base",
-				"price_monthly": 0.00,
-				"price_yearly": 0.00,
-				"storage_limit_mb": 100,
-				"max_files": 10,
-				"monthly_rag_queries": 50,
-				"extra_storage_price_per_mb": 0.0001,
-				"extra_rag_query_price": 0.01,
-				"is_active": True
-			},
-			{
-				"name": "Starter",
-				"description": "Piano starter per utenti individuali",
-				"price_monthly": 9.99,
-				"price_yearly": 99.99,
-				"storage_limit_mb": 1000,
-				"max_files": 100,
-				"monthly_rag_queries": 500,
-				"extra_storage_price_per_mb": 0.0001,
-				"extra_rag_query_price": 0.01,
-				"is_active": True
-			},
-			{
-				"name": "Professional",
-				"description": "Piano professionale per utenti avanzati",
-				"price_monthly": 29.99,
-				"price_yearly": 299.99,
-				"storage_limit_mb": 5000,
-				"max_files": 500,
-				"monthly_rag_queries": 2000,
-				"extra_storage_price_per_mb": 0.0001,
-				"extra_rag_query_price": 0.005,
-				"is_active": True
-			},
-			{
-				"name": "Enterprise",
-				"description": "Piano enterprise per aziende",
-				"price_monthly": 99.99,
-				"price_yearly": 999.99,
-				"storage_limit_mb": 50000,
-				"max_files": 5000,
-				"monthly_rag_queries": 10000,
-				"extra_storage_price_per_mb": 0.00005,
-				"extra_rag_query_price": 0.002,
-				"is_active": True
-			}
-		]
-
-		for plan_data in plans:
-			if update_existing:
-				obj, created = SubscriptionPlan.objects.update_or_create(
-					name=plan_data["name"],
-					defaults={k: v for k, v in plan_data.items() if k != "name"}
-				)
-				if created:
-					logger.debug(f"✨ Creato piano di abbonamento: {obj.name}")
-				else:
-					logger.debug(f"🔄 Aggiornato piano di abbonamento: {obj.name}")
-			else:
-				obj, created = SubscriptionPlan.objects.get_or_create(
-					name=plan_data["name"],
-					defaults={k: v for k, v in plan_data.items() if k != "name"}
-				)
-				if created:
-					logger.debug(f"✨ Creato piano di abbonamento: {obj.name}")
-				else:
-					logger.debug(f"⚠️ Piano di abbonamento già esistente: {obj.name}")
 
 	def configure_existing_projects(self):
 		"""Configura i progetti esistenti con le impostazioni predefinite"""

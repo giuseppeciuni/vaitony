@@ -403,26 +403,26 @@ def verify_api_key(api_type, api_key):
 				logger.error(f"Errore Gemini: {str(e)}")
 				return False, f"Errore imprevisto Gemini: {str(e)[:100]}"
 
-		elif api_type == 'mistral':
-			# Validazione semplificata per Mistral
-			if not api_key or len(api_key) < 10:
-				return False, "Chiave API Mistral non valida"
-			logger.debug("Mistral API key validation skipped (not implemented)")
-			return True, None
-
-		elif api_type == 'groq':
-			# Validazione semplificata per Groq
-			if not api_key or len(api_key) < 10:
-				return False, "Chiave API Groq non valida"
-			logger.debug("Groq API key validation skipped (not implemented)")
-			return True, None
-
-		elif api_type == 'togetherai':
-			# Validazione semplificata per TogetherAI
-			if not api_key or len(api_key) < 10:
-				return False, "Chiave API TogetherAI non valida"
-			logger.debug("TogetherAI API key validation skipped (not implemented)")
-			return True, None
+		# elif api_type == 'mistral':
+		# 	# Validazione semplificata per Mistral
+		# 	if not api_key or len(api_key) < 10:
+		# 		return False, "Chiave API Mistral non valida"
+		# 	logger.debug("Mistral API key validation skipped (not implemented)")
+		# 	return True, None
+		#
+		# elif api_type == 'groq':
+		# 	# Validazione semplificata per Groq
+		# 	if not api_key or len(api_key) < 10:
+		# 		return False, "Chiave API Groq non valida"
+		# 	logger.debug("Groq API key validation skipped (not implemented)")
+		# 	return True, None
+		#
+		# elif api_type == 'togetherai':
+		# 	# Validazione semplificata per TogetherAI
+		# 	if not api_key or len(api_key) < 10:
+		# 		return False, "Chiave API TogetherAI non valida"
+		# 	logger.debug("TogetherAI API key validation skipped (not implemented)")
+		# 	return True, None
 
 		else:
 			return False, f"Tipo API non supportato: {api_type}"

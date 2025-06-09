@@ -77,7 +77,7 @@ class Project(models.Model):
 	name = models.CharField(max_length=255)
 	description = models.TextField(blank=True)
 	is_active = models.BooleanField(default=True)
-	metadata = models.JSONField(default=dict, blank=True, null=True)
+	#metadata = models.JSONField(default=dict, blank=True, null=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
@@ -143,7 +143,7 @@ class ProjectFile(models.Model):
 	uploaded_at = models.DateTimeField(auto_now_add=True)
 	last_modified = models.DateTimeField(auto_now=True)
 	last_indexed_at = models.DateTimeField(null=True, blank=True)
-	metadata = models.JSONField(default=dict, blank=True, null=True)
+	#metadata = models.JSONField(default=dict, blank=True, null=True)
 
 	class Meta:
 		unique_together = ('project', 'file_path')
@@ -361,24 +361,12 @@ class ProjectRAGConfig(models.Model):
 	project = models.OneToOneField(Project, on_delete=models.CASCADE, related_name='rag_config')
 
 	# === PARAMETRI DI CHUNKING ===
-	chunk_size = models.IntegerField(
-		default=500,
-		help_text=_("Lunghezza di ciascun frammento in caratteri")
-	)
-	chunk_overlap = models.IntegerField(
-		default=50,
-		help_text=_("Sovrapposizione fra chunk adiacenti")
-	)
+	chunk_size = models.IntegerField(default=500, help_text=_("Lunghezza di ciascun frammento in caratteri"))
+	chunk_overlap = models.IntegerField(default=50, help_text=_("Sovrapposizione fra chunk adiacenti"))
 
 	# === PARAMETRI DI RICERCA ===
-	similarity_top_k = models.IntegerField(
-		default=6,
-		help_text=_("Numero di frammenti più rilevanti da utilizzare")
-	)
-	mmr_lambda = models.FloatField(
-		default=0.7,
-		help_text=_("Bilanciamento tra rilevanza e diversità (0-1)")
-	)
+	similarity_top_k = models.IntegerField(default=6, help_text=_("Numero di frammenti più rilevanti da utilizzare"))
+	mmr_lambda = models.FloatField(default=0.7, help_text=_("Bilanciamento tra rilevanza e diversità (0-1)"))
 	similarity_threshold = models.FloatField(
 		default=0.7,
 		help_text=_("Soglia minima di similarità per includere risultati")
@@ -800,64 +788,65 @@ class GlobalEmbeddingCache(models.Model):
 		return f"Embedding cache for {self.original_filename} ({self.file_hash[:8]}...)"
 
 
-# ==============================================================================
-# MODELLI PER FATTURAZIONE (OPZIONALI - MANTENUTI PER COMPATIBILITÀ)
-# ==============================================================================
-
-class SubscriptionPlan(models.Model):
-	"""
-    Definisce i diversi piani di abbonamento disponibili nel sistema.
-    """
-	name = models.CharField(max_length=100)
-	description = models.TextField(blank=True)
-	price_monthly = models.DecimalField(max_digits=10, decimal_places=2)
-	price_yearly = models.DecimalField(max_digits=10, decimal_places=2)
-	storage_limit_mb = models.IntegerField(help_text=_("Limite di archiviazione in MB"))
-	max_files = models.IntegerField(help_text=_("Numero massimo di file"))
-	monthly_rag_queries = models.IntegerField(help_text=_("Numero di query RAG mensili incluse"))
-	extra_storage_price_per_mb = models.DecimalField(max_digits=10, decimal_places=4)
-	extra_rag_query_price = models.DecimalField(max_digits=10, decimal_places=4)
-	is_active = models.BooleanField(default=True)
-	created_at = models.DateTimeField(auto_now_add=True)
-	updated_at = models.DateTimeField(auto_now=True)
-
-	def __str__(self):
-		return self.name
-
-
-class UserSubscription(models.Model):
-	"""
-    Associa un utente a un piano di abbonamento.
-    """
-	user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
-	plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name='subscribers')
-	start_date = models.DateField()
-	end_date = models.DateField()
-	is_annual = models.BooleanField(default=False)
-	auto_renew = models.BooleanField(default=True)
-	is_active = models.BooleanField(default=True)
-	payment_status = models.CharField(
-		max_length=20,
-		choices=[
-			('paid', 'Pagato'),
-			('pending', 'In attesa'),
-			('failed', 'Fallito'),
-			('canceled', 'Annullato'),
-		],
-		default='paid'
-	)
-	current_storage_used_mb = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-	current_files_count = models.IntegerField(default=0)
-	current_month_rag_queries = models.IntegerField(default=0)
-	extra_storage_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-	extra_queries_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-	created_at = models.DateTimeField(auto_now_add=True)
-	updated_at = models.DateTimeField(auto_now=True)
-	last_usage_reset = models.DateField(null=True, blank=True)
-
-	def __str__(self):
-		return f"{self.user.username} - {self.plan.name}"
-
+# # ==============================================================================
+# # MODELLI PER FATTURAZIONE (OPZIONALI - MANTENUTI PER COMPATIBILITÀ)
+# # ==============================================================================
+#
+# class SubscriptionPlan(models.Model):
+# 	"""
+#     Definisce i diversi piani di abbonamento disponibili nel sistema.
+#     """
+# 	name = models.CharField(max_length=100)
+# 	description = models.TextField(blank=True)
+# 	price_monthly = models.DecimalField(max_digits=10, decimal_places=2)
+# 	price_yearly = models.DecimalField(max_digits=10, decimal_places=2)
+# 	storage_limit_mb = models.IntegerField(help_text=_("Limite di archiviazione in MB"))
+# 	max_files = models.IntegerField(help_text=_("Numero massimo di file"))
+# 	monthly_rag_queries = models.IntegerField(help_text=_("Numero di query RAG mensili incluse"))
+# 	extra_storage_price_per_mb = models.DecimalField(max_digits=10, decimal_places=4)
+# 	extra_rag_query_price = models.DecimalField(max_digits=10, decimal_places=4)
+# 	is_active = models.BooleanField(default=True)
+# 	created_at = models.DateTimeField(auto_now_add=True)
+# 	updated_at = models.DateTimeField(auto_now=True)
+#
+# 	def __str__(self):
+# 		return self.name
+#
+#
+# class UserSubscription(models.Model):
+# 	"""
+#     Associa un utente a un piano di abbonamento.
+#     """
+# 	user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
+# 	plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name='subscribers')
+# 	start_date = models.DateField()
+# 	end_date = models.DateField()
+# 	is_annual = models.BooleanField(default=False)
+# 	auto_renew = models.BooleanField(default=True)
+# 	is_active = models.BooleanField(default=True)
+# 	payment_status = models.CharField(
+# 		max_length=20,
+# 		choices=[
+# 			('paid', 'Pagato'),
+# 			('pending', 'In attesa'),
+# 			('failed', 'Fallito'),
+# 			('canceled', 'Annullato'),
+# 		],
+# 		default='paid'
+# 	)
+# 	current_storage_used_mb = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+# 	current_files_count = models.IntegerField(default=0)
+# 	current_month_rag_queries = models.IntegerField(default=0)
+# 	extra_storage_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+# 	extra_queries_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+# 	created_at = models.DateTimeField(auto_now_add=True)
+# 	updated_at = models.DateTimeField(auto_now=True)
+# 	last_usage_reset = models.DateField(null=True, blank=True)
+#
+# 	def __str__(self):
+# 		return f"{self.user.username} - {self.plan.name}"
+#
+#
 
 # ==============================================================================
 # SEGNALI PER L'AGGIORNAMENTO AUTOMATICO

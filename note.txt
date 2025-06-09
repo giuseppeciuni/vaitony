@@ -163,8 +163,8 @@ python manage.py initialize_ai_platform --update-existing
 
 
 
-
-
+# fare il dump del database
+python manage.py dumpdata > database_dump.json
 
 
 

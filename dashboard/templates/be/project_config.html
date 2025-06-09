@@ -1,5 +1,8 @@
 {% extends 'be/base.html' %}
+
 {% load static %}
+
+
 
 {% block title %}Configurazione Completa - {{ project.name }}{% endblock %}
 
@@ -777,6 +780,7 @@
 </div>
 {% endblock %}
 
+
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -879,54 +883,60 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Gestione form RAG personalizzato
-    document.getElementById('custom-rag-form').addEventListener('submit', function(e) {
-        e.preventDefault();
+    const customRagForm = document.getElementById('custom-rag-form');
+    if (customRagForm) {
+        customRagForm.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-        const submitBtn = this.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
 
-        const formData = new FormData(this);
-        formData.append('csrfmiddlewaretoken', getCsrfToken());
+            const formData = new FormData(this);
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
 
-        fetch(window.location.href, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
 
-            if (data.success) {
-                showToast(data.message, 'success');
+                if (data.success) {
+                    showToast(data.message, 'success');
 
-                // Aggiorna indicatore stato a "Personalizzata"
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                showToast(data.message, 'danger');
-            }
-        })
-        .catch(error => {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-            console.error('Errore:', error);
-            showToast('Errore di comunicazione', 'danger');
+                    // Aggiorna indicatore stato a "Personalizzata"
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showToast(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+                console.error('Errore:', error);
+                showToast('Errore di comunicazione', 'danger');
+            });
         });
-    });
+    }
 
     // Reset a preset
-    document.getElementById('reset-to-preset').addEventListener('click', function() {
-        if (confirm('Ripristinare la configurazione al preset bilanciato?')) {
-            applyRagPreset('balanced', this);
-        }
-    });
+    const resetToPresetBtn = document.getElementById('reset-to-preset');
+    if (resetToPresetBtn) {
+        resetToPresetBtn.addEventListener('click', function() {
+            if (confirm('Ripristinare la configurazione al preset bilanciato?')) {
+                applyRagPreset('balanced', this);
+            }
+        });
+    }
 
     // ======= GESTIONE MOTORE LLM =======
 
@@ -946,51 +956,66 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Conferma cambio motore
-    document.getElementById('confirm-engine-change').addEventListener('click', function() {
-        if (selectedEngineId) {
-            selectEngine(selectedEngineId, true);
-            confirmationModal.hide();
-        }
-    });
-
-    function selectEngine(engineId, confirmed = false) {
-        const formData = new FormData();
-        formData.append('action', 'select_llm_engine');
-        formData.append('engine_id', engineId);
-        formData.append('confirmed_change', confirmed ? 'true' : 'false');
-        formData.append('csrfmiddlewaretoken', getCsrfToken());
-
-        fetch(window.location.href, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+    const confirmEngineChangeBtn = document.getElementById('confirm-engine-change');
+    if (confirmEngineChangeBtn) {
+        confirmEngineChangeBtn.addEventListener('click', function() {
+            if (selectedEngineId) {
+                selectEngine(selectedEngineId, true);
+                confirmationModal.hide();
             }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast(data.message, 'success');
-
-                // Aggiorna UI motore
-                updateEngineSelection(engineId);
-
-                // Ricarica pagina per aggiornare parametri
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else if (data.require_confirmation) {
-                // Dovrebbe aprire il modal, ma è già gestito sopra
-                confirmationModal.show();
-            } else {
-                showToast(data.message, 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Errore:', error);
-            showToast('Errore di comunicazione', 'danger');
         });
     }
+
+    function selectEngine(engineId, confirmed = false) {
+    const formData = new FormData();
+    formData.append('action', 'select_llm_engine');
+    formData.append('engine_id', engineId);
+    formData.append('confirmed_change', confirmed ? 'true' : 'false');
+    formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+
+            // Aggiorna UI motore
+            updateEngineSelection(engineId);
+
+            // Mostra sezione parametri LLM
+            const llmParamsSection = document.getElementById('llm-parameters-section');
+            if (llmParamsSection) {
+                llmParamsSection.style.display = 'block';
+            }
+
+            // AGGIUNTA: Aggiorna i valori effettivi se forniti
+            if (data.updated_values) {
+                updateEngineParameters(data.updated_values);
+            }
+
+            // RIMUOVI il reload automatico per vedere i cambiamenti subito
+            // setTimeout(() => {
+            //     window.location.reload();
+            // }, 1500);
+
+        } else if (data.require_confirmation) {
+            // Dovrebbe aprire il modal, ma è già gestito sopra
+            confirmationModal.show();
+        } else {
+            showToast(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        showToast('Errore di comunicazione', 'danger');
+    });
+}
 
     function updateEngineSelection(selectedEngineId) {
         // Rimuovi selezione da tutte le card
@@ -1016,6 +1041,64 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+
+    // funzione per aggiornare i parametri del motore
+    function updateEngineParameters(values) {
+        console.log('Updating engine parameters:', values);
+
+        // Aggiorna i placeholder
+        if (values.default_temperature !== undefined) {
+            const tempField = document.getElementById('temperature');
+            if (tempField) {
+                tempField.placeholder = `Default: ${values.default_temperature}`;
+            }
+        }
+
+        if (values.default_max_tokens !== undefined) {
+            const tokensField = document.getElementById('max_tokens');
+            if (tokensField) {
+                tokensField.placeholder = `Default: ${values.default_max_tokens}`;
+            }
+        }
+
+        if (values.default_timeout !== undefined) {
+            const timeoutField = document.getElementById('timeout');
+            if (timeoutField) {
+                timeoutField.placeholder = `Default: ${values.default_timeout}`;
+            }
+        }
+
+        // Aggiorna la sezione "Valori Effettivi in Uso"
+        if (values.effective_temperature !== undefined) {
+            updateEffectiveValues(values);
+        }
+
+        // Aggiorna i testi delle descrizioni
+        updateEngineDescriptions(values);
+    }
+
+    // funzione per aggiornare le descrizioni
+    function updateEngineDescriptions(values) {
+        // Aggiorna il testo delle descrizioni con i nuovi valori default
+        const descriptions = document.querySelectorAll('small.form-text');
+        descriptions.forEach(desc => {
+            const text = desc.textContent;
+            if (text.includes('Default motore:')) {
+                const input = desc.closest('.form-group').querySelector('input');
+                if (input) {
+                    if (input.id === 'temperature' && values.default_temperature !== undefined) {
+                        desc.innerHTML = `Range: 0.0 - 2.0 (Default motore: ${values.default_temperature})`;
+                    } else if (input.id === 'max_tokens' && values.default_max_tokens !== undefined) {
+                        desc.innerHTML = `Range: 1 - 32000 (Default motore: ${values.default_max_tokens})`;
+                    } else if (input.id === 'timeout' && values.default_timeout !== undefined) {
+                        desc.innerHTML = `Range: 10 - 300 secondi (Default motore: ${values.default_timeout}s)`;
+                    }
+                }
+            }
+        });
+    }
+
+    // ======= GESTIONE PARAMETRI MOTORE LLM =======
 
     // Gestione form parametri LLM
     const llmParamsForm = document.getElementById('llm-params-form');
@@ -1045,6 +1128,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (data.success) {
                     showToast(data.message, 'success');
+
+                    // Aggiorna i valori effettivi se forniti
+                    if (data.updated_values) {
+                        updateEffectiveValues(data.updated_values);
+                        updatePlaceholders(data.updated_values);
+                    }
                 } else {
                     showToast(data.message, 'danger');
                 }
@@ -1056,6 +1145,103 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Errore di comunicazione', 'danger');
             });
         });
+    }
+
+    // Pulsante per ripristinare ai valori default
+    const resetLlmParamsBtn = document.getElementById('reset-llm-params');
+    if (resetLlmParamsBtn) {
+        resetLlmParamsBtn.addEventListener('click', function() {
+            if (confirm('Sei sicuro di voler ripristinare tutti i parametri ai valori predefiniti del motore?')) {
+                // Svuota tutti i campi per usare i default
+                const temperatureField = document.getElementById('temperature');
+                const maxTokensField = document.getElementById('max_tokens');
+                const timeoutField = document.getElementById('timeout');
+
+                if (temperatureField) temperatureField.value = '';
+                if (maxTokensField) maxTokensField.value = '';
+                if (timeoutField) timeoutField.value = '';
+
+                // Invia il form per salvare i valori vuoti
+                if (llmParamsForm) {
+                    llmParamsForm.dispatchEvent(new Event('submit'));
+                }
+            }
+        });
+    }
+
+    // Validazione in tempo reale dei campi
+    const temperatureField = document.getElementById('temperature');
+    if (temperatureField) {
+        temperatureField.addEventListener('input', function() {
+            const val = parseFloat(this.value);
+            const isValid = isNaN(val) || (val >= 0 && val <= 2);
+            this.classList.toggle('is-invalid', !isValid && this.value !== '');
+            this.classList.toggle('is-valid', isValid && this.value !== '');
+        });
+    }
+
+    const maxTokensField = document.getElementById('max_tokens');
+    if (maxTokensField) {
+        maxTokensField.addEventListener('input', function() {
+            const val = parseInt(this.value);
+            const isValid = isNaN(val) || (val >= 1 && val <= 32000);
+            this.classList.toggle('is-invalid', !isValid && this.value !== '');
+            this.classList.toggle('is-valid', isValid && this.value !== '');
+        });
+    }
+
+    const timeoutField = document.getElementById('timeout');
+    if (timeoutField) {
+        timeoutField.addEventListener('input', function() {
+            const val = parseInt(this.value);
+            const isValid = isNaN(val) || (val >= 10 && val <= 300);
+            this.classList.toggle('is-invalid', !isValid && this.value !== '');
+            this.classList.toggle('is-valid', isValid && this.value !== '');
+        });
+    }
+
+    // Funzione per aggiornare i valori effettivi nella UI
+    function updateEffectiveValues(values) {
+        const alertInfo = document.querySelector('.alert-info');
+        if (alertInfo) {
+            const newContent = `
+                <h6><i class="fas fa-info-circle"></i> Valori Effettivi in Uso:</h6>
+                <div class="row">
+                    <div class="col-md-4"><strong>Temperature:</strong> ${values.effective_temperature}</div>
+                    <div class="col-md-4"><strong>Max Tokens:</strong> ${values.effective_max_tokens}</div>
+                    <div class="col-md-4"><strong>Timeout:</strong> ${values.effective_timeout}s</div>
+                </div>
+            `;
+            alertInfo.innerHTML = newContent;
+
+            // Animazione per evidenziare l'aggiornamento
+            alertInfo.classList.add('border-success');
+            setTimeout(() => {
+                alertInfo.classList.remove('border-success');
+            }, 2000);
+        }
+    }
+
+    // Funzione per aggiornare i placeholder
+    function updatePlaceholders(values) {
+        if (values.effective_temperature !== undefined) {
+            const tempField = document.getElementById('temperature');
+            if (tempField) {
+                tempField.placeholder = `Default: ${values.effective_temperature}`;
+            }
+        }
+        if (values.effective_max_tokens !== undefined) {
+            const tokensField = document.getElementById('max_tokens');
+            if (tokensField) {
+                tokensField.placeholder = `Default: ${values.effective_max_tokens}`;
+            }
+        }
+        if (values.effective_timeout !== undefined) {
+            const timeoutField = document.getElementById('timeout');
+            if (timeoutField) {
+                timeoutField.placeholder = `Default: ${values.effective_timeout}`;
+            }
+        }
     }
 
     // ======= FUNZIONI UTILITY =======
@@ -1105,6 +1291,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         return toast;
     }
+
+    // Inizializza i tooltip se presenti
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 });
 </script>
 {% endblock %}

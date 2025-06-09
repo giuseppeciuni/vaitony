@@ -3,10 +3,10 @@ import traceback
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
-from profiles.models import Project, ProjectRAGConfig, ProjectLLMConfiguration, LLMEngine, UserAPIKey, ProjectFile, ProjectPromptConfig, DefaultSystemPrompts
+from profiles.models import Project, ProjectRAGConfig, ProjectLLMConfiguration, LLMEngine, UserAPIKey, ProjectFile, \
+	ProjectPromptConfig, DefaultSystemPrompts
 
 logger = logging.getLogger(__name__)
-
 
 
 def project_config(request, project_id):
@@ -233,10 +233,12 @@ def project_config(request, project_id):
 					old_engine = llm_config.engine
 					llm_config.engine = selected_engine
 
-					# Resetta i parametri personalizzati per usare quelli del nuovo motore
-					llm_config.temperature = None
-					llm_config.max_tokens = None
-					llm_config.timeout = None
+					# IMPORTANTE: NON resettare i parametri personalizzati
+					# Lascia che l'utente li gestisca manualmente se necessario
+					# llm_config.temperature = None  # RIMOSSO
+					# llm_config.max_tokens = None   # RIMOSSO
+					# llm_config.timeout = None      # RIMOSSO
+
 					llm_config.save()
 
 					logger.info(f"LLM engine changed from {old_engine} to {selected_engine}")
@@ -260,14 +262,25 @@ def project_config(request, project_id):
 
 						except Exception as e:
 							logger.error(f"Error rebuilding index for engine change: {str(e)}")
-						# Non fallire per questo errore, il motore è comunque stato cambiato
+					# Non fallire per questo errore, il motore è comunque stato cambiato
 
 					messages.success(request, f"Motore '{selected_engine.name}' selezionato con successo.")
 
 					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 						return JsonResponse({
 							'success': True,
-							'message': f"Motore '{selected_engine.name}' selezionato con successo"
+							'message': f"Motore '{selected_engine.name}' selezionato con successo",
+							# AGGIUNTA: Invia i nuovi valori effettivi
+							'updated_values': {
+								'engine_name': selected_engine.name,
+								'engine_provider': selected_engine.provider.name,
+								'effective_temperature': llm_config.get_temperature(),
+								'effective_max_tokens': llm_config.get_max_tokens(),
+								'effective_timeout': llm_config.get_timeout(),
+								'default_temperature': selected_engine.default_temperature,
+								'default_max_tokens': selected_engine.default_max_tokens,
+								'default_timeout': selected_engine.default_timeout,
+							}
 						})
 
 				except Exception as e:
@@ -284,44 +297,70 @@ def project_config(request, project_id):
 					logger.info(f"Saving LLM parameters for project {project.id}")
 
 					# Estrai i parametri dal form
-					temperature = request.POST.get('temperature')
-					max_tokens = request.POST.get('max_tokens')
-					timeout = request.POST.get('timeout')
+					temperature_str = request.POST.get('temperature', '').strip()
+					max_tokens_str = request.POST.get('max_tokens', '').strip()
+					timeout_str = request.POST.get('timeout', '').strip()
 
-					# Valida e converte i parametri
-					if temperature:
-						temperature = float(temperature)
+					# Validazione e conversione parametri con gestione valori vuoti
+					temperature = None
+					max_tokens = None
+					timeout = None
+
+					# Gestisci temperature
+					if temperature_str:
+						temperature = float(temperature_str)
 						if temperature < 0 or temperature > 2:
 							raise ValueError("Temperature deve essere tra 0 e 2")
-						llm_config.temperature = temperature
-					else:
-						llm_config.temperature = None
 
-					if max_tokens:
-						max_tokens = int(max_tokens)
+					# Gestisci max_tokens
+					if max_tokens_str:
+						max_tokens = int(max_tokens_str)
 						if max_tokens < 1 or max_tokens > 32000:
 							raise ValueError("Max tokens deve essere tra 1 e 32000")
-						llm_config.max_tokens = max_tokens
-					else:
-						llm_config.max_tokens = None
 
-					if timeout:
-						timeout = int(timeout)
+					# Gestisci timeout
+					if timeout_str:
+						timeout = int(timeout_str)
 						if timeout < 10 or timeout > 300:
 							raise ValueError("Timeout deve essere tra 10 e 300 secondi")
-						llm_config.timeout = timeout
-					else:
-						llm_config.timeout = None
 
+					# Salva i parametri (None se vuoti per usare i default del motore)
+					llm_config.temperature = temperature
+					llm_config.max_tokens = max_tokens
+					llm_config.timeout = timeout
 					llm_config.save()
 
-					logger.info(f"LLM parameters saved for project {project.id}")
-					messages.success(request, "Parametri motore LLM salvati con successo.")
+					logger.info(
+						f"LLM parameters saved for project {project.id} - temp: {temperature}, tokens: {max_tokens}, timeout: {timeout}")
+
+					# Messaggio di successo più dettagliato
+					updated_params = []
+					if temperature is not None:
+						updated_params.append(f"Temperature: {temperature}")
+					if max_tokens is not None:
+						updated_params.append(f"Max tokens: {max_tokens}")
+					if timeout is not None:
+						updated_params.append(f"Timeout: {timeout}s")
+
+					if updated_params:
+						param_msg = f"Parametri aggiornati: {', '.join(updated_params)}"
+					else:
+						param_msg = "Parametri ripristinati ai valori predefiniti del motore"
+
+					messages.success(request, f"Configurazione motore salvata. {param_msg}")
 
 					if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 						return JsonResponse({
 							'success': True,
-							'message': 'Parametri motore LLM salvati con successo'
+							'message': f'Parametri motore LLM salvati con successo. {param_msg}',
+							'updated_values': {
+								'temperature': temperature,
+								'max_tokens': max_tokens,
+								'timeout': timeout,
+								'effective_temperature': llm_config.get_temperature(),
+								'effective_max_tokens': llm_config.get_max_tokens(),
+								'effective_timeout': llm_config.get_timeout()
+							}
 						})
 
 				except ValueError as e:
@@ -341,7 +380,6 @@ def project_config(request, project_id):
 
 			# Redirect dopo POST per evitare re-submit
 			return redirect('project_config', project_id=project.id)
-
 		# ======= PREPARAZIONE DATI PER IL TEMPLATE =======
 
 		# Ottieni i preset RAG disponibili dal modello stesso
@@ -425,9 +463,12 @@ def project_config(request, project_id):
 			'engines_by_provider': engines_by_provider,  # Dal database
 			'current_engine': llm_config.engine,
 			'engine_parameters': {
-				'temperature': llm_config.get_temperature(),
-				'max_tokens': llm_config.get_max_tokens(),
-				'timeout': llm_config.get_timeout()
+				'temperature': llm_config.temperature,  # Valore configurato dall'utente o None
+				'max_tokens': llm_config.max_tokens,  # Valore configurato dall'utente o None
+				'timeout': llm_config.timeout,  # Valore configurato dall'utente o None
+				'effective_temperature': llm_config.get_temperature(),  # Valore effettivo (con fallback ai default)
+				'effective_max_tokens': llm_config.get_max_tokens(),  # Valore effettivo (con fallback ai default)
+				'effective_timeout': llm_config.get_timeout()  # Valore effettivo (con fallback ai default)
 			},
 			# Valori RAG correnti dal database
 			'rag_values': {
@@ -974,4 +1015,3 @@ def get_prompt_writing_tips():
 			'example': 'Mantieni un tono professionale ma accessibile...'
 		}
 	]
-

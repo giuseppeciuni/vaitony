@@ -1204,6 +1204,89 @@ def project(request, project_id=None):
 						messages.error(request, f"Errore nell'aggiornamento: {str(e)}")
 						return redirect('project', project_id=project.id)
 
+				# ----- Applicazione preset RAG -----
+				elif action == 'apply_rag_preset':
+					logger.debug(f'action --->: {action}')
+					try:
+						preset_name = request.POST.get('preset_name')
+
+						if not preset_name:
+							raise ValueError("Nome preset non specificato")
+
+						logger.info(f"Applying RAG preset '{preset_name}' to project {project.id}")
+
+						# Ottieni la configurazione RAG del progetto
+						try:
+							project_rag_config = ProjectRAGConfig.objects.get(project=project)
+						except ProjectRAGConfig.DoesNotExist:
+							# Crea configurazione se non esiste
+							project_rag_config = ProjectRAGConfig.objects.create(project=project)
+							logger.info(f"Created new RAG configuration for project {project.id}")
+
+						# Applica il preset richiesto
+						if project_rag_config.apply_preset(preset_name):
+							project_rag_config.save()
+							logger.info(f"RAG preset '{preset_name}' applied successfully to project {project.id}")
+
+							# Risposta AJAX di successo
+							if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+								return JsonResponse({
+									'success': True,
+									'message': f'Preset "{preset_name}" applicato con successo',
+									'preset_name': preset_name,
+									'applied_values': {
+										'chunk_size': project_rag_config.chunk_size,
+										'chunk_overlap': project_rag_config.chunk_overlap,
+										'similarity_top_k': project_rag_config.similarity_top_k,
+										'mmr_lambda': project_rag_config.mmr_lambda,
+										'similarity_threshold': project_rag_config.similarity_threshold,
+										'retriever_type': project_rag_config.retriever_type,
+										'auto_citation': project_rag_config.auto_citation,
+										'prioritize_filenames': project_rag_config.prioritize_filenames,
+										'equal_notes_weight': project_rag_config.equal_notes_weight,
+										'strict_context': project_rag_config.strict_context,
+									}
+								})
+
+							messages.success(request, f'Preset "{preset_name}" applicato con successo.')
+							return redirect('project', project_id=project.id)
+						else:
+							logger.error(f"Failed to apply RAG preset '{preset_name}' - preset not found")
+
+							if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+								return JsonResponse({
+									'success': False,
+									'message': f'Preset "{preset_name}" non trovato'
+								})
+
+							messages.error(request, f'Preset "{preset_name}" non trovato.')
+							return redirect('project', project_id=project.id)
+
+					except ValueError as e:
+						logger.error(f"Validation error applying RAG preset: {str(e)}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f'Errore di validazione: {str(e)}'
+							})
+
+						messages.error(request, f"Errore di validazione: {str(e)}")
+						return redirect('project', project_id=project.id)
+
+					except Exception as e:
+						logger.error(f"Error applying RAG preset: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f'Errore nell\'applicazione del preset: {str(e)}'
+							})
+
+						messages.error(request, f"Errore nell'applicazione del preset: {str(e)}")
+						return redirect('project', project_id=project.id)
+
 				# ----- Selezione prompt predefinito -----
 				elif action == 'select_default_prompt':
 					try:

@@ -595,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Prepara dati per la richiesta
             const formData = new FormData();
             formData.append('action', 'apply_rag_preset');
-            formData.append('preset', preset);
+            formData.append('preset_name', preset);
             formData.append('csrfmiddlewaretoken', getCsrfToken());
 
             // Effettua la richiesta AJAX

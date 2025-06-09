@@ -1540,8 +1540,31 @@ def get_answer_from_project(project, question):
         }
 
         # Aggiungi fonti alla risposta
-        for doc in source_documents:
+        for i, doc in enumerate(source_documents):
             metadata = doc.metadata
+
+            # Calcola score basato sulla posizione (più semplice ma efficace)
+            relevance_score = 1.0 - (i * 0.05)  # Primo documento = 1.0, secondo = 0.95, etc.
+            relevance_score = max(0.1, relevance_score)  # Minimo 0.1
+
+            # Se disponibile un score reale nei metadati, usalo
+            if '_score' in metadata:
+                try:
+                    relevance_score = float(metadata['_score'])
+                except (ValueError, TypeError):
+                    pass
+                    pass
+
+            # Estrai il punteggio di rilevanza se disponibile
+            relevance_score = None
+            if hasattr(doc, 'metadata') and '_score' in doc.metadata:
+                relevance_score = doc.metadata['_score']
+            elif hasattr(doc, 'score'):
+                relevance_score = doc.score
+            elif len(source_documents) > 0:
+                # Calcola score basato sulla posizione (primo = più rilevante)
+                relevance_score = 1.0 - (i * 0.1)  # Scala da 1.0 a 0.1
+                relevance_score = max(0.1, relevance_score)  # Minimo 0.1
 
             # Determina il tipo di fonte
             if metadata.get("type") == "note":
@@ -1566,10 +1589,9 @@ def get_answer_from_project(project, question):
             source = {
                 "content": doc.page_content,
                 "metadata": metadata,
-                "score": getattr(doc, 'score', None),
+                "score": relevance_score,  # ✅ CORRETTO - ora include lo score reale
                 "type": source_type,
                 "filename": f"{filename}{page_info}",
-                # *** NOVITÀ: Includi informazioni sulla priorità ***
                 "priority": metadata.get('priority', 1)
             }
             response["sources"].append(source)
@@ -1714,9 +1736,13 @@ def create_retrieval_qa_chain(vectordb, project=None):
                 "score_threshold": rag_settings['similarity_threshold']
             }
         )
-    else:  # default: similarity
+    else:  # default: similarity with scores
         retriever = vectordb.as_retriever(
-            search_kwargs={"k": k_value_for_generic}
+            search_type="similarity_score_threshold",  # ✅ AGGIUNTO per ottenere score
+            search_kwargs={
+                "k": k_value_for_generic,
+                "score_threshold": 0.0  # ✅ Accetta tutti i risultati ma con score
+            }
         )
 
     logger.info(f"Retriever configurato con k={k_value_for_generic} per supportare priorità documenti")

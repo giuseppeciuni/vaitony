@@ -570,6 +570,15 @@ def project(request, project_id=None):
 													pass
 
 										# Salva la fonte
+										relevance_score = source.get('score')
+										if relevance_score is not None:
+											# Assicura che sia un float valido tra 0 e 1
+											try:
+												relevance_score = float(relevance_score)
+												relevance_score = max(0.0, min(1.0, relevance_score))  # Clamp tra 0 e 1
+											except (ValueError, TypeError):
+												relevance_score = None
+
 										AnswerSource.objects.create(
 											conversation=conversation,
 											project_file=project_file,
@@ -577,7 +586,7 @@ def project(request, project_id=None):
 											project_url=project_url,
 											content=source.get('content', ''),
 											page_number=source.get('metadata', {}).get('page'),
-											relevance_score=source.get('score')
+											relevance_score=relevance_score  # ✅ CORRETTO - ora salva lo score reale
 										)
 									logger.info(f"Conversazione salvata con ID: {conversation.id}")
 

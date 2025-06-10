@@ -1,0 +1,44 @@
+-----------------------------------------------------------------------------------
+                    VAITONY SERVICE DI SYSTEMD
+-----------------------------------------------------------------------------------
+questo file serve per far partire vaitony come servizio di systemd su un server Ubuntu.
+
+cat /etc/systemd/system/vaitony.service:
+
+[Unit]
+Description=Gunicorn daemon for VaiTony Django application
+After=network.target
+
+[Service]
+User=vaitony
+Group=www-data
+WorkingDirectory=/var/www/vaitony
+Environment="PYTHONPATH=/var/www/vaitony"
+# Aggiungi queste variabili d'ambiente per aumentare il logging
+Environment="DJANGO_LOG_LEVEL=DEBUG"
+Environment="GUNICORN_LOG_LEVEL=debug"
+ExecStart=/var/www/vaitony/start_gunicorn.sh
+# Aggiungi la redirezione standard error e output a file di log
+StandardOutput=append:/var/www/vaitony/logs/gunicorn_stdout.log
+StandardError=append:/var/www/vaitony/logs/gunicorn_stderr.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+
+
+
+------------ PERMESSI file di configurazione:
+ls -la  /etc/systemd/system/vaitony.service
+4.0K -rw-r--r-- 1 root 644 May 24 00:58 /etc/systemd/system/vaitony.service
+
+
+VIENE ESEGUITO CON QUESTI COMANDI:
+sudo systemctl restart vaitony.service
+
+------------------- PER VEDERE I LOG
+sudo journalctl -u vaitony.service -n 50 --no-pager

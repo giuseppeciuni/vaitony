@@ -11,6 +11,8 @@ MIGLIORAMENTI:
 - Timeout e retry migliorati per siti lenti
 - Gestione di lazy loading e infinite scroll
 """
+import traceback
+
 from django.utils import timezone
 import os
 import time
@@ -1104,3 +1106,116 @@ class WebCrawler:
 		except Exception as e:
 			logger.error(f"❌ Errore nell'estrazione con OpenAI: {str(e)}")
 			return {"error": str(e), "extraction_method": "openai_gpt_failed"}
+
+	def update_crawl_status(self, current_url=None, status='running', stats=None, error=None):
+		"""
+		Aggiorna lo stato del crawling con controllo timeout.
+		"""
+		if not hasattr(self, 'project_index_status') or not self.project_index_status:
+			return
+
+		try:
+			# Ricarica lo stato corrente dal database
+			self.project_index_status.refresh_from_db()
+
+			# Inizializza metadata se necessario
+			if not self.project_index_status.metadata:
+				self.project_index_status.metadata = {}
+
+			# Ottieni lo stato del crawling corrente
+			last_crawl = self.project_index_status.metadata.get('last_crawl', {})
+
+			# CONTROLLO TIMEOUT: Se il processo è in running da troppo tempo, marcalo come failed
+			if status == 'running':
+				start_time_str = last_crawl.get('timestamp')
+				if start_time_str:
+					try:
+						from datetime import datetime, timezone as tz
+						import dateutil.parser
+
+						start_time = dateutil.parser.parse(start_time_str)
+						current_time = datetime.now(tz.utc)
+						elapsed_seconds = (current_time - start_time).total_seconds()
+
+						# Timeout dopo 30 minuti (1800 secondi)
+						MAX_CRAWL_TIME = 1800
+
+						if elapsed_seconds > MAX_CRAWL_TIME:
+							logger.warning(f"🕐 Crawling timeout dopo {elapsed_seconds / 60:.1f} minuti")
+							status = 'failed'
+							error = f'Timeout del processo dopo {elapsed_seconds / 60:.1f} minuti'
+
+					except Exception as time_error:
+						logger.error(f"Errore nel controllo timeout: {time_error}")
+
+			# Aggiorna i dati dello stato
+			last_crawl.update({
+				'status': status,
+				'timestamp': datetime.now(timezone.utc).isoformat(),
+				'current_url': current_url or last_crawl.get('current_url', ''),
+				'stats': stats or last_crawl.get('stats', {}),
+			})
+
+			if error:
+				last_crawl['error'] = error
+
+			# Salva lo stato aggiornato
+			self.project_index_status.metadata['last_crawl'] = last_crawl
+			self.project_index_status.save()
+
+			logger.debug(f"📊 Status aggiornato: {status} per URL {current_url}")
+
+		except Exception as e:
+			logger.error(f"❌ Errore nell'aggiornamento status: {str(e)}")
+
+	def check_if_cancelled(self):
+		"""
+		Controlla se il processo di crawling è stato cancellato dall'utente.
+		Include anche controllo timeout automatico.
+		"""
+		if not hasattr(self, 'project_index_status') or not self.project_index_status:
+			return False
+
+		try:
+			# Ricarica stato fresco dal database
+			self.project_index_status.refresh_from_db()
+
+			last_crawl = self.project_index_status.metadata.get('last_crawl', {})
+			current_status = last_crawl.get('status', '')
+
+			# Controlla se è stato cancellato
+			if current_status == 'cancelled':
+				logger.info("🛑 Crawling cancellato dall'utente")
+				return True
+
+			# Controlla timeout automatico
+			start_time_str = last_crawl.get('timestamp')
+			if start_time_str and current_status == 'running':
+				try:
+					from datetime import datetime, timezone as tz
+					import dateutil.parser
+
+					start_time = dateutil.parser.parse(start_time_str)
+					current_time = datetime.now(tz.utc)
+					elapsed_seconds = (current_time - start_time).total_seconds()
+
+					# Timeout dopo 30 minuti
+					if elapsed_seconds > 1800:
+						logger.warning(f"🕐 Auto-cancellazione per timeout ({elapsed_seconds / 60:.1f} min)")
+
+						# Aggiorna stato a failed
+						last_crawl['status'] = 'failed'
+						last_crawl['error'] = f'Timeout automatico dopo {elapsed_seconds / 60:.1f} minuti'
+						self.project_index_status.metadata['last_crawl'] = last_crawl
+						self.project_index_status.save()
+
+						return True
+
+				except Exception as time_error:
+					logger.error(f"Errore controllo timeout: {time_error}")
+
+			return False
+
+		except Exception as e:
+			logger.error(f"❌ Errore nel controllo cancellazione: {str(e)}")
+			return False

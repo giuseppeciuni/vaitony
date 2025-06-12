@@ -1761,3 +1761,286 @@ window.copyWidgetCodePermanent = function() {
     }
 };
 </script>
+
+
+
+<!-- Mantieni tutto il contenuto originale del file javascript.html -->
+<!-- Il contenuto originale rimane identico fino a qui... -->
+
+<script>
+// ===================================================================
+// CORREZIONI PER IL LOOP INFINITO DEL SISTEMA DI CRAWLING
+// Aggiunto alla fine per risolvere il problema dei log infiniti
+// ===================================================================
+
+// Override delle funzioni esistenti per correggere il loop infinito
+(function() {
+    'use strict';
+
+    console.log('🔧 Applicazione correzioni anti-loop per il sistema di crawling...');
+
+    // Variabili per il controllo del loop
+    let originalMonitorInterval = null;
+    let statusCheckCount = 0;
+    let lastStatusTimestamp = null;
+    let stuckStatusDetectionCount = 0;
+    const MAX_STATUS_CHECKS = 15; // Massimo 15 controlli prima di fermare
+    const MAX_STUCK_DETECTIONS = 3; // Massimo 3 status identici consecutivi
+    const STATUS_CHECK_DELAY = 3000; // 3 secondi invece di 1
+
+    // Funzione per gestire il monitoraggio migliorato
+    function improvedMonitorCrawlProgress(websiteUrl) {
+        console.log('🔍 Avvio monitoraggio migliorato con protezione anti-loop');
+
+        // Ferma eventuali monitoraggi precedenti
+        if (originalMonitorInterval) {
+            clearInterval(originalMonitorInterval);
+            originalMonitorInterval = null;
+        }
+
+        // Reset contatori
+        statusCheckCount = 0;
+        lastStatusTimestamp = null;
+        stuckStatusDetectionCount = 0;
+
+        // Avvia nuovo monitoraggio con protezioni
+        originalMonitorInterval = setInterval(() => {
+            statusCheckCount++;
+
+            // Protezione 1: Limite massimo di controlli
+            if (statusCheckCount > MAX_STATUS_CHECKS) {
+                console.warn(`🚫 Raggiunto limite massimo di ${MAX_STATUS_CHECKS} controlli status, ferma monitoraggio`);
+                stopImprovedCrawling();
+                showToast(`Monitoraggio fermato dopo ${MAX_STATUS_CHECKS} controlli per evitare loop infiniti`, 'warning');
+                return;
+            }
+
+            // Protezione 2: Verifica se il crawling è ancora attivo
+            if (!window.crawlInProgress) {
+                console.log('🛑 Crawling non più attivo, ferma monitoraggio');
+                clearInterval(originalMonitorInterval);
+                originalMonitorInterval = null;
+                return;
+            }
+
+            console.log(`🔍 Controllo status ${statusCheckCount}/${MAX_STATUS_CHECKS}`);
+            improvedCheckStatus();
+
+        }, STATUS_CHECK_DELAY);
+
+        // Prima verifica immediata
+        setTimeout(() => improvedCheckStatus(), 500);
+    }
+
+    // Funzione per controllo status migliorato
+    function improvedCheckStatus() {
+        if (!window.crawlInProgress) {
+            console.log('🛑 Crawling fermato, skip controllo status');
+            return;
+        }
+
+        // Verifica che project sia disponibile
+        if (typeof project === 'undefined' || !project || !project.id) {
+            console.error('❌ Progetto non disponibile, ferma monitoraggio');
+            stopImprovedCrawling();
+            return;
+        }
+
+        fetch(`/website_crawl/${project.id}/?check_status=true`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log(`📊 Status ricevuto (check ${statusCheckCount}):`, data.status);
+
+            // Protezione 3: Rilevamento status bloccato
+            const currentTimestamp = data.timestamp;
+            if (currentTimestamp && currentTimestamp === lastStatusTimestamp) {
+                stuckStatusDetectionCount++;
+                console.warn(`⚠️ Status potenzialmente bloccato (${stuckStatusDetectionCount}/${MAX_STUCK_DETECTIONS})`);
+
+                if (stuckStatusDetectionCount >= MAX_STUCK_DETECTIONS) {
+                    console.error('🚫 Status bloccato rilevato, ferma crawling');
+                    stopImprovedCrawling();
+                    showToast('Il processo sembra bloccato. Crawling interrotto automaticamente.', 'warning');
+                    return;
+                }
+            } else {
+                stuckStatusDetectionCount = 0; // Reset se timestamp è cambiato
+                lastStatusTimestamp = currentTimestamp;
+            }
+
+            // Gestisci i diversi stati
+            handleImprovedStatusResponse(data);
+
+        })
+        .catch(error => {
+            console.error('❌ Errore nel controllo status:', error);
+
+            // Dopo 3 errori consecutivi, ferma il monitoraggio
+            if (statusCheckCount >= 3) {
+                console.error('🚫 Troppi errori consecutivi, ferma monitoraggio');
+                stopImprovedCrawling();
+                showToast('Errori ripetuti nel monitoraggio. Processo interrotto.', 'danger');
+            }
+        });
+    }
+
+    // Gestione migliorata delle risposte di status
+    function handleImprovedStatusResponse(data) {
+        if (!data.success) {
+            console.warn('⚠️ Risposta status non valida');
+            return;
+        }
+
+        switch (data.status) {
+            case 'completed':
+                console.log('✅ Crawling completato con successo');
+                stopImprovedCrawling();
+
+                // Aggiorna statistiche finali
+                if (data.stats) {
+                    updateImprovedCrawlStats(data.stats);
+                }
+
+                showToast(`Crawling completato! Processate ${data.stats?.processed_pages || 0} pagine.`, 'success');
+
+                // Ricarica la pagina dopo un breve delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+                break;
+
+            case 'failed':
+                console.error('❌ Crawling fallito:', data.error);
+                stopImprovedCrawling();
+                showToast(`Errore durante il crawling: ${data.error || 'Errore sconosciuto'}`, 'danger');
+                break;
+
+            case 'cancelled':
+                console.log('🛑 Crawling cancellato dall\'utente');
+                stopImprovedCrawling();
+                showToast('Crawling cancellato dall\'utente', 'info');
+                break;
+
+            case 'running':
+                console.log('🔄 Crawling in corso...');
+
+                // Aggiorna statistiche solo se in corso
+                if (data.stats) {
+                    updateImprovedCrawlStats(data.stats);
+                }
+
+                // Aggiorna URL corrente
+                if (data.url && window.currentUrlDisplay) {
+                    window.currentUrlDisplay.textContent = data.url;
+                }
+                break;
+
+            default:
+                console.warn('⚠️ Status sconosciuto:', data.status);
+                // Non interrompere per status sconosciuti, ma limita i tentativi
+                break;
+        }
+    }
+
+    // Funzione per fermare il crawling migliorato
+    function stopImprovedCrawling() {
+        console.log('🛑 Interruzione crawling migliorato');
+
+        // Ferma il monitoraggio
+        if (originalMonitorInterval) {
+            clearInterval(originalMonitorInterval);
+            originalMonitorInterval = null;
+        }
+
+        // Reset dello stato globale
+        if (window.crawlInProgress) {
+            window.crawlInProgress = false;
+        }
+
+        // Reset UI se elementi disponibili
+        const startBtn = document.getElementById('start-crawl-btn');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.innerHTML = 'Avvia Crawling';
+        }
+
+        // Reset contatori
+        statusCheckCount = 0;
+        lastStatusTimestamp = null;
+        stuckStatusDetectionCount = 0;
+    }
+
+    // Aggiornamento statistiche migliorato
+    function updateImprovedCrawlStats(stats) {
+        if (!stats) return;
+
+        const processedElement = document.getElementById('processed-pages-count');
+        const queuedElement = document.getElementById('queued-pages-count');
+        const failedElement = document.getElementById('failed-pages-count');
+
+        if (processedElement) processedElement.textContent = stats.processed_pages || 0;
+        if (queuedElement) queuedElement.textContent = stats.queued_pages || 0;
+        if (failedElement) failedElement.textContent = stats.failed_pages || 0;
+
+        console.log(`📊 Stats aggiornate: P:${stats.processed_pages || 0}, Q:${stats.queued_pages || 0}, F:${stats.failed_pages || 0}`);
+    }
+
+    // Override della funzione originale monitorCrawlProgress se esiste
+    if (typeof window.monitorCrawlProgress === 'function') {
+        console.log('🔄 Override della funzione monitorCrawlProgress originale');
+        window.monitorCrawlProgress = improvedMonitorCrawlProgress;
+    }
+
+    // Override della funzione originale stopCrawling se esiste
+    if (typeof window.stopCrawling === 'function') {
+        const originalStopCrawling = window.stopCrawling;
+        window.stopCrawling = function(userCancelled = false) {
+            console.log('🛑 Chiamata stopCrawling migliorata');
+            stopImprovedCrawling();
+
+            // Chiama anche la funzione originale se necessario
+            if (typeof originalStopCrawling === 'function') {
+                try {
+                    originalStopCrawling(userCancelled);
+                } catch (e) {
+                    console.warn('⚠️ Errore nella chiamata alla funzione originale:', e);
+                }
+            }
+        };
+    }
+
+    // Gestione chiusura/ricarica pagina
+    window.addEventListener('beforeunload', function(e) {
+        if (window.crawlInProgress) {
+            stopImprovedCrawling();
+        }
+    });
+
+    // Funzione di debug per verificare lo stato
+    window.debugCrawlState = function() {
+        console.log('🐛 Debug Crawl State:');
+        console.log('- crawlInProgress:', window.crawlInProgress);
+        console.log('- statusCheckCount:', statusCheckCount);
+        console.log('- lastStatusTimestamp:', lastStatusTimestamp);
+        console.log('- stuckStatusDetectionCount:', stuckStatusDetectionCount);
+        console.log('- monitorInterval attivo:', !!originalMonitorInterval);
+    };
+
+    console.log('✅ Correzioni anti-loop applicate con successo');
+    console.log('🔧 Usare window.debugCrawlState() per debug');
+
+})();
+
+// ===================================================================
+// FINE CORREZIONI ANTI-LOOP
+// ===================================================================
+</script>

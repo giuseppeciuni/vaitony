@@ -1760,6 +1760,10 @@ window.copyWidgetCodePermanent = function() {
             .catch(err => showToast('Errore nel copiare il codice', 'danger'));
     }
 };
+
+
+
+ // SEZIONE PER IL CONVERSAZIONALE
 </script>
 
 
@@ -2043,4 +2047,758 @@ window.copyWidgetCodePermanent = function() {
 // ===================================================================
 // FINE CORREZIONI ANTI-LOOP
 // ===================================================================
+</script>
+
+
+
+<script>
+    // Conversational RAG JavaScript Enhancement
+// Aggiunge funzionalità conversazionali al sistema RAG esistente
+
+class ConversationalRAG {
+    constructor() {
+        this.currentSessionId = null;
+        this.conversationMode = true; // true = conversazionale, false = tradizionale
+        this.isProcessing = false;
+        this.turnCounter = 0;
+        this.contextMemory = [];
+
+        this.init();
+    }
+
+    init() {
+        console.log('🤖 Inizializzazione sistema RAG conversazionale');
+
+        // Elementi DOM
+        this.chatMessages = document.getElementById('chat-messages');
+        this.questionInput = document.getElementById('question-input');
+        this.sendButton = document.getElementById('send-question-btn');
+        this.modeToggle = document.getElementById('conversation-mode-toggle');
+        this.sessionInfo = document.getElementById('session-info');
+        this.newSessionBtn = document.getElementById('new-session-btn');
+        this.endSessionBtn = document.getElementById('end-session-btn');
+
+        // Event listeners
+        this.setupEventListeners();
+
+        // Inizializza interfaccia
+        this.updateUIForMode();
+        this.addWelcomeMessage();
+    }
+
+    setupEventListeners() {
+        // Invio domanda
+        if (this.sendButton) {
+            this.sendButton.addEventListener('click', () => this.sendQuestion());
+        }
+
+        if (this.questionInput) {
+            this.questionInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendQuestion();
+                }
+
+                // Suggerimenti con '/'
+                if (e.key === '/' && this.questionInput.value === '') {
+                    e.preventDefault();
+                    this.showSuggestions();
+                }
+            });
+        }
+
+        // Toggle modalità conversazionale
+        if (this.modeToggle) {
+            this.modeToggle.addEventListener('change', (e) => {
+                this.conversationMode = e.target.checked;
+                this.updateUIForMode();
+                this.addSystemMessage(
+                    `Modalità ${this.conversationMode ? 'conversazionale' : 'tradizionale'} attivata`
+                );
+            });
+        }
+
+        // Nuova sessione
+        if (this.newSessionBtn) {
+            this.newSessionBtn.addEventListener('click', () => this.startNewSession());
+        }
+
+        // Termina sessione
+        if (this.endSessionBtn) {
+            this.endSessionBtn.addEventListener('click', () => this.endCurrentSession());
+        }
+
+        // Focus automatico
+        document.getElementById('ask-tab')?.addEventListener('shown.bs.tab', () => {
+            setTimeout(() => {
+                this.questionInput?.focus();
+                this.scrollToBottom();
+            }, 200);
+        });
+    }
+
+    updateUIForMode() {
+        const conversationalControls = document.querySelectorAll('.conversational-only');
+        const traditionalControls = document.querySelectorAll('.traditional-only');
+
+        conversationalControls.forEach(el => {
+            el.style.display = this.conversationMode ? 'block' : 'none';
+        });
+
+        traditionalControls.forEach(el => {
+            el.style.display = this.conversationMode ? 'none' : 'block';
+        });
+
+        // Aggiorna placeholder
+        if (this.questionInput) {
+            this.questionInput.placeholder = this.conversationMode
+                ? "Scrivi la tua domanda... (usa '/' per suggerimenti)"
+                : "Fai una domanda sui documenti...";
+        }
+    }
+
+    addWelcomeMessage() {
+        if (!this.chatMessages) return;
+
+        const welcomeMsg = this.createMessageElement(
+            'assistant',
+            this.conversationMode
+                ? "👋 Ciao! Sono il tuo assistente AI conversazionale. Posso rispondere alle tue domande mantenendo il contesto della nostra conversazione. Cosa vorresti sapere?"
+                : "🤖 Assistente AI pronto. Fai una domanda sui documenti del progetto.",
+            this.getCurrentTimeString(),
+            { isWelcome: true }
+        );
+
+        this.chatMessages.appendChild(welcomeMsg);
+        this.scrollToBottom();
+    }
+
+    async sendQuestion() {
+        const question = this.questionInput.value.trim();
+        if (!question || this.isProcessing) return;
+
+        this.isProcessing = true;
+        this.turnCounter++;
+
+        // Rimuovi stato vuoto se presente
+        this.removeEmptyState();
+
+        // Aggiungi messaggio utente
+        this.addUserMessage(question);
+
+        // Reset input e disabilita controlli
+        this.questionInput.value = '';
+        this.questionInput.disabled = true;
+        this.sendButton.disabled = true;
+        this.sendButton.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div> Elaborando...';
+
+        // Aggiungi indicatore di digitazione
+        const typingIndicator = this.addTypingIndicator();
+
+        try {
+            const response = await this.processQuestion(question);
+
+            // Rimuovi indicatore di digitazione
+            typingIndicator.remove();
+
+            if (response.success) {
+                this.handleSuccessResponse(response);
+            } else {
+                this.handleErrorResponse(response);
+            }
+
+        } catch (error) {
+            typingIndicator.remove();
+            console.error('Errore nella comunicazione:', error);
+            this.addErrorMessage('Errore di comunicazione. Riprova più tardi.');
+        } finally {
+            this.resetInputState();
+        }
+    }
+
+    async processQuestion(question) {
+        const formData = new FormData();
+        formData.append('action', 'ask_question');
+        formData.append('question', question);
+        formData.append('use_conversational', this.conversationMode.toString());
+
+        if (this.conversationMode && this.currentSessionId) {
+            formData.append('session_id', this.currentSessionId);
+        }
+
+        // Aggiungi CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfToken) {
+            formData.append('csrfmiddlewaretoken', csrfToken.value);
+        }
+
+        const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        return await response.json();
+    }
+
+    handleSuccessResponse(response) {
+        // Aggiorna sessione ID se in modalità conversazionale
+        if (this.conversationMode && response.session_id) {
+            this.currentSessionId = response.session_id;
+            this.updateSessionInfo(response);
+        }
+
+        // Aggiungi risposta AI
+        this.addAIMessage(
+            response.answer,
+            response.sources || [],
+            response.processing_time || 0,
+            {
+                turnNumber: response.turn_number,
+                contextAnalysis: response.context_analysis,
+                sessionId: response.session_id
+            }
+        );
+
+        // Aggiorna suggerimenti se disponibili
+        if (response.suggestions) {
+            this.updateSuggestions(response.suggestions);
+        }
+
+        // Salva nel context memory per riferimenti futuri
+        this.contextMemory.push({
+            turn: this.turnCounter,
+            question: this.questionInput.dataset.lastQuestion || '',
+            answer: response.answer,
+            sources: response.sources || [],
+            timestamp: new Date(),
+            sessionId: this.currentSessionId
+        });
+
+        // Mantieni solo gli ultimi 10 turni in memoria
+        if (this.contextMemory.length > 10) {
+            this.contextMemory = this.contextMemory.slice(-10);
+        }
+    }
+
+    handleErrorResponse(response) {
+        let errorMessage = response.message || 'Si è verificato un errore';
+
+        if (response.error === 'api_auth_error') {
+            errorMessage = '🔑 Errore di autenticazione API. Verifica le chiavi API nelle impostazioni.';
+        } else if (response.error === 'no_question') {
+            errorMessage = '❓ Nessuna domanda fornita';
+        } else if (response.error === 'conversational_error') {
+            errorMessage = '💬 Errore nel sistema conversazionale. Prova a ricominciare la sessione.';
+        }
+
+        this.addErrorMessage(errorMessage);
+    }
+
+    addUserMessage(message) {
+        if (!this.chatMessages) return;
+
+        this.questionInput.dataset.lastQuestion = message; // Salva per reference
+
+        const userMsg = this.createMessageElement('user', message, this.getCurrentTimeString());
+        this.chatMessages.appendChild(userMsg);
+        this.scrollToBottom();
+    }
+
+    addAIMessage(answer, sources, processingTime, metadata = {}) {
+        if (!this.chatMessages) return;
+
+        const aiMsg = this.createMessageElement('assistant', answer, this.getCurrentTimeString(), {
+            sources: sources,
+            processingTime: processingTime,
+            metadata: metadata
+        });
+
+        this.chatMessages.appendChild(aiMsg);
+        this.scrollToBottom();
+    }
+
+    addSystemMessage(message) {
+        if (!this.chatMessages) return;
+
+        const systemMsg = document.createElement('div');
+        systemMsg.className = 'system-message text-center text-muted small my-2';
+        systemMsg.innerHTML = `<em>${message}</em>`;
+
+        this.chatMessages.appendChild(systemMsg);
+        this.scrollToBottom();
+    }
+
+    addErrorMessage(message) {
+        if (!this.chatMessages) return;
+
+        const errorMsg = this.createMessageElement('assistant', `❌ ${message}`, this.getCurrentTimeString(), {
+            isError: true
+        });
+
+        this.chatMessages.appendChild(errorMsg);
+        this.scrollToBottom();
+    }
+
+    addTypingIndicator() {
+        if (!this.chatMessages) return { remove: () => {} };
+
+        const indicator = document.createElement('div');
+        indicator.className = 'message-container assistant-container typing-indicator';
+        indicator.innerHTML = `
+            <div class="message-avatar assistant-avatar">
+                <i class="bi bi-robot"></i>
+            </div>
+            <div class="assistant-message">
+                <div class="typing-animation">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="text-muted small">L'assistente sta scrivendo...</div>
+            </div>
+        `;
+
+        this.chatMessages.appendChild(indicator);
+        this.scrollToBottom();
+
+        return indicator;
+    }
+
+    createMessageElement(role, content, timestamp, options = {}) {
+        const isUser = role === 'user';
+        const containerClass = isUser ? 'user-container' : 'assistant-container';
+        const messageClass = isUser ? 'user-message' : 'assistant-message';
+        const avatarClass = isUser ? 'user-avatar' : 'assistant-avatar';
+        const avatarIcon = isUser ? 'person-fill' : 'robot';
+
+        const messageContainer = document.createElement('div');
+        messageContainer.className = `message-container ${containerClass}`;
+
+        if (options.isError) {
+            messageContainer.classList.add('error-message');
+        }
+
+        let messageHTML = `
+            <div class="message-avatar ${avatarClass}">
+                <i class="bi bi-${avatarIcon}"></i>
+            </div>
+            <div class="${messageClass}">
+                ${this.formatMessageContent(content)}
+                <span class="message-time">${timestamp}</span>
+        `;
+
+        // Aggiungi informazioni aggiuntive per messaggi AI
+        if (!isUser && options.sources && options.sources.length > 0) {
+            messageHTML += this.createSourcesHTML(options.sources);
+        }
+
+        if (!isUser && options.processingTime) {
+            messageHTML += `<div class="processing-time text-muted small">⏱️ ${options.processingTime.toFixed(2)}s</div>`;
+        }
+
+        // Aggiungi badge modalità conversazionale
+        if (!isUser && this.conversationMode && options.metadata) {
+            const { turnNumber, contextAnalysis, sessionId } = options.metadata;
+            messageHTML += `
+                <div class="conversation-metadata small text-muted mt-2">
+                    <span class="badge bg-secondary me-1">Turno ${turnNumber || '?'}</span>
+                    ${sessionId ? `<span class="badge bg-info me-1">Sessione ${sessionId.substring(0, 8)}</span>` : ''}
+                    ${contextAnalysis?.needs_context ? '<span class="badge bg-warning">Contesto utilizzato</span>' : ''}
+                </div>
+            `;
+        }
+
+        messageHTML += '</div>';
+        messageContainer.innerHTML = messageHTML;
+
+        return messageContainer;
+    }
+
+    createSourcesHTML(sources) {
+        if (!sources || sources.length === 0) return '';
+
+        let sourcesHTML = '<div class="sources-container mt-2"><h6 class="sources-title">📚 Fonti utilizzate:</h6>';
+
+        sources.forEach((source, index) => {
+            const sourceIcon = this.getSourceIcon(source.type);
+            const fileName = source.filename || source.name || 'Fonte sconosciuta';
+
+            sourcesHTML += `
+                <div class="source-item">
+                    <strong>${sourceIcon} ${fileName}</strong>
+                    ${source.content ? `<div class="source-content">${source.content.substring(0, 200)}${source.content.length > 200 ? '...' : ''}</div>` : ''}
+                    ${source.url ? `<div class="source-url"><a href="${source.url}" target="_blank">🔗 Apri link</a></div>` : ''}
+                </div>
+            `;
+        });
+
+        sourcesHTML += '</div>';
+        return sourcesHTML;
+    }
+
+    getSourceIcon(type) {
+        const icons = {
+            'pdf': '📄',
+            'txt': '📝',
+            'docx': '📋',
+            'note': '📓',
+            'url': '🌐',
+            'file': '📁'
+        };
+        return icons[type] || '📄';
+    }
+
+    formatMessageContent(content) {
+        // Converte newlines in <br> e applica altre formattazioni
+        return content
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    }
+
+    showSuggestions() {
+        const suggestionsPopup = document.createElement('div');
+        suggestionsPopup.className = 'dropdown-menu show p-2 suggestions-popup';
+        suggestionsPopup.style.position = 'absolute';
+        suggestionsPopup.style.bottom = '60px';
+        suggestionsPopup.style.width = '100%';
+        suggestionsPopup.style.maxHeight = '300px';
+        suggestionsPopup.style.overflowY = 'auto';
+        suggestionsPopup.style.zIndex = '1000';
+
+        // Suggerimenti contestuali se in modalità conversazionale
+        let suggestions;
+        if (this.conversationMode && this.currentSessionId) {
+            suggestions = this.getContextualSuggestions();
+        } else {
+            suggestions = this.getDefaultSuggestions();
+        }
+
+        suggestions.forEach(suggestion => {
+            const item = document.createElement('button');
+            item.className = 'dropdown-item d-flex align-items-center suggestion-item';
+            item.innerHTML = `<i class="bi bi-${suggestion.icon} me-2"></i> ${suggestion.text}`;
+            item.addEventListener('click', () => {
+                this.questionInput.value = suggestion.text;
+                suggestionsPopup.remove();
+                this.questionInput.focus();
+            });
+            suggestionsPopup.appendChild(item);
+        });
+
+        // Aggiungi header
+        const header = document.createElement('div');
+        header.className = 'dropdown-header';
+        header.textContent = this.conversationMode ? 'Suggerimenti Contestuali' : 'Suggerimenti Generali';
+        suggestionsPopup.insertBefore(header, suggestionsPopup.firstChild);
+
+        this.questionInput.parentElement.appendChild(suggestionsPopup);
+
+        // Chiudi al click esterno
+        const closePopup = (e) => {
+            if (!suggestionsPopup.contains(e.target) && e.target !== this.questionInput) {
+                suggestionsPopup.remove();
+                document.removeEventListener('click', closePopup);
+            }
+        };
+        document.addEventListener('click', closePopup);
+    }
+
+    getContextualSuggestions() {
+        const contextualSuggestions = [
+            { text: 'Puoi darmi più dettagli su questo?', icon: 'zoom-in' },
+            { text: 'Come si collega questo al resto?', icon: 'diagram-3' },
+            { text: 'Ci sono esempi pratici?', icon: 'lightbulb' },
+            { text: 'Qual è il prossimo passo?', icon: 'arrow-right-circle' },
+            { text: 'Puoi approfondire questo punto?', icon: 'search' },
+            { text: 'Come posso applicare queste informazioni?', icon: 'gear' }
+        ];
+
+        return contextualSuggestions.concat(this.getDefaultSuggestions().slice(0, 3));
+    }
+
+    getDefaultSuggestions() {
+        return [
+            { text: 'Riassumi il contenuto di tutti i documenti', icon: 'file-text' },
+            { text: 'Quali sono i punti chiave del progetto?', icon: 'key' },
+            { text: 'Estrai le informazioni più importanti dalle note', icon: 'journal-text' },
+            { text: 'Trova eventuali contraddizioni nei documenti', icon: 'exclamation-triangle' },
+            { text: 'Crea una lista di azioni da eseguire', icon: 'check2-square' },
+            { text: 'Analizza i contenuti estratti dai siti web', icon: 'globe' },
+            { text: 'Confronta i contenuti dei documenti', icon: 'arrow-left-right' }
+        ];
+    }
+
+    updateSuggestions(suggestions) {
+        const suggestionsContainer = document.getElementById('suggestions-container');
+        if (!suggestionsContainer) return;
+
+        suggestionsContainer.innerHTML = '';
+
+        suggestions.forEach(suggestion => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-outline-secondary btn-sm me-2 mb-2 suggestion-btn';
+            btn.textContent = suggestion;
+            btn.addEventListener('click', () => {
+                this.questionInput.value = suggestion;
+                this.questionInput.focus();
+            });
+            suggestionsContainer.appendChild(btn);
+        });
+    }
+
+    startNewSession() {
+        if (this.isProcessing) return;
+
+        // Conferma se c'è una sessione attiva
+        if (this.currentSessionId && this.turnCounter > 0) {
+            if (!confirm('Vuoi davvero iniziare una nuova conversazione? La conversazione attuale verrà terminata.')) {
+                return;
+            }
+        }
+
+        // Reset stato
+        this.currentSessionId = null;
+        this.turnCounter = 0;
+        this.contextMemory = [];
+
+        // Pulisci chat
+        if (this.chatMessages) {
+            this.chatMessages.innerHTML = '';
+        }
+
+        // Aggiungi messaggio di benvenuto
+        this.addWelcomeMessage();
+        this.addSystemMessage('🆕 Nuova conversazione iniziata');
+
+        // Reset UI
+        this.updateSessionInfo(null);
+
+        console.log('🆕 Nuova sessione conversazionale iniziata');
+    }
+
+    async endCurrentSession() {
+        if (!this.currentSessionId || this.isProcessing) return;
+
+        if (!confirm('Vuoi terminare la conversazione corrente?')) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('action', 'end_conversation_session');
+            formData.append('session_id', this.currentSessionId);
+
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrfToken) {
+                formData.append('csrfmiddlewaretoken', csrfToken.value);
+            }
+
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.addSystemMessage('🔚 Conversazione terminata');
+                this.currentSessionId = null;
+                this.updateSessionInfo(null);
+            } else {
+                this.addErrorMessage('Errore nella terminazione della sessione');
+            }
+
+        } catch (error) {
+            console.error('Errore nella terminazione:', error);
+            this.addErrorMessage('Errore di comunicazione durante la terminazione');
+        }
+    }
+
+    updateSessionInfo(responseData) {
+        if (!this.sessionInfo) return;
+
+        if (this.currentSessionId && responseData) {
+            this.sessionInfo.innerHTML = `
+                <div class="session-status active">
+                    <div class="session-id">
+                        <strong>Sessione:</strong> ${this.currentSessionId.substring(0, 8)}...
+                    </div>
+                    <div class="turn-counter">
+                        <strong>Turno:</strong> ${responseData.turn_number || this.turnCounter}
+                    </div>
+                    ${responseData.context_analysis?.context_score ?
+                        `<div class="context-score">
+                            <strong>Contesto:</strong> ${(responseData.context_analysis.context_score * 100).toFixed(0)}%
+                        </div>` : ''
+                    }
+                </div>
+            `;
+        } else {
+            this.sessionInfo.innerHTML = '<div class="session-status inactive">Nessuna sessione attiva</div>';
+        }
+    }
+
+    removeEmptyState() {
+        const emptyState = this.chatMessages?.querySelector('.chat-empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+    }
+
+    resetInputState() {
+        this.isProcessing = false;
+        this.questionInput.disabled = false;
+        this.sendButton.disabled = false;
+        this.sendButton.innerHTML = '<i class="bi bi-send"></i>';
+        this.questionInput.focus();
+    }
+
+    scrollToBottom() {
+        if (this.chatMessages) {
+            setTimeout(() => {
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }, 100);
+        }
+    }
+
+    getCurrentTimeString() {
+        const now = new Date();
+        return now.toLocaleTimeString('it-IT', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+// Inizializza il sistema quando il DOM è pronto
+document.addEventListener('DOMContentLoaded', function() {
+    // Verifica se siamo nella pagina giusta
+    if (document.getElementById('chat-messages')) {
+        window.conversationalRAG = new ConversationalRAG();
+        console.log('✅ Sistema RAG conversazionale inizializzato');
+    }
+});
+
+// CSS aggiuntivo da inserire (può essere in un file separato)
+const conversationalCSS = `
+<style>
+.conversational-only {
+    display: none;
+}
+
+.conversation-metadata .badge {
+    font-size: 0.7em;
+}
+
+.typing-indicator {
+    opacity: 0.7;
+}
+
+.typing-animation {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.typing-animation span {
+    height: 8px;
+    width: 8px;
+    background-color: #007bff;
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-animation span:nth-child(1) { animation-delay: -0.32s; }
+.typing-animation span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+    0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+.error-message .assistant-message {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+.system-message {
+    padding: 8px 16px;
+    margin: 8px 0;
+    background-color: #f8f9fa;
+    border-radius: 16px;
+    border: 1px solid #e9ecef;
+}
+
+.session-status.active {
+    color: #28a745;
+    font-size: 0.85em;
+}
+
+.session-status.inactive {
+    color: #6c757d;
+    font-size: 0.85em;
+}
+
+.suggestions-popup {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-item:hover {
+    background-color: #f8f9fa;
+}
+
+.sources-container {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 8px;
+}
+
+.sources-title {
+    color: #495057;
+    font-size: 0.9em;
+    margin-bottom: 8px;
+}
+
+.source-item {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.source-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.source-content {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.source-url a {
+    font-size: 0.8em;
+    text-decoration: none;
+}
+
+.processing-time {
+    margin-top: 4px;
+    font-style: italic;
+}
+</style>
+`;
+
+// Inietta CSS se non già presente
+if (!document.getElementById('conversational-css')) {
+    const styleElement = document.createElement('div');
+    styleElement.id = 'conversational-css';
+    styleElement.innerHTML = conversationalCSS;
+    document.head.appendChild(styleElement);
+}
 </script>

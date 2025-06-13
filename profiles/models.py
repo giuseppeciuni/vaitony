@@ -259,38 +259,6 @@ class ProjectURL(models.Model):
 				return '/' + '/'.join(parts[3:])
 			return '/'
 
-
-class AnswerSource(models.Model):
-	"""
-    Tiene traccia delle fonti utilizzate per generare una risposta.
-    Collega ogni fonte (file, nota o URL) a una conversazione specifica e
-    memorizza il contenuto rilevante, il numero di pagina e il punteggio di rilevanza.
-    """
-	conversation = models.ForeignKey(ProjectConversation, on_delete=models.CASCADE, related_name='sources')
-	project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, null=True, blank=True,
-									 related_name='used_in_answers')
-	project_note = models.ForeignKey(ProjectNote, on_delete=models.SET_NULL, null=True, blank=True,
-									 related_name='used_in_answers_from_notes')
-	project_url = models.ForeignKey(ProjectURL, on_delete=models.SET_NULL, null=True, blank=True,
-									related_name='used_in_answers_from_urls')
-
-	content = models.TextField()
-	page_number = models.IntegerField(null=True, blank=True)
-	relevance_score = models.FloatField(null=True, blank=True)
-	created_at = models.DateTimeField(auto_now_add=True)
-
-	def __str__(self):
-		source_type = "sconosciuta"
-		if self.project_file:
-			source_type = f"file: {self.project_file.filename}"
-		elif self.project_note:
-			source_type = f"nota: {self.project_note.title}"
-		elif self.project_url:
-			source_type = f"URL: {self.project_url.url}"
-
-		return f"Fonte {source_type} per conversazione {self.conversation.id}"
-
-
 class ProjectIndexStatus(models.Model):
 	"""
     Tiene traccia dello stato dell'indice vettoriale FAISS per ciascun progetto.
@@ -789,65 +757,312 @@ class GlobalEmbeddingCache(models.Model):
 		return f"Embedding cache for {self.original_filename} ({self.file_hash[:8]}...)"
 
 
-# # ==============================================================================
-# # MODELLI PER FATTURAZIONE (OPZIONALI - MANTENUTI PER COMPATIBILITÀ)
-# # ==============================================================================
-#
-# class SubscriptionPlan(models.Model):
-# 	"""
-#     Definisce i diversi piani di abbonamento disponibili nel sistema.
-#     """
-# 	name = models.CharField(max_length=100)
-# 	description = models.TextField(blank=True)
-# 	price_monthly = models.DecimalField(max_digits=10, decimal_places=2)
-# 	price_yearly = models.DecimalField(max_digits=10, decimal_places=2)
-# 	storage_limit_mb = models.IntegerField(help_text=_("Limite di archiviazione in MB"))
-# 	max_files = models.IntegerField(help_text=_("Numero massimo di file"))
-# 	monthly_rag_queries = models.IntegerField(help_text=_("Numero di query RAG mensili incluse"))
-# 	extra_storage_price_per_mb = models.DecimalField(max_digits=10, decimal_places=4)
-# 	extra_rag_query_price = models.DecimalField(max_digits=10, decimal_places=4)
-# 	is_active = models.BooleanField(default=True)
-# 	created_at = models.DateTimeField(auto_now_add=True)
-# 	updated_at = models.DateTimeField(auto_now=True)
-#
-# 	def __str__(self):
-# 		return self.name
-#
-#
-# class UserSubscription(models.Model):
-# 	"""
-#     Associa un utente a un piano di abbonamento.
-#     """
-# 	user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
-# 	plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name='subscribers')
-# 	start_date = models.DateField()
-# 	end_date = models.DateField()
-# 	is_annual = models.BooleanField(default=False)
-# 	auto_renew = models.BooleanField(default=True)
-# 	is_active = models.BooleanField(default=True)
-# 	payment_status = models.CharField(
-# 		max_length=20,
-# 		choices=[
-# 			('paid', 'Pagato'),
-# 			('pending', 'In attesa'),
-# 			('failed', 'Fallito'),
-# 			('canceled', 'Annullato'),
-# 		],
-# 		default='paid'
-# 	)
-# 	current_storage_used_mb = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-# 	current_files_count = models.IntegerField(default=0)
-# 	current_month_rag_queries = models.IntegerField(default=0)
-# 	extra_storage_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-# 	extra_queries_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-# 	created_at = models.DateTimeField(auto_now_add=True)
-# 	updated_at = models.DateTimeField(auto_now=True)
-# 	last_usage_reset = models.DateField(null=True, blank=True)
-#
-# 	def __str__(self):
-# 		return f"{self.user.username} - {self.plan.name}"
-#
-#
+# ==============================================================================
+# MODELLI PER CONVERSAZIONI AVANZATE (IMPLEMENTAZIONE COMPLETA)
+# ==============================================================================
+
+class ConversationSession(models.Model):
+	"""
+	Rappresenta una sessione di conversazione continua tra l'utente e l'AI.
+	Una sessione può contenere più turni di conversazione e mantiene il contesto.
+	"""
+	project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='conversation_sessions')
+	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversation_sessions')
+	session_id = models.CharField(max_length=64, unique=True, db_index=True)
+	title = models.CharField(max_length=255, blank=True,
+							 help_text="Titolo generato automaticamente o fornito dall'utente")
+
+	# Impostazioni conversazione
+	context_window_size = models.IntegerField(default=10,
+											  help_text="Numero di turni precedenti da mantenere nel contesto")
+	is_active = models.BooleanField(default=True)
+
+	# Metadati
+	metadata = models.JSONField(default=dict, blank=True, help_text="Dati aggiuntivi come preferenze utente")
+
+	# Timestamp
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+	last_interaction_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-last_interaction_at']
+		indexes = [
+			models.Index(fields=['project', 'is_active']),
+			models.Index(fields=['user', 'is_active']),
+			models.Index(fields=['session_id']),
+		]
+
+	def __str__(self):
+		return f"Sessione {self.session_id[:8]} - {self.project.name}"
+
+	def save(self, *args, **kwargs):
+		if not self.session_id:
+			import uuid
+			self.session_id = str(uuid.uuid4())
+
+		# Salva prima l'oggetto per ottenere il primary key
+		super().save(*args, **kwargs)
+
+		# DOPO il salvataggio, genera titolo automatico se non presente
+		if not self.title:
+			# Controlla se esistono turni SOLO dopo che l'oggetto è stato salvato
+			if self.pk and self.conversation_turns.exists():
+				first_turn = self.conversation_turns.order_by('turn_number').first()
+				if first_turn:
+					self.title = first_turn.user_message[:50] + "..." if len(
+						first_turn.user_message) > 50 else first_turn.user_message
+					# Salva di nuovo SOLO il campo title per evitare loop infiniti
+					super().save(update_fields=['title'])
+
+
+
+	def get_recent_context(self, max_turns=None):
+		"""
+		Restituisce il contesto conversazionale recente per mantenere la continuità.
+		"""
+		if max_turns is None:
+			max_turns = self.context_window_size
+
+		recent_turns = self.conversation_turns.order_by('-created_at')[:max_turns]
+
+		# Ordina cronologicamente per il contesto
+		context = []
+		for turn in reversed(recent_turns):
+			context.append({
+				'role': 'user',
+				'content': turn.user_message,
+				'timestamp': turn.created_at
+			})
+			context.append({
+				'role': 'assistant',
+				'content': turn.ai_response,
+				'timestamp': turn.created_at,
+				'sources': turn.get_sources_summary()
+			})
+
+		return context
+
+	def get_conversation_summary(self):
+		"""
+		Genera un riassunto della conversazione per prompt contestuali.
+		"""
+		turns_count = self.conversation_turns.count()
+		if turns_count == 0:
+			return "Nuova conversazione"
+
+		first_turn = self.conversation_turns.order_by('created_at').first()
+		last_turn = self.conversation_turns.order_by('-created_at').first()
+
+		return {
+			'turns_count': turns_count,
+			'first_question': first_turn.user_message[:100] + "..." if len(
+				first_turn.user_message) > 100 else first_turn.user_message,
+			'last_question': last_turn.user_message[:100] + "..." if len(
+				last_turn.user_message) > 100 else last_turn.user_message,
+			'duration_minutes': int((last_turn.created_at - first_turn.created_at).total_seconds() / 60),
+			'main_topics': self.extract_main_topics()
+		}
+
+	def extract_main_topics(self):
+		"""
+		Estrae i topic principali dalla conversazione (implementazione semplificata).
+		"""
+		# Implementazione base - può essere migliorata con NLP
+		all_messages = []
+		for turn in self.conversation_turns.all():
+			all_messages.append(turn.user_message)
+
+		# Semplice estrazione di parole chiave frequenti
+		import re
+		from collections import Counter
+
+		text = " ".join(all_messages).lower()
+		words = re.findall(r'\b\w{4,}\b', text)
+		common_words = Counter(words).most_common(5)
+
+		return [word for word, count in common_words if count > 1]
+
+
+class ConversationTurn(models.Model):
+	"""
+	Rappresenta un singolo scambio (turno) in una conversazione.
+	Include la domanda dell'utente, la risposta dell'AI e i metadati correlati.
+	"""
+	session = models.ForeignKey(ConversationSession, on_delete=models.CASCADE, related_name='conversation_turns')
+	turn_number = models.PositiveIntegerField(help_text="Numero progressivo del turno nella sessione")
+
+	# Contenuti del turno
+	user_message = models.TextField(help_text="Messaggio/domanda dell'utente")
+	ai_response = models.TextField(help_text="Risposta generata dall'AI")
+
+	# Contesto utilizzato
+	context_used = models.JSONField(default=dict, blank=True,
+									help_text="Contesto conversazionale utilizzato per questa risposta")
+	prompt_used = models.TextField(blank=True, help_text="Prompt finale utilizzato per generare la risposta")
+
+	# Metadati RAG
+	retrieval_query = models.TextField(blank=True, help_text="Query di ricerca utilizzata nel sistema RAG")
+	sources_count = models.PositiveIntegerField(default=0, help_text="Numero di fonti utilizzate")
+
+	# Metriche performance
+	processing_time = models.FloatField(null=True, blank=True, help_text="Tempo di elaborazione in secondi")
+	tokens_used = models.PositiveIntegerField(null=True, blank=True, help_text="Token utilizzati per la risposta")
+
+	# Feedback e qualità
+	user_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)],
+												   help_text="Valutazione utente 1-5")
+	user_feedback = models.TextField(blank=True, help_text="Feedback testuale dell'utente")
+
+	# Timestamp
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['turn_number']
+		unique_together = ('session', 'turn_number')
+		indexes = [
+			models.Index(fields=['session', 'turn_number']),
+			models.Index(fields=['created_at']),
+		]
+
+	def __str__(self):
+		return f"Turno {self.turn_number} - Sessione {self.session.session_id[:8]}"
+
+	def save(self, *args, **kwargs):
+		# Auto-incrementa il numero del turno
+		if not self.turn_number:
+			last_turn = ConversationTurn.objects.filter(session=self.session).order_by('-turn_number').first()
+			self.turn_number = (last_turn.turn_number + 1) if last_turn else 1
+
+		super().save(*args, **kwargs)
+
+		# Aggiorna timestamp della sessione
+		self.session.last_interaction_at = self.created_at
+		self.session.save(update_fields=['last_interaction_at'])
+
+	def get_sources_summary(self):
+		"""
+		Restituisce un riassunto delle fonti utilizzate in questo turno.
+		"""
+		from profiles.models import AnswerSource
+		sources = AnswerSource.objects.filter(conversation_turn=self)
+
+		summary = {
+			'total': sources.count(),
+			'by_type': {},
+			'files': [],
+			'notes': [],
+			'urls': []
+		}
+
+		for source in sources:
+			if source.project_file:
+				summary['files'].append({
+					'filename': source.project_file.filename,
+					'relevance': source.relevance_score
+				})
+				summary['by_type']['files'] = summary['by_type'].get('files', 0) + 1
+
+			elif source.project_note:
+				summary['notes'].append({
+					'title': source.project_note.title or 'Senza titolo',
+					'relevance': source.relevance_score
+				})
+				summary['by_type']['notes'] = summary['by_type'].get('notes', 0) + 1
+
+			elif source.project_url:
+				summary['urls'].append({
+					'title': source.project_url.title or source.project_url.url,
+					'url': source.project_url.url,
+					'relevance': source.relevance_score
+				})
+				summary['by_type']['urls'] = summary['by_type'].get('urls', 0) + 1
+
+		return summary
+
+	def get_context_references(self):
+		"""
+		Analizza il messaggio utente per trovare riferimenti al contesto precedente.
+		"""
+		user_message_lower = self.user_message.lower()
+
+		# Parole che indicano riferimenti contestuali
+		context_indicators = [
+			'questo', 'quello', 'questa', 'quella', 'questi', 'quelli', 'queste', 'quelle',
+			'esso', 'essa', 'essi', 'esse', 'tale', 'tali',
+			'precedente', 'prima', 'sopra', 'di cui', 'che ho menzionato',
+			'lo stesso', 'la stessa', 'gli stessi', 'le stesse',
+			'il documento', 'la nota', "l'url", 'il file'
+		]
+
+		found_indicators = [indicator for indicator in context_indicators if indicator in user_message_lower]
+
+		return {
+			'has_context_references': len(found_indicators) > 0,
+			'indicators_found': found_indicators,
+			'needs_previous_context': len(found_indicators) > 0 or any(
+				word in user_message_lower for word in ['quando', 'quanto', 'posso', 'continua', 'ancora', 'di più'])
+		}
+
+# AGGIORNAMENTO MODELLO ANSWERSOURCE PER SUPPORTARE CONVERSAZIONI
+class AnswerSource(models.Model):
+	"""
+	Modello aggiornato per supportare sia il vecchio sistema che quello conversazionale.
+	Collega le fonti utilizzate sia alle vecchie conversazioni che ai nuovi turni.
+	"""
+	# Collegamenti ai sistemi (vecchio e nuovo)
+	conversation = models.ForeignKey(ProjectConversation, on_delete=models.CASCADE, related_name='sources', null=True,
+									 blank=True)
+	conversation_turn = models.ForeignKey(ConversationTurn, on_delete=models.CASCADE, related_name='sources', null=True,
+										  blank=True)
+
+	# Fonti (una delle tre deve essere valorizzata)
+	project_file = models.ForeignKey(ProjectFile, on_delete=models.CASCADE, null=True, blank=True)
+	project_note = models.ForeignKey(ProjectNote, on_delete=models.CASCADE, null=True, blank=True)
+	project_url = models.ForeignKey(ProjectURL, on_delete=models.CASCADE, null=True, blank=True)
+
+	# Contenuto e metadati
+	content = models.TextField(help_text="Contenuto estratto dalla fonte")
+	page_number = models.PositiveIntegerField(null=True, blank=True, help_text="Pagina del documento (se applicabile)")
+	chunk_index = models.PositiveIntegerField(null=True, blank=True, help_text="Indice del chunk nel documento")
+	relevance_score = models.FloatField(null=True, blank=True, help_text="Score di rilevanza della fonte")
+
+	# Timestamp
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		indexes = [
+			models.Index(fields=['conversation']),
+			models.Index(fields=['conversation_turn']),
+			models.Index(fields=['relevance_score']),
+		]
+
+	def __str__(self):
+		source_type = "File" if self.project_file else "Nota" if self.project_note else "URL" if self.project_url else "Sconosciuta"
+		target = f"Conv {self.conversation.id}" if self.conversation else f"Turn {self.conversation_turn.id}" if self.conversation_turn else "Nessun target"
+		return f"{source_type} - {target}"
+
+	def get_source_name(self):
+		"""Restituisce il nome della fonte"""
+		if self.project_file:
+			return self.project_file.filename
+		elif self.project_note:
+			return self.project_note.title or 'Nota senza titolo'
+		elif self.project_url:
+			return self.project_url.title or self.project_url.url
+		return 'Fonte sconosciuta'
+
+	def get_source_type(self):
+		"""Restituisce il tipo di fonte"""
+		if self.project_file:
+			return 'file'
+		elif self.project_note:
+			return 'note'
+		elif self.project_url:
+			return 'url'
+		return 'unknown'
+
 
 # ==============================================================================
 # SEGNALI PER L'AGGIORNAMENTO AUTOMATICO

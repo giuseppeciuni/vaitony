@@ -1626,6 +1626,62 @@ def get_answer_from_project(project, question):
         }
 
 
+def get_answer_from_project_with_custom_prompt(project, question, custom_prompt):
+    """
+    Versione estesa della funzione RAG che accetta un prompt personalizzato.
+    Utilizzata dal sistema conversazionale per includere il contesto.
+    """
+    from profiles.models import ProjectPromptConfig
+
+    logger.info(f"Elaborazione query con prompt personalizzato per progetto {project.id}")
+
+    try:
+        # Salva temporaneamente il prompt corrente
+        original_prompt_config = None
+        original_custom_prompt = ""
+        original_use_custom = False
+
+        try:
+            original_prompt_config = ProjectPromptConfig.objects.get(project=project)
+            original_custom_prompt = original_prompt_config.custom_prompt_text
+            original_use_custom = original_prompt_config.use_custom_prompt
+        except ProjectPromptConfig.DoesNotExist:
+            original_prompt_config = ProjectPromptConfig.objects.create(project=project)
+
+        # Imposta il prompt personalizzato temporaneamente
+        original_prompt_config.custom_prompt_text = custom_prompt
+        original_prompt_config.use_custom_prompt = True
+        original_prompt_config.save()
+
+        # Esegui la query RAG
+        response = get_answer_from_project(project, question)
+
+        # Ripristina il prompt originale
+        original_prompt_config.custom_prompt_text = original_custom_prompt
+        original_prompt_config.use_custom_prompt = original_use_custom
+        original_prompt_config.save()
+
+        return response
+
+    except Exception as e:
+        logger.exception(f"Errore nell'elaborazione con prompt personalizzato: {str(e)}")
+
+        # Assicurati di ripristinare il prompt originale anche in caso di errore
+        if original_prompt_config:
+            try:
+                original_prompt_config.custom_prompt_text = original_custom_prompt
+                original_prompt_config.use_custom_prompt = original_use_custom
+                original_prompt_config.save()
+            except:
+                pass
+
+        return {
+            'answer': f"Errore nell'elaborazione conversazionale: {str(e)}",
+            'sources': [],
+            'error': 'custom_prompt_error'
+        }
+
+
 def create_retrieval_qa_chain(vectordb, project=None):
     """
     Configura e crea una catena RetrievalQA con le impostazioni appropriate.

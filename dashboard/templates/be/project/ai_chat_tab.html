@@ -1,67 +1,816 @@
-<!-- Ask AI Tab -->
-<div class="tab-pane fade" id="ask" role="tabpanel" aria-labelledby="ask-tab">
-    <div class="mb-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="h5 mb-0">Chiedi all'IA sui tuoi documenti</h2>
-            <span class="badge bg-primary d-flex align-items-center">
-                <i class="bi bi-lightning-fill me-1"></i> Powered by
-                {% if user.ai_engine_settings.selected_engine == 'openai' %}ChatGPT
-                {% elif user.ai_engine_settings.selected_engine == 'claude' %}Claude
-                {% elif user.ai_engine_settings.selected_engine == 'deepseek' %}DeepSeek
-                {% elif user.ai_engine_settings.selected_engine == 'gemini' %}Gemini
-                {% else %}AI Engine{% endif %}
-            </span>
-        </div>
+<!-- Aggiornamenti da fare al template project.html nella sezione chat -->
+<!-- Sostituire la sezione "Chiedi all'AI" con questo codice migliorato -->
 
-        <!-- Chat messages area -->
-        <div class="chat-messages p-0 rounded" id="chat-messages">
-            {% if conversation_history %}
-                {% for message in conversation_history %}
-                    <div class="message-container {% if message.is_user %}user-container{% endif %}">
-                        <div class="message-avatar {% if message.is_user %}user-avatar{% else %}ai-avatar{% endif %}">
-                            {% if message.is_user %}
-                                <i class="bi bi-person-fill"></i>
-                            {% else %}
-                                <i class="bi bi-robot"></i>
-                            {% endif %}
+<div class="tab-pane fade" id="ask" role="tabpanel">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-chat-dots me-2"></i>Assistente AI Conversazionale
+                    </h5>
+
+                    <!-- Controlli modalità conversazionale -->
+                    <div class="d-flex align-items-center gap-3">
+                        <!-- Toggle modalità -->
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="conversation-mode-toggle" checked>
+                            <label class="form-check-label small" for="conversation-mode-toggle">
+                                Modalità conversazionale
+                            </label>
                         </div>
-                        <div class="{% if message.is_user %}user-message{% else %}ai-message{% endif %}">
-                            {{ message.content|linebreaks }}
-                            <span class="message-time">
-                                {{ message.timestamp|date:"H:i" }}
-                            </span>
+
+                        <!-- Controlli sessione (solo in modalità conversazionale) -->
+                        <div class="conversational-only">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="new-session-btn" title="Nuova conversazione">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" id="end-session-btn" title="Termina conversazione">
+                                    <i class="bi bi-stop-circle"></i>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="chat-empty-state">
-                    <i class="bi bi-chat-square-dots"></i>
-                    <h4>Chiedi qualsiasi cosa riguardo i tuoi documenti</h4>
-                    <p class="text-muted mb-4">L'IA analizzerà i tuoi file e le tue note per darti risposte dettagliate</p>
-                    <div class="suggestions">
-                        <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Riassumi i punti principali di tutti i documenti">
-                            <i class="bi bi-file-text me-1"></i> Riassumi tutti i documenti
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Quali sono le informazioni più importanti in questi documenti?">
-                            <i class="bi bi-lightbulb me-1"></i> Informazioni principali
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary m-1 suggestion-btn" data-text="Elenca 5 punti chiave tratti dalle mie note">
-                            <i class="bi bi-list-check me-1"></i> Punti chiave dalle note
-                        </button>
                     </div>
                 </div>
-            {% endif %}
+
+                <!-- Info sessione conversazionale -->
+                <div class="conversational-only">
+                    <div class="card-body py-2 bg-light border-bottom">
+                        <div id="session-info" class="d-flex justify-content-between align-items-center">
+                            <div class="session-status inactive">Nessuna sessione attiva</div>
+                            {% if has_old_conversations %}
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="migrateOldConversations()" title="Migra conversazioni precedenti">
+                                <i class="bi bi-arrow-up-circle"></i> Migra cronologia
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <!-- Area messaggi chat -->
+                    <div id="chat-messages" class="chat-messages-container">
+                        <!-- I messaggi verranno aggiunti dinamicamente qui -->
+
+                        <!-- Stato vuoto iniziale -->
+                        {% if not conversations %}
+                        <div class="chat-empty-state text-center p-4">
+                            <div class="mb-3">
+                                <i class="bi bi-chat-text display-4 text-muted"></i>
+                            </div>
+                            <h6 class="text-muted">Inizia una conversazione</h6>
+                            <p class="text-muted small mb-0">
+                                Fai una domanda sui documenti del progetto.<br>
+                                L'assistente manterrà il contesto della conversazione.
+                            </p>
+                        </div>
+                        {% else %}
+                        <!-- Cronologia conversazioni esistenti -->
+                        {% for conv in conversation_history %}
+                        <div class="message-container {% if conv.is_user %}user-container{% else %}assistant-container{% endif %}">
+                            <div class="message-avatar {% if conv.is_user %}user-avatar{% else %}assistant-avatar{% endif %}">
+                                <i class="bi bi-{% if conv.is_user %}person-fill{% else %}robot{% endif %}"></i>
+                            </div>
+                            <div class="{% if conv.is_user %}user-message{% else %}assistant-message{% endif %}">
+                                {{ conv.content|linebreaksbr }}
+                                <span class="message-time">{{ conv.timestamp|date:"H:i" }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <!-- Suggerimenti quick-action -->
+                    <div class="suggestions-section p-3 bg-light border-top border-bottom">
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="bi bi-lightbulb"></i> Suggerimenti rapidi:
+                            </small>
+                        </div>
+                        <div id="suggestions-container" class="d-flex flex-wrap">
+                            {% for suggestion in conversation_suggestions %}
+                            <button class="btn btn-outline-secondary btn-sm me-2 mb-2 suggestion-btn"
+                                    data-text="{{ suggestion }}">
+                                {{ suggestion }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Input area -->
+                    <div class="chat-input-section p-3">
+                        <div class="chat-input-wrapper position-relative">
+                            <div class="input-group">
+                                <textarea
+                                    class="form-control"
+                                    id="question-input"
+                                    placeholder="Scrivi la tua domanda... (usa '/' per suggerimenti)"
+                                    rows="2"
+                                    style="resize: none;"
+                                ></textarea>
+                                <button class="btn btn-primary" type="button" id="send-question-btn">
+                                    <i class="bi bi-send"></i>
+                                </button>
+                            </div>
+
+                            <!-- Indicatori di contesto (solo modalità conversazionale) -->
+                            <div class="conversational-only mt-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i>
+                                        L'assistente manterrà il contesto della conversazione
+                                    </small>
+                                    <small class="text-muted">
+                                        Premi <kbd>/</kbd> per suggerimenti
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessioni conversazionali recenti (solo se presenti) -->
+    {% if recent_conversation_sessions %}
+    <div class="conversational-only mt-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-clock-history me-2"></i>Conversazioni Recenti
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for session in recent_conversation_sessions %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold">{{ session.title|default:"Conversazione senza titolo" }}</div>
+                            <small class="text-muted">
+                                {{ session.conversation_turns.count }} turni •
+                                {{ session.last_interaction_at|timesince }} fa
+                            </small>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary"
+                                    onclick="loadConversationSession('{{ session.session_id }}')"
+                                    title="Carica conversazione">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="viewConversationHistory('{{ session.session_id }}')"
+                                    title="Visualizza cronologia">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal per visualizzare cronologia conversazioni -->
+<div class="modal fade" id="conversationHistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-chat-square-text me-2"></i>Cronologia Conversazione
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="history-content">
+                    <!-- Contenuto caricato dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-primary" onclick="loadSelectedSession()">
+                    Carica questa conversazione
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Input fisso posizionato fuori dai tab, visibile solo quando si è nel tab "Chiedi all'AI" -->
-<div class="chat-input-container" id="fixed-chat-input" style="display: none;">
-    <div class="chat-input-wrapper">
-        <textarea class="form-control" id="question-input" rows="1"
-                  placeholder="Scrivi la tua domanda qui o premi '/' per i suggerimenti..."></textarea>
-        <button id="send-question-btn" class="btn">
-            <i class="bi bi-send-fill"></i>
-        </button>
-    </div>
-</div>
+<!-- CSS personalizzato per l'interfaccia conversazionale -->
+<style>
+/* Container messaggi chat */
+.chat-messages-container {
+    height: 400px;
+    overflow-y: auto;
+    padding: 20px;
+    background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
+}
+
+/* Contenitori messaggi */
+.message-container {
+    display: flex;
+    margin-bottom: 20px;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.user-container {
+    justify-content: flex-end;
+}
+
+.assistant-container {
+    justify-content: flex-start;
+}
+
+/* Avatar messaggi */
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    margin: 0 10px;
+    flex-shrink: 0;
+}
+
+.user-avatar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    order: 2;
+}
+
+.assistant-avatar {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    order: 1;
+}
+
+/* Bolle messaggi */
+.user-message, .assistant-message {
+    max-width: 70%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    word-wrap: break-word;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.user-message {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+}
+
+.assistant-message {
+    background: white;
+    color: #333;
+    border: 1px solid #e9ecef;
+    border-bottom-left-radius: 4px;
+}
+
+/* Timestamp messaggi */
+.message-time {
+    font-size: 0.75em;
+    opacity: 0.7;
+    display: block;
+    margin-top: 6px;
+    text-align: right;
+}
+
+.assistant-message .message-time {
+    text-align: left;
+    color: #6c757d;
+}
+
+/* Indicatore di digitazione */
+.typing-indicator {
+    opacity: 0.7;
+}
+
+.typing-animation {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.typing-animation span {
+    height: 8px;
+    width: 8px;
+    background-color: #007bff;
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-animation span:nth-child(1) { animation-delay: -0.32s; }
+.typing-animation span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Animazioni */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Messaggi di sistema */
+.system-message {
+    text-align: center;
+    padding: 8px 16px;
+    margin: 12px auto;
+    background-color: #f8f9fa;
+    border-radius: 16px;
+    border: 1px solid #e9ecef;
+    max-width: 80%;
+    font-style: italic;
+}
+
+/* Messaggi di errore */
+.error-message .assistant-message {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    color: white;
+    border-color: #dc3545;
+}
+
+/* Stato sessione */
+.session-status {
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+}
+
+.session-status.active {
+    background-color: #d1edff;
+    color: #0c5460;
+    border: 1px solid #b8daff;
+}
+
+.session-status.inactive {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #e9ecef;
+}
+
+/* Metadati conversazione */
+.conversation-metadata {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.conversation-metadata .badge {
+    font-size: 0.7em;
+    font-weight: 500;
+}
+
+/* Fonti */
+.sources-container {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 12px;
+    border-left: 4px solid #007bff;
+}
+
+.sources-title {
+    color: #495057;
+    font-size: 0.9em;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.source-item {
+    background: white;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+}
+
+.source-item:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+.source-item:last-child {
+    margin-bottom: 0;
+}
+
+.source-content {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+.source-url {
+    margin-top: 6px;
+}
+
+.source-url a {
+    font-size: 0.8em;
+    text-decoration: none;
+    color: #007bff;
+    font-weight: 500;
+}
+
+.source-url a:hover {
+    text-decoration: underline;
+}
+
+/* Tempo di elaborazione */
+.processing-time {
+    margin-top: 6px;
+    font-style: italic;
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+/* Area input */
+.chat-input-section {
+    background: white;
+    border-top: 1px solid #e9ecef;
+}
+
+.chat-input-wrapper textarea {
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    resize: none;
+}
+
+.chat-input-wrapper textarea:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.chat-input-wrapper .btn {
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    font-weight: 600;
+}
+
+/* Suggerimenti */
+.suggestions-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.suggestion-btn {
+    border-radius: 20px;
+    font-size: 0.85em;
+    transition: all 0.2s ease;
+    border: 1px solid #dee2e6;
+    background: white;
+}
+
+.suggestion-btn:hover {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Popup suggerimenti */
+.suggestions-popup {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    z-index: 1050;
+}
+
+.suggestion-item {
+    border-radius: 8px;
+    margin: 2px;
+    transition: all 0.2s ease;
+}
+
+.suggestion-item:hover {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    transform: translateX(4px);
+}
+
+/* Stato vuoto */
+.chat-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.chat-empty-state i {
+    color: #dee2e6;
+    margin-bottom: 20px;
+}
+
+.chat-empty-state h6 {
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.chat-empty-state p {
+    color: #adb5bd;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+/* Controlli modalità */
+.form-check-input:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-group .btn {
+    border-radius: 6px;
+}
+
+/* Lista conversazioni recenti */
+.list-group-item {
+    border: none;
+    border-bottom: 1px solid #e9ecef;
+    padding: 15px 20px;
+    transition: all 0.2s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(4px);
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .message-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        margin: 0 8px;
+    }
+
+    .user-message, .assistant-message {
+        max-width: 85%;
+        padding: 10px 12px;
+        font-size: 0.9em;
+    }
+
+    .chat-messages-container {
+        height: 350px;
+        padding: 15px;
+    }
+
+    .suggestion-btn {
+        font-size: 0.8em;
+        padding: 0.4rem 0.8rem;
+    }
+}
+
+/* Scrollbar personalizzata */
+.chat-messages-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #667eea 100%);
+}
+
+/* Elementi nascosti per modalità */
+.conversational-only {
+    display: none;
+}
+
+body.conversational-mode .conversational-only {
+    display: block;
+}
+
+body.conversational-mode .traditional-only {
+    display: none;
+}
+</style>
+
+<!-- JavaScript aggiuntivo per funzioni helper -->
+<script>
+// Funzioni helper per l'interfaccia conversazionale
+
+function migrateOldConversations() {
+    if (!confirm('Vuoi migrare le conversazioni precedenti al nuovo sistema conversazionale?')) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'migrate_old_conversations');
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Conversazioni migrate con successo!');
+            location.reload();
+        } else {
+            alert('Errore nella migrazione: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        alert('Errore di comunicazione durante la migrazione');
+    });
+}
+
+function loadConversationSession(sessionId) {
+    if (window.conversationalRAG) {
+        window.conversationalRAG.currentSessionId = sessionId;
+        window.conversationalRAG.addSystemMessage(`🔄 Sessione ${sessionId.substring(0, 8)} caricata`);
+
+        // Carica la cronologia
+        viewConversationHistory(sessionId, true);
+    }
+}
+
+function viewConversationHistory(sessionId, autoLoad = false) {
+    const formData = new FormData();
+    formData.append('action', 'get_conversation_history');
+    formData.append('session_id', sessionId);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (autoLoad) {
+                loadHistoryIntoChat(data.history);
+            } else {
+                showHistoryModal(data.history);
+            }
+        } else {
+            alert('Errore nel caricamento della cronologia: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        alert('Errore di comunicazione');
+    });
+}
+
+function loadHistoryIntoChat(history) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+
+    // Pulisci chat attuale
+    chatMessages.innerHTML = '';
+
+    // Carica messaggi dalla cronologia
+    history.history.forEach(turn => {
+        // Messaggio utente
+        const userMsg = window.conversationalRAG.createMessageElement(
+            'user',
+            turn.user_message,
+            new Date(turn.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+        );
+        chatMessages.appendChild(userMsg);
+
+        // Risposta AI
+        const aiMsg = window.conversationalRAG.createMessageElement(
+            'assistant',
+            turn.ai_response,
+            new Date(turn.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            {
+                sources: Object.values(turn.sources_summary).flat(),
+                processingTime: turn.processing_time,
+                metadata: {
+                    turnNumber: turn.turn_number,
+                    contextAnalysis: turn.context_analysis
+                }
+            }
+        );
+        chatMessages.appendChild(aiMsg);
+    });
+
+    window.conversationalRAG.scrollToBottom();
+}
+
+function showHistoryModal(history) {
+    const modal = new bootstrap.Modal(document.getElementById('conversationHistoryModal'));
+    const content = document.getElementById('history-content');
+
+    let html = `
+        <div class="mb-3">
+            <h6><strong>Sessione:</strong> ${history.session_id.substring(0, 8)}...</h6>
+            <p class="text-muted">
+                <strong>Titolo:</strong> ${history.session_title || 'Senza titolo'}<br>
+                <strong>Turni:</strong> ${history.turns_count}<br>
+                <strong>Creata:</strong> ${new Date(history.created_at).toLocaleString('it-IT')}
+            </p>
+        </div>
+        <div class="conversation-history" style="max-height: 400px; overflow-y: auto;">
+    `;
+
+    history.history.forEach(turn => {
+        html += `
+            <div class="mb-3 p-3 border rounded">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <strong>Turno ${turn.turn_number}</strong>
+                    <small class="text-muted">${new Date(turn.timestamp).toLocaleString('it-IT')}</small>
+                </div>
+                <div class="mb-2">
+                    <strong>👤 Utente:</strong><br>
+                    <div class="ps-3">${turn.user_message}</div>
+                </div>
+                <div class="mb-2">
+                    <strong>🤖 Assistente:</strong><br>
+                    <div class="ps-3">${turn.ai_response.substring(0, 200)}${turn.ai_response.length > 200 ? '...' : ''}</div>
+                </div>
+                ${turn.sources_summary.total > 0 ? `
+                    <div class="small text-muted">
+                        📚 Fonti utilizzate: ${turn.sources_summary.total}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    content.innerHTML = html;
+
+    // Salva session ID per il caricamento
+    document.getElementById('conversationHistoryModal').dataset.sessionId = history.session_id;
+
+    modal.show();
+}
+
+function loadSelectedSession() {
+    const modal = document.getElementById('conversationHistoryModal');
+    const sessionId = modal.dataset.sessionId;
+
+    if (sessionId) {
+        loadConversationSession(sessionId);
+        bootstrap.Modal.getInstance(modal).hide();
+    }
+}
+
+// Inizializza gli event listeners quando il documento è pronto
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestisci toggle modalità conversazionale
+    const modeToggle = document.getElementById('conversation-mode-toggle');
+    if (modeToggle) {
+        modeToggle.addEventListener('change', function() {
+            document.body.classList.toggle('conversational-mode', this.checked);
+        });
+
+        // Imposta stato iniziale
+        if (modeToggle.checked) {
+            document.body.classList.add('conversational-mode');
+        }
+    }
+});
+</script>

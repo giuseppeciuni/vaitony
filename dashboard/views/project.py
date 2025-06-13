@@ -15,7 +15,9 @@ from dashboard.rag_utils import handle_delete_note, get_answer_from_project, han
 from dashboard.views.chatbot import create_chatwoot_bot_for_project
 from profiles.chatwoot_client import ChatwootClient
 from profiles.models import Project, UserAPIKey, ProjectLLMConfiguration, LLMEngine, LLMProvider, ProjectRAGConfig, \
-	ProjectIndexStatus, ProjectPromptConfig, AnswerSource, ProjectFile, ProjectURL, ProjectNote, ProjectConversation
+	ProjectIndexStatus, ProjectPromptConfig, AnswerSource, ProjectFile, ProjectURL, ProjectNote, ProjectConversation, \
+	ConversationSession
+from dashboard.conversational_rag_utils import ConversationalRAGManager, get_conversational_suggestions
 
 
 logger = logging.getLogger(__name__)
@@ -466,182 +468,262 @@ def project(request, project_id=None):
 
 				# ----- Domande al modello RAG -----
 				elif action == 'ask_question':
-					# Gestione delle domande dirette al sistema RAG
+					# Gestione delle domande dirette al sistema RAG (VERSIONE CONVERSAZIONALE)
 					question = request.POST.get('question', '').strip()
+					session_id = request.POST.get('session_id')  # Nuovo parametro per la sessione
+					use_conversational = request.POST.get('use_conversational', 'true').lower() == 'true'
 
 					if question:
 						# Misura il tempo di elaborazione della risposta
 						start_time = time.time()
 
-						# Ottieni la risposta dal sistema RAG
 						try:
-							logger.info(f"Elaborazione domanda RAG: '{question[:50]}...' per progetto {project.id}")
-
-							# Verifica configurazione RAG attuale (aggiornato per nuova struttura)
-							try:
-								rag_config = ProjectRAGConfig.objects.get(project=project)
-								logger.info(
-									f"Configurazione RAG attiva: {rag_config.get_preset_category_display()} - {rag_config.preset_name}")
-							except ProjectRAGConfig.DoesNotExist:
-								logger.warning("Nessuna configurazione RAG trovata per il progetto")
-
-							# Verifica risorse disponibili (file, note, URL) prima di processare la query
-							project_files = ProjectFile.objects.filter(project=project)
-							project_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
-							project_urls = ProjectURL.objects.filter(project=project, is_indexed=True)
-
 							logger.info(
-								f"Documenti disponibili: {project_files.count()} file, {project_notes.count()} note, {project_urls.count()} URL")
+								f"Elaborazione domanda {'conversazionale' if use_conversational else 'standard'}: '{question[:50]}...' per progetto {project.id}")
 
-							try:
-								# Usa la funzione ottimizzata per ottenere la risposta
+							if use_conversational:
+								# USA IL NUOVO SISTEMA CONVERSAZIONALE
+								conv_manager = ConversationalRAGManager(project=project, user=request.user)
+								rag_response = conv_manager.process_conversational_query(
+									user_message=question,
+									session_id=session_id
+								)
+
+								# Il nuovo sistema include già session_id e turn_number
+								session_id = rag_response.get('session_id')
+								turn_number = rag_response.get('turn_number')
+								context_analysis = rag_response.get('context_analysis', {})
+
+								logger.info(
+									f"RAG conversazionale completato in {rag_response.get('processing_time', 0):.2f}s - Sessione: {session_id[:8] if session_id else 'N/A'}")
+
+							else:
+								# USA IL SISTEMA TRADIZIONALE (RETROCOMPATIBILITÀ)
+								from dashboard.rag_utils import get_answer_from_project
 								rag_response = get_answer_from_project(project, question)
 
-								# Calcola il tempo di elaborazione
+								# Calcola il tempo di elaborazione per il sistema tradizionale
 								processing_time = round(time.time() - start_time, 2)
-								logger.info(f"RAG processing completed in {processing_time} seconds")
+								rag_response['processing_time'] = processing_time
 
-								# Verifica se c'è stato un errore di autenticazione API
-								if rag_response.get('error') == 'api_auth_error':
-									# Crea risposta JSON specifica per questo errore
-									error_response = {
-										"success": False,
-										"error": "api_auth_error",
-										"error_details": rag_response.get('error_details', ''),
-										"answer": rag_response.get('answer', 'Errore di autenticazione API'),
-										"sources": []
-									}
-
-									# Non salvare conversazioni con errori di autenticazione
-									if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-										return JsonResponse(error_response)
-									else:
-										messages.error(request,
-													   "Errore di autenticazione API. Verifica le chiavi API nelle impostazioni del motore IA.")
-										return redirect('project', project_id=project.id)
-
-								# Log delle fonti trovate
-								if 'sources' in rag_response and rag_response['sources']:
-									logger.info(f"Trovate {len(rag_response['sources'])} fonti rilevanti")
-								else:
-									logger.warning("Nessuna fonte trovata per la risposta")
-
-								# Salva la conversazione nel database
-								try:
+								# Salva nella vecchia tabella per retrocompatibilità
+								if not rag_response.get('error'):
 									conversation = ProjectConversation.objects.create(
 										project=project,
 										question=question,
-										answer=rag_response.get('answer', 'No answer found.'),
+										answer=rag_response.get('answer', 'Nessuna risposta disponibile'),
 										processing_time=processing_time
 									)
 
-									# Salva le fonti utilizzate
-									for source in rag_response.get('sources', []):
-										# Identifica il tipo di fonte (file, nota o URL)
-										project_file = None
-										project_note = None
-										project_url = None
+									# Salva le fonti nel vecchio formato
+									if 'sources' in rag_response:
+										for source_data in rag_response['sources']:
+											AnswerSource.objects.create(
+												conversation=conversation,
+												project_file=source_data.get('project_file'),
+												project_note=source_data.get('project_note'),
+												project_url=source_data.get('project_url'),
+												content=source_data.get('content', ''),
+												page_number=source_data.get('page_number'),
+												relevance_score=source_data.get('relevance_score')
+											)
 
-										# Se la fonte è una nota
-										if source.get('type') == 'note':
-											note_id = source.get('metadata', {}).get('note_id')
-											if note_id:
-												try:
-													project_note = ProjectNote.objects.get(id=note_id, project=project)
-												except ProjectNote.DoesNotExist:
-													pass
-										# Se la fonte è un URL
-										elif source.get('type') == 'url':
-											url_id = source.get('metadata', {}).get('url_id')
-											if url_id:
-												try:
-													project_url = ProjectURL.objects.get(id=url_id, project=project)
-												except ProjectURL.DoesNotExist:
-													pass
-										else:
-											# Se è un file
-											source_path = source.get('metadata', {}).get('source', '')
-											if source_path:
-												# Cerca il file per path
-												try:
-													project_file = ProjectFile.objects.get(project=project,
-																						   file_path=source_path)
-												except ProjectFile.DoesNotExist:
-													pass
+								logger.info(f"RAG tradizionale completato in {processing_time}s")
 
-										# Salva la fonte
-										relevance_score = source.get('score')
-										if relevance_score is not None:
-											# Assicura che sia un float valido tra 0 e 1
-											try:
-												relevance_score = float(relevance_score)
-												relevance_score = max(0.0, min(1.0, relevance_score))  # Clamp tra 0 e 1
-											except (ValueError, TypeError):
-												relevance_score = None
-
-										AnswerSource.objects.create(
-											conversation=conversation,
-											project_file=project_file,
-											project_note=project_note,
-											project_url=project_url,
-											content=source.get('content', ''),
-											page_number=source.get('metadata', {}).get('page'),
-											relevance_score=relevance_score  # ✅ CORRETTO - ora salva lo score reale
-										)
-									logger.info(f"Conversazione salvata con ID: {conversation.id}")
-
-								except Exception as save_error:
-									logger.error(f"Errore nel salvare la conversazione: {str(save_error)}")
-								# Non interrompiamo il flusso se il salvataggio fallisce
-
-								# Crea risposta AJAX
-								if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-									return JsonResponse({
-										"success": True,
-										"answer": rag_response.get('answer', 'No answer found.'),
-										"sources": rag_response.get('sources', []),
-										"processing_time": processing_time,
-										"engine_info": rag_response.get('engine', {})
-									})
-							except Exception as specific_error:
-								logger.exception(f"Specific error in RAG processing: {str(specific_error)}")
-								error_message = str(specific_error)
-
-								# Verifica se l'errore è di autenticazione OpenAI
-								if 'openai.AuthenticationError' in str(
-										type(specific_error)) or 'invalid_api_key' in error_message:
-									error_response = {
-										"success": False,
-										"error": "api_auth_error",
-										"error_details": error_message,
-										"answer": "Errore di autenticazione con l'API. Verifica le tue chiavi API nelle impostazioni.",
-										"sources": []
-									}
-								else:
-									error_response = {
-										"success": False,
-										"error": "processing_error",
-										"error_details": error_message,
-										"answer": f"Error processing your question: {error_message}",
-										"sources": []
-									}
+							# Verifica se c'è stato un errore di autenticazione API
+							if rag_response.get('error') == 'api_auth_error':
+								error_response = {
+									"success": False,
+									"error": "api_auth_error",
+									"error_details": rag_response.get('error_details', ''),
+									"answer": rag_response.get('answer', 'Errore di autenticazione API'),
+									"sources": []
+								}
 
 								if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 									return JsonResponse(error_response)
+								else:
+									messages.error(request,
+												   "Errore di autenticazione API. Verifica le chiavi API nelle impostazioni del motore IA.")
+									return redirect('project', project_id=project.id)
 
-								messages.error(request, f"Error processing your question: {error_message}")
+							# Log delle fonti trovate
+							if 'sources' in rag_response and rag_response['sources']:
+								logger.info(f"Trovate {len(rag_response['sources'])} fonti rilevanti")
+							else:
+								logger.warning("Nessuna fonte trovata per la risposta")
+
+							# Prepara la risposta JSON per AJAX
+							if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+								ajax_response = {
+									"success": True,
+									"answer": rag_response.get('answer', 'Nessuna risposta disponibile'),
+									"sources": rag_response.get('sources', []),
+									"processing_time": rag_response.get('processing_time', 0),
+									"session_id": rag_response.get('session_id') if use_conversational else None,
+									"turn_number": rag_response.get('turn_number') if use_conversational else None,
+									"context_analysis": rag_response.get('context_analysis',
+																		 {}) if use_conversational else {},
+									"conversation_mode": "conversational" if use_conversational else "traditional"
+								}
+
+								# Aggiungi suggerimenti contestuali per il sistema conversazionale
+								if use_conversational and rag_response.get('session_id'):
+									ajax_response["suggestions"] = get_conversational_suggestions(
+										project,
+										rag_response.get('session_id')
+									)
+
+								return JsonResponse(ajax_response)
+
+							# Reindirizzamento per richieste non-AJAX
+							messages.success(request, "Domanda elaborata con successo!")
+							return redirect('project', project_id=project.id)
 
 						except Exception as e:
-							logger.exception(f"Error processing RAG query: {str(e)}")
+							logger.exception(f"Errore nell'elaborazione della domanda: {str(e)}")
+
+							error_message = f"Si è verificato un errore: {str(e)}"
+
 							if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 								return JsonResponse({
 									"success": False,
-									"error": str(e),
-									"answer": f"Error processing your question: {str(e)}",
+									"error": "processing_error",
+									"message": error_message,
+									"answer": error_message,
 									"sources": []
 								})
 
-							messages.error(request, f"Error processing your question: {str(e)}")
+							messages.error(request, error_message)
+							return redirect('project', project_id=project.id)
+
+					else:
+						# Nessuna domanda fornita
+						error_msg = "Nessuna domanda fornita"
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								"success": False,
+								"error": "no_question",
+								"message": error_msg
+							})
+
+						messages.error(request, error_msg)
+						return redirect('project', project_id=project.id)
+
+				# Nuova action da aggiungere per gestire le sessioni conversazionali
+				elif action == 'get_conversation_history':
+					session_id = request.POST.get('session_id')
+
+					if not session_id:
+						return JsonResponse({
+							"success": False,
+							"error": "no_session_id",
+							"message": "ID sessione non fornito"
+						})
+
+					try:
+						conv_manager = ConversationalRAGManager(project=project, user=request.user)
+						history = conv_manager.get_session_history(session_id)
+
+						if 'error' in history:
+							return JsonResponse({
+								"success": False,
+								"error": history['error'],
+								"message": "Sessione non trovata"
+							})
+
+						return JsonResponse({
+							"success": True,
+							"history": history
+						})
+
+					except Exception as e:
+						logger.exception(f"Errore nel recupero cronologia: {str(e)}")
+						return JsonResponse({
+							"success": False,
+							"error": "history_error",
+							"message": f"Errore nel recupero cronologia: {str(e)}"
+						})
+
+				elif action == 'end_conversation_session':
+					session_id = request.POST.get('session_id')
+
+					if not session_id:
+						return JsonResponse({
+							"success": False,
+							"error": "no_session_id"
+						})
+
+					try:
+						conv_manager = ConversationalRAGManager(project=project, user=request.user)
+						success = conv_manager.end_session(session_id)
+
+						return JsonResponse({
+							"success": success,
+							"message": "Sessione terminata" if success else "Errore nella terminazione"
+						})
+
+					except Exception as e:
+						logger.exception(f"Errore nella terminazione sessione: {str(e)}")
+						return JsonResponse({
+							"success": False,
+							"error": "end_session_error",
+							"message": str(e)
+						})
+
+				elif action == 'get_conversation_suggestions':
+					session_id = request.POST.get('session_id')
+
+					try:
+						suggestions = get_conversational_suggestions(project, session_id)
+
+						return JsonResponse({
+							"success": True,
+							"suggestions": suggestions
+						})
+
+					except Exception as e:
+						logger.exception(f"Errore nel recupero suggerimenti: {str(e)}")
+						return JsonResponse({
+							"success": False,
+							"error": "suggestions_error",
+							"message": str(e)
+						})
+
+				elif action == 'migrate_old_conversations':
+					"""Migra le vecchie conversazioni al nuovo sistema (solo per admin)"""
+					if not request.user.is_staff:
+						return JsonResponse({
+							"success": False,
+							"error": "permission_denied",
+							"message": "Operazione consentita solo agli amministratori"
+						})
+
+					try:
+						from dashboard.conversational_rag_utils import migrate_old_conversations_to_sessions
+
+						migration_session = migrate_old_conversations_to_sessions(project)
+
+						if migration_session:
+							return JsonResponse({
+								"success": True,
+								"message": f"Conversazioni migrate nella sessione {migration_session.session_id}",
+								"session_id": migration_session.session_id
+							})
+						else:
+							return JsonResponse({
+								"success": True,
+								"message": "Nessuna conversazione da migrare"
+							})
+
+					except Exception as e:
+						logger.exception(f"Errore nella migrazione: {str(e)}")
+						return JsonResponse({
+							"success": False,
+							"error": "migration_error",
+							"message": str(e)
+						})
 
 				# ----- Gestione contenuto URL -----
 				elif action == 'get_url_content':
@@ -1886,6 +1968,20 @@ def project(request, project_id=None):
 				'sources': sources,
 				'project_notes': project_notes
 			}
+
+			# ===== AGGIORNA CONTEXT PER SISTEMA CONVERSAZIONALE =====
+			context.update({
+				# Nuovo supporto conversazionale
+				'conversational_mode_enabled': True,
+				'conversation_suggestions': get_conversational_suggestions(project),
+				'has_old_conversations': ProjectConversation.objects.filter(project=project).exists(),
+
+				# Sessioni conversazionali recenti
+				'recent_conversation_sessions': ConversationSession.objects.filter(
+					project=project,
+					is_active=True
+				).order_by('-last_interaction_at')[:5] if 'ConversationSession' in globals() else [],
+			})
 
 			# Aggiungi dati sulla configurazione RAG al contesto - AGGIORNATO per nuova struttura
 			try:

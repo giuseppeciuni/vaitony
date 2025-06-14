@@ -10,8 +10,12 @@ MIGLIORAMENTI:
 - Estrazione intelligente da siti WordPress e CMS moderni
 - Timeout e retry migliorati per siti lenti
 - Gestione di lazy loading e infinite scroll
+- FILTRO AVANZATO per escludere link esterni non rilevanti (social, analytics, ads, etc.)
+- SUPPORTO CLI per esecuzione da linea di comando con output JSON
 """
 import traceback
+import argparse
+import sys
 
 from django.utils import timezone
 import os
@@ -25,47 +29,158 @@ from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from langchain.schema import Document
 
-from vaitony_project import settings
-
 # Configurazione logger
 logger = logging.getLogger(__name__)
+
+# Lista di domini esterni da escludere sempre
+EXCLUDED_EXTERNAL_DOMAINS = [
+	# Social Networks
+	'facebook.com', 'twitter.com', 'instagram.com', 'linkedin.com',
+	'youtube.com', 'pinterest.com', 'tiktok.com', 'snapchat.com',
+	'reddit.com', 'tumblr.com', 'vimeo.com', 'whatsapp.com',
+	'telegram.org', 'discord.com', 'twitch.tv', 'x.com',
+
+	# Analytics & Tracking
+	'google-analytics.com', 'googletagmanager.com', 'google.com/analytics',
+	'region1.google-analytics.com', 'googleadservices.com',
+	'googlesyndication.com', 'doubleclick.net',
+	'google.com/recaptcha', 'gstatic.com', 'googleapis.com',
+	'facebook.com/tr', 'facebook.com/plugins', 'connect.facebook.net',
+	'platform.twitter.com', 'platform.linkedin.com',
+	'amazon-adsystem.com', 'amazon.com/gp', 'cloudfront.net',
+	'scorecardresearch.com', 'quantserve.com', 'outbrain.com',
+	'taboola.com', 'criteo.com', 'adsrvr.org', 'adnxs.com',
+	'adzerk.net', 'bing.com/bat', 'clarity.ms', 'hotjar.com',
+	'mixpanel.com', 'segment.com', 'amplitude.com', 'optimizely.com',
+	'crazyegg.com', 'fullstory.com', 'mouseflow.com', 'luckyorange.com',
+	'inspectlet.com', 'smartlook.com', 'userreport.com', 'pingdom.com',
+	'newrelic.com', 'nr-data.net', 'datadoghq.com', 'sumologic.com',
+	'matomo.org', 'piwik.org', 'clicky.com', 'statcounter.com',
+	'histats.com', 'addthis.com', 'sharethis.com', 'addtoany.com',
+
+	# Advertising Networks
+	'doubleclick.com', 'googleadservices.com', 'googlesyndication.com',
+	'adsafeprotected.com', 'adsrvr.org', 'amazon-adsystem.com',
+	'facebook.com/tr', 'rubiconproject.com', 'pubmatic.com',
+	'openx.net', 'appnexus.com', 'contextweb.com', 'sovrn.com',
+	'indexexchange.com', 'casalemedia.com', 'chartbeat.com',
+	'parsely.com', 'tynt.com', 'yieldlab.net', 'adtech.de',
+	'adsystem.com', 'advertising.com', 'adsense.com', 'media.net',
+
+	# Privacy & Legal Tools
+	'iubenda.com', 'cookiebot.com', 'onetrust.com', 'trustarc.com',
+	'privacyshield.gov', 'cookielaw.org', 'cookiepro.com',
+	'termsfeed.com', 'termly.io', 'freeprivacypolicy.com',
+	'privacypolicies.com', 'privacypolicyonline.com',
+
+	# Comments & Forums
+	'disqus.com', 'livefyre.com', 'coral.ai', 'spot.im',
+	'facebook.com/plugins/comments', 'intensedebate.com',
+	'commento.io', 'hyvor.com', 'discourse.org',
+
+	# CDN & External Resources (da valutare caso per caso)
+	'cloudflare.com', 'jsdelivr.net', 'unpkg.com', 'cdnjs.com',
+	'maxcdn.bootstrapcdn.com', 'ajax.googleapis.com',
+
+	# Payment & E-commerce (esterni)
+	'paypal.com', 'stripe.com', 'shopify.com', 'gumroad.com',
+	'paddle.com', 'fastspring.com', '2checkout.com',
+
+	# Customer Support
+	'zendesk.com', 'intercom.io', 'drift.com', 'crisp.chat',
+	'tawk.to', 'livechat.com', 'olark.com', 'uservoice.com',
+	'freshdesk.com', 'helpscout.com', 'groove.cm',
+
+	# Email Marketing
+	'mailchimp.com', 'constantcontact.com', 'sendinblue.com',
+	'mailerlite.com', 'getresponse.com', 'aweber.com',
+	'convertkit.com', 'activecampaign.com', 'klaviyo.com',
+
+	# Misc External Services
+	'gravatar.com', 'wp.com/remote', 'akismet.com',
+	'typekit.net', 'fonts.googleapis.com', 'use.fontawesome.com',
+	'polyfill.io', 'schema.org', 'w3.org/1999/xhtml',
+]
+
+# Pattern per escludere percorsi specifici
+EXCLUDED_PATH_PATTERNS = [
+	r'/privacy', r'/privacy-policy', r'/cookie-policy', r'/terms',
+	r'/legal', r'/disclaimer', r'/gdpr', r'/ccpa',
+	r'/wp-admin', r'/admin', r'/login', r'/signin', r'/signup',
+	r'/logout', r'/signout', r'/register', r'/cart', r'/checkout',
+	r'/account', r'/profile', r'/user/', r'/users/',
+	r'/tag/', r'/tags/', r'/category/', r'/categories/',
+	r'/archive/', r'/archives/', r'/author/', r'/authors/',
+	r'/feed/', r'/rss', r'/sitemap', r'/robots.txt',
+	r'/wp-content/uploads/', r'/wp-includes/',
+	r'/cdn-cgi/', r'/.well-known/', r'/api/', r'/oauth/',
+	r'/auth/', r'/callback', r'/share/', r'/print/',
+	r'/pdf/', r'/download/', r'/mailto:', r'/tel:',
+	r'/sms:', r'/whatsapp:', r'/facebook:', r'/twitter:',
+	r'/instagram:', r'/linkedin:', r'/youtube:',
+]
+
+# Pattern per parametri URL da ignorare
+EXCLUDED_QUERY_PARAMS = [
+	'utm_', 'fbclid', 'gclid', 'msclkid', 'twclid',
+	'dclid', 'gbraid', 'wbraid', 'gclsrc', 'yclid',
+	'fb_action_ids', 'fb_action_types', 'fb_source',
+	'mc_cid', 'mc_eid', '_ga', '_gid', '_gat',
+	'gtm_', 'pk_', 'piwik_', 'matomo_',
+	'hsCtaTracking', 'hsCacheBuster', 'hsSearchTerms',
+	'__hstc', '__hssc', '__hsfp', '_hsenc', '_hsmi',
+]
 
 
 class WebCrawler:
 	"""
-    Classe per il crawling di siti web con supporto avanzato per JavaScript e
-    navigazione ricorsiva di link interni fino a una profondità specificata.
-    Include funzionalità per l'estrazione di contenuti informativi tramite LLM.
+	Classe per il crawling di siti web con supporto avanzato per JavaScript e
+	navigazione ricorsiva di link interni fino a una profondità specificata.
+	Include funzionalità per l'estrazione di contenuti informativi tramite LLM.
 
-    NUOVE FUNZIONALITÀ:
-    - Gestione completa di contenuti dinamici (carousel, modali, accordions)
-    - Supporto per siti WordPress e CMS moderni
-    - Estrazione intelligente di lazy loading e infinite scroll
-    - Simulazione di interazioni utente per rivelare contenuti nascosti
-    """
+	NUOVE FUNZIONALITÀ:
+	- Gestione completa di contenuti dinamici (carousel, modali, accordions)
+	- Supporto per siti WordPress e CMS moderni
+	- Estrazione intelligente di lazy loading e infinite scroll
+	- Simulazione di interazioni utente per rivelare contenuti nascosti
+	- FILTRO AVANZATO per escludere link esterni non rilevanti
+	"""
 
 	def __init__(self, max_depth=2, max_pages=10, min_text_length=500,
 				 exclude_patterns=None, include_patterns=None, timeout=60000,
-				 llm_provider=None, enhanced_js_support=True):
+				 llm_provider=None, enhanced_js_support=True,
+				 excluded_domains=None, excluded_paths=None):
 		"""
-        Inizializza il crawler con i parametri specificati.
+		Inizializza il crawler con i parametri specificati.
 
-        Args:
-            max_depth: Profondità massima di crawling (default: 2)
-            max_pages: Numero massimo di pagine da analizzare (default: 10)
-            min_text_length: Lunghezza minima del testo da considerare valido (default: 500)
-            exclude_patterns: Lista di pattern regex da escludere negli URL (default: None)
-            include_patterns: Lista di pattern regex da includere negli URL (default: None)
-            timeout: Timeout in ms per il caricamento delle pagine (default: 60000 - aumentato per JS)
-            llm_provider: Provider LLM da utilizzare per l'estrazione di contenuti (default: None)
-            enhanced_js_support: Abilita supporto avanzato per JavaScript (default: True)
-        """
+		Args:
+			max_depth: Profondità massima di crawling (default: 2)
+			max_pages: Numero massimo di pagine da analizzare (default: 10)
+			min_text_length: Lunghezza minima del testo da considerare valido (default: 500)
+			exclude_patterns: Lista di pattern regex da escludere negli URL (default: None)
+			include_patterns: Lista di pattern regex da includere negli URL (default: None)
+			timeout: Timeout in ms per il caricamento delle pagine (default: 60000)
+			llm_provider: Provider LLM da utilizzare per l'estrazione di contenuti (default: None)
+			enhanced_js_support: Abilita supporto avanzato per JavaScript (default: True)
+			excluded_domains: Domini esterni aggiuntivi da escludere (default: None)
+			excluded_paths: Pattern di percorsi aggiuntivi da escludere (default: None)
+		"""
 		self.max_depth = max_depth
 		self.max_pages = max_pages
 		self.min_text_length = min_text_length
-		self.timeout = timeout  # Aumentato da 30s a 60s per contenuti JS complessi
+		self.timeout = timeout
 		self.llm_provider = llm_provider
-		self.enhanced_js_support = enhanced_js_support  # NUOVO: supporto JS avanzato
+		self.enhanced_js_support = enhanced_js_support
+
+		# Combina domini esclusi predefiniti con quelli personalizzati
+		self.excluded_domains = set(EXCLUDED_EXTERNAL_DOMAINS)
+		if excluded_domains:
+			self.excluded_domains.update(excluded_domains)
+
+		# Combina pattern di percorsi esclusi
+		self.excluded_path_patterns = EXCLUDED_PATH_PATTERNS.copy()
+		if excluded_paths:
+			self.excluded_path_patterns.extend(excluded_paths)
 
 		# Compila i pattern regex
 		self.exclude_patterns = None
@@ -77,19 +192,121 @@ class WebCrawler:
 			self.include_patterns = [re.compile(p) for p in include_patterns]
 
 		# Pattern di default da escludere (file binari, pagine admin, ecc.)
-		self.default_exclude = re.compile(r'.*\.(pdf|zip|jpg|jpeg|png|gif|doc|docx|ppt|pptx|xls|xlsx|mp3|mp4|avi|mov)$|'
-										  r'.*(login|logout|admin|cart|checkout|account|signin|signup).*')
+		self.default_exclude = re.compile(
+			r'.*\.(pdf|zip|jpg|jpeg|png|gif|doc|docx|ppt|pptx|xls|xlsx|mp3|mp4|avi|mov)$|'
+			r'.*(login|logout|admin|cart|checkout|account|signin|signup).*'
+		)
 
-	def should_process_url(self, url):
+	def is_external_tracking_link(self, url):
 		"""
-        Verifica se un URL dovrebbe essere processato in base ai pattern di inclusione/esclusione.
+		Verifica se un URL è un link di tracking esterno o non rilevante.
 
-        Args:
-            url: URL da verificare
+		Args:
+			url: URL da verificare
 
-        Returns:
-            bool: True se l'URL dovrebbe essere processato, False altrimenti
-        """
+		Returns:
+			bool: True se il link è da escludere, False altrimenti
+		"""
+		try:
+			parsed = urlparse(url.lower())
+			domain = parsed.netloc.replace('www.', '')
+
+			# Controlla se il dominio è nella lista di esclusioni
+			for excluded_domain in self.excluded_domains:
+				if excluded_domain in domain or domain.endswith('.' + excluded_domain):
+					return True
+
+			# Controlla i pattern nei percorsi
+			path = parsed.path.lower()
+			for pattern in self.excluded_path_patterns:
+				if re.search(pattern, path):
+					return True
+
+			# Controlla i parametri query
+			if parsed.query:
+				query_lower = parsed.query.lower()
+				for param in EXCLUDED_QUERY_PARAMS:
+					if param in query_lower:
+						return True
+
+			# Controlla schemi non HTTP/HTTPS
+			if parsed.scheme and parsed.scheme not in ['http', 'https', '']:
+				return True
+
+			return False
+
+		except Exception as e:
+			logger.debug(f"Errore nel controllo link esterno: {e}")
+			return True  # In caso di errore, meglio escludere
+
+	def clean_url(self, url):
+		"""
+		Pulisce l'URL rimuovendo parametri di tracking non necessari.
+
+		Args:
+			url: URL da pulire
+
+		Returns:
+			str: URL pulito
+		"""
+		try:
+			parsed = urlparse(url)
+
+			# Se non ci sono query params, ritorna l'URL così com'è
+			if not parsed.query:
+				return url
+
+			# Parsa i parametri query
+			from urllib.parse import parse_qs, urlencode
+			params = parse_qs(parsed.query, keep_blank_values=True)
+
+			# Rimuovi parametri di tracking
+			cleaned_params = {}
+			for key, value in params.items():
+				# Controlla se il parametro è da escludere
+				exclude = False
+				for excluded_param in EXCLUDED_QUERY_PARAMS:
+					if key.lower().startswith(excluded_param):
+						exclude = True
+						break
+
+				if not exclude:
+					cleaned_params[key] = value
+
+			# Ricostruisci l'URL
+			cleaned_query = urlencode(cleaned_params, doseq=True)
+			return urlparse(url)._replace(query=cleaned_query).geturl()
+
+		except Exception as e:
+			logger.debug(f"Errore nella pulizia URL: {e}")
+			return url
+
+	def should_process_url(self, url, base_domain):
+		"""
+		Verifica se un URL dovrebbe essere processato in base ai pattern di inclusione/esclusione
+		e ai filtri per link esterni non rilevanti.
+
+		Args:
+			url: URL da verificare
+			base_domain: Dominio base del sito in crawling
+
+		Returns:
+			bool: True se l'URL dovrebbe essere processato, False altrimenti
+		"""
+		# Prima verifica se è un link esterno di tracking/social/etc
+		if self.is_external_tracking_link(url):
+			logger.debug(f"🚫 URL escluso (tracking/social esterno): {url}")
+			return False
+
+		# Verifica se appartiene al dominio base
+		parsed = urlparse(url)
+		url_domain = parsed.netloc.replace('www.', '')
+		base_domain_clean = base_domain.replace('www.', '')
+
+		if url_domain != base_domain_clean:
+			logger.debug(f"🚫 URL escluso (dominio diverso): {url} != {base_domain}")
+			return False
+
 		# Controlla i pattern di esclusione di default
 		if self.default_exclude.match(url):
 			return False
@@ -112,43 +329,43 @@ class WebCrawler:
 
 	def simulate_user_interactions(self, page):
 		"""
-        NUOVO: Simula interazioni utente per rivelare contenuti nascosti.
+		NUOVO: Simula interazioni utente per rivelare contenuti nascosti.
 
-        Questa funzione esegue una serie di azioni comuni che potrebbero
-        rivelare contenuti dinamici nascosti:
-        - Hover su elementi
-        - Click su pulsanti/tab
-        - Scroll della pagina
-        - Attivazione di carousel e accordions
+		Questa funzione esegue una serie di azioni comuni che potrebbero
+		rivelare contenuti dinamici nascosti:
+		- Hover su elementi
+		- Click su pulsanti/tab
+		- Scroll della pagina
+		- Attivazione di carousel e accordions
 
-        Args:
-            page: Oggetto Page di Playwright
-        """
+		Args:
+			page: Oggetto Page di Playwright
+		"""
 		try:
 			logger.debug("🎭 Simulazione interazioni utente per rivelare contenuti dinamici")
 
 			# 1. SCROLL COMPLETO DELLA PAGINA per attivare lazy loading
 			page.evaluate("""
-				() => {
-					// Scroll graduale per simulare lettura utente
-					const scrollHeight = document.body.scrollHeight;
-					const viewportHeight = window.innerHeight;
-					const steps = Math.ceil(scrollHeight / viewportHeight);
+                () => {
+                    // Scroll graduale per simulare lettura utente
+                    const scrollHeight = document.body.scrollHeight;
+                    const viewportHeight = window.innerHeight;
+                    const steps = Math.ceil(scrollHeight / viewportHeight);
 
-					let currentStep = 0;
-					const scrollStep = () => {
-						if (currentStep < steps) {
-							window.scrollTo(0, currentStep * viewportHeight);
-							currentStep++;
-							setTimeout(scrollStep, 200); // Pausa tra scroll
-						} else {
-							// Torna in cima
-							window.scrollTo(0, 0);
-						}
-					};
-					scrollStep();
-				}
-			""")
+                    let currentStep = 0;
+                    const scrollStep = () => {
+                        if (currentStep < steps) {
+                            window.scrollTo(0, currentStep * viewportHeight);
+                            currentStep++;
+                            setTimeout(scrollStep, 200); // Pausa tra scroll
+                        } else {
+                            // Torna in cima
+                            window.scrollTo(0, 0);
+                        }
+                    };
+                    scrollStep();
+                }
+            """)
 			time.sleep(2)  # Attendi che il lazy loading si completi
 
 			# 2. ATTIVAZIONE CAROUSEL - cerca e attiva tutti gli elementi del carousel
@@ -250,17 +467,17 @@ class WebCrawler:
 
 	def extract_carousel_content_forcefully(self, page):
 		"""
-        NUOVO: Estrazione specifica e forzata per contenuti carousel Bootstrap.
+		NUOVO: Estrazione specifica e forzata per contenuti carousel Bootstrap.
 
-        Questa funzione forza la visibilità di TUTTI gli elementi carousel
-        e li estrae uno per uno, indipendentemente dal loro stato di visibilità.
+		Questa funzione forza la visibilità di TUTTI gli elementi carousel
+		e li estrae uno per uno, indipendentemente dal loro stato di visibilità.
 
-        Args:
-            page: Oggetto Page di Playwright
+		Args:
+			page: Oggetto Page di Playwright
 
-        Returns:
-            str: Contenuto completo del carousel estratto
-        """
+		Returns:
+			str: Contenuto completo del carousel estratto
+		"""
 		carousel_content = ""
 
 		try:
@@ -268,73 +485,73 @@ class WebCrawler:
 
 			# 1. FORZA TUTTI GLI ELEMENTI CAROUSEL A ESSERE VISIBILI
 			extraction_result = page.evaluate('''
-				() => {
-					const results = [];
+                () => {
+                    const results = [];
 
-					// Trova tutti i carousel
-					const carousels = document.querySelectorAll('.carousel, [data-bs-ride="carousel"], [id*="carousel"]');
-					console.log('🎠 Trovati', carousels.length, 'carousel');
+                    // Trova tutti i carousel
+                    const carousels = document.querySelectorAll('.carousel, [data-bs-ride="carousel"], [id*="carousel"]');
+                    console.log('🎠 Trovati', carousels.length, 'carousel');
 
-					carousels.forEach((carousel, carouselIndex) => {
-						// Trova tutti gli elementi carousel-item
-						const items = carousel.querySelectorAll('.carousel-item');
-						console.log('📋 Carousel', carouselIndex, 'ha', items.length, 'items');
+                    carousels.forEach((carousel, carouselIndex) => {
+                        // Trova tutti gli elementi carousel-item
+                        const items = carousel.querySelectorAll('.carousel-item');
+                        console.log('📋 Carousel', carouselIndex, 'ha', items.length, 'items');
 
-						items.forEach((item, itemIndex) => {
-							// Forza la visibilità completa
-							item.style.display = 'block';
-							item.style.visibility = 'visible'; 
-							item.style.opacity = '1';
-							item.style.position = 'static';
-							item.style.transform = 'none';
-							item.style.left = 'auto';
-							item.style.right = 'auto';
-							item.classList.remove('carousel-item-next', 'carousel-item-prev');
-							item.classList.add('carousel-item-active');
+                        items.forEach((item, itemIndex) => {
+                            // Forza la visibilità completa
+                            item.style.display = 'block';
+                            item.style.visibility = 'visible'; 
+                            item.style.opacity = '1';
+                            item.style.position = 'static';
+                            item.style.transform = 'none';
+                            item.style.left = 'auto';
+                            item.style.right = 'auto';
+                            item.classList.remove('carousel-item-next', 'carousel-item-prev');
+                            item.classList.add('carousel-item-active');
 
-							// Estrai tutto il contenuto testuale
-							const textContent = item.innerText || item.textContent || '';
+                            // Estrai tutto il contenuto testuale
+                            const textContent = item.innerText || item.textContent || '';
 
-							if (textContent.trim().length > 10) {
-								results.push({
-									carousel: carouselIndex,
-									item: itemIndex,
-									content: textContent.trim(),
-									html: item.innerHTML
-								});
-								console.log('✅ Estratto item', itemIndex, ':', textContent.substring(0, 50));
-							}
-						});
-					});
+                            if (textContent.trim().length > 10) {
+                                results.push({
+                                    carousel: carouselIndex,
+                                    item: itemIndex,
+                                    content: textContent.trim(),
+                                    html: item.innerHTML
+                                });
+                                console.log('✅ Estratto item', itemIndex, ':', textContent.substring(0, 50));
+                            }
+                        });
+                    });
 
-					// ESTRAZIONE AGGIUNTIVA: Cerca direttamente testo con nomi specifici
-					const bodyText = document.body.innerText || document.body.textContent || '';
-					const lines = bodyText.split('\\n');
+                    // ESTRAZIONE AGGIUNTIVA: Cerca direttamente testo con nomi specifici
+                    const bodyText = document.body.innerText || document.body.textContent || '';
+                    const lines = bodyText.split('\\n');
 
-					lines.forEach((line, lineIndex) => {
-						const cleanLine = line.trim();
-						if (cleanLine.length > 10 && (
-							cleanLine.toLowerCase().includes('mario') ||
-							cleanLine.toLowerCase().includes('laura') ||
-							cleanLine.toLowerCase().includes('giuseppe') ||
-							cleanLine.toLowerCase().includes('rossi') ||
-							cleanLine.toLowerCase().includes('bianchi') ||
-							cleanLine.toLowerCase().includes('verdi') ||
-							cleanLine.includes('"') // Possibili citazioni
-						)) {
-							results.push({
-								type: 'text_search',
-								line: lineIndex,
-								content: cleanLine
-							});
-							console.log('🔍 Trovato testo rilevante:', cleanLine.substring(0, 50));
-						}
-					});
+                    lines.forEach((line, lineIndex) => {
+                        const cleanLine = line.trim();
+                        if (cleanLine.length > 10 && (
+                            cleanLine.toLowerCase().includes('mario') ||
+                            cleanLine.toLowerCase().includes('laura') ||
+                            cleanLine.toLowerCase().includes('giuseppe') ||
+                            cleanLine.toLowerCase().includes('rossi') ||
+                            cleanLine.toLowerCase().includes('bianchi') ||
+                            cleanLine.toLowerCase().includes('verdi') ||
+                            cleanLine.includes('"') // Possibili citazioni
+                        )) {
+                            results.push({
+                                type: 'text_search',
+                                line: lineIndex,
+                                content: cleanLine
+                            });
+                            console.log('🔍 Trovato testo rilevante:', cleanLine.substring(0, 50));
+                        }
+                    });
 
-					console.log('📊 Totale elementi estratti:', results.length);
-					return results;
-				}
-			''')
+                    console.log('📊 Totale elementi estratti:', results.length);
+                    return results;
+                }
+            ''')
 
 			# 2. PROCESSA I RISULTATI DELL'ESTRAZIONE
 			if extraction_result:
@@ -359,33 +576,25 @@ class WebCrawler:
 
 	def extract_text_content(self, soup, url, page=None):
 		"""
-        Estrae il contenuto testuale significativo da una pagina HTML con supporto migliorato
-        per contenuti dinamici e strutture complesse.
+		Estrae il contenuto testuale significativo da una pagina HTML con supporto migliorato
+		per contenuti dinamici e strutture complesse.
 
-        MIGLIORAMENTI:
-        - Estrazione specifica per carousel e componenti dinamici
-        - Gestione di contenuti WordPress e CMS
-        - Rilevamento automatico di strutture dati (schema.org, JSON-LD)
-        - Estrazione di meta-informazioni avanzate
-        - ESTRAZIONE FORZATA CAROUSEL con JavaScript
+		Args:
+			soup: Oggetto BeautifulSoup della pagina
+			url: URL della pagina
+			page: Oggetto Page di Playwright (per estrazione JavaScript)
 
-        Args:
-            soup: Oggetto BeautifulSoup della pagina
-            url: URL della pagina
-            page: Oggetto Page di Playwright (NUOVO - per estrazione JavaScript)
-
-        Returns:
-            tuple: (contenuto testuale, testo principale, titolo, meta descrizione)
-        """
+		Returns:
+			tuple: (contenuto testuale, testo principale, titolo, meta descrizione)
+		"""
 		logger.debug(f"🔍 Estrazione contenuto migliorata per: {url}")
 
-		# NUOVO: Rimuovi elementi non informativi MA mantieni alcuni elementi dinamici importanti
+		# Rimuovi elementi non informativi MA mantieni alcuni elementi dinamici importanti
 		elements_to_remove = ['script', 'style', 'noscript']
-		# NON rimuoviamo nav, footer, header, aside perché potrebbero contenere info utili
 		for element in soup.find_all(elements_to_remove):
 			element.decompose()
 
-		# NUOVO: Estrai il titolo con fallback multipli
+		# Estrai il titolo con fallback multipli
 		title = ""
 		title_sources = [
 			soup.find('title'),
@@ -405,7 +614,7 @@ class WebCrawler:
 				if title:
 					break
 
-		# NUOVO: Estrazione meta descrizioni avanzata
+		# Estrazione meta descrizioni avanzata
 		meta_description = ""
 		meta_sources = [
 			soup.find('meta', attrs={'name': 'description'}),
@@ -419,7 +628,7 @@ class WebCrawler:
 				if meta_description:
 					break
 
-		# NUOVO: Estrazione di dati strutturati JSON-LD
+		# Estrazione di dati strutturati JSON-LD
 		structured_data = ""
 		json_ld_scripts = soup.find_all('script', {'type': 'application/ld+json'})
 		for script in json_ld_scripts:
@@ -436,24 +645,24 @@ class WebCrawler:
 			except (json.JSONDecodeError, TypeError):
 				continue
 
-		# NUOVO: ESTRAZIONE CAROUSEL FORZATA VIA JAVASCRIPT
+		# ESTRAZIONE CAROUSEL FORZATA VIA JAVASCRIPT
 		carousel_content = ""
 		if page and self.enhanced_js_support:
 			carousel_content = self.extract_carousel_content_forcefully(page)
 			if carousel_content:
 				logger.info(f"🎠 Estratto contenuto carousel: {len(carousel_content)} caratteri")
 
-		# NUOVO: Cerca il contenuto principale con selettori più ampi e intelligenti
+		# Cerca il contenuto principale con selettori più ampi e intelligenti
 		main_content = None
 		content_selectors = [
 			'main', 'article', '[role="main"]',
 			'.content', '.main', '.article', '#content', '#main',
-			# NUOVO: selettori per WordPress e CMS comuni
+			# Selettori per WordPress e CMS comuni
 			'.entry-content', '.post-content', '.page-content',
 			'.content-area', '.site-content', '.primary-content',
-			# NUOVO: selettori per framework moderni
+			# Selettori per framework moderni
 			'.container', '.wrapper', '.page-wrapper',
-			# NUOVO: selettori generici ma con priorità bassa
+			# Selettori generici ma con priorità bassa
 			'body'
 		]
 
@@ -470,23 +679,23 @@ class WebCrawler:
 			main_content = soup.body
 			logger.debug("📄 Usando body come contenuto principale")
 
-		# NUOVO: Estrazione completa di tutti gli elementi testuali con categorizzazione
+		# Estrazione completa di tutti gli elementi testuali con categorizzazione
 		all_text_content = []
 
 		if main_content:
-			# NUOVO: Estrai TUTTI gli elementi testuali, inclusi quelli nascosti
+			# Estrai TUTTI gli elementi testuali, inclusi quelli nascosti
 			text_elements = main_content.find_all([
 				'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 				'li', 'pre', 'blockquote', 'div', 'span',
-				# NUOVO: elementi specifici per contenuti dinamici
+				# Elementi specifici per contenuti dinamici
 				'.carousel-item', '.slide', '.tab-pane',
 				'.collapse', '.accordion-body', '.modal-body',
-				# NUOVO: elementi di testimonianze e contenuti utente
+				# Elementi di testimonianze e contenuti utente
 				'.testimonial', '.review', '.comment',
 				'.card-body', '.card-text', '.card-title'
 			])
 
-			# NUOVO: Raccogli tutto il testo, anche da elementi nascosti
+			# Raccogli tutto il testo, anche da elementi nascosti
 			processed_texts = set()  # Per evitare duplicati
 
 			for element in text_elements:
@@ -494,7 +703,7 @@ class WebCrawler:
 				if text and len(text) > 10 and text not in processed_texts:
 					processed_texts.add(text)
 
-					# NUOVO: Aggiungi contesto per elementi specifici
+					# Aggiungi contesto per elementi specifici
 					element_context = ""
 
 					# Identifica il tipo di contenuto
@@ -516,7 +725,7 @@ class WebCrawler:
 
 					all_text_content.append(element_context + text)
 
-			# NUOVO: Estrai anche testo da attributi specifici (alt, title, aria-label)
+			# Estrai anche testo da attributi specifici (alt, title, aria-label)
 			for element in main_content.find_all(['img', 'a', 'button', 'input']):
 				alt_text = element.get('alt', '').strip()
 				title_text = element.get('title', '').strip()
@@ -529,7 +738,7 @@ class WebCrawler:
 				if aria_label and len(aria_label) > 5:
 					all_text_content.append(f"[ARIA] {aria_label}")
 
-		# NUOVO: Combina contenuto standard + contenuto carousel forzato
+		# Combina contenuto standard + contenuto carousel forzato
 		main_text = '\n\n'.join(all_text_content)
 
 		# Aggiungi il contenuto del carousel estratto forzatamente
@@ -549,7 +758,7 @@ class WebCrawler:
 		content += "CONTENUTO PRINCIPALE:\n"
 		content += main_text
 
-		# NUOVO: Statistiche di estrazione per debug
+		# Statistiche di estrazione per debug
 		logger.debug(f"📊 Statistiche estrazione:")
 		logger.debug(f"   - Titolo: {'✅' if title else '❌'}")
 		logger.debug(f"   - Meta descrizione: {'✅' if meta_description else '❌'}")
@@ -562,14 +771,11 @@ class WebCrawler:
 
 	def wait_for_dynamic_content(self, page):
 		"""
-        NUOVO: Attende che tutti i contenuti dinamici si carichino completamente.
+		Attende che tutti i contenuti dinamici si carichino completamente.
 
-        Questa funzione implementa varie strategie di attesa per garantire
-        che tutto il contenuto JavaScript sia stato caricato prima dell'estrazione.
-
-        Args:
-            page: Oggetto Page di Playwright
-        """
+		Args:
+			page: Oggetto Page di Playwright
+		"""
 		logger.debug("⏳ Attesa caricamento contenuti dinamici...")
 
 		try:
@@ -579,7 +785,7 @@ class WebCrawler:
 			# 2. Attendi che tutte le richieste di rete siano completate
 			page.wait_for_load_state("networkidle")
 
-			# 3. NUOVO: Attendi specificamente elementi comuni che indicano contenuto caricato
+			# 3. Attendi specificamente elementi comuni che indicano contenuto caricato
 			common_dynamic_selectors = [
 				'.carousel-item',  # Bootstrap carousel
 				'.swiper-slide',  # Swiper
@@ -598,54 +804,46 @@ class WebCrawler:
 				except:
 					continue  # Se non troviamo questo selettore, prova il successivo
 
-			# 4. NUOVO: Attendi che i carousel siano inizializzati
+			# 4. Attendi che i carousel siano inizializzati
 			page.evaluate("""
-				() => {
-					return new Promise(resolve => {
-						// Aspetta che Bootstrap sia caricato
-						if (typeof bootstrap !== 'undefined') {
-							setTimeout(resolve, 1000);
-						} else {
-							// Se Bootstrap non è caricato, aspetta comunque un po'
-							setTimeout(resolve, 500);
-						}
-					});
-				}
-			""")
+                () => {
+                    return new Promise(resolve => {
+                        // Aspetta che Bootstrap sia caricato
+                        if (typeof bootstrap !== 'undefined') {
+                            setTimeout(resolve, 1000);
+                        } else {
+                            // Se Bootstrap non è caricato, aspetta comunque un po'
+                            setTimeout(resolve, 500);
+                        }
+                    });
+                }
+            """)
 
-			# 5. NUOVO: Verifica che le immagini lazy load siano caricate
+			# 5. Verifica che le immagini lazy load siano caricate
 			page.evaluate("""
-				() => {
-					const images = document.querySelectorAll('img[loading="lazy"], img[data-src]');
-					return Promise.all(Array.from(images).map(img => {
-						if (img.complete) return Promise.resolve();
-						return new Promise(resolve => {
-							img.onload = resolve;
-							img.onerror = resolve;
-							// Timeout dopo 2 secondi
-							setTimeout(resolve, 2000);
-						});
-					}));
-				}
-			""")
+                () => {
+                    const images = document.querySelectorAll('img[loading="lazy"], img[data-src]');
+                    return Promise.all(Array.from(images).map(img => {
+                        if (img.complete) return Promise.resolve();
+                        return new Promise(resolve => {
+                            img.onload = resolve;
+                            img.onerror = resolve;
+                            // Timeout dopo 2 secondi
+                            setTimeout(resolve, 2000);
+                        });
+                    }));
+                }
+            """)
 
 			logger.debug("✅ Contenuti dinamici caricati")
 
 		except Exception as e:
 			logger.warning(f"⚠️ Timeout o errore nell'attesa contenuti dinamici: {str(e)}")
 
-	# Non è un errore fatale, continuiamo con quello che abbiamo
-
-	def crawl(self, start_url, output_dir, project=None):
+	def crawl(self, start_url, output_dir=None, project=None):
 		"""
 		Esegue il crawling di un sito web partendo da un URL specificato con supporto
-		avanzato per contenuti dinamici e JavaScript.
-
-		MIGLIORAMENTI:
-		- Caricamento completo di contenuti JavaScript
-		- Simulazione interazioni utente per rivelare contenuti nascosti
-		- Gestione intelligente di timeout e retry
-		- Estrazione migliorata per siti WordPress e CMS moderni
+		avanzato per contenuti dinamici e JavaScript, escludendo link esterni non rilevanti.
 
 		Args:
 			start_url: URL di partenza per il crawling
@@ -656,7 +854,8 @@ class WebCrawler:
 			tuple: (pagine processate, fallite, lista dei documenti, lista degli URL)
 		"""
 		# Importazione ritardata per evitare cicli di importazione
-		from profiles.models import ProjectURL
+		if project:
+			from profiles.models import ProjectURL
 
 		# Validazione dell'URL
 		if not start_url.startswith(('http://', 'https://')):
@@ -668,9 +867,11 @@ class WebCrawler:
 
 		logger.info(f"🚀 Avvio crawling MIGLIORATO del sito {base_domain} con profondità {self.max_depth}")
 		logger.info(f"🔧 Supporto JS avanzato: {'✅ ATTIVO' if self.enhanced_js_support else '❌ DISATTIVO'}")
+		logger.info(f"🚫 Filtri attivi per escludere {len(self.excluded_domains)} domini esterni")
 
-		# Crea la directory di output se non esiste
-		os.makedirs(output_dir, exist_ok=True)
+		# Crea la directory di output se non esiste e se specificata
+		if output_dir:
+			os.makedirs(output_dir, exist_ok=True)
 
 		# Inizializza strutture dati per il crawling
 		visited_urls = set()
@@ -680,28 +881,28 @@ class WebCrawler:
 		documents = []
 		collected_data = []  # Raccogliamo i dati qui invece di salvarli immediatamente
 
-		# NUOVO: Configurazione browser ottimizzata per contenuti dinamici
+		# Configurazione browser ottimizzata per contenuti dinamici
 		browser_config = {
 			'headless': True,
 			'args': [
 				'--no-sandbox',
 				'--disable-dev-shm-usage',
-				'--disable-web-security',  # NUOVO: per alcuni siti con restrizioni CORS
-				'--disable-features=VizDisplayCompositor',  # NUOVO: per performance
-				'--disable-background-timer-throttling',  # NUOVO: evita throttling JS
+				'--disable-web-security',  # Per alcuni siti con restrizioni CORS
+				'--disable-features=VizDisplayCompositor',  # Per performance
+				'--disable-background-timer-throttling',  # Evita throttling JS
 				'--disable-backgrounding-occluded-windows',
 				'--disable-renderer-backgrounding',
 			]
 		}
 
-		# NUOVO: Context configurato per siti dinamici
+		# Context configurato per siti dinamici
 		context_config = {
 			'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-			'viewport': {'width': 1920, 'height': 1080},  # NUOVO: viewport più grande
-			'locale': 'it-IT',  # NUOVO: locale italiano
-			'timezone_id': 'Europe/Rome',  # NUOVO: timezone italiana
-			'geolocation': {'latitude': 41.9028, 'longitude': 12.4964},  # NUOVO: Roma
-			'permissions': ['geolocation']  # NUOVO: permessi
+			'viewport': {'width': 1920, 'height': 1080},  # Viewport più grande
+			'locale': 'it-IT',  # Locale italiano
+			'timezone_id': 'Europe/Rome',  # Timezone italiana
+			'geolocation': {'latitude': 41.9028, 'longitude': 12.4964},  # Roma
+			'permissions': ['geolocation']  # Permessi
 		}
 
 		# Avvia Playwright con configurazione migliorata
@@ -709,34 +910,32 @@ class WebCrawler:
 			browser = playwright.chromium.launch(**browser_config)
 			context = browser.new_context(**context_config)
 
-			# NUOVO: Configura il timeout della pagina aumentato
+			# Configura il timeout della pagina aumentato
 			page = context.new_page()
 			page.set_default_timeout(self.timeout)
 			page.set_default_navigation_timeout(self.timeout)
 
-			# NUOVO: Intercetta e gestisci errori JavaScript
+			# Intercetta e gestisci errori JavaScript
 			page.on("pageerror", lambda error: logger.debug(f"🐛 JS Error: {error}"))
 			page.on("requestfailed", lambda request: logger.debug(f"🌐 Request failed: {request.url}"))
 
 			while url_queue and processed_pages < self.max_pages:
 				current_url, current_depth = url_queue.pop(0)
 
+				# Pulisci l'URL rimuovendo parametri di tracking
+				current_url = self.clean_url(current_url)
+
 				# Salta URL già visitati o non validi
-				if current_url in visited_urls or not self.should_process_url(current_url):
+				if current_url in visited_urls or not self.should_process_url(current_url, base_domain):
 					continue
 
-				# Verifica dominio
-				current_domain = urlparse(current_url).netloc
-				if current_domain != base_domain:
-					continue
-
-				logger.info(f"🔍 Elaborazione pagina MIGLIORATA: {current_url} (profondità: {current_depth})")
+				logger.info(f"🔍 Elaborazione pagina: {current_url} (profondità: {current_depth})")
 
 				# Aggiungi alla lista dei visitati
 				visited_urls.add(current_url)
 
 				try:
-					# NUOVO: Navigazione con retry e gestione errori migliorata
+					# Navigazione con retry e gestione errori migliorata
 					max_retries = 3
 					page_loaded = False
 
@@ -766,14 +965,14 @@ class WebCrawler:
 						failed_pages += 1
 						continue
 
-					# NUOVO: Attendi che tutti i contenuti dinamici si carichino
+					# Attendi che tutti i contenuti dinamici si carichino
 					if self.enhanced_js_support:
 						self.wait_for_dynamic_content(page)
 
-						# NUOVO: Simula interazioni utente per rivelare contenuti nascosti
+						# Simula interazioni utente per rivelare contenuti nascosti
 						self.simulate_user_interactions(page)
 
-						# NUOVO: Attesa finale per stabilizzare la pagina
+						# Attesa finale per stabilizzare la pagina
 						page.wait_for_timeout(1000)
 
 					# Ottieni il contenuto HTML finale (dopo tutte le interazioni JS)
@@ -784,8 +983,7 @@ class WebCrawler:
 					page_content, main_text, title, meta_description = self.extract_text_content(soup, current_url,
 																								 page)
 
-					# NUOVO: Verifica più intelligente della lunghezza del testo
-					# Considera anche contenuti brevi ma significativi (come testimonianze)
+					# Verifica più intelligente della lunghezza del testo
 					content_quality_check = (
 							len(main_text) >= self.min_text_length or  # Lunghezza standard
 							(len(main_text) >= 100 and any(keyword in main_text.lower()
@@ -807,59 +1005,65 @@ class WebCrawler:
 						extracted_info = extraction_method(page_content, current_url)
 						logger.info(f"🤖 Informazioni estratte con {self.llm_provider} per {current_url}")
 
-					# Crea un nome file basato sull'URL
-					parsed_suburl = urlparse(current_url)
-					path = parsed_suburl.path.strip('/')
-					if not path:
-						path = 'index'
+					# Crea un documento per l'output
+					doc_metadata = {
+						"url": current_url,
+						"title": title,
+						"crawl_depth": current_depth,
+						"domain": base_domain,
+						"type": "web_page",
+						"extraction_method": "enhanced_js" if self.enhanced_js_support else "standard",
+						"content_length": len(page_content),
+						"main_text_length": len(main_text),
+						"has_dynamic_content": "carousel" in html_content.lower() or "javascript" in html_content.lower()
+					}
 
-					# Sostituisci caratteri non validi nei nomi file
-					path = path.replace('/', '_').replace('?', '_').replace('&', '_')
-					path = re.sub(r'[^a-zA-Z0-9_.-]', '_', path)
+					# Se abbiamo una directory di output, salva il file
+					if output_dir:
+						# Crea un nome file basato sull'URL
+						parsed_suburl = urlparse(current_url)
+						path = parsed_suburl.path.strip('/')
+						if not path:
+							path = 'index'
 
-					# Limita la lunghezza del nome file
-					if len(path) > 100:
-						path = path[:100]
+						# Sostituisci caratteri non validi nei nomi file
+						path = path.replace('/', '_').replace('?', '_').replace('&', '_')
+						path = re.sub(r'[^a-zA-Z0-9_.-]', '_', path)
 
-					file_id = uuid.uuid4().hex[:8]
-					file_name = f"{path}_{file_id}.txt"
-					file_path = os.path.join(output_dir, file_name)
+						# Limita la lunghezza del nome file
+						if len(path) > 100:
+							path = path[:100]
 
-					# Salva il contenuto come file di testo
-					with open(file_path, 'w', encoding='utf-8') as f:
-						f.write(f"URL: {current_url}\n\n{page_content}")
+						file_id = uuid.uuid4().hex[:8]
+						file_name = f"{path}_{file_id}.txt"
+						file_path = os.path.join(output_dir, file_name)
+
+						# Salva il contenuto come file di testo
+						with open(file_path, 'w', encoding='utf-8') as f:
+							f.write(f"URL: {current_url}\n\n{page_content}")
+
+						doc_metadata["source"] = file_path
+						doc_metadata["filename"] = file_name
+
+						logger.info(f"✅ Pagina salvata: {file_name} ({os.path.getsize(file_path)} bytes)")
 
 					# Crea un documento LangChain
 					doc = Document(
 						page_content=page_content,
-						metadata={
-							"source": file_path,
-							"url": current_url,
-							"title": title,
-							"crawl_depth": current_depth,
-							"domain": base_domain,
-							"filename": file_name,
-							"type": "web_page",
-							# NUOVO: Metadati migliorati
-							"extraction_method": "enhanced_js" if self.enhanced_js_support else "standard",
-							"content_length": len(page_content),
-							"main_text_length": len(main_text),
-							"has_dynamic_content": "carousel" in html_content.lower() or "javascript" in html_content.lower()
-						}
+						metadata=doc_metadata
 					)
 
-					documents.append((doc, file_path))
+					documents.append((doc, doc_metadata.get("source", current_url)))
 					processed_pages += 1
 
-					logger.info(f"✅ Pagina salvata: {file_name} ({os.path.getsize(file_path)} bytes)")
 					logger.debug(f"📊 Contenuto estratto: {len(page_content)} caratteri totali")
 
-					# Invece di salvare direttamente, raccogli i dati
+					# Se c'è un progetto, raccogli i dati per il salvataggio
 					if project:
 						# Normalizza l'URL se necessario
 						normalized_url = current_url
 
-						# NUOVO: Metadati migliorati per ProjectURL
+						# Metadati migliorati per ProjectURL
 						enhanced_metadata = {
 							'domain': base_domain,
 							'path': parsed_suburl.path,
@@ -880,7 +1084,7 @@ class WebCrawler:
 							'description': meta_description,
 							'content': page_content,
 							'extracted_info': json.dumps(extracted_info) if extracted_info else None,
-							'file_path': file_path,
+							'file_path': doc_metadata.get("source", ""),
 							'crawl_depth': current_depth,
 							'is_indexed': False,
 							'metadata': enhanced_metadata
@@ -889,51 +1093,51 @@ class WebCrawler:
 
 					# Se non abbiamo raggiunto la profondità massima, aggiungi i link alla coda
 					if current_depth < self.max_depth:
-						# NUOVO: Estrazione link migliorata che considera anche link dinamici
+						# Estrazione link migliorata che considera anche link dinamici
 						try:
 							# Estrai link sia tramite JavaScript che HTML
 							all_links = page.evaluate("""() => {
-								const links = [];
+                                const links = [];
 
-								// 1. Link HTML standard
-								document.querySelectorAll('a[href]').forEach(a => {
-									if (a.href && !a.href.startsWith('javascript:') && !a.href.startsWith('#')) {
-										links.push(a.href);
-									}
-								});
+                                // 1. Link HTML standard
+                                document.querySelectorAll('a[href]').forEach(a => {
+                                    if (a.href && !a.href.startsWith('javascript:') && !a.href.startsWith('#')) {
+                                        links.push(a.href);
+                                    }
+                                });
 
-								// 2. NUOVO: Link che potrebbero essere generati dinamicamente
-								document.querySelectorAll('[data-href], [data-url], [onclick*="location"]').forEach(el => {
-									const href = el.dataset.href || el.dataset.url;
-									if (href && !href.startsWith('#')) {
-										links.push(href);
-									}
-								});
+                                // 2. Link che potrebbero essere generati dinamicamente
+                                document.querySelectorAll('[data-href], [data-url], [onclick*="location"]').forEach(el => {
+                                    const href = el.dataset.href || el.dataset.url;
+                                    if (href && !href.startsWith('#')) {
+                                        links.push(href);
+                                    }
+                                });
 
-								// 3. NUOVO: Cerca link nei dati JSON incorporati
-								const jsonScripts = document.querySelectorAll('script[type="application/json"], script[type="application/ld+json"]');
-								jsonScripts.forEach(script => {
-									try {
-										const data = JSON.parse(script.textContent);
-										const findUrls = (obj) => {
-											if (typeof obj === 'object' && obj !== null) {
-												Object.values(obj).forEach(value => {
-													if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/'))) {
-														links.push(value);
-													} else if (typeof value === 'object') {
-														findUrls(value);
-													}
-												});
-											}
-										};
-										findUrls(data);
-									} catch (e) {
-										// Ignora errori JSON
-									}
-								});
+                                // 3. Cerca link nei dati JSON incorporati
+                                const jsonScripts = document.querySelectorAll('script[type="application/json"], script[type="application/ld+json"]');
+                                jsonScripts.forEach(script => {
+                                    try {
+                                        const data = JSON.parse(script.textContent);
+                                        const findUrls = (obj) => {
+                                            if (typeof obj === 'object' && obj !== null) {
+                                                Object.values(obj).forEach(value => {
+                                                    if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/'))) {
+                                                        links.push(value);
+                                                    } else if (typeof value === 'object') {
+                                                        findUrls(value);
+                                                    }
+                                                });
+                                            }
+                                        };
+                                        findUrls(data);
+                                    } catch (e) {
+                                        // Ignora errori JSON
+                                    }
+                                });
 
-								return [...new Set(links)]; // Rimuovi duplicati
-							}""")
+                                return [...new Set(links)]; // Rimuovi duplicati
+                            }""")
 
 							logger.debug(f"🔗 Trovati {len(all_links)} link sulla pagina")
 
@@ -942,11 +1146,14 @@ class WebCrawler:
 								try:
 									absolute_link = urljoin(current_url, link)
 
-									# NUOVO: Filtro migliorato per escludere link non utili
+									# Pulisci il link dai parametri di tracking
+									absolute_link = self.clean_url(absolute_link)
+
+									# Filtro migliorato per escludere link non utili
 									if (absolute_link not in visited_urls and
-											self.should_process_url(absolute_link) and
-											urlparse(absolute_link).netloc == base_domain):
+											self.should_process_url(absolute_link, base_domain)):
 										url_queue.append((absolute_link, current_depth + 1))
+										logger.debug(f"✅ Link aggiunto alla coda: {absolute_link}")
 								except Exception as link_error:
 									logger.debug(f"⚠️ Errore nel processare link {link}: {link_error}")
 
@@ -958,8 +1165,9 @@ class WebCrawler:
 								href = link_tag['href']
 								if not href.startswith(('javascript:', '#')):
 									absolute_link = urljoin(current_url, href)
+									absolute_link = self.clean_url(absolute_link)
 									if (absolute_link not in visited_urls and
-											urlparse(absolute_link).netloc == base_domain):
+											self.should_process_url(absolute_link, base_domain)):
 										url_queue.append((absolute_link, current_depth + 1))
 
 				except Exception as e:
@@ -997,7 +1205,7 @@ class WebCrawler:
 
 						stored_urls.append(existing_url)
 						logger.info(
-							f"🔄 Aggiornato URL esistente (MIGLIORATO) {url_data['url']} per il progetto {project.id}")
+							f"🔄 Aggiornato URL esistente {url_data['url']} per il progetto {project.id}")
 					else:
 						# Crea nuovo URL
 						url_obj = ProjectURL.objects.create(
@@ -1009,32 +1217,34 @@ class WebCrawler:
 							extracted_info=url_data['extracted_info'],
 							file_path=url_data['file_path'],
 							crawl_depth=url_data['crawl_depth'],
-							is_indexed=False,  # Inizialmente non indicizzato
-							is_included_in_rag=True,  # Includi di default nel RAG
+							is_indexed=False,
+							is_included_in_rag=True,
 							metadata=url_data['metadata']
 						)
 						stored_urls.append(url_obj)
-						logger.info(f"🆕 Creato nuovo URL (MIGLIORATO) {url_data['url']} per il progetto {project.id}")
+						logger.info(f"🆕 Creato nuovo URL {url_data['url']} per il progetto {project.id}")
 
 				except Exception as db_error:
 					logger.error(f"❌ Errore nel salvare l'URL nel database: {str(db_error)}")
 
-		# NUOVO: Statistiche finali dettagliate
+		# Statistiche finali dettagliate
 		logger.info("=" * 60)
-		logger.info(f"🏁 CRAWLING MIGLIORATO COMPLETATO")
+		logger.info(f"🏁 CRAWLING COMPLETATO")
 		logger.info(f"📊 Statistiche finali:")
 		logger.info(f"   ✅ Pagine elaborate: {processed_pages}")
 		logger.info(f"   ❌ Pagine fallite: {failed_pages}")
 		logger.info(f"   🔗 URL visitati: {len(visited_urls)}")
 		logger.info(f"   💾 Documenti creati: {len(documents)}")
-		logger.info(f"   🗄️ URL salvati nel DB: {len(stored_urls)}")
+		if project:
+			logger.info(f"   🗄️ URL salvati nel DB: {len(stored_urls)}")
 		logger.info(f"   🔧 Modalità JS avanzata: {'✅' if self.enhanced_js_support else '❌'}")
+		logger.info(f"   🚫 Domini esterni filtrati: {len(self.excluded_domains)}")
 
 		if stored_urls:
 			total_content_size = sum(len(url.content or '') for url in stored_urls)
 			logger.info(f"   📏 Contenuto totale estratto: {total_content_size:,} caratteri")
 
-			# NUOVO: Statistiche sui tipi di contenuto trovato
+			# Statistiche sui tipi di contenuto trovato
 			dynamic_content_count = sum(1 for url in stored_urls
 										if url.metadata and url.metadata.get('has_dynamic_content', False))
 			logger.info(f"   🎭 Pagine con contenuto dinamico: {dynamic_content_count}")
@@ -1045,11 +1255,7 @@ class WebCrawler:
 
 	def extract_info_with_openai(self, content, url):
 		"""
-		NUOVO: Estrae informazioni strutturate usando OpenAI GPT per analisi avanzata del contenuto.
-
-		Questa funzione utilizza l'API OpenAI per estrarre automaticamente
-		informazioni chiave dal contenuto web, come entità, sentiment,
-		punti salienti e classificazione del contenuto.
+		Estrae informazioni strutturate usando OpenAI GPT per analisi avanzata del contenuto.
 
 		Args:
 			content: Contenuto testuale della pagina
@@ -1068,22 +1274,22 @@ class WebCrawler:
 
 			# Prompt ottimizzato per estrazione di informazioni web
 			prompt = f"""
-			Analizza il seguente contenuto web e estrai informazioni strutturate:
+            Analizza il seguente contenuto web e estrai informazioni strutturate:
 
-			URL: {url}
+            URL: {url}
 
-			Contenuto:
-			{content[:3000]}  # Limita a 3000 caratteri per evitare token limit
+            Contenuto:
+            {content[:3000]}  # Limita a 3000 caratteri per evitare token limit
 
-			Estrai e restituisci in formato JSON:
-			1. "summary": Riassunto del contenuto in 2-3 frasi
-			2. "key_points": Lista dei 3-5 punti principali
-			3. "entities": Lista di persone, luoghi, organizzazioni menzionate
-			4. "content_type": Tipo di contenuto (e.g., "product_page", "blog_post", "testimonials", "company_info")
-			5. "language": Lingua del contenuto
-			6. "sentiment": Sentiment generale (positive, negative, neutral)
-			7. "topics": Lista di 3-5 argomenti principali
-			"""
+            Estrai e restituisci in formato JSON:
+            1. "summary": Riassunto del contenuto in 2-3 frasi
+            2. "key_points": Lista dei 3-5 punti principali
+            3. "entities": Lista di persone, luoghi, organizzazioni menzionate
+            4. "content_type": Tipo di contenuto (e.g., "product_page", "blog_post", "testimonials", "company_info")
+            5. "language": Lingua del contenuto
+            6. "sentiment": Sentiment generale (positive, negative, neutral)
+            7. "topics": Lista di 3-5 argomenti principali
+            """
 
 			response = client.chat.completions.create(
 				model="gpt-3.5-turbo",
@@ -1219,3 +1425,199 @@ class WebCrawler:
 		except Exception as e:
 			logger.error(f"❌ Errore nel controllo cancellazione: {str(e)}")
 			return False
+
+
+def crawl_from_cli(url, output_format='json', output_file=None, **kwargs):
+	"""
+	Funzione per eseguire il crawling da linea di comando.
+
+	Args:
+		url: URL da crawlare
+		output_format: Formato di output ('json' o 'text')
+		output_file: File dove salvare l'output (opzionale)
+		**kwargs: Parametri aggiuntivi per il crawler
+
+	Returns:
+		dict: Risultati del crawling in formato dizionario
+	"""
+	# Configura il logger per CLI
+	console_handler = logging.StreamHandler()
+	console_handler.setLevel(logging.INFO)
+	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+	console_handler.setFormatter(formatter)
+	logger.addHandler(console_handler)
+
+	# Crea una directory temporanea per i file
+	import tempfile
+	with tempfile.TemporaryDirectory() as temp_dir:
+		# Inizializza il crawler con i parametri forniti
+		crawler = WebCrawler(
+			max_depth=kwargs.get('max_depth', 2),
+			max_pages=kwargs.get('max_pages', 10),
+			min_text_length=kwargs.get('min_text_length', 500),
+			enhanced_js_support=kwargs.get('enhanced_js', True),
+			timeout=kwargs.get('timeout', 60000)
+		)
+
+		# Esegui il crawling
+		processed, failed, documents, _ = crawler.crawl(url, temp_dir)
+
+		# Prepara i risultati
+		results = {
+			'url': url,
+			'processed_pages': processed,
+			'failed_pages': failed,
+			'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+			'pages': []
+		}
+
+		# Aggiungi i documenti ai risultati
+		for doc, source in documents:
+			page_data = {
+				'url': doc.metadata.get('url', ''),
+				'title': doc.metadata.get('title', ''),
+				'content_length': doc.metadata.get('content_length', 0),
+				'crawl_depth': doc.metadata.get('crawl_depth', 0),
+				'has_dynamic_content': doc.metadata.get('has_dynamic_content', False)
+			}
+
+			if output_format == 'text' or kwargs.get('include_content', False):
+				page_data['content'] = doc.page_content
+
+			results['pages'].append(page_data)
+
+		# Salva o stampa i risultati
+		if output_file:
+			with open(output_file, 'w', encoding='utf-8') as f:
+				if output_format == 'json':
+					json.dump(results, f, ensure_ascii=False, indent=2)
+				else:
+					f.write(f"Crawling Report for {url}\n")
+					f.write("=" * 80 + "\n\n")
+					f.write(f"Processed Pages: {processed}\n")
+					f.write(f"Failed Pages: {failed}\n")
+					f.write(f"Timestamp: {results['timestamp']}\n\n")
+
+					for page in results['pages']:
+						f.write(f"\n{'-' * 80}\n")
+						f.write(f"URL: {page['url']}\n")
+						f.write(f"Title: {page['title']}\n")
+						f.write(f"Content Length: {page['content_length']} chars\n")
+						f.write(f"Crawl Depth: {page['crawl_depth']}\n")
+						if 'content' in page:
+							f.write(f"\nContent:\n{page['content']}\n")
+		else:
+			if output_format == 'json':
+				print(json.dumps(results, ensure_ascii=False, indent=2))
+			else:
+				print(f"Crawling completed for {url}")
+				print(f"Processed: {processed} pages, Failed: {failed} pages")
+
+		return results
+
+
+def main():
+	"""
+	Entry point per l'esecuzione da linea di comando.
+	"""
+	parser = argparse.ArgumentParser(
+		description='Web Crawler avanzato con supporto JavaScript e filtri per link esterni',
+		formatter_class=argparse.RawDescriptionHelpFormatter,
+		epilog="""
+Esempi di utilizzo:
+  python web_crawler.py https://example.com
+  python web_crawler.py https://example.com -o output.json
+  python web_crawler.py https://example.com --max-depth 3 --max-pages 50
+  python web_crawler.py https://example.com --format text --include-content
+  python web_crawler.py https://example.com --no-js --min-text 1000
+        """
+	)
+
+	# Argomenti posizionali
+	parser.add_argument('url', help='URL del sito da crawlare')
+
+	# Opzioni di output
+	parser.add_argument('-o', '--output', dest='output_file',
+						help='File di output (se non specificato, stampa su stdout)')
+	parser.add_argument('-f', '--format', dest='output_format',
+						choices=['json', 'text'], default='json',
+						help='Formato di output (default: json)')
+	parser.add_argument('--include-content', action='store_true',
+						help='Include il contenuto completo delle pagine nel JSON')
+
+	# Parametri del crawler
+	parser.add_argument('--max-depth', type=int, default=2,
+						help='Profondità massima di crawling (default: 2)')
+	parser.add_argument('--max-pages', type=int, default=10,
+						help='Numero massimo di pagine da crawlare (default: 10)')
+	parser.add_argument('--min-text', type=int, default=500,
+						help='Lunghezza minima del testo per considerare valida una pagina (default: 500)')
+	parser.add_argument('--timeout', type=int, default=60000,
+						help='Timeout in millisecondi per il caricamento delle pagine (default: 60000)')
+
+	# Opzioni JavaScript
+	parser.add_argument('--no-js', dest='enhanced_js', action='store_false',
+						help='Disabilita il supporto JavaScript avanzato')
+
+	# Opzioni di logging
+	parser.add_argument('-v', '--verbose', action='store_true',
+						help='Abilita output dettagliato')
+	parser.add_argument('-q', '--quiet', action='store_true',
+						help='Disabilita tutti i messaggi tranne gli errori')
+
+	args = parser.parse_args()
+
+	# Configura il livello di logging
+	if args.quiet:
+		logger.setLevel(logging.ERROR)
+	elif args.verbose:
+		logger.setLevel(logging.DEBUG)
+	else:
+		logger.setLevel(logging.INFO)
+
+	try:
+		# Esegui il crawling
+		results = crawl_from_cli(
+			url=args.url,
+			output_format=args.output_format,
+			output_file=args.output_file,
+			include_content=args.include_content,
+			max_depth=args.max_depth,
+			max_pages=args.max_pages,
+			min_text_length=args.min_text,
+			enhanced_js=args.enhanced_js,
+			timeout=args.timeout
+		)
+
+		# Exit code basato sui risultati
+		if results['failed_pages'] > 0:
+			sys.exit(1)  # Almeno una pagina è fallita
+		else:
+			sys.exit(0)  # Tutto ok
+
+	except KeyboardInterrupt:
+		logger.info("\n🛑 Crawling interrotto dall'utente")
+		sys.exit(130)
+	except Exception as e:
+		logger.error(f"❌ Errore durante il crawling: {str(e)}")
+		if args.verbose:
+			logger.error(traceback.format_exc())
+		sys.exit(1)
+
+
+# si puo usare anche da console in questo modo:
+# Esempi di utilizzo:
+#python web_crawler.py https://example.com
+#python web_crawler.py https://example.com -o output.json
+#python web_crawler.py https://example.com --max-depth 3 --max-pages 50
+#python web_crawler.py https://example.com --format text --include-content
+
+
+
+if __name__ == "__main__":
+	main()
+
+
+
+
+

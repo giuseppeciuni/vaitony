@@ -293,7 +293,8 @@ def check_project_index_update_needed(project):
     logger.debug(f"Controllo aggiornamento indice per progetto {project.id}")
 
     # Verifica file non ancora indicizzati
-    files_to_embed = ProjectFile.objects.filter(project=project, is_embedded=False).count()
+    #files_to_embed = ProjectFile.objects.filter(project=project, is_embedded=False).count()
+    files_to_embed = ProjectFile.objects.filter(project=project, is_included_in_rag=True, is_embedded=False).count()
 
     # Verifica note attive non ancora indicizzate
     notes_to_embed = ProjectNote.objects.filter(

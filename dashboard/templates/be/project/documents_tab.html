@@ -12,9 +12,8 @@
         {% for file in project_files %}
         <div class="col">
             <div class="document-card card h-100" data-file-id="{{ file.id }}">
-                <div class="card-body text-center p-3 view-document" data-bs-toggle="modal" data-bs-target="#documentModal"
-                     data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}" data-file-size="{{ file.file_size|filesizeformat }}"
-                     data-file-path="{% url 'serve_project_file' file.id %}">
+                <div class="card-body text-center p-3">
+                    <!-- Icona del tipo di file -->
                     {% if file.extension == '.pdf' %}
                         <i class="bi bi-file-earmark-pdf document-icon pdf mb-2"></i>
                     {% elif file.extension == '.doc' or file.extension == '.docx' %}
@@ -26,10 +25,39 @@
                     {% else %}
                         <i class="bi bi-file-earmark document-icon mb-2"></i>
                     {% endif %}
+
+                    <!-- Nome e dimensione file -->
                     <div class="card-title text-truncate small">{{ file.filename }}</div>
                     <small class="text-muted d-block">{{ file.file_size|filesizeformat }}</small>
+
+                    <!-- Toggle RAG -->
+                    <div class="mt-2">
+                        <div class="form-check form-switch d-flex justify-content-center">
+                            <input class="form-check-input include-file-check me-2"
+                                   type="checkbox"
+                                   role="switch"
+                                   id="include-file-{{ file.id }}"
+                                   data-file-id="{{ file.id }}"
+                                   {% if file.is_included_in_rag %}checked{% endif %}>
+                            <label class="form-check-label small text-muted" for="include-file-{{ file.id }}">
+                                Ricerca AI
+                            </label>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="card-footer bg-white border-top-0 py-2 px-3">
+                    <!-- Pulsante Anteprima (mantiene il codice esatto originale) -->
+                    <button class="btn btn-sm btn-outline-primary w-100 mb-2 view-document"
+                            data-bs-toggle="modal" data-bs-target="#documentModal"
+                            data-file-id="{{ file.id }}"
+                            data-file-name="{{ file.filename }}"
+                            data-file-size="{{ file.file_size|filesizeformat }}"
+                            data-file-path="{% url 'serve_project_file' file.id %}">
+                        <i class="bi bi-eye"></i> Anteprima
+                    </button>
+
+                    <!-- Pulsante Elimina -->
                     <button class="btn btn-sm btn-outline-danger w-100 delete-file-btn"
                             data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}"
                             data-bs-toggle="modal" data-bs-target="#deleteFileModal">
@@ -51,3 +79,118 @@
     </div>
     {% endif %}
 </div>
+
+<!-- NUOVO: JavaScript per gestire il toggle RAG dei documenti -->
+<script>
+// Toggle per l'inclusione dei documenti nella ricerca AI
+document.querySelectorAll('.include-file-check').forEach(checkbox => {
+    checkbox.addEventListener('change', function(e) {
+        const fileId = this.getAttribute('data-file-id');
+        const isIncluded = this.checked;
+
+        // Disabilita temporaneamente il toggle durante la richiesta
+        this.disabled = true;
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'toggle_file_inclusion',
+                'file_id': fileId,
+                'is_included': isIncluded,
+                'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Mostra notifica di successo
+                showToast(isIncluded ?
+                    '📄 Documento incluso nella ricerca AI' :
+                    '📄 Documento escluso dalla ricerca AI',
+                    'success'
+                );
+            } else {
+                // Ripristina stato precedente in caso di errore
+                this.checked = !isIncluded;
+                showToast('❌ Errore: ' + (data.message || 'Impossibile aggiornare lo stato del documento'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            // Ripristina stato precedente
+            this.checked = !isIncluded;
+            showToast('❌ Errore di rete. Riprova più tardi.', 'danger');
+        })
+        .finally(() => {
+            // Riabilita il toggle
+            this.disabled = false;
+        });
+    });
+});
+
+// Funzione helper per mostrare notifiche toast (se non esiste già)
+function showToast(message, type = 'info') {
+    // Cerca un sistema di toast esistente o crea uno semplice
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+    } else {
+        // Toast semplice se non esiste un sistema
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'danger' ? 'danger' : 'success'} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.body.appendChild(alertDiv);
+
+        // Rimuovi automaticamente dopo 3 secondi
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.parentNode.removeChild(alertDiv);
+            }
+        }, 3000);
+    }
+}
+</script>
+
+<!-- CSS aggiuntivo per stilizzare le card -->
+<style>
+/* Stili per le card documenti */
+.document-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.document-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Toggle personalizzato */
+.document-card .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.document-card .form-check-input:not(:checked) {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+/* Icone documenti colorate */
+.document-icon.pdf { color: #dc3545; font-size: 2.5rem; }
+.document-icon.doc { color: #0d6efd; font-size: 2.5rem; }
+.document-icon.xls { color: #198754; font-size: 2.5rem; }
+.document-icon.jpg { color: #fd7e14; font-size: 2.5rem; }
+.document-icon { color: #6c757d; font-size: 2.5rem; }
+
+/* Previeni che il toggle sia cliccabile durante il caricamento */
+.document-card .form-check-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+</style>

@@ -2802,3 +2802,71 @@ if (!document.getElementById('conversational-css')) {
     document.head.appendChild(styleElement);
 }
 </script>
+
+
+<script>
+// Toggle per l'inclusione dei documenti nella ricerca AI
+document.querySelectorAll('.include-file-check').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const fileId = this.getAttribute('data-file-id');
+        const isIncluded = this.checked;
+        const card = this.closest('.card');
+        const badge = card.querySelector('.badge');
+
+        // Feedback visivo immediato
+        if (isIncluded) {
+            badge.className = 'badge bg-success-subtle text-success-emphasis';
+            badge.innerHTML = '<i class="bi bi-search me-1"></i>Incluso nella ricerca';
+        } else {
+            badge.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+            badge.innerHTML = '<i class="bi bi-search me-1"></i>Escluso dalla ricerca';
+        }
+
+        // Disabilita temporaneamente il toggle durante la richiesta
+        this.disabled = true;
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'toggle_file_inclusion',
+                'file_id': fileId,
+                'is_included': isIncluded,
+                'csrfmiddlewaretoken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(isIncluded ?
+                    '📄 Documento incluso nella ricerca AI' :
+                    '📄 Documento escluso dalla ricerca AI',
+                    'success'
+                );
+            } else {
+                // Ripristina stato precedente
+                this.checked = !isIncluded;
+                if (!isIncluded) {
+                    badge.className = 'badge bg-success-subtle text-success-emphasis';
+                    badge.innerHTML = '<i class="bi bi-search me-1"></i>Incluso nella ricerca';
+                } else {
+                    badge.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+                    badge.innerHTML = '<i class="bi bi-search me-1"></i>Escluso dalla ricerca';
+                }
+                showToast('❌ Errore: ' + (data.message || 'Impossibile aggiornare lo stato del documento'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            this.checked = !isIncluded;
+            showToast('❌ Errore di rete. Riprova più tardi.', 'danger');
+        })
+        .finally(() => {
+            this.disabled = false;
+        });
+    });
+});
+</script>

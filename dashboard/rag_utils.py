@@ -7,17 +7,8 @@ Questo modulo gestisce:
 - Gestione delle query e recupero delle risposte
 - Operazioni sulle note e sui file dei progetti
 """
-import base64
-import json
 import logging
-import os
-import shutil
-import time
-from urllib.parse import urlparse
-import openai
-from django.conf import settings
-from django.db.models import Q
-from django.utils import timezone
+
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
@@ -31,7 +22,7 @@ from langchain_openai import ChatOpenAI
 # Importa le funzioni utility per la gestione dei documenti
 from dashboard.rag_document_utils import (
     compute_file_hash, check_project_index_update_needed,
-    update_project_index_status, get_cached_embedding, create_embedding_cache
+    update_project_index_status, get_cached_embedding, create_embedding_cache, copy_embedding_to_project_index
 )
 from profiles.models import ProjectURL
 
@@ -479,6 +470,517 @@ def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_dela
     raise Exception("Impossibile creare gli embedding dopo ripetuti tentativi")
 
 
+# dashboard/rag_utils.py - Integrazione delle nuove funzioni
+
+# Le nuove funzioni vanno aggiunte in QUESTE POSIZIONI SPECIFICHE:
+
+# ========================================
+# 1. AGGIUNGI DOPO GLI IMPORT (riga ~20)
+# ========================================
+
+import base64
+import os
+import shutil
+import time
+import pickle  # NUOVO: per i metadati dell'indice
+from urllib.parse import urlparse
+import openai
+from django.conf import settings
+from django.utils import timezone
+
+
+# ========================================
+# 2. AGGIUNGI DOPO create_embeddings_with_retry() (circa riga 150)
+# ========================================
+
+def create_embeddings_with_retry(documents, user=None, max_retries=3, retry_delay=2):
+    # ... funzione esistente ...
+    pass
+
+
+def create_project_rag_chain_optimized(project, changed_file_id=None, changed_note_id=None,
+                                       changed_url_id=None, operation='update'):
+    """
+    Versione ottimizzata di create_project_rag_chain che gestisce modifiche incrementali
+    per ridurre i costi degli embedding e migliorare le performance.
+
+    Operations supported:
+    - 'toggle_inclusion': Toggle on/off di un elemento nel RAG
+    - 'content_update': Aggiornamento del contenuto di un elemento
+    - 'delete': Eliminazione di un elemento
+    - 'full_rebuild': Ricostruzione completa (fallback)
+    """
+
+    logger.info(f"🔧 Ottimizzazione RAG per progetto {project.id} - Operazione: {operation}")
+
+    project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+    index_name = f"vector_index_{project.id}"
+    index_path = os.path.join(project_dir, index_name)
+
+    # Percorso per salvare metadati dell'indice per ottimizzazioni future
+    metadata_path = os.path.join(project_dir, f"index_metadata_{project.id}.pkl")
+
+    try:
+        # Carica metadati esistenti dell'indice
+        index_metadata = load_index_metadata(metadata_path)
+
+        # Determina strategia di ottimizzazione
+        optimization_strategy = determine_optimization_strategy(
+            project, operation, changed_file_id, changed_note_id, changed_url_id, index_metadata
+        )
+
+        logger.info(f"📊 Strategia di ottimizzazione: {optimization_strategy['strategy']}")
+
+        if optimization_strategy['strategy'] == 'incremental_update':
+            return handle_incremental_update(project, optimization_strategy, index_path, metadata_path)
+
+        elif optimization_strategy['strategy'] == 'selective_rebuild':
+            return handle_selective_rebuild(project, optimization_strategy, index_path, metadata_path)
+
+        elif optimization_strategy['strategy'] == 'remove_from_index':
+            return handle_remove_from_index(project, optimization_strategy, index_path, metadata_path)
+
+        else:  # full_rebuild
+            logger.info("🔄 Eseguendo ricostruzione completa dell'indice")
+            return create_project_rag_chain(project, force_rebuild=True)
+
+    except Exception as e:
+        logger.error(f"❌ Errore nell'ottimizzazione RAG: {str(e)}")
+        logger.info("🔄 Fallback a ricostruzione completa")
+        return create_project_rag_chain(project, force_rebuild=True)
+
+
+def determine_optimization_strategy(project, operation, file_id, note_id, url_id, index_metadata):
+    """Determina la strategia di ottimizzazione basata sull'operazione e lo stato dell'indice."""
+    from profiles.models import ProjectFile, ProjectNote, ProjectURL
+
+    strategy = {
+        'strategy': 'full_rebuild',
+        'changed_elements': [],
+        'total_elements': 0,
+        'impact_percentage': 100
+    }
+
+    # Conta elementi totali attivi
+    total_files = ProjectFile.objects.filter(project=project, is_included_in_rag=True).count()
+    total_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True).count()
+    total_urls = ProjectURL.objects.filter(project=project, is_included_in_rag=True).count()
+    total_elements = total_files + total_notes + total_urls
+
+    strategy['total_elements'] = total_elements
+
+    # Se non ci sono elementi, non c'è nulla da ottimizzare
+    if total_elements == 0:
+        strategy['strategy'] = 'remove_index'
+        return strategy
+
+    # Analizza l'impatto della modifica
+    changed_elements = []
+    if file_id:
+        try:
+            file_obj = ProjectFile.objects.get(id=file_id, project=project)
+            changed_elements.append({'type': 'file', 'obj': file_obj})
+        except ProjectFile.DoesNotExist:
+            pass
+
+    if note_id:
+        try:
+            note_obj = ProjectNote.objects.get(id=note_id, project=project)
+            changed_elements.append({'type': 'note', 'obj': note_obj})
+        except ProjectNote.DoesNotExist:
+            pass
+
+    if url_id:
+        try:
+            url_obj = ProjectURL.objects.get(id=url_id, project=project)
+            changed_elements.append({'type': 'url', 'obj': url_obj})
+        except ProjectURL.DoesNotExist:
+            pass
+
+    strategy['changed_elements'] = changed_elements
+
+    # Calcola percentuale di impatto
+    impact_percentage = (len(changed_elements) / max(total_elements, 1)) * 100
+    strategy['impact_percentage'] = impact_percentage
+
+    # Determina strategia basata su operazione e impatto
+    if operation == 'toggle_inclusion':
+        if impact_percentage <= 10:  # Meno del 10% degli elementi
+            strategy['strategy'] = 'incremental_update'
+        else:
+            strategy['strategy'] = 'selective_rebuild'
+
+    elif operation == 'content_update':
+        if impact_percentage <= 5:  # Meno del 5% per aggiornamenti contenuto
+            strategy['strategy'] = 'incremental_update'
+        else:
+            strategy['strategy'] = 'selective_rebuild'
+
+    elif operation == 'delete':
+        if impact_percentage <= 15:  # Fino al 15% per eliminazioni
+            strategy['strategy'] = 'remove_from_index'
+        else:
+            strategy['strategy'] = 'selective_rebuild'
+
+    # Se l'indice è molto piccolo (< 10 elementi), sempre full rebuild
+    if total_elements < 10:
+        strategy['strategy'] = 'full_rebuild'
+
+    return strategy
+
+
+def handle_incremental_update(project, strategy, index_path, metadata_path):
+    """Gestisce aggiornamenti incrementali aggiungendo/aggiornando solo gli elementi modificati."""
+    from langchain_community.embeddings import OpenAIEmbeddings
+
+    logger.info("⚡ Eseguendo aggiornamento incrementale")
+
+    try:
+        # Carica indice esistente
+        embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
+        vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+
+        # Processa solo gli elementi modificati
+        new_documents = []
+        for element in strategy['changed_elements']:
+            if element['type'] == 'file' and element['obj'].is_included_in_rag:
+                docs = load_file_documents(element['obj'])
+                new_documents.extend(docs)
+            elif element['type'] == 'note' and element['obj'].is_included_in_rag:
+                docs = create_note_documents([element['obj']], project)
+                new_documents.extend(docs)
+            elif element['type'] == 'url' and element['obj'].is_included_in_rag:
+                docs = create_url_documents([element['obj']], project)
+                new_documents.extend(docs)
+
+        if new_documents:
+            # Aggiungi nuovi documenti all'indice esistente
+            vectordb.add_documents(new_documents)
+            vectordb.save_local(index_path)
+
+            # Aggiorna metadati
+            update_index_metadata(metadata_path, strategy['changed_elements'], 'incremental_add')
+
+            logger.info(f"✅ Aggiunti {len(new_documents)} documenti all'indice esistente")
+
+        return create_retrieval_qa_chain(vectordb, project)
+
+    except Exception as e:
+        logger.error(f"❌ Errore nell'aggiornamento incrementale: {str(e)}")
+        raise
+
+
+def handle_selective_rebuild(project, strategy, index_path, metadata_path):
+    """Ricostruisce selettivamente parti dell'indice mantenendo elementi non modificati."""
+    logger.info("🔧 Eseguendo ricostruzione selettiva")
+
+    # Per ora, implementa come full rebuild ma con logging dettagliato
+    # In futuro si può implementare una logica più sofisticata
+    return create_project_rag_chain(project, force_rebuild=True)
+
+
+def handle_remove_from_index(project, strategy, index_path, metadata_path):
+    """Rimuove elementi specifici dall'indice senza ricostruire tutto."""
+    logger.info("🗑️ Rimuovendo elementi dall'indice")
+
+    # FAISS non supporta la rimozione diretta, quindi ricostruiamo con elementi restanti
+    # Ma solo se l'impatto è limitato
+    if strategy['impact_percentage'] <= 20:
+        return create_project_rag_chain(project, force_rebuild=True)
+    else:
+        logger.info("📊 Troppi elementi da rimuovere, ricostruzione completa")
+        return create_project_rag_chain(project, force_rebuild=True)
+
+
+def load_index_metadata(metadata_path):
+    """Carica metadati dell'indice per ottimizzazioni."""
+    try:
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'rb') as f:
+                return pickle.load(f)
+    except Exception as e:
+        logger.warning(f"Impossibile caricare metadati indice: {str(e)}")
+
+    return {
+        'created_at': timezone.now(),
+        'last_update': timezone.now(),
+        'elements': {},
+        'version': 1
+    }
+
+
+def update_index_metadata(metadata_path, changed_elements, operation):
+    """Aggiorna metadati dell'indice dopo modifiche."""
+    try:
+        metadata = load_index_metadata(metadata_path)
+        metadata['last_update'] = timezone.now()
+        metadata['last_operation'] = operation
+
+        # Aggiorna tracking elementi
+        for element in changed_elements:
+            element_key = f"{element['type']}_{element['obj'].id}"
+            metadata['elements'][element_key] = {
+                'last_updated': timezone.now(),
+                'operation': operation
+            }
+
+        # Salva metadati aggiornati
+        os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
+        with open(metadata_path, 'wb') as f:
+            pickle.dump(metadata, f)
+
+        logger.debug(f"📝 Metadati indice aggiornati: {metadata_path}")
+
+    except Exception as e:
+        logger.warning(f"Impossibile aggiornare metadati indice: {str(e)}")
+
+
+def load_and_split_document(file_path, chunk_size=500, chunk_overlap=50):
+    """
+    Carica un documento e lo divide in chunk configurabili.
+
+    Funzione completa che unifica il caricamento e la divisione in chunk.
+    Supporta diversi formati di file e gestisce automaticamente il chunking
+    con parametri configurabili per ottimizzare le prestazioni RAG.
+
+    FUNZIONALITÀ PRINCIPALI:
+    - Caricamento multi-formato: PDF, DOCX, PPTX, TXT, immagini
+    - Chunking intelligente con overlap configurabile
+    - Gestione errori robusta per ogni tipo di file
+    - Metadata completi per il sistema RAG
+    - Supporto per immagini tramite OpenAI Vision API
+    - Fallback per PDF con loader multipli
+
+    CORREZIONI IMPLEMENTATE:
+    - Parametri chunk_size e chunk_overlap configurabili
+    - Chunking applicato DOPO il caricamento per consistenza
+    - Metadata preservati durante il chunking
+    - Gestione errori migliorata per ogni tipo di file
+    - Logging dettagliato per debugging
+
+    Args:
+        file_path (str): Percorso completo del file da caricare
+        chunk_size (int): Dimensione massima di ogni chunk in caratteri (default: 500)
+        chunk_overlap (int): Sovrapposizione tra chunk adiacenti (default: 50)
+
+    Returns:
+        list: Lista di oggetti Document di LangChain divisi in chunk
+
+    Raises:
+        FileNotFoundError: Se il file non esiste
+        ValueError: Se i parametri di chunking non sono validi
+        Exception: Per errori specifici di caricamento file
+    """
+    import os
+    import logging
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain.schema import Document
+    from langchain_community.document_loaders import (
+        PyMuPDFLoader, PDFMinerLoader, UnstructuredWordDocumentLoader,
+        UnstructuredPowerPointLoader, TextLoader
+    )
+
+    logger = logging.getLogger(__name__)
+
+    # ===== VALIDAZIONE INPUT =====
+    if not os.path.exists(file_path):
+        logger.error(f"❌ File non trovato: {file_path}")
+        raise FileNotFoundError(f"File non trovato: {file_path}")
+
+    if chunk_size <= 0 or chunk_overlap < 0:
+        logger.error(f"❌ Parametri chunking non validi: chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
+        raise ValueError("chunk_size deve essere > 0 e chunk_overlap deve essere >= 0")
+
+    if chunk_overlap >= chunk_size:
+        logger.warning(f"⚠️ chunk_overlap ({chunk_overlap}) >= chunk_size ({chunk_size}), riducendo overlap")
+        chunk_overlap = max(0, chunk_size - 1)
+
+    filename = os.path.basename(file_path)
+    file_extension = os.path.splitext(filename)[1].lower()
+
+    logger.info(f"📄 Caricamento documento: {filename}")
+    logger.debug(f"   Percorso: {file_path}")
+    logger.debug(f"   Estensione: {file_extension}")
+    logger.debug(f"   Chunk size: {chunk_size}, Overlap: {chunk_overlap}")
+
+    # ===== CARICAMENTO DOCUMENTO BASATO SUL TIPO =====
+    documents = []
+
+    try:
+        if file_extension == ".pdf":
+            documents = _load_pdf_document(file_path, filename)
+        elif file_extension in [".docx", ".doc"]:
+            documents = _load_word_document(file_path, filename)
+        elif file_extension in [".pptx", ".ppt"]:
+            documents = _load_powerpoint_document(file_path, filename)
+        elif file_extension in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
+            documents = _load_image_document(file_path, filename)
+        elif file_extension in [".txt", ".md", ".csv"]:
+            documents = _load_text_document(file_path, filename)
+        else:
+            logger.warning(f"⚠️ Tipo di file non supportato: {file_extension}")
+            # Prova comunque come file di testo
+            documents = _load_text_document(file_path, filename)
+
+    except Exception as e:
+        logger.error(f"❌ Errore nel caricamento di {filename}: {str(e)}", exc_info=True)
+        return []
+
+    # ===== VALIDAZIONE CONTENUTO CARICATO =====
+    if not documents:
+        logger.warning(f"⚠️ Nessun documento caricato da {filename}")
+        return []
+
+    # Filtra documenti vuoti
+    valid_documents = []
+    for doc in documents:
+        if doc.page_content and doc.page_content.strip():
+            valid_documents.append(doc)
+        else:
+            logger.debug(f"🗑️ Rimosso documento vuoto da {filename}")
+
+    if not valid_documents:
+        logger.warning(f"⚠️ Tutti i documenti erano vuoti in {filename}")
+        return []
+
+    logger.info(f"✅ Caricati {len(valid_documents)} documenti validi da {filename}")
+
+    # ===== AGGIUNTA METADATA BASE =====
+    for doc in valid_documents:
+        # Aggiungi metadata fondamentali se non presenti
+        if 'filename' not in doc.metadata:
+            doc.metadata['filename'] = filename
+        if 'filename_no_ext' not in doc.metadata:
+            doc.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
+        if 'source' not in doc.metadata:
+            doc.metadata['source'] = file_path
+        if 'file_extension' not in doc.metadata:
+            doc.metadata['file_extension'] = file_extension
+        if 'file_size' not in doc.metadata:
+            try:
+                doc.metadata['file_size'] = os.path.getsize(file_path)
+            except OSError:
+                doc.metadata['file_size'] = 0
+
+    # ===== CHUNKING INTELLIGENTE =====
+    logger.info(f"🔪 Avvio chunking con size={chunk_size}, overlap={chunk_overlap}")
+
+    # Configurazione text splitter
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        separators=["\n\n", "\n", ". ", "! ", "? ", ", ", " ", ""]
+    )
+
+    # Applica chunking preservando metadata
+    chunked_documents = []
+    for doc in valid_documents:
+        # Salta chunking per documenti già piccoli
+        if len(doc.page_content) <= chunk_size * 1.2:
+            logger.debug(f"📝 Documento già piccolo, nessun chunking necessario")
+            chunked_documents.append(doc)
+        else:
+            logger.debug(f"🔪 Chunking documento di {len(doc.page_content)} caratteri")
+            chunks = text_splitter.split_documents([doc])
+
+            # Aggiungi informazioni sul chunk ai metadata
+            for i, chunk in enumerate(chunks):
+                chunk.metadata['chunk_index'] = i
+                chunk.metadata['total_chunks'] = len(chunks)
+                chunk.metadata['chunk_size_used'] = chunk_size
+                chunk.metadata['chunk_overlap_used'] = chunk_overlap
+
+            chunked_documents.extend(chunks)
+
+    # ===== VALIDAZIONE FINALE =====
+    # Rimuovi chunk vuoti dopo lo splitting
+    final_documents = []
+    for doc in chunked_documents:
+        content = doc.page_content.strip()
+        if content and len(content) > 10:  # Minimo 10 caratteri significativi
+            final_documents.append(doc)
+        else:
+            logger.debug(f"🗑️ Rimosso chunk troppo piccolo: '{content[:50]}...'")
+
+    logger.info(f"✅ Processamento completato: {len(final_documents)} chunk finali da {filename}")
+
+    # ===== LOG STATISTICHE =====
+    if final_documents:
+        total_chars = sum(len(doc.page_content) for doc in final_documents)
+        avg_chunk_size = total_chars / len(final_documents)
+
+        logger.debug(f"📊 Statistiche chunking per {filename}:")
+        logger.debug(f"   • Chunk totali: {len(final_documents)}")
+        logger.debug(f"   • Caratteri totali: {total_chars}")
+        logger.debug(f"   • Dimensione media chunk: {avg_chunk_size:.1f}")
+        logger.debug(f"   • Chunk più piccolo: {min(len(doc.page_content) for doc in final_documents)}")
+        logger.debug(f"   • Chunk più grande: {max(len(doc.page_content) for doc in final_documents)}")
+
+    return final_documents
+
+
+def load_file_documents(project_file):
+    """Carica documenti da un singolo ProjectFile."""
+    try:
+        documents = load_and_split_document(project_file.file_path)
+        # Aggiungi metadata specifici
+        for doc in documents:
+            doc.metadata.update({
+                'source_type': 'file',
+                'source_id': project_file.id,
+                'filename': project_file.filename,
+                'file_type': project_file.file_type
+            })
+        return documents
+    except Exception as e:
+        logger.error(f"Errore caricamento file {project_file.filename}: {str(e)}")
+        return []
+
+
+def create_note_documents(notes, project):
+    """Crea documenti da ProjectNote objects."""
+    from langchain.schema import Document
+
+    documents = []
+    for note in notes:
+        if note.content.strip():
+            doc = Document(
+                page_content=note.content,
+                metadata={
+                    'source_type': 'note',
+                    'source_id': note.id,
+                    'title': note.title or 'Nota senza titolo',
+                    'created_at': note.created_at.isoformat(),
+                    'project_id': project.id
+                }
+            )
+            documents.append(doc)
+    return documents
+
+
+def create_url_documents(urls, project):
+    """Crea documenti da ProjectURL objects."""
+    from langchain.schema import Document
+
+    documents = []
+    for url in urls:
+        if url.content and url.content.strip():
+            doc = Document(
+                page_content=url.content,
+                metadata={
+                    'source_type': 'url',
+                    'source_id': url.id,
+                    'url': url.url,
+                    'title': url.title or url.url,
+                    'domain': url.get_domain(),
+                    'project_id': project.id
+                }
+            )
+            documents.append(doc)
+    return documents
+
+
 def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     """
     Crea o aggiorna la catena RAG per un progetto.
@@ -487,7 +989,19 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     includendo file, note e URL del progetto. Supporta la cache degli embedding per ottimizzare
     le prestazioni e ridurre le chiamate API.
 
-    MODIFICHE PER "NOTE CON PESO UGUALE":
+    FUNZIONALITÀ PRINCIPALI:
+    - Caricamento e processamento di documenti PDF, Word, PowerPoint, Excel, immagini e testi
+    - Gestione note testuali del progetto con controllo inclusione RAG
+    - Processamento contenuti web da URL crawlati
+    - Sistema di cache degli embedding per ridurre costi API
+    - Gestione priorità documenti vs note basata su impostazioni progetto
+    - Chunking intelligente con overlap configurabile
+    - Indicizzazione FAISS con metadati estesi
+
+    MODIFICHE PER SISTEMA DI TOGGLE:
+    - Filtra SOLO file con is_included_in_rag=True
+    - Filtra SOLO note con is_included_in_rag=True
+    - Filtra SOLO URL con is_included_in_rag=True
     - Aggiunge metadata di priorità ai documenti basati sul parametro equal_notes_weight
     - priority: 0 = Alta priorità (documenti e URL quando equal_notes_weight=False)
     - priority: 1 = Priorità normale (tutti quando equal_notes_weight=True, note quando equal_notes_weight=False)
@@ -502,12 +1016,12 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         RetrievalQA: Catena RAG configurata, o None in caso di errore
     """
     # Importazione ritardata per evitare cicli di importazione
-    from profiles.models import ProjectFile, ProjectNote, ProjectIndexStatus, GlobalEmbeddingCache, ProjectURL
+    from profiles.models import ProjectFile, ProjectNote, ProjectURL
 
     logger.debug(
         f"---> create_project_rag_chain: Creazione catena RAG per progetto: {project.id if project else 'Nessuno'}")
 
-    # PARTE 1: INIZIALIZZAZIONE VARIABILI
+    # ===== PARTE 1: INIZIALIZZAZIONE VARIABILI =====
     cached_files = []
     document_ids = []
     note_ids = []
@@ -515,157 +1029,148 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
     any_content_available = False
 
     if project:
-        # PARTE 2: CONFIGURAZIONE PERCORSI E RECUPERO DATI
+        # ===== PARTE 2: CONFIGURAZIONE PERCORSI E RECUPERO DATI =====
         project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
         index_name = f"vector_index_{project.id}"
         index_path = os.path.join(project_dir, index_name)
 
         os.makedirs(project_dir, exist_ok=True)
 
-        # Recupera tutti i file, le note attive e gli URL del progetto
-        all_files = ProjectFile.objects.filter(project=project)
+        # ✅ CORREZIONE: Recupera SOLO contenuti inclusi nel RAG
+        all_files = ProjectFile.objects.filter(project=project, is_included_in_rag=True)
         all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
         all_urls = ProjectURL.objects.filter(project=project, is_included_in_rag=True)
 
-        logger.info(f"📊 URL totali nel progetto: {ProjectURL.objects.filter(project=project).count()}")
-        logger.info(f"✅ URL attive (is_included_in_rag=True): {all_urls.count()}")
-        logger.info(
-            f"❌ URL disattivate: {ProjectURL.objects.filter(project=project, is_included_in_rag=False).count()}")
+        logger.info(f"📊 Contenuti inclusi nel RAG per progetto {project.id}:")
+        logger.info(f"   • File inclusi: {all_files.count()}")
+        logger.info(f"   • Note incluse: {all_active_notes.count()}")
+        logger.info(f"   • URL incluse: {all_urls.count()}")
 
-        # PARTE 3: GESTIONE RICOSTRUZIONE FORZATA
+        # Recupera le impostazioni RAG del progetto
+        try:
+            rag_settings = project.rag_settings
+            chunk_size = rag_settings.chunk_size
+            chunk_overlap = rag_settings.chunk_overlap
+            equal_notes_weight = rag_settings.equal_notes_weight
+            logger.debug(
+                f"Configurazione RAG caricata: chunk_size={chunk_size}, chunk_overlap={chunk_overlap}, equal_notes_weight={equal_notes_weight}")
+        except AttributeError:
+            # Valori di default se non configurato
+            chunk_size = 500
+            chunk_overlap = 50
+            equal_notes_weight = False
+            logger.warning(f"Configurazione RAG non trovata per progetto {project.id}, uso valori default")
+
+        # ===== PARTE 3: GESTIONE FORCE_REBUILD =====
         if force_rebuild and os.path.exists(index_path):
-            logger.info(f"Eliminazione forzata dell'indice precedente in {index_path}")
             try:
                 shutil.rmtree(index_path)
-                index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                index_status.index_exists = False
-                index_status.save(update_fields=['index_exists'])
-                logger.info(f"✅ Vecchio indice eliminato con successo")
+                logger.info(f"🔄 Indice esistente eliminato per rebuild: {index_path}")
+
+                # Reset flag embedded per tutti i file del progetto
+                all_files.update(is_embedded=False)
+                logger.info(f"🔄 Reset flag is_embedded per {all_files.count()} file")
+
+                # Reset flag indexed per tutti gli URL del progetto
+                all_urls.update(is_indexed=False, last_indexed_at=None)
+                logger.info(f"🔄 Reset flag is_indexed per {all_urls.count()} URL")
+
+                # Reset timestamp per tutte le note del progetto
+                all_active_notes.update(last_indexed_at=None)
+                logger.info(f"🔄 Reset timestamp per {all_active_notes.count()} note")
+
             except Exception as e:
-                logger.error(f"Errore nell'eliminazione dell'indice: {str(e)}")
+                logger.error(f"❌ Errore nella rimozione dell'indice esistente: {str(e)}")
 
-        # PARTE 4: CARICAMENTO DEI DOCUMENTI
-        if docs is None:
-            # Determina quali elementi devono essere elaborati
-            if force_rebuild:
-                files_to_embed = all_files
-                urls_to_embed = all_urls
-                logger.info(
-                    f"Ricostruendo indice con {files_to_embed.count()} file, {all_active_notes.count()} note e {urls_to_embed.count()} URL")
-            else:
-                files_to_embed = all_files.filter(is_embedded=False)
-                urls_to_embed = all_urls.filter(Q(is_indexed=False) | Q(last_indexed_at__isnull=True))
-                logger.info(f"File da incorporare: {files_to_embed.count()}")
-                logger.info(f"URL da incorporare: {urls_to_embed.count()}")
-                logger.info(f"Note attive trovate: {all_active_notes.count()}")
+        # ===== PARTE 4: PROCESSAMENTO DOCUMENTI NON ANCORA INCORPORATI =====
+        documents_to_process = []
 
-            docs = []
+        # Processamento file inclusi nel RAG
+        for file in all_files:
+            if not file.is_embedded or force_rebuild:
+                # Controlla se esiste un embedding in cache
+                cached_embedding = get_cached_embedding(file.file_hash, chunk_size, chunk_overlap)
 
-            # *** NOVITÀ: Ottieni le impostazioni RAG per il chunking E per la priorità ***
-            rag_settings = get_project_RAG_settings(project)
-            chunk_size = rag_settings['chunk_size']
-            chunk_overlap = rag_settings['chunk_overlap']
-            # *** PARAMETRO CHIAVE: Determina se note e documenti hanno peso uguale ***
-            equal_notes_weight = rag_settings.get('equal_notes_weight', True)
-
-            logger.info(f"🎯 Impostazione equal_notes_weight: {equal_notes_weight}")
-            if not equal_notes_weight:
-                logger.info("📚 MODALITÀ PRIORITÀ DOCUMENTI: I documenti e URL avranno priorità rispetto alle note")
-            else:
-                logger.info("⚖️ MODALITÀ PESO UGUALE: Tutti i contenuti hanno la stessa importanza")
-
-            # PARTE 5: ELABORAZIONE DEI FILE
-            for doc_model in files_to_embed:
-                logger.debug(f"Caricamento documento per embedding: {doc_model.filename}")
-
-                # Verifica se esiste già un embedding nella cache globale
-                cached_embedding = get_cached_embedding(
-                    doc_model.file_hash,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap
-                )
-
-                if cached_embedding:
-                    logger.info(
-                        f"Trovato embedding in cache per {doc_model.filename} (hash: {doc_model.file_hash[:8]}...)")
+                if cached_embedding and not force_rebuild:
+                    logger.info(f"📦 Trovato embedding in cache per: {file.filename}")
                     cached_files.append({
-                        'doc_model': doc_model,
+                        'file': file,
                         'cache_info': cached_embedding
                     })
-
-                # Carichiamo SEMPRE il documento per l'indice
-                langchain_docs = load_document(doc_model.file_path)
-
-                if langchain_docs:
-                    any_content_available = True
-                    # Aggiungi metadati necessari per il retrieval
-                    for doc in langchain_docs:
-                        doc.metadata['filename'] = doc_model.filename
-                        doc.metadata['filename_no_ext'] = os.path.splitext(doc_model.filename)[0]
-                        doc.metadata['source'] = doc_model.file_path
-                        doc.metadata['type'] = 'file'
-
-                        # *** NOVITÀ: Aggiungi priorità basata su equal_notes_weight ***
-                        # Se equal_notes_weight è True: tutti hanno priorità 1 (normale)
-                        # Se equal_notes_weight è False: file hanno priorità 0 (alta)
-                        doc.metadata['priority'] = 1 if equal_notes_weight else 0
-                        logger.debug(f"File {doc_model.filename} - priorità impostata a: {doc.metadata['priority']}")
-
-                    docs.extend(langchain_docs)
-                    document_ids.append(doc_model.id)
                 else:
-                    logger.warning(f"Nessun contenuto estratto dal file {doc_model.filename}")
-
-            # PARTE 6: ELABORAZIONE DEGLI URL
-            for url_model in urls_to_embed:
-                logger.debug(f"Aggiunta URL all'embedding: {url_model.url}")
-
-                url_ids.append(url_model.id)
-
-                if not url_model.is_included_in_rag:
-                    logger.info(f"❌ URL {url_model.url} esclusa dal RAG, saltata nell'indicizzazione")
-                    continue
-                else:
-                    logger.info(f"✅ URL {url_model.url} inclusa nel RAG, procedo con l'indicizzazione")
-
-                # Verifica se l'URL ha contenuto
-                if not url_model.content or len(url_model.content.strip()) < 10:
-                    logger.warning(f"URL senza contenuto sufficiente: {url_model.url}, creando contenuto minimo")
-                    url_content = f"""
-                    URL: {url_model.url}
-                    Titolo: {url_model.title or 'Nessun titolo'}
-
-                    Questa è una pagina web includibile nell'indice ma senza contenuto significativo estratto.
-                    URL: {url_model.url}
-                    """
-                else:
-                    url_content = url_model.content
-                    any_content_available = True
-
-                # Se abbiamo informazioni estratte, le aggiungiamo al contenuto
-                if url_model.extracted_info:
+                    # Carica e processa il documento
                     try:
-                        extracted_info = json.loads(url_model.extracted_info)
-                        summary = extracted_info.get('summary', '')
-                        key_points = extracted_info.get('key_points', [])
-                        entities = extracted_info.get('entities', [])
-                        content_type = extracted_info.get('content_type', 'unknown')
+                        documents = load_and_split_document(file.file_path, chunk_size, chunk_overlap)
 
-                        # Costruisci un contenuto migliorato con le informazioni estratte
-                        enhanced_content = f"URL: {url_model.url}\n"
-                        enhanced_content += f"Titolo: {url_model.title or 'Nessun titolo'}\n"
-                        enhanced_content += f"Tipo di contenuto: {content_type}\n\n"
+                        # ✅ CORREZIONE: Aggiungi metadata con priorità per toggle
+                        priority = 0 if not equal_notes_weight else 1
+                        for doc in documents:
+                            doc.metadata.update({
+                                'source_type': 'file',
+                                'source_id': file.id,
+                                'filename': file.filename,
+                                'file_type': file.file_type,
+                                'priority': priority,
+                                'project_id': project.id,
+                                'included_in_rag': True  # ✅ NUOVO: Indica che è incluso
+                            })
 
-                        if summary:
-                            enhanced_content += f"RIEPILOGO:\n{summary}\n\n"
+                        documents_to_process.extend(documents)
+                        document_ids.append(file.id)
+                        any_content_available = True
 
-                        if key_points:
+                        logger.info(
+                            f"📄 Processato file: {file.filename} ({len(documents)} chunks, priorità: {priority})")
+
+                    except Exception as e:
+                        logger.error(f"❌ Errore nel processare il file {file.filename}: {str(e)}")
+
+        # ===== PARTE 5: PROCESSAMENTO NOTE INCLUSE NEL RAG =====
+        for note in all_active_notes:
+            if note.content.strip():
+                # ✅ CORREZIONE: Gestione priorità per toggle
+                priority = 2 if not equal_notes_weight else 1
+                note_doc = Document(
+                    page_content=note.content,
+                    metadata={
+                        'source_type': 'note',
+                        'source_id': note.id,
+                        'title': note.title or 'Nota senza titolo',
+                        'created_at': note.created_at.isoformat(),
+                        'priority': priority,
+                        'project_id': project.id,
+                        'included_in_rag': True,  # ✅ NUOVO: Indica che è incluso
+                        'filename': f"Nota: {note.title or 'Senza titolo'}"
+                    }
+                )
+                documents_to_process.append(note_doc)
+                note_ids.append(note.id)
+                any_content_available = True
+
+                logger.debug(f"📝 Aggiunta nota: {note.title or 'Senza titolo'} (priorità: {priority})")
+
+        # ===== PARTE 6: PROCESSAMENTO URL INCLUSE NEL RAG =====
+        for url in all_urls:
+            if url.content and url.content.strip():
+                # Processo il contenuto con informazioni estratte se disponibili
+                url_content = url.content
+
+                if url.extracted_info:
+                    try:
+                        extracted = url.extracted_info
+                        enhanced_content = ""
+
+                        if extracted.get('summary'):
+                            enhanced_content += f"RIASSUNTO: {extracted['summary']}\n\n"
+
+                        if extracted.get('key_points'):
                             enhanced_content += "PUNTI CHIAVE:\n"
-                            for idx, point in enumerate(key_points, 1):
-                                enhanced_content += f"{idx}. {point}\n"
+                            for point in extracted['key_points'][:5]:
+                                enhanced_content += f"• {point}\n"
                             enhanced_content += "\n"
 
-                        if entities:
+                        if extracted.get('entities'):
+                            entities = extracted['entities']
                             enhanced_content += "ENTITÀ RILEVANTI:\n"
                             entity_text = ", ".join(entities[:10])
                             enhanced_content += f"{entity_text}\n\n"
@@ -674,394 +1179,278 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
                         enhanced_content += "CONTENUTO COMPLETO:\n" + url_content
                         url_content = enhanced_content
                     except Exception as e:
-                        logger.error(f"Errore nel processare le informazioni estratte per {url_model.url}: {str(e)}")
+                        logger.error(f"Errore nel processare le informazioni estratte per {url.url}: {str(e)}")
 
-                # Aggiungi l'ID del progetto ai metadata per isolamento
+                # ✅ CORREZIONE: Gestione priorità per toggle
+                priority = 0 if not equal_notes_weight else 1
                 url_doc = Document(
                     page_content=url_content,
                     metadata={
-                        "source": f"url_{url_model.id}",
-                        "type": "url",
-                        "title": url_model.title or "URL senza titolo",
-                        "url_id": url_model.id,
-                        "url": url_model.url,
+                        "source": f"url_{url.id}",
+                        "source_type": "url",
+                        "source_id": url.id,
+                        "title": url.title or "URL senza titolo",
+                        "url": url.url,
                         "project_id": project.id,
-                        "domain": url_model.get_domain() if hasattr(url_model, 'get_domain') else urlparse(
-                            url_model.url).netloc,
-                        "filename": f"URL: {url_model.title or url_model.url}",
-                        "last_crawled": url_model.updated_at.isoformat() if url_model.updated_at else None,
-
-                        # *** NOVITÀ: Aggiungi priorità per URL ***
-                        # Se equal_notes_weight è True: priorità normale (1)
-                        # Se equal_notes_weight è False: priorità alta (0) come i file
-                        "priority": 1 if equal_notes_weight else 0
+                        "domain": url.get_domain() if hasattr(url, 'get_domain') else urlparse(url.url).netloc,
+                        "filename": f"URL: {url.title or url.url}",
+                        "last_crawled": url.updated_at.isoformat() if url.updated_at else None,
+                        "priority": priority,
+                        "included_in_rag": True  # ✅ NUOVO: Indica che è incluso
                     }
                 )
-                logger.debug(f"URL {url_model.url} - priorità impostata a: {url_doc.metadata['priority']}")
-                docs.append(url_doc)
-
-            # PARTE 7: ELABORAZIONE DELLE NOTE
-            for note in all_active_notes:
-                logger.debug(f"Aggiunta nota all'embedding: {note.title or 'Senza titolo'}")
-
-                # Verifica se la nota ha contenuto
-                if not note.content or len(note.content.strip()) < 10:
-                    logger.warning(f"Nota senza contenuto sufficiente: ID {note.id}, saltata")
-                    continue
-
+                logger.debug(f"🌐 URL {url.url} - priorità impostata a: {url_doc.metadata['priority']}")
+                documents_to_process.append(url_doc)
+                url_ids.append(url.id)
                 any_content_available = True
 
-                # Crea un documento LangChain per la nota
-                note_doc = Document(
-                    page_content=note.content,
-                    metadata={
-                        "source": f"note_{note.id}",
-                        "type": "note",
-                        "title": note.title or "Nota senza titolo",
-                        "note_id": note.id,
-                        "filename": f"Nota: {note.title or 'Senza titolo'}",
+        # ===== PARTE 7: VERIFICA CONTENUTI DISPONIBILI =====
+        if not any_content_available and not cached_files:
+            logger.warning(f"❌ Nessun contenuto incluso nel RAG trovato per il progetto {project.id}")
+            return None
 
-                        # *** NOVITÀ: Aggiungi priorità per note ***
-                        # Se equal_notes_weight è True: priorità normale (1) come tutti gli altri
-                        # Se equal_notes_weight è False: priorità bassa (2) rispetto a file e URL
-                        "priority": 1 if equal_notes_weight else 2
-                    }
-                )
-                logger.debug(
-                    f"Nota '{note.title or 'Senza titolo'}' - priorità impostata a: {note_doc.metadata['priority']}")
-                docs.append(note_doc)
-                note_ids.append(note.id)
+        logger.info(
+            f"📊 Totale contenuti da processare: {len(documents_to_process)} documenti + {len(cached_files)} file cached")
 
-            logger.info(f"Totale documenti: {len(docs)} (di cui {len(note_ids)} sono note e {len(url_ids)} sono URL)")
-            logger.info(f"Documenti in cache: {len(cached_files)}")
-
-            # *** NOVITÀ: Log del riepilogo delle priorità ***
-            if not equal_notes_weight:
-                high_priority_count = sum(1 for doc in docs if doc.metadata.get('priority', 1) == 0)
-                normal_priority_count = sum(1 for doc in docs if doc.metadata.get('priority', 1) == 1)
-                low_priority_count = sum(1 for doc in docs if doc.metadata.get('priority', 1) == 2)
-                logger.info(
-                    f"🎯 Distribuzione priorità: Alta({high_priority_count}) Normale({normal_priority_count}) Bassa({low_priority_count})")
+    # ===== PARTE 8: GESTIONE DOCUMENTI FORNITI ESTERNAMENTE =====
     else:
-        # PARTE 8: CONFIGURAZIONE DI FALLBACK SENZA PROGETTO
-        index_name = "default_index"
-        index_path = os.path.join(settings.MEDIA_ROOT, index_name)
-        document_ids = None
-        note_ids = None
-        url_ids = None
-        cached_files = []
-        equal_notes_weight = True  # Default per progetti senza configurazione
+        # Se vengono forniti documenti dall'esterno, usali direttamente
+        if docs:
+            documents_to_process = docs
+            any_content_available = True
+        else:
+            logger.error("❌ Nessun progetto e nessun documento fornito")
+            return None
 
-    # PARTE 9: INIZIALIZZAZIONE EMBEDDINGS
-    embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user if project else None))
-    vectordb = None
+    # ===== PARTE 9: VERIFICA FINALE CONTENUTI =====
+    if not any_content_available:
+        logger.warning("❌ Nessun contenuto disponibile per creare l'indice")
+        return None
 
-    # PARTE 10: GESTIONE CASO NESSUN DOCUMENTO DISPONIBILE
-    if not docs or len(docs) == 0 or not any_content_available:
-        logger.warning(f"Nessun documento con contenuto disponibile per l'indicizzazione")
+    # ===== PARTE 10: GESTIONE CACHE E CREAZIONE INDICE OTTIMIZZATO =====
+    if project and cached_files:
+        # Cerca di utilizzare una combinazione di cache esistenti
+        combined_index_path = None
 
-        # Verifica se esiste già un indice
-        if os.path.exists(index_path):
-            logger.info(f"Nessun nuovo documento da indicizzare, mantenimento dell'indice esistente")
+        for cached_file_info in cached_files:
+            cache_info = cached_file_info['cache_info']
 
+            if combined_index_path is None:
+                # Primo file: copia la sua cache come base
+                success = copy_embedding_to_project_index(project, cache_info, index_path)
+                if success:
+                    combined_index_path = index_path
+                    logger.info(f"📦 Base dell'indice creata dalla cache: {cached_file_info['file'].filename}")
+            else:
+                # File successivi: cerca di aggiungerli all'indice esistente
+                try:
+                    from langchain_community.embeddings import OpenAIEmbeddings
+                    from langchain_community.vectorstores import FAISS
+
+                    embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
+                    existing_vectordb = FAISS.load_local(combined_index_path, embeddings,
+                                                         allow_dangerous_deserialization=True)
+                    cached_vectordb = FAISS.load_local(cache_info['embedding_path'], embeddings,
+                                                       allow_dangerous_deserialization=True)
+
+                    # Combina gli indici
+                    existing_vectordb.merge_from(cached_vectordb)
+                    existing_vectordb.save_local(combined_index_path)
+
+                    logger.info(f"📦 Cache aggiunta all'indice: {cached_file_info['file'].filename}")
+
+                except Exception as e:
+                    logger.error(f"❌ Errore nella combinazione cache per {cached_file_info['file'].filename}: {str(e)}")
+
+        # Aggiorna flag embedded per i file cached
+        for cached_file_info in cached_files:
+            file = cached_file_info['file']
+            file.is_embedded = True
+            file.last_indexed_at = timezone.now()
+            file.save(update_fields=['is_embedded', 'last_indexed_at'])
+            document_ids.append(file.id)
+
+    # ===== PARTE 11: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS =====
+    if documents_to_process:
+        logger.info(f"🔄 Creazione embedding per {len(documents_to_process)} nuovi documenti")
+
+        # Ottieni le impostazioni RAG per il chunking
+        if project:
+            # Già ottenute sopra
+            pass
+        else:
+            chunk_size = 500
+            chunk_overlap = 50
+
+        # Dividi i documenti in chunk se necessario
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            length_function=len,
+        )
+
+        # Applica text splitting solo ai documenti che non sono già stati processati
+        final_documents = []
+        for doc in documents_to_process:
+            # Se il documento è già piccolo o è una nota, non dividerlo ulteriormente
+            if len(doc.page_content) <= chunk_size * 1.2 or doc.metadata.get('source_type') == 'note':
+                final_documents.append(doc)
+            else:
+                # Dividi i documenti più grandi
+                chunks = text_splitter.split_documents([doc])
+                final_documents.extend(chunks)
+
+        logger.info(f"📊 Documenti finali dopo chunking: {len(final_documents)}")
+
+        # Crea gli embedding con retry per resilienza
+        try:
+            vectordb = create_embeddings_with_retry(final_documents, project.user if project else None)
+
+            # ===== PARTE 12: GESTIONE CACHE PER SINGOLI FILE =====
+            if project:
+                # Salva in cache gli embedding per singoli file per riuso futuro
+                for file_id in document_ids:
+                    try:
+                        file = ProjectFile.objects.get(id=file_id)
+
+                        # Crea un embedding separato per questo file per la cache
+                        file_documents = [doc for doc in final_documents if
+                                          doc.metadata.get('source_id') == file_id and doc.metadata.get(
+                                              'source_type') == 'file']
+
+                        if file_documents:
+                            file_vectordb = create_embeddings_with_retry(file_documents, project.user)
+
+                            file_info = {
+                                'file_type': file.file_type,
+                                'filename': file.filename,
+                                'chunk_size': chunk_size,
+                                'chunk_overlap': chunk_overlap,
+                                'embedding_model': 'OpenAIEmbeddings',
+                                'file_size': file.file_size
+                            }
+
+                            create_embedding_cache(file.file_hash, file_vectordb, file_info)
+                            logger.info(f"💾 Embedding salvato in cache per: {file.filename}")
+
+                    except Exception as e:
+                        logger.error(f"❌ Errore nel salvare cache per file ID {file_id}: {str(e)}")
+
+            # ===== PARTE 13: COMBINAZIONE CON INDICE ESISTENTE =====
+            if project and os.path.exists(index_path):
+                try:
+                    from langchain_community.embeddings import OpenAIEmbeddings
+                    from langchain_community.vectorstores import FAISS
+
+                    embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
+                    existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+
+                    # Combina il nuovo indice con quello esistente
+                    existing_vectordb.merge_from(vectordb)
+                    vectordb = existing_vectordb
+
+                    logger.info(f"🔀 Indice combinato con quello esistente")
+
+                except Exception as e:
+                    logger.warning(f"⚠️ Impossibile combinare con indice esistente: {str(e)}")
+
+            # ===== PARTE 14: SALVATAGGIO INDICE =====
+            if project:
+                vectordb.save_local(index_path)
+                logger.info(f"💾 Indice FAISS salvato in: {index_path}")
+
+        except Exception as e:
+            logger.error(f"❌ Errore nella creazione degli embedding: {str(e)}")
+            return None
+
+    # ===== PARTE 15: CARICAMENTO INDICE ESISTENTE =====
+    elif project and os.path.exists(index_path):
+        try:
+            from langchain_community.embeddings import OpenAIEmbeddings
+            from langchain_community.vectorstores import FAISS
+
+            embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
+            vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+            logger.info(f"📂 Indice FAISS esistente caricato da: {index_path}")
+
+        except Exception as e:
+            logger.error(f"❌ Errore nel caricare l'indice esistente: {str(e)}")
+            return None
+    else:
+        logger.error("❌ Nessun indice da caricare e nessun documento da processare")
+        return None
+
+    # ===== PARTE 16: LOG STATISTICHE CONTENUTI =====
+    if project:
+        # Conta i documenti per tipo nel vectordb (se possibile)
+        file_count = len([doc_id for doc_id in document_ids])
+        note_count = len([note_id for note_id in note_ids])
+        url_count = len([url_id for url_id in url_ids])
+
+        logger.info(f"📊 Statistiche indice creato:")
+        logger.info(f"  - File processati: {file_count}")
+        logger.info(f"  - Note processate: {note_count}")
+        logger.info(f"  - URL processate: {url_count}")
+        logger.info(f"  - Totale contenuti inclusi nel RAG: {file_count + note_count + url_count}")
+
+    # ===== PARTE 17: AGGIORNAMENTO STATO NEL DATABASE =====
+    if project:
+        update_project_index_status(project, document_ids, note_ids, url_ids)
+
+        # Aggiorna flag per URL processate
+        if url_ids:
             try:
-                vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-                logger.info(f"Indice esistente caricato con successo")
-
-                if project:
-                    index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                    index_status.index_exists = True
-                    index_status.save(update_fields=['index_exists'])
-
-                # Aggiorna comunque lo stato di indicizzazione per gli URL
                 for url_id in url_ids:
                     try:
                         url = ProjectURL.objects.get(id=url_id)
                         url.is_indexed = True
                         url.last_indexed_at = timezone.now()
                         url.save(update_fields=['is_indexed', 'last_indexed_at'])
+                        logger.debug(f"✅ URL {url.url} (ID: {url_id}) marcato come indicizzato")
                     except ProjectURL.DoesNotExist:
-                        logger.warning(f"URL con ID {url_id} non trovato durante l'aggiornamento")
-
-                return create_retrieval_qa_chain(vectordb, project)
+                        logger.warning(f"⚠️ URL con ID {url_id} non trovato durante l'aggiornamento")
             except Exception as e:
-                logger.error(f"Errore nel caricare l'indice FAISS esistente: {str(e)}")
+                logger.error(f"❌ Errore nell'aggiornamento degli URL come indicizzati: {str(e)}")
 
-                logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
-
-                if project:
-                    index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                    index_status.index_exists = False
-                    index_status.save(update_fields=['index_exists'])
-
-                return None
-        else:
-            logger.error(f"Nessun indice FAISS trovato in {index_path} e nessun documento da processare")
-
-            if project:
-                index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                index_status.index_exists = False
-                index_status.save(update_fields=['index_exists'])
-
-            return None
-
-    # PARTE 11: CREAZIONE/AGGIORNAMENTO DELL'INDICE FAISS
-    logger.info(f"Creazione o aggiornamento dell'indice FAISS per il progetto {project.id if project else 'default'}")
-
-    # Ottieni le impostazioni RAG per il chunking (già ottenute sopra se project è definito)
-    if project:
-        # Già ottenute sopra
-        pass
-    else:
-        chunk_size = 500
-        chunk_overlap = 50
-
-    # Dividi i documenti in chunk
-    logger.info(f"Chunking con parametri: size={chunk_size}, overlap={chunk_overlap}")
-    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    split_docs = splitter.split_documents(docs)
-
-    # Filtra documenti vuoti
-    split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
-    logger.info(f"Documenti divisi in {len(split_docs)} chunk dopo splitting")
-
-    # Assicura che ogni chunk mantenga i metadati necessari (INCLUSA LA PRIORITÀ)
-    for chunk in split_docs:
-        if 'source' in chunk.metadata and 'filename' not in chunk.metadata:
-            filename = os.path.basename(chunk.metadata['source'])
-            chunk.metadata['filename'] = filename
-            chunk.metadata['filename_no_ext'] = os.path.splitext(filename)[0]
-
-        if 'type' not in chunk.metadata:
-            source = chunk.metadata.get('source', '')
-            if source.startswith('url_'):
-                chunk.metadata['type'] = 'url'
-            elif source.startswith('note_'):
-                chunk.metadata['type'] = 'note'
-            else:
-                chunk.metadata['type'] = 'file'
-
-        # *** NOVITÀ: Assicura che la priorità sia preservata durante il chunking ***
-        if 'priority' not in chunk.metadata:
-            # Se manca la priorità, assegna in base al tipo e al setting equal_notes_weight
-            if project:
-                if chunk.metadata.get('type') == 'note':
-                    chunk.metadata['priority'] = 1 if equal_notes_weight else 2
-                else:  # file o url
-                    chunk.metadata['priority'] = 1 if equal_notes_weight else 0
-            else:
-                chunk.metadata['priority'] = 1  # Default
-
-    # PARTE 12: DECISIONE SU AGGIORNAMENTO O CREAZIONE NUOVO INDICE
-    if os.path.exists(index_path) and not force_rebuild:
-        try:
-            logger.info(f"Aggiornamento dell'indice FAISS esistente: {index_path}")
-            existing_vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-            existing_vectordb.add_documents(split_docs)
-            vectordb = existing_vectordb
-            logger.info(f"Documenti aggiunti all'indice esistente")
-
-            if project:
-                index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                index_status.index_exists = True
-                index_status.save(update_fields=['index_exists'])
-        except Exception as e:
-            logger.error(f"Errore nell'aggiornamento dell'indice FAISS: {str(e)}")
-            logger.info(f"Creazione di un nuovo indice FAISS come fallback")
-            try:
-                vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
-
-                if project:
-                    index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                    index_status.index_exists = True
-                    index_status.save(update_fields=['index_exists'])
-            except Exception as create_error:
-                logger.error(f"Errore anche nella creazione del nuovo indice: {str(create_error)}")
-                return None
-    else:
-        # PARTE 13: CREAZIONE NUOVO INDICE
-        logger.info(f"Creazione di un nuovo indice FAISS")
-        try:
-            vectordb = create_embeddings_with_retry(split_docs, project.user if project else None)
-
-            if project:
-                index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                index_status.index_exists = True
-                index_status.save(update_fields=['index_exists'])
-
-            # PARTE 14: SALVATAGGIO NELLA CACHE GLOBALE
-            if document_ids and project:
-                for doc_id in document_ids:
-                    try:
-                        doc = ProjectFile.objects.get(id=doc_id)
-
-                        # Controlla se il file è già nella cache
-                        is_already_cached = any(cf['doc_model'].id == doc_id for cf in cached_files)
-
-                        if not is_already_cached:
-                            existing_cache = GlobalEmbeddingCache.objects.filter(file_hash=doc.file_hash).first()
-
-                            if not existing_cache:
-                                file_info = {
-                                    'file_type': doc.file_type,
-                                    'filename': doc.filename,
-                                    'file_size': doc.file_size,
-                                    'chunk_size': chunk_size,
-                                    'chunk_overlap': chunk_overlap,
-                                    'embedding_model': 'OpenAIEmbeddings'
-                                }
-                                create_embedding_cache(doc.file_hash, vectordb, file_info)
-                                logger.info(f"Embedding salvato nella cache globale per {doc.filename}")
-                            else:
-                                logger.info(f"Embedding già presente nella cache per {doc.filename}")
-                        else:
-                            logger.debug(f"File {doc.filename} già marcato come cached, skip salvataggio cache")
-
-                    except Exception as cache_error:
-                        logger.error(f"Errore nel salvare l'embedding nella cache: {str(cache_error)}")
-
-        except Exception as e:
-            logger.error(f"Errore nella creazione dell'indice con retry: {str(e)}")
-            try:
-                logger.info("Tentativo di fallback con FAISS.from_documents diretto")
-                vectordb = FAISS.from_documents(split_docs, embeddings)
-
-                if project:
-                    index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                    index_status.index_exists = True
-                    index_status.save(update_fields=['index_exists'])
-            except Exception as fallback_error:
-                logger.error(f"Errore anche nel fallback: {str(fallback_error)}")
-                return None
-
-    # PARTE 15: SALVATAGGIO DELL'INDICE E AGGIORNAMENTO STATO
-    if vectordb:
-        # Verifica e elimina il vecchio indice se esiste
-        if os.path.exists(index_path):
-            logger.info(f"🗑️ Eliminando vecchio indice in: {index_path}")
-            try:
-                shutil.rmtree(index_path)
-                logger.info(f"✅ Vecchio indice eliminato prima del salvataggio")
-            except Exception as e:
-                logger.error(f"Errore nell'eliminazione del vecchio indice: {str(e)}")
-
-        # Assicura che la directory esista e salva l'indice
-        os.makedirs(os.path.dirname(index_path), exist_ok=True)
-        try:
-            vectordb.save_local(index_path)
-            logger.info(f"Indice FAISS salvato in {index_path}")
-
-            if project:
-                index_status, _ = ProjectIndexStatus.objects.get_or_create(project=project)
-                index_status.index_exists = True
-                index_status.save(update_fields=['index_exists'])
-        except Exception as save_error:
-            logger.error(f"Errore nel salvare l'indice FAISS: {str(save_error)}")
-
-        # Log per verificare il contenuto dell'indice
-        logger.info(f"Indice FAISS creato/aggiornato con {len(vectordb.docstore._dict)} documenti")
-
-        # Verifica quali file sono nell'indice E la distribuzione delle priorità
-        unique_sources = set()
-        file_distribution = {}
-        url_distribution = {}
-        note_distribution = {}
-        priority_distribution = {0: 0, 1: 0, 2: 0}  # *** NOVITÀ: Conteggio per priorità ***
-
-        for doc_id, doc in vectordb.docstore._dict.items():
-            if hasattr(doc, 'metadata') and 'source' in doc.metadata:
-                source = doc.metadata['source']
-                source_type = doc.metadata.get('type', 'unknown')
-                priority = doc.metadata.get('priority', 1)  # *** NOVITÀ ***
-                unique_sources.add(source)
-
-                # *** NOVITÀ: Conta distribuzione priorità ***
-                priority_distribution[priority] += 1
-
-                if source_type == 'file':
-                    filename = os.path.basename(source)
-                    if filename not in file_distribution:
-                        file_distribution[filename] = 0
-                    file_distribution[filename] += 1
-                elif source_type == 'url':
-                    url = doc.metadata.get('url', 'unknown_url')
-                    if url not in url_distribution:
-                        url_distribution[url] = 0
-                    url_distribution[url] += 1
-                elif source_type == 'note':
-                    note_title = doc.metadata.get('title', 'unknown_note')
-                    if note_title not in note_distribution:
-                        note_distribution[note_title] = 0
-                    note_distribution[note_title] += 1
-
-        logger.info(f"Fonti uniche nell'indice: {len(unique_sources)}")
-
-        # *** NOVITÀ: Log della distribuzione delle priorità ***
-        logger.info(f"🎯 Distribuzione priorità nell'indice:")
-        logger.info(f"  - Priorità ALTA (0): {priority_distribution[0]} chunk")
-        logger.info(f"  - Priorità NORMALE (1): {priority_distribution[1]} chunk")
-        logger.info(f"  - Priorità BASSA (2): {priority_distribution[2]} chunk")
-
-        # Log della distribuzione dei documenti per tipo
-        if file_distribution:
-            logger.info(f"Distribuzione dei chunk per file:")
-            for filename, count in file_distribution.items():
-                logger.info(f"  - {filename}: {count} chunk")
-
-        if url_distribution:
-            logger.info(f"Distribuzione dei chunk per URL:")
-            for url, count in url_distribution.items():
-                logger.info(f"  - {url[:50]}{'...' if len(url) > 50 else ''}: {count} chunk")
-
-        if note_distribution:
-            logger.info(f"Distribuzione dei chunk per note:")
-            for note_title, count in note_distribution.items():
-                logger.info(f"  - {note_title}: {count} chunk")
-
-        # PARTE 16: AGGIORNAMENTO STATO NEL DATABASE
-        if project:
-            update_project_index_status(project, document_ids, note_ids, url_ids)
-
-            # Aggiorna solo gli URL che abbiamo effettivamente processato come indicizzati
-            if url_ids:
+        # Aggiorna flag embedded per i file processati
+        if document_ids:
+            for doc_id in document_ids:
                 try:
-                    for url_id in url_ids:
-                        try:
-                            url = ProjectURL.objects.get(id=url_id)
-                            url.is_indexed = True
-                            url.last_indexed_at = timezone.now()
-                            url.save(update_fields=['is_indexed', 'last_indexed_at'])
-                            logger.info(f"URL {url.url} (ID: {url_id}) marcato come indicizzato")
-                        except ProjectURL.DoesNotExist:
-                            logger.warning(f"URL con ID {url_id} non trovato durante l'aggiornamento")
-                except Exception as e:
-                    logger.error(f"Errore nell'aggiornamento degli URL come indicizzati: {str(e)}")
+                    doc = ProjectFile.objects.get(id=doc_id)
+                    doc.is_embedded = True
+                    doc.last_indexed_at = timezone.now()
+                    doc.save(update_fields=['is_embedded', 'last_indexed_at'])
+                    logger.debug(f"✅ File {doc.filename} (ID: {doc_id}) marcato come embedded")
+                except ProjectFile.DoesNotExist:
+                    logger.warning(f"⚠️ File con ID {doc_id} non trovato durante l'aggiornamento")
 
-            # Aggiorna il flag embedded per i file processati
-            if document_ids:
-                for doc_id in document_ids:
-                    try:
-                        doc = ProjectFile.objects.get(id=doc_id)
-                        doc.is_embedded = True
-                        doc.last_indexed_at = timezone.now()
-                        doc.save(update_fields=['is_embedded', 'last_indexed_at'])
-                    except ProjectFile.DoesNotExist:
-                        logger.warning(f"File con ID {doc_id} non trovato durante l'aggiornamento")
+        # Aggiorna timestamp per le note processate
+        if note_ids:
+            for note_id in note_ids:
+                try:
+                    note = ProjectNote.objects.get(id=note_id)
+                    note.last_indexed_at = timezone.now()
+                    note.save(update_fields=['last_indexed_at'])
+                    logger.debug(f"✅ Nota {note.title or 'Senza titolo'} (ID: {note_id}) timestamp aggiornato")
+                except ProjectNote.DoesNotExist:
+                    logger.warning(f"⚠️ Nota con ID {note_id} non trovata durante l'aggiornamento")
 
-            # Aggiorna il timestamp per le note processate
-            if note_ids:
-                for note_id in note_ids:
-                    try:
-                        note = ProjectNote.objects.get(id=note_id)
-                        note.last_indexed_at = timezone.now()
-                        note.save(update_fields=['last_indexed_at'])
-                    except ProjectNote.DoesNotExist:
-                        logger.warning(f"Nota con ID {note_id} non trovata durante l'aggiornamento")
-
-    # PARTE 17: CREAZIONE DELLA CATENA RAG
+    # ===== PARTE 18: CREAZIONE DELLA CATENA RAG =====
     result = create_retrieval_qa_chain(vectordb, project)
     if result is None:
-        logger.error("Impossibile creare la catena RAG, controllo dei componenti necessario")
+        logger.error("❌ Impossibile creare la catena RAG, controllo dei componenti necessario")
+        return None
+
+    # ===== PARTE 19: LOG FINALE CONFIGURAZIONE =====
+    if project:
+        logger.info(f"✅ Catena RAG creata con successo per progetto {project.id}")
+        logger.info(
+            f"📊 Configurazione priorità: {'NOTE PESO RIDOTTO' if not equal_notes_weight else 'PESO UGUALE TUTTI'}")
+        if not equal_notes_weight:
+            logger.info("🎯 Le risposte privilegeranno documenti e URL rispetto alle note")
+        else:
+            logger.info("⚖️ Tutti i tipi di contenuto hanno peso uguale nella ricerca")
+
     return result
 
 
@@ -2198,3 +2587,369 @@ def remove_url_from_index(project, url_id):
     except Exception as e:
         logger.error(f"Errore nella rimozione dell'URL dall'indice: {str(e)}")
         return False
+
+
+def handle_toggle_file_inclusion(project, file_id, is_included):
+    """
+    Cambia lo stato di inclusione di un file nel RAG e ottimizza l'indice se necessario.
+    Versione aggiornata che usa il sistema di ottimizzazione intelligente.
+    """
+    from profiles.models import ProjectFile
+
+    try:
+        file_obj = ProjectFile.objects.get(id=file_id, project=project)
+        state_changed = file_obj.is_included_in_rag != is_included
+        file_obj.is_included_in_rag = is_included
+        file_obj.save()
+
+        if is_included:
+            logger.info(f"✅ FILE ATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+        else:
+            logger.info(f"❌ FILE DISATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+
+        if state_changed:
+            try:
+                logger.info(f"Ottimizzazione dell'indice vettoriale dopo cambio stato file")
+                create_project_rag_chain_optimized(
+                    project,
+                    changed_file_id=file_id,
+                    operation='toggle_inclusion'
+                )
+                logger.info(f"Indice vettoriale ottimizzato con successo")
+            except Exception as e:
+                logger.error(f"Errore nell'ottimizzazione dell'indice: {str(e)}")
+
+        return True, "Stato inclusione file aggiornato."
+    except ProjectFile.DoesNotExist:
+        return False, "File non trovato."
+
+
+# ===== FUNZIONI HELPER PER CARICAMENTO SPECIFICO =====
+
+def _load_pdf_document(file_path, filename):
+    """Carica documenti PDF con fallback tra loader diversi."""
+    logger.debug(f"📑 Caricamento PDF: {filename}")
+
+    documents = []
+
+    # ===== FUNZIONI HELPER PER CARICAMENTO SPECIFICO =====
+
+    def _load_pdf_document(file_path, filename):
+        """Carica documenti PDF con fallback tra loader diversi."""
+        logger.debug(f"📑 Caricamento PDF: {filename}")
+
+        documents = []
+
+        # Primo tentativo con PyMuPDFLoader (più veloce e accurato)
+        try:
+            logger.debug("🔄 Tentativo con PyMuPDFLoader...")
+            loader = PyMuPDFLoader(file_path)
+            documents = loader.load()
+
+            # Verifica se il contenuto è stato estratto
+            if documents and any(doc.page_content.strip() for doc in documents):
+                logger.debug(f"✅ PyMuPDFLoader: estratte {len(documents)} pagine")
+                return documents
+            else:
+                logger.debug("⚠️ PyMuPDFLoader: nessun contenuto estratto")
+
+        except Exception as e:
+            logger.debug(f"❌ PyMuPDFLoader fallito: {str(e)}")
+
+        # Secondo tentativo con PDFMinerLoader (più robusto per PDF complessi)
+        try:
+            logger.debug("🔄 Tentativo con PDFMinerLoader...")
+            loader = PDFMinerLoader(file_path)
+            documents = loader.load()
+
+            if documents and any(doc.page_content.strip() for doc in documents):
+                logger.debug(f"✅ PDFMinerLoader: estratte {len(documents)} pagine")
+                return documents
+            else:
+                logger.debug("⚠️ PDFMinerLoader: nessun contenuto estratto")
+
+        except Exception as e:
+            logger.debug(f"❌ PDFMinerLoader fallito: {str(e)}")
+
+        # Se entrambi falliscono, crea un documento di errore
+        logger.warning(f"⚠️ Impossibile estrarre contenuto da PDF: {filename}")
+        error_doc = Document(
+            page_content=f"Errore: impossibile estrarre contenuto dal PDF {filename}",
+            metadata={
+                "filename": filename,
+                "source": file_path,
+                "type": "pdf",
+                "error": "extraction_failed"
+            }
+        )
+        return [error_doc]
+
+    def _load_word_document(file_path, filename):
+        """Carica documenti Word (.doc, .docx)."""
+        logger.debug(f"📄 Caricamento Word: {filename}")
+
+        try:
+            loader = UnstructuredWordDocumentLoader(file_path)
+            documents = loader.load()
+
+            # Aggiungi metadata specifici
+            for doc in documents:
+                doc.metadata["type"] = "word"
+
+            logger.debug(f"✅ Word caricato: {len(documents)} sezioni")
+            return documents
+
+        except Exception as e:
+            logger.error(f"❌ Errore caricamento Word {filename}: {str(e)}")
+            raise
+
+    def _load_powerpoint_document(file_path, filename):
+        """Carica presentazioni PowerPoint (.ppt, .pptx)."""
+        logger.debug(f"📊 Caricamento PowerPoint: {filename}")
+
+        try:
+            loader = UnstructuredPowerPointLoader(file_path)
+            documents = loader.load()
+
+            # Aggiungi metadata specifici
+            for doc in documents:
+                doc.metadata["type"] = "powerpoint"
+
+            logger.debug(f"✅ PowerPoint caricato: {len(documents)} slide")
+            return documents
+
+        except Exception as e:
+            logger.error(f"❌ Errore caricamento PowerPoint {filename}: {str(e)}")
+            raise
+
+    def _load_text_document(file_path, filename):
+        """Carica file di testo (.txt, .md, .csv)."""
+        logger.debug(f"📝 Caricamento testo: {filename}")
+
+        try:
+            loader = TextLoader(file_path, encoding='utf-8')
+            documents = loader.load()
+
+            # Aggiungi metadata specifici
+            for doc in documents:
+                doc.metadata["type"] = "text"
+
+            logger.debug(f"✅ Testo caricato: {len(documents)} documenti")
+            return documents
+
+        except UnicodeDecodeError:
+            # Prova con encoding diverso
+            try:
+                loader = TextLoader(file_path, encoding='latin1')
+                documents = loader.load()
+
+                for doc in documents:
+                    doc.metadata["type"] = "text"
+                    doc.metadata["encoding"] = "latin1"
+
+                logger.debug(f"✅ Testo caricato (latin1): {len(documents)} documenti")
+                return documents
+
+            except Exception as e:
+                logger.error(f"❌ Errore caricamento testo {filename}: {str(e)}")
+                raise
+
+        except Exception as e:
+            logger.error(f"❌ Errore caricamento testo {filename}: {str(e)}")
+            raise
+
+    def _load_image_document(file_path, filename):
+        """Carica immagini usando OpenAI Vision API."""
+        logger.debug(f"🖼️ Caricamento immagine: {filename}")
+
+        try:
+            # Usa la funzione process_image esistente se disponibile
+            if 'process_image' in globals():
+                document = process_image(file_path)
+                return [document]
+            else:
+                # Fallback se process_image non è disponibile
+                logger.warning(f"⚠️ process_image non disponibile per {filename}")
+                placeholder_doc = Document(
+                    page_content=f"Immagine: {filename} (elaborazione non disponibile)",
+                    metadata={
+                        "filename": filename,
+                        "source": file_path,
+                        "type": "image",
+                        "error": "vision_api_unavailable"
+                    }
+                )
+                return [placeholder_doc]
+
+        except Exception as e:
+            logger.error(f"❌ Errore caricamento immagine {filename}: {str(e)}")
+            # Crea documento di errore
+            error_doc = Document(
+                page_content=f"Errore nell'elaborazione dell'immagine {filename}: {str(e)}",
+                metadata={
+                    "filename": filename,
+                    "source": file_path,
+                    "type": "image",
+                    "error": str(e)
+                }
+            )
+            return [error_doc]
+
+    # Primo tentativo con PyMuPDFLoader (più veloce e accurato)
+    try:
+        logger.debug("🔄 Tentativo con PyMuPDFLoader...")
+        loader = PyMuPDFLoader(file_path)
+        documents = loader.load()
+
+        # Verifica se il contenuto è stato estratto
+        if documents and any(doc.page_content.strip() for doc in documents):
+            logger.debug(f"✅ PyMuPDFLoader: estratte {len(documents)} pagine")
+            return documents
+        else:
+            logger.debug("⚠️ PyMuPDFLoader: nessun contenuto estratto")
+
+    except Exception as e:
+        logger.debug(f"❌ PyMuPDFLoader fallito: {str(e)}")
+
+    # Secondo tentativo con PDFMinerLoader (più robusto per PDF complessi)
+    try:
+        logger.debug("🔄 Tentativo con PDFMinerLoader...")
+        loader = PDFMinerLoader(file_path)
+        documents = loader.load()
+
+        if documents and any(doc.page_content.strip() for doc in documents):
+            logger.debug(f"✅ PDFMinerLoader: estratte {len(documents)} pagine")
+            return documents
+        else:
+            logger.debug("⚠️ PDFMinerLoader: nessun contenuto estratto")
+
+    except Exception as e:
+        logger.debug(f"❌ PDFMinerLoader fallito: {str(e)}")
+
+    # Se entrambi falliscono, crea un documento di errore
+    logger.warning(f"⚠️ Impossibile estrarre contenuto da PDF: {filename}")
+    error_doc = Document(
+        page_content=f"Errore: impossibile estrarre contenuto dal PDF {filename}",
+        metadata={
+            "filename": filename,
+            "source": file_path,
+            "type": "pdf",
+            "error": "extraction_failed"
+        }
+    )
+    return [error_doc]
+
+
+def _load_word_document(file_path, filename):
+    """Carica documenti Word (.doc, .docx)."""
+    logger.debug(f"📄 Caricamento Word: {filename}")
+
+    try:
+        loader = UnstructuredWordDocumentLoader(file_path)
+        documents = loader.load()
+
+        # Aggiungi metadata specifici
+        for doc in documents:
+            doc.metadata["type"] = "word"
+
+        logger.debug(f"✅ Word caricato: {len(documents)} sezioni")
+        return documents
+
+    except Exception as e:
+        logger.error(f"❌ Errore caricamento Word {filename}: {str(e)}")
+        raise
+
+
+def _load_powerpoint_document(file_path, filename):
+    """Carica presentazioni PowerPoint (.ppt, .pptx)."""
+    logger.debug(f"📊 Caricamento PowerPoint: {filename}")
+
+    try:
+        loader = UnstructuredPowerPointLoader(file_path)
+        documents = loader.load()
+
+        # Aggiungi metadata specifici
+        for doc in documents:
+            doc.metadata["type"] = "powerpoint"
+
+        logger.debug(f"✅ PowerPoint caricato: {len(documents)} slide")
+        return documents
+
+    except Exception as e:
+        logger.error(f"❌ Errore caricamento PowerPoint {filename}: {str(e)}")
+        raise
+
+
+def _load_text_document(file_path, filename):
+    """Carica file di testo (.txt, .md, .csv)."""
+    logger.debug(f"📝 Caricamento testo: {filename}")
+
+    try:
+        loader = TextLoader(file_path, encoding='utf-8')
+        documents = loader.load()
+
+        # Aggiungi metadata specifici
+        for doc in documents:
+            doc.metadata["type"] = "text"
+
+        logger.debug(f"✅ Testo caricato: {len(documents)} documenti")
+        return documents
+
+    except UnicodeDecodeError:
+        # Prova con encoding diverso
+        try:
+            loader = TextLoader(file_path, encoding='latin1')
+            documents = loader.load()
+
+            for doc in documents:
+                doc.metadata["type"] = "text"
+                doc.metadata["encoding"] = "latin1"
+
+            logger.debug(f"✅ Testo caricato (latin1): {len(documents)} documenti")
+            return documents
+
+        except Exception as e:
+            logger.error(f"❌ Errore caricamento testo {filename}: {str(e)}")
+            raise
+
+    except Exception as e:
+        logger.error(f"❌ Errore caricamento testo {filename}: {str(e)}")
+        raise
+
+
+def _load_image_document(file_path, filename):
+    """Carica immagini usando OpenAI Vision API."""
+    logger.debug(f"🖼️ Caricamento immagine: {filename}")
+
+    try:
+        # Usa la funzione process_image esistente se disponibile
+        if 'process_image' in globals():
+            document = process_image(file_path)
+            return [document]
+        else:
+            # Fallback se process_image non è disponibile
+            logger.warning(f"⚠️ process_image non disponibile per {filename}")
+            placeholder_doc = Document(
+                page_content=f"Immagine: {filename} (elaborazione non disponibile)",
+                metadata={
+                    "filename": filename,
+                    "source": file_path,
+                    "type": "image",
+                    "error": "vision_api_unavailable"
+                }
+            )
+            return [placeholder_doc]
+
+    except Exception as e:
+        logger.error(f"❌ Errore caricamento immagine {filename}: {str(e)}")
+        # Crea documento di errore
+        error_doc = Document(
+            page_content=f"Errore nell'elaborazione dell'immagine {filename}: {str(e)}",
+            metadata={
+                "filename": filename,
+                "source": file_path,
+                "type": "image",
+                "error": str(e)
+            }
+        )
+        return [error_doc]

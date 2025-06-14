@@ -819,62 +819,99 @@ def project(request, project_id=None):
 						messages.success(request, f"Folder with {len(folder_files)} files uploaded successfully.")
 						return redirect('project', project_id=project.id)
 
+				# ----- Gestisce toggle di inclusione/esclusione file da ricerca rag -----
+				elif action == 'toggle_file_inclusion':
+					"""Gestisce il toggle di inclusione/esclusione dei documenti nel RAG."""
+					file_id = request.POST.get('file_id')
+					is_included = request.POST.get('is_included') == 'true'
+
+					logger.info(f"🔄 Richiesta toggle FILE - ID: {file_id}, is_included: {is_included}")
+
+					if file_id:
+						try:
+							file_obj = ProjectFile.objects.get(id=file_id, project=project)
+							previous_value = file_obj.is_included_in_rag
+
+							file_obj.is_included_in_rag = is_included
+							file_obj.save(update_fields=['is_included_in_rag', 'last_modified'])
+
+							if is_included:
+								logger.info(f"✅ FILE ATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+							else:
+								logger.info(f"❌ FILE DISATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+
+							# L'ottimizzazione viene gestita automaticamente dal signal
+							if previous_value != is_included:
+								logger.info(f"🔄 Signal attivato per ottimizzazione indice dopo toggle file")
+
+							return JsonResponse({
+								'success': True,
+								'message': f"File {'incluso' if is_included else 'escluso'} dalla ricerca AI"
+							})
+
+						except ProjectFile.DoesNotExist:
+							logger.error(f"File con ID {file_id} non trovato")
+							return JsonResponse({
+								'success': False,
+								'message': "File non trovato."
+							})
+					else:
+						return JsonResponse({
+							'success': False,
+							'message': "ID file mancante."
+						})
+
 				# ----- Eliminazione dei file -----
 				elif action == 'delete_file':
-					# Eliminazione di un file dal progetto
+					"""Gestisce l'eliminazione di un file dal progetto."""
 					file_id = request.POST.get('file_id')
 
-					# Log dettagliati
-					logger.debug(
-						f"Richiesta di eliminazione file ricevuta. ID file: {file_id}, ID progetto: {project.id}")
+					if file_id:
+						try:
+							file_obj = ProjectFile.objects.get(id=file_id, project=project)
+							was_included = file_obj.is_included_in_rag
+							file_path = file_obj.file_path
+							filename = file_obj.filename
 
-					# Verifica che file_id non sia vuoto
-					if not file_id:
-						logger.warning("Richiesta di eliminazione file senza file_id")
-						messages.error(request, "ID file non valido.")
-						return redirect('project', project_id=project.id)
+							# Elimina il record dal database
+							file_obj.delete()
 
-					try:
-						# Ottieni il file del progetto
-						project_file = get_object_or_404(ProjectFile, id=file_id, project=project)
-						logger.info(f"File trovato per l'eliminazione: {project_file.filename} (ID: {file_id})")
-
-						# Elimina il file fisico
-						if os.path.exists(project_file.file_path):
-							logger.debug(f"Eliminazione del file fisico in: {project_file.file_path}")
+							# Elimina il file fisico se esiste
 							try:
-								os.remove(project_file.file_path)
-								logger.info(f"File fisico eliminato: {project_file.file_path}")
+								if os.path.exists(file_path):
+									os.remove(file_path)
+									logger.info(f"🗑️ File fisico eliminato: {file_path}")
 							except Exception as e:
-								logger.error(f"Errore nell'eliminazione del file fisico: {str(e)}")
-							# Continua con l'eliminazione dal database anche se l'eliminazione del file fallisce
-						else:
-							logger.warning(f"File fisico non trovato in: {project_file.file_path}")
+								logger.warning(f"⚠️ Impossibile eliminare il file fisico {file_path}: {str(e)}")
 
-						# Memorizza se il file era incorporato
-						was_embedded = project_file.is_embedded
+							# Se il file era incluso nel RAG, ottimizza l'indice
+							if was_included:
+								try:
+									from dashboard.rag_utils import create_project_rag_chain_optimized
+									create_project_rag_chain_optimized(
+										project,
+										changed_file_id=file_id,
+										operation='delete'
+									)
+									logger.info(f"✅ Indice ottimizzato dopo eliminazione file")
+								except Exception as e:
+									logger.error(f"❌ Errore nell'ottimizzazione indice: {str(e)}")
 
-						# Elimina il record dal database
-						project_file.delete()
-						logger.info(f"Record eliminato dal database per il file ID: {file_id}")
+							return JsonResponse({
+								'success': True,
+								'message': f"File '{filename}' eliminato con successo"
+							})
 
-						# Se il file era incorporato, aggiorna l'indice vettoriale
-						if was_embedded:
-							try:
-								logger.info(f"🔄 Aggiornando l'indice dopo eliminazione del file")
-								# Forza la ricostruzione dell'indice poiché è difficile rimuovere documenti specificamenti
-								create_project_rag_chain(project=project, force_rebuild=True)
-								logger.info(f"✅ Indice vettoriale ricostruito con successo")
-							except Exception as e:
-								logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
-
-						messages.success(request, "File eliminato con successo.")
-						return redirect('project', project_id=project.id)
-
-					except Exception as e:
-						logger.exception(f"Errore nell'azione delete_file: {str(e)}")
-						messages.error(request, f"Errore nell'eliminazione del file: {str(e)}")
-						return redirect('project', project_id=project.id)
+						except ProjectFile.DoesNotExist:
+							return JsonResponse({
+								'success': False,
+								'message': "File non trovato."
+							})
+					else:
+						return JsonResponse({
+							'success': False,
+							'message': "ID file mancante."
+						})
 
 				# ----- Eliminazione di un URL -----
 				elif action == 'delete_url':

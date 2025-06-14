@@ -329,46 +329,114 @@ class WebCrawler:
 
 	def simulate_user_interactions(self, page):
 		"""
-		NUOVO: Simula interazioni utente per rivelare contenuti nascosti.
-
-		Questa funzione esegue una serie di azioni comuni che potrebbero
-		rivelare contenuti dinamici nascosti:
-		- Hover su elementi
-		- Click su pulsanti/tab
-		- Scroll della pagina
-		- Attivazione di carousel e accordions
+		Simula interazioni utente per rivelare contenuti dinamici nascosti.
+		Esegue scroll, click su carousel/tab/accordion, hover su dropdown e chiusura di banner di consenso.
+		Correzioni e ottimizzazioni:
+		- Correzione dell'errore di scope per 'is_element_interactable', ora definita all'inizio.
+		- Chiusura automatica di qualsiasi banner di consenso/popup (es. Iubenda, Cookiebot, OneTrust).
+		- Timeout ridotti per azioni interattive (da 60s a 5s).
+		- Pause temporali ridotte per migliorare le prestazioni.
+		- Limite al numero di interazioni per evitare loop su siti con molti elementi (es. 37 accordion).
 
 		Args:
-			page: Oggetto Page di Playwright
+			page: Oggetto Page di Playwright per interagire con la pagina web.
 		"""
 		try:
 			logger.debug("🎭 Simulazione interazioni utente per rivelare contenuti dinamici")
 
-			# 1. SCROLL COMPLETO DELLA PAGINA per attivare lazy loading
+			# Definizione della funzione helper per verificare se un elemento è interagibile
+			def is_element_interactable(element):
+				"""
+				Verifica se un elemento è interagibile (non coperto da popup o modali).
+				Usa JavaScript per controllare se l'elemento è quello più in alto nel punto centrale.
+				"""
+				try:
+					return page.evaluate("""
+	                    (el) => {
+	                        const rect = el.getBoundingClientRect();
+	                        const topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+	                        return topElement === el || topElement === null;
+	                    }""", element)
+				except:
+					return False
+
+			# 1. CHIUSURA BANNER DI CONSENSO E POPUP
+			# Cerca e chiude banner di consenso (es. cookie, privacy, GDPR) o popup modali
+			consent_selectors = (
+				'[id*="cookie"] button, [class*="cookie"] button, '  # Banner cookie generici
+				'[id*="consent"] button, [class*="consent"] button, '  # Banner consenso
+				'[id*="privacy"] button, [class*="privacy"] button, '  # Banner privacy
+				'[id*="gdpr"] button, [class*="gdpr"] button, '  # Banner GDPR
+				'.iubenda-cs-accept-btn, .iubenda-cs-deny-btn, '  # Iubenda
+				'.cookiebot-button, .onetrust-close-btn, '  # Cookiebot, OneTrust
+				'button[id*="accept"], button[class*="accept"], '  # Pulsanti con "accept" in ID/classe
+				'button[id*="decline"], button[class*="decline"], '  # Pulsanti con "decline" in ID/classe
+				'button[id*="ok"], button[class*="ok"], '  # Pulsanti con "ok" in ID/classe
+				'button[id*="close"], button[class*="close"], '  # Pulsanti con "close" in ID/classe
+				'[aria-label*="accept"], [aria-label*="decline"], [aria-label*="close"], '  # ARIA labels
+				'.popup-close, .modal-close, .close-btn'  # Chiusura popup generici
+			)
+			consent_buttons = page.query_selector_all(consent_selectors)
+			if consent_buttons:
+				logger.debug(f"🔍 Trovati {len(consent_buttons)} pulsanti di consenso/popup")
+				for button in consent_buttons[:2]:  # Limita a 2 tentativi per evitare loop
+					try:
+						if button.is_visible() and button.is_enabled():
+							button.click(timeout=5000)  # Timeout ridotto a 5s
+							logger.debug("✅ Chiuso banner di consenso/popup")
+							page.wait_for_timeout(1000)  # Attendi 1s per chiusura
+							break  # Esci dopo il primo click riuscito
+					except Exception as e:
+						logger.debug(f"Errore nel chiudere banner di consenso: {e}")
+
+			# Fallback JavaScript per pulsanti con testo specifico (es. "Accetta", "Rifiuta")
+			js_consent_buttons = page.evaluate("""
+	            () => {
+	                const buttons = document.querySelectorAll('button');
+	                const keywords = ['Accetta', 'Accept', 'Rifiuta', 'Decline', 'OK', 'Chiudi', 'Close'];
+	                return Array.from(buttons).filter(btn => 
+	                    keywords.some(keyword => btn.textContent.toLowerCase().includes(keyword.toLowerCase()))
+	                ).map(btn => btn);
+	            }
+	        """)
+			if js_consent_buttons:
+				logger.debug(f"🔍 Trovati {len(js_consent_buttons)} pulsanti di consenso tramite JavaScript")
+				for i, button in enumerate(js_consent_buttons[:1]):  # Limita a 1 tentativo
+					try:
+						button.click(timeout=5000)
+						logger.debug(f"✅ Chiuso banner di consenso tramite JavaScript {i}")
+						page.wait_for_timeout(1000)
+						break
+					except Exception as e:
+						logger.debug(f"Errore nel chiudere banner JavaScript {i}: {e}")
+
+			# 2. SCROLL COMPLETO DELLA PAGINA
+			# Esegue uno scroll graduale per attivare lazy loading e contenuti dinamici
 			page.evaluate("""
-                () => {
-                    // Scroll graduale per simulare lettura utente
-                    const scrollHeight = document.body.scrollHeight;
-                    const viewportHeight = window.innerHeight;
-                    const steps = Math.ceil(scrollHeight / viewportHeight);
+	            () => {
+	                // Scroll graduale per simulare lettura utente
+	                const scrollHeight = document.body.scrollHeight;
+	                const viewportHeight = window.innerHeight;
+	                const steps = Math.ceil(scrollHeight / viewportHeight);
 
-                    let currentStep = 0;
-                    const scrollStep = () => {
-                        if (currentStep < steps) {
-                            window.scrollTo(0, currentStep * viewportHeight);
-                            currentStep++;
-                            setTimeout(scrollStep, 200); // Pausa tra scroll
-                        } else {
-                            // Torna in cima
-                            window.scrollTo(0, 0);
-                        }
-                    };
-                    scrollStep();
-                }
-            """)
-			time.sleep(2)  # Attendi che il lazy loading si completi
+	                let currentStep = 0;
+	                const scrollStep = () => {
+	                    if (currentStep < steps) {
+	                        window.scrollTo(0, currentStep * viewportHeight);
+	                        currentStep++;
+	                        setTimeout(scrollStep, 100); // Ridotto da 200ms a 100ms
+	                    } else {
+	                        // Torna in cima
+	                        window.scrollTo(0, 0);
+	                    }
+	                };
+	                scrollStep();
+	            }
+	        """)
+			time.sleep(1)  # Ridotto da 2s a 1s per attendere il lazy loading
 
-			# 2. ATTIVAZIONE CAROUSEL - cerca e attiva tutti gli elementi del carousel
+			# 3. ATTIVAZIONE CAROUSEL
+			# Cerca e attiva elementi carousel (es. Bootstrap, Swiper)
 			carousel_elements = page.query_selector_all('.carousel-item, .swiper-slide, .slide')
 			if carousel_elements:
 				logger.debug(f"🎠 Trovati {len(carousel_elements)} elementi carousel")
@@ -381,84 +449,95 @@ class WebCrawler:
 					'.next, .prev'
 				)
 
-				# Attiva tutti gli elementi del carousel uno per uno
-				for i, control in enumerate(carousel_controls[:6]):  # Limita a 6 click per evitare loop infiniti
+				# Attiva i controlli del carousel
+				for i, control in enumerate(carousel_controls[:3]):  # Ridotto da 6 a 3 click
 					try:
-						if control.is_visible():
-							control.click()
-							time.sleep(1)  # Attendi l'animazione
+						if control.is_visible() and is_element_interactable(control):
+							control.click(timeout=5000)  # Timeout ridotto a 5s
+							time.sleep(0.3)  # Ridotto da 1s a 0.3s
+						else:
+							logger.debug(f"🚫 Carousel control {i} non interagibile, salto")
 					except Exception as e:
 						logger.debug(f"Errore nel click carousel control {i}: {e}")
 
-			# 3. ATTIVAZIONE TAB E ACCORDIONS
+			# 4. ATTIVAZIONE TAB
+			# Cerca e attiva tab per rivelare contenuti nascosti
 			tab_buttons = page.query_selector_all(
 				'[data-bs-toggle="tab"], [data-toggle="tab"], '
 				'.tab-button, .nav-link, '
 				'[role="tab"], .ui-tab'
 			)
-
 			if tab_buttons:
 				logger.debug(f"📑 Trovati {len(tab_buttons)} tab buttons")
-				for i, tab in enumerate(tab_buttons[:8]):  # Limita a 8 tab
+				for i, tab in enumerate(tab_buttons[:5]):  # Ridotto da 8 a 5 tab
 					try:
-						if tab.is_visible() and tab.is_enabled():
-							tab.click()
-							time.sleep(0.5)  # Pausa breve tra i click
+						if tab.is_visible() and tab.is_enabled() and is_element_interactable(tab):
+							tab.click(timeout=5000)  # Timeout ridotto a 5s
+							time.sleep(0.2)  # Ridotto da 0.5s a 0.2s
+						else:
+							logger.debug(f"🚫 Tab {i} non interagibile, salto")
 					except Exception as e:
 						logger.debug(f"Errore nel click tab {i}: {e}")
 
-			# 4. ESPANSIONE ACCORDIONS E ELEMENTI COLLASSABILI
+			# 5. ESPANSIONE ACCORDION
+			# Cerca e espande elementi collassabili (es. Bootstrap accordion)
 			accordion_triggers = page.query_selector_all(
 				'[data-bs-toggle="collapse"], [data-toggle="collapse"], '
 				'.accordion-button, .collapse-trigger, '
 				'[aria-expanded="false"]'
 			)
-
 			if accordion_triggers:
 				logger.debug(f"🪗 Trovati {len(accordion_triggers)} accordion triggers")
-				for i, trigger in enumerate(accordion_triggers[:10]):  # Limita a 10 elementi
+				for i, trigger in enumerate(accordion_triggers[:5]):  # Ridotto da 10 a 5
 					try:
-						if trigger.is_visible() and trigger.is_enabled():
-							trigger.click()
-							time.sleep(0.3)
+						if trigger.is_visible() and trigger.is_enabled() and is_element_interactable(trigger):
+							trigger.click(timeout=5000)  # Timeout ridotto a 5s
+							time.sleep(0.2)  # Ridotto da 0.3s a 0.2s
+						else:
+							logger.debug(f"🚫 Accordion {i} non interagibile, salto")
 					except Exception as e:
 						logger.debug(f"Errore nel click accordion {i}: {e}")
 
-			# 5. HOVER SU ELEMENTI CON DROPDOWN
+			# 6. HOVER SU DROPDOWN
+			# Cerca ed esegue hover su elementi con dropdown
 			dropdown_triggers = page.query_selector_all(
 				'.dropdown-toggle, [data-bs-toggle="dropdown"], '
 				'.has-dropdown, .menu-item-has-children'
 			)
-
 			if dropdown_triggers:
 				logger.debug(f"📋 Trovati {len(dropdown_triggers)} dropdown triggers")
-				for i, trigger in enumerate(dropdown_triggers[:5]):  # Limita a 5 hover
+				for i, trigger in enumerate(dropdown_triggers[:3]):  # Ridotto da 5 a 3
 					try:
-						if trigger.is_visible():
-							trigger.hover()
-							time.sleep(0.5)
+						if trigger.is_visible() and is_element_interactable(trigger):
+							trigger.hover(timeout=5000)  # Timeout ridotto a 5s
+							time.sleep(0.2)  # Ridotto da 0.5s a 0.2s
+						else:
+							logger.debug(f"🚫 Dropdown {i} non interagibile, salto")
 					except Exception as e:
 						logger.debug(f"Errore nell'hover dropdown {i}: {e}")
 
-			# 6. CLICK SU PULSANTI "MOSTRA DI PIÙ" / "LOAD MORE"
+			# 7. CLICK SU PULSANTI "MOSTRA DI PIÙ"
+			# Cerca pulsanti di caricamento aggiuntivo (es. "Load More")
 			load_more_buttons = page.query_selector_all(
 				'[id*="load"], [class*="load"], [id*="more"], [class*="more"], '
 				'[id*="show"], [class*="show"], .btn:has-text("more"), '
 				'.button:has-text("più"), .btn:has-text("show")'
 			)
-
 			if load_more_buttons:
 				logger.debug(f"➕ Trovati {len(load_more_buttons)} load more buttons")
-				for i, button in enumerate(load_more_buttons[:3]):  # Limita a 3 per evitare loop
+				for i, button in enumerate(load_more_buttons[:3]):  # Limite invariato
 					try:
-						if button.is_visible() and button.is_enabled():
-							button.click()
-							time.sleep(1.5)  # Pausa più lunga per il caricamento
+						if button.is_visible() and button.is_enabled() and is_element_interactable(button):
+							button.click(timeout=5000)  # Timeout ridotto a 5s
+							time.sleep(1.0)  # Ridotto da 1.5s a 1s
+						else:
+							logger.debug(f"🚫 Load more {i} non interagibile, salto")
 					except Exception as e:
 						logger.debug(f"Errore nel click load more {i}: {e}")
 
-			# 7. ATTENDI CHE TUTTI GLI ELEMENTI DINAMICI SI CARICHINO
-			page.wait_for_timeout(2000)  # Attesa finale di 2 secondi
+			# 8. ATTENDI STABILIZZAZIONE FINALE
+			# Breve attesa per garantire che tutti i contenuti dinamici siano caricati
+			page.wait_for_timeout(1000)  # Ridotto da 2000ms a 1000ms
 
 			logger.debug("✅ Simulazione interazioni utente completata")
 

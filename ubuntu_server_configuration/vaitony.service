@@ -37,8 +37,10 @@ ls -la  /etc/systemd/system/vaitony.service
 4.0K -rw-r--r-- 1 root 644 May 24 00:58 /etc/systemd/system/vaitony.service
 
 
-VIENE ESEGUITO CON QUESTI COMANDI:
-sudo systemctl restart vaitony.service
+per far partire il servizio vaitony (devi esserre utente root):
+systemctl restart vaitony.service
 
 ------------------- PER VEDERE I LOG
 sudo journalctl -u vaitony.service -n 50 --no-pager
+
+

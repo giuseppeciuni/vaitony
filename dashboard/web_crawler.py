@@ -938,10 +938,21 @@ class WebCrawler:
                 current_url, current_depth = url_queue.pop(0)
                 current_url = self.clean_url(current_url)
 
-                if current_url in visited_urls or not self.should_process_url(current_url, base_domain):
+                # if current_url in visited_urls or not self.should_process_url(current_url, base_domain):
+                #    continue
+
+                # Descrizione: Per risolvere il problema che l'URL di partenza (es. https://chatbot.ciunix.com)
+                # viene escluso dal filtro is_external_tracking_link, aggiungiamo una condizione che salta
+                # il controllo should_process_url per l'URL iniziale. Questo assicura che la pagina di partenza
+                # venga sempre processata, mantenendo i filtri per gli URL successivi trovati nella pagina.
+                # Logica: Controlliamo se l'URL corrente è diverso dall'URL di partenza prima di applicare
+                # il filtro should_process_url, e aggiungiamo un log per tracciare gli URL esclusi.
+                if current_url in visited_urls or (
+                        current_url != start_url and not self.should_process_url(current_url, base_domain)):
+                    logger.debug(f"🚫 URL escluso: {current_url}")
                     continue
 
-                logger.info(f"🔍 Elaborazione pagina: {current_url} (profondità: {current_depth})")
+            logger.info(f"🔍 Elaborazione pagina: {current_url} (profondità: {current_depth})")
                 visited_urls.add(current_url)
 
                 try:

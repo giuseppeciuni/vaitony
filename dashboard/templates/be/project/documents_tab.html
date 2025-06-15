@@ -8,37 +8,89 @@
     </div>
 
     {% if project_files %}
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
-        {% for file in project_files %}
-        <div class="col">
-            <div class="document-card card h-100" data-file-id="{{ file.id }}">
-                <div class="card-body text-center p-3 view-document" data-bs-toggle="modal" data-bs-target="#documentModal"
-                     data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}" data-file-size="{{ file.file_size|filesizeformat }}"
-                     data-file-path="{% url 'serve_project_file' file.id %}">
+    <!-- Card container per i documenti (simile agli URLs) -->
+    <div class="website-card">
+        <div class="website-card-header">
+            <h5 class="website-card-title">
+                <i class="bi bi-files"></i>
+                Documenti caricati nel progetto
+            </h5>
+            <div>
+                <span class="badge bg-info">{{ project_files|length }} Document{{ project_files|length|pluralize:"o,i" }}</span>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadFilesModal">
+                    <i class="bi bi-plus-lg"></i> Carica
+                </button>
+            </div>
+        </div>
+        <div class="website-links-grid">
+            {% for file in project_files %}
+            <div class="website-link-card document-link-card" data-file-id="{{ file.id }}">
+                <!-- Icona e titolo del documento -->
+                <div class="d-flex align-items-center mb-2">
                     {% if file.extension == '.pdf' %}
-                        <i class="bi bi-file-earmark-pdf document-icon pdf mb-2"></i>
+                        <i class="bi bi-file-earmark-pdf text-danger me-2" style="font-size: 1.5rem;"></i>
                     {% elif file.extension == '.doc' or file.extension == '.docx' %}
-                        <i class="bi bi-file-earmark-word document-icon doc mb-2"></i>
+                        <i class="bi bi-file-earmark-word text-primary me-2" style="font-size: 1.5rem;"></i>
                     {% elif file.extension == '.xls' or file.extension == '.xlsx' %}
-                        <i class="bi bi-file-earmark-excel document-icon xls mb-2"></i>
+                        <i class="bi bi-file-earmark-excel text-success me-2" style="font-size: 1.5rem;"></i>
                     {% elif file.extension == '.jpg' or file.extension == '.jpeg' or file.extension == '.png' or file.extension == '.gif' %}
-                        <i class="bi bi-file-earmark-image document-icon jpg mb-2"></i>
+                        <i class="bi bi-file-earmark-image text-info me-2" style="font-size: 1.5rem;"></i>
                     {% else %}
-                        <i class="bi bi-file-earmark document-icon mb-2"></i>
+                        <i class="bi bi-file-earmark text-secondary me-2" style="font-size: 1.5rem;"></i>
                     {% endif %}
-                    <div class="card-title text-truncate small">{{ file.filename }}</div>
-                    <small class="text-muted d-block">{{ file.file_size|filesizeformat }}</small>
+                    <div class="flex-grow-1">
+                        <div class="website-link-title">
+                            {{ file.filename }}
+                        </div>
+                        <small class="text-muted">{{ file.file_size|filesizeformat }}</small>
+                    </div>
                 </div>
-                <div class="card-footer bg-white border-top-0 py-2 px-3">
-                    <button class="btn btn-sm btn-outline-danger w-100 delete-file-btn"
-                            data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}"
+
+                <!-- Informazioni aggiuntive -->
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <!-- Toggle switch per includere/escludere dalla ricerca AI -->
+                    <div class="form-check form-switch">
+                        <input class="form-check-input include-file-check" type="checkbox"
+                               id="include-file-{{ file.id }}" data-file-id="{{ file.id }}"
+                               {% if file.is_embedded %}checked{% endif %}>
+                        <label class="form-check-label small" for="include-file-{{ file.id }}">
+                            Includi nella ricerca
+                        </label>
+                    </div>
+                    <!-- Indicatori di stato -->
+                    <div class="d-flex gap-1">
+                        <span class="badge bg-secondary">{{ file.extension|upper|slice:"1:" }}</span>
+                        {% if file.is_embedded %}
+                        <span class="badge bg-success">Indicizzato</span>
+                        {% else %}
+                        <span class="badge bg-warning">In attesa</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Pulsanti azione (identici agli URLs) -->
+                <div class="website-link-actions mt-2">
+                    <button class="btn btn-sm btn-outline-primary view-document-btn"
+                            data-bs-toggle="modal" data-bs-target="#documentModal"
+                            data-file-id="{{ file.id }}"
+                            data-file-name="{{ file.filename }}"
+                            data-file-size="{{ file.file_size|filesizeformat }}"
+                            data-file-path="{% url 'serve_project_file' file.id %}">
+                        <i class="bi bi-eye"></i> Anteprima
+                    </button>
+                    <a href="{% url 'serve_project_file' file.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-box-arrow-up-right"></i> Apri
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger delete-file-btn"
+                            data-file-id="{{ file.id }}"
+                            data-file-name="{{ file.filename }}"
                             data-bs-toggle="modal" data-bs-target="#deleteFileModal">
                         <i class="bi bi-trash"></i> Elimina
                     </button>
                 </div>
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
     {% else %}
     <div class="empty-state">
@@ -51,3 +103,76 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+/* Stili aggiuntivi per le card dei documenti */
+.document-link-card {
+    /* Eredita tutti gli stili da website-link-card */
+    min-height: 120px;
+}
+
+.document-link-card .website-link-title {
+    font-size: 0.9rem;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
+    max-height: 2.6em;
+}
+
+.document-link-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+/* Migliore spacing per le icone */
+.document-link-card .bi {
+    flex-shrink: 0;
+}
+
+/* Stili per il toggle dei documenti (identici agli URL) */
+.document-link-card .form-check-input {
+    cursor: pointer;
+}
+
+.document-link-card .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.document-link-card .form-check-input:focus {
+    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+}
+
+.document-link-card .form-check-label {
+    color: #6c757d;
+    font-size: 0.85rem;
+    transition: color 0.2s ease;
+}
+
+.document-link-card .form-check-input:checked + .form-check-label {
+    color: #0d6efd;
+    font-weight: 500;
+}
+
+.document-link-card .form-check-input:disabled {
+    opacity: 0.6;
+}
+
+/* Evidenzia le card dei documenti attivi nella ricerca AI */
+.document-link-card.file-active {
+    border-color: #0d6efd;
+    border-left-width: 3px;
+}
+
+/* Opacità ridotta per i documenti non inclusi nel RAG */
+.document-link-card.file-inactive {
+    opacity: 0.75;
+    background-color: #f8f9fa;
+}
+</style>

@@ -11,7 +11,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from dashboard.rag_utils import handle_delete_note, get_answer_from_project, handle_project_file_upload, \
-	create_project_rag_chain, handle_add_note, handle_update_note
+	create_project_rag_chain, handle_add_note, handle_update_note, add_file_to_index, remove_file_from_index
 from dashboard.views.chatbot import create_chatwoot_bot_for_project
 from profiles.chatwoot_client import ChatwootClient
 from profiles.models import Project, UserAPIKey, ProjectLLMConfiguration, LLMEngine, LLMProvider, ProjectRAGConfig, \
@@ -1213,6 +1213,71 @@ def project(request, project_id=None):
 							'success': False,
 							'message': "ID URL non fornito"
 						})
+
+				# ----- Toggle inclusione File nel RAG -----
+				elif action == 'toggle_file_inclusion':
+					file_id = request.POST.get('file_id')
+					is_included = request.POST.get('is_included') == 'true'
+
+					logger.info(f"🔄 Richiesta toggle File OTTIMIZZATO - ID: {file_id}, is_included: {is_included}")
+
+					if file_id:
+						try:
+							file_obj = ProjectFile.objects.get(id=file_id, project=project)
+							previous_value = file_obj.is_included_in_rag
+
+							# Aggiorna lo stato nel database
+							file_obj.is_included_in_rag = is_included
+							file_obj.save(update_fields=['is_included_in_rag', 'last_modified'])
+
+							if is_included:
+								logger.info(f"✅ FILE ATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+							else:
+								logger.info(f"❌ FILE DISATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+
+							# Solo se lo stato è effettivamente cambiato
+							if previous_value != is_included:
+								try:
+									if is_included:
+										# AGGIUNGE il file all'indice (operazione veloce)
+										logger.info(f"📥 Aggiunta file all'indice: {file_obj.filename}")
+										success = add_file_to_index(project, file_id)
+
+										if not success:
+											logger.warning("Fallback: ricostruzione completa dell'indice")
+											create_project_rag_chain(project=project, force_rebuild=True)
+
+									else:
+										# RIMUOVE il file dall'indice (operazione veloce)
+										logger.info(f"📤 Rimozione file dall'indice: {file_obj.filename}")
+										success = remove_file_from_index(project, file_id)
+
+										if not success:
+											logger.warning("Fallback: ricostruzione completa dell'indice")
+											create_project_rag_chain(project=project, force_rebuild=True)
+
+									logger.info(f"✅ Operazione completata per {file_obj.filename}")
+
+								except Exception as e:
+									logger.error(f"❌ Errore nell'operazione ottimizzata: {str(e)}")
+									# Fallback: ricostruzione completa
+									logger.info("🔄 Fallback: ricostruzione completa dell'indice")
+									create_project_rag_chain(project=project, force_rebuild=True)
+
+							return JsonResponse({
+								'success': True,
+								'message': f"File {'incluso' if is_included else 'escluso'} nella ricerca AI"
+							})
+
+						except ProjectFile.DoesNotExist:
+							logger.error(f"File con ID {file_id} non trovato")
+							return JsonResponse({'success': False, 'message': "File non trovato."})
+
+						except Exception as e:
+							logger.error(f"Errore nel toggle file inclusion: {str(e)}")
+							return JsonResponse({'success': False, 'message': f"Errore: {str(e)}"})
+					else:
+						return JsonResponse({'success': False, 'message': "ID file mancante."})
 
 				# ----- Aggiornamento parametri comportamentali RAG -----
 				elif action == 'update_rag_behavior':

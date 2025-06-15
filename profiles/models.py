@@ -141,6 +141,7 @@ class ProjectFile(models.Model):
 	file_size = models.BigIntegerField()
 	file_hash = models.CharField(max_length=64)  # SHA-256 hash
 	is_embedded = models.BooleanField(default=False)
+	is_included_in_rag = models.BooleanField(default=True)
 	uploaded_at = models.DateTimeField(auto_now_add=True)
 	last_modified = models.DateTimeField(auto_now=True)
 	last_indexed_at = models.DateTimeField(null=True, blank=True)

@@ -33,7 +33,7 @@ from dashboard.rag_document_utils import (
     compute_file_hash, check_project_index_update_needed,
     update_project_index_status, get_cached_embedding, create_embedding_cache
 )
-from profiles.models import ProjectURL
+from profiles.models import ProjectURL, ProjectFile
 
 # Configurazione logger
 logger = logging.getLogger(__name__)
@@ -2197,4 +2197,147 @@ def remove_url_from_index(project, url_id):
 
     except Exception as e:
         logger.error(f"Errore nella rimozione dell'URL dall'indice: {str(e)}")
+        return False
+
+
+def remove_file_from_index(project, file_id):
+    """
+    Rimuove un file specifico dall'indice FAISS senza ricostruire tutto.
+
+    Args:
+        project: Oggetto Project
+        file_id: ID del file da rimuovere
+
+    Returns:
+        bool: True se l'operazione è riuscita, False altrimenti
+    """
+    try:
+        project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+        index_name = f"vector_index_{project.id}"
+        index_path = os.path.join(project_dir, index_name)
+
+        if not os.path.exists(index_path):
+            logger.warning(f"Indice non trovato per il progetto {project.id}")
+            return False
+
+        # Carica l'indice esistente
+        embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
+        vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+
+        # Ottieni informazioni sul file da rimuovere
+        try:
+            file_obj = ProjectFile.objects.get(id=file_id, project=project)
+            file_source = file_obj.file_path
+        except ProjectFile.DoesNotExist:
+            logger.error(f"File con ID {file_id} non trovato")
+            return False
+
+        # Trova tutti i documenti che NON appartengono al file da rimuovere
+        docs_to_keep = []
+        removed_count = 0
+
+        for doc_id, doc in vectordb.docstore._dict.items():
+            if hasattr(doc, 'metadata'):
+                doc_source = doc.metadata.get('source', '')
+
+                # Se il documento appartiene al file da rimuovere, non includerlo
+                if doc_source == file_source:
+                    removed_count += 1
+                    logger.debug(f"Rimozione chunk dall'indice: {doc.metadata.get('filename', 'unknown')}")
+                else:
+                    # Mantieni questo documento
+                    docs_to_keep.append(doc)
+
+        if removed_count == 0:
+            logger.warning(f"Nessun documento trovato per file ID {file_id}")
+            return True
+
+        # Ricrea l'indice con solo i documenti da mantenere
+        if docs_to_keep:
+            new_vectordb = FAISS.from_documents(docs_to_keep, embeddings)
+            new_vectordb.save_local(index_path)
+            logger.info(f"✅ Rimossi {removed_count} chunk dall'indice per file {file_obj.filename}")
+        else:
+            # Se non rimangono documenti, elimina l'indice
+            shutil.rmtree(index_path)
+            logger.info(f"Indice eliminato completamente (vuoto dopo rimozione file)")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Errore nella rimozione del file dall'indice: {str(e)}")
+        return False
+
+
+def add_file_to_index(project, file_id):
+    """
+    Aggiunge un file specifico all'indice FAISS esistente.
+
+    Args:
+        project: Oggetto Project
+        file_id: ID del file da aggiungere
+
+    Returns:
+        bool: True se l'operazione è riuscita, False altrimenti
+    """
+    try:
+        project_dir = os.path.join(settings.MEDIA_ROOT, 'projects', str(project.user.id), str(project.id))
+        index_name = f"vector_index_{project.id}"
+        index_path = os.path.join(project_dir, index_name)
+
+        # Ottieni informazioni sul file da aggiungere
+        try:
+            file_obj = ProjectFile.objects.get(id=file_id, project=project)
+        except ProjectFile.DoesNotExist:
+            logger.error(f"File con ID {file_id} non trovato")
+            return False
+
+        # Carica il documento
+        docs = load_document(file_obj.file_path)
+        if not docs:
+            logger.warning(f"Nessun contenuto estratto dal file {file_obj.filename}")
+            return False
+
+        # Ottieni le impostazioni RAG per il chunking
+        rag_settings = get_project_RAG_settings(project)
+        chunk_size = rag_settings['chunk_size']
+        chunk_overlap = rag_settings['chunk_overlap']
+        equal_notes_weight = rag_settings.get('equal_notes_weight', True)
+
+        # Aggiungi metadati necessari
+        for doc in docs:
+            doc.metadata['filename'] = file_obj.filename
+            doc.metadata['filename_no_ext'] = os.path.splitext(file_obj.filename)[0]
+            doc.metadata['source'] = file_obj.file_path
+            doc.metadata['type'] = 'file'
+            doc.metadata['priority'] = 1 if equal_notes_weight else 0
+
+        # Dividi in chunk
+        splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        split_docs = splitter.split_documents(docs)
+        split_docs = [doc for doc in split_docs if doc.page_content.strip() != ""]
+
+        if not split_docs:
+            logger.warning(f"Nessun chunk valido per il file {file_obj.filename}")
+            return False
+
+        # Carica embeddings
+        embeddings = OpenAIEmbeddings(openai_api_key=get_openai_api_key(project.user))
+
+        if os.path.exists(index_path):
+            # Aggiungi all'indice esistente
+            vectordb = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+            vectordb.add_documents(split_docs)
+            vectordb.save_local(index_path)
+            logger.info(f"✅ Aggiunti {len(split_docs)} chunk all'indice per file {file_obj.filename}")
+        else:
+            # Crea nuovo indice
+            vectordb = FAISS.from_documents(split_docs, embeddings)
+            vectordb.save_local(index_path)
+            logger.info(f"✅ Creato nuovo indice con {len(split_docs)} chunk per file {file_obj.filename}")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Errore nell'aggiunta del file all'indice: {str(e)}")
         return False

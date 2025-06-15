@@ -523,7 +523,7 @@ def create_project_rag_chain(project=None, docs=None, force_rebuild=False):
         os.makedirs(project_dir, exist_ok=True)
 
         # Recupera tutti i file, le note attive e gli URL del progetto
-        all_files = ProjectFile.objects.filter(project=project)
+        all_files = ProjectFile.objects.filter(project=project, is_included_in_rag=True)
         all_active_notes = ProjectNote.objects.filter(project=project, is_included_in_rag=True)
         all_urls = ProjectURL.objects.filter(project=project, is_included_in_rag=True)
 

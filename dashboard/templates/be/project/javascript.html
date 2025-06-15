@@ -135,6 +135,88 @@ function initQuickNoteSystem() {
             quickNoteInput.focus();
         }
     });
+
+    // Toggle per l'inclusione dei file nella ricerca AI
+    document.querySelectorAll('.include-file-check').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const fileId = this.getAttribute('data-file-id');
+            const isIncluded = this.checked;
+
+            // Disabilita temporaneamente il checkbox
+            this.disabled = true;
+
+            const label = this.nextElementSibling;
+            const originalLabelText = label.textContent;
+            label.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_file_inclusion',
+                    'project_id': '{{ project.id }}',
+                    'file_id': fileId,
+                    'is_included': isIncluded,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(isIncluded ?
+                        'File incluso nella ricerca AI' :
+                        'File escluso dalla ricerca AI',
+                        'success'
+                    );
+
+                    // Aggiorna l'aspetto visivo della card
+                    const card = this.closest('.document-link-card');
+                    if (isIncluded) {
+                        card.classList.add('file-active');
+                        card.classList.remove('file-inactive');
+                    } else {
+                        card.classList.add('file-inactive');
+                        card.classList.remove('file-active');
+                    }
+                } else {
+                    // Ripristina lo stato del checkbox in caso di errore
+                    this.checked = !isIncluded;
+                    showToast(data.message || 'Errore durante l\'aggiornamento', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                // Ripristina lo stato del checkbox
+                this.checked = !isIncluded;
+                showToast('Errore di connessione. Riprova più tardi.', 'danger');
+            })
+            .finally(() => {
+                // Riabilita il checkbox e ripristina il label
+                this.disabled = false;
+                label.textContent = originalLabelText;
+            });
+        });
+    });
+
+    // Inizializza classi CSS per i file in base allo stato iniziale
+    document.querySelectorAll('.include-file-check').forEach(checkbox => {
+        const fileCard = checkbox.closest('.document-link-card');
+        if (fileCard) {
+            if (checkbox.checked) {
+                fileCard.classList.add('file-active');
+                fileCard.classList.remove('file-inactive');
+            } else {
+                fileCard.classList.add('file-inactive');
+                fileCard.classList.remove('file-active');
+            }
+        }
+    });
+
+
+
 }
 
 // Toast notification function
@@ -2802,3 +2884,5 @@ if (!document.getElementById('conversational-css')) {
     document.head.appendChild(styleElement);
 }
 </script>
+
+

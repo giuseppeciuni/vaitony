@@ -1214,6 +1214,79 @@ def project(request, project_id=None):
 							'message': "ID URL non fornito"
 						})
 
+				# ----- Toggle inclusione File nel RAG -----
+				elif action == 'toggle_file_inclusion':
+					# Toggle inclusione nella ricerca RAG
+					file_id = request.POST.get('file_id')
+					is_included = request.POST.get('is_included') == 'true'
+
+					logger.info(f"🔄 Richiesta toggle File - ID: {file_id}, is_included: {is_included}")
+
+					if file_id:
+						try:
+							# Trova il file del progetto
+							file_obj = ProjectFile.objects.get(id=file_id, project=project)
+
+							# Valore precedente per verificare il cambiamento
+							previous_value = file_obj.is_included_in_rag
+
+							# Aggiorna lo stato di inclusione
+							file_obj.is_included_in_rag = is_included
+							file_obj.save(update_fields=['is_included_in_rag', 'last_modified'])
+
+							# AGGIUNTA: Log di attivazione/disattivazione per debug
+							if is_included:
+								logger.info(f"✅ FILE ATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+							else:
+								logger.info(f"❌ FILE DISATTIVATO per ricerca AI: {file_obj.filename} (ID: {file_id})")
+
+							# Forza la ricostruzione dell'indice se lo stato è cambiato
+							if previous_value != is_included:
+								try:
+									logger.info(
+										f"🔄 Avvio aggiornamento dell'indice vettoriale dopo toggle File {file_obj.filename} -> is_included_in_rag={is_included}")
+
+									# Forza un nuovo crawling dell'indice vettoriale
+									create_project_rag_chain(project=project, force_rebuild=True)
+									logger.info(f"✅ Ricostruzione indice completata")
+
+								except Exception as e:
+									logger.error(f"❌ Errore nella ricostruzione dell'indice: {str(e)}")
+									logger.error(traceback.format_exc())
+
+									return JsonResponse({
+										'success': False,
+										'message': f"File {'incluso' if is_included else 'escluso'}, ma errore nella ricostruzione dell'indice: {str(e)}"
+									})
+
+							# IMPORTANTE: Restituisci sempre una risposta JSON per questa azione
+							return JsonResponse({
+								'success': True,
+								'message': f"File {'incluso' if is_included else 'escluso'} nella ricerca AI"
+							})
+
+						except ProjectFile.DoesNotExist:
+							logger.error(f"File con ID {file_id} non trovato")
+
+							return JsonResponse({
+								'success': False,
+								'message': "File non trovato."
+							})
+
+						except Exception as e:
+							logger.error(f"Errore nel toggle file inclusion: {str(e)}")
+							logger.error(traceback.format_exc())
+
+							return JsonResponse({
+								'success': False,
+								'message': f"Errore nell'aggiornamento: {str(e)}"
+							})
+					else:
+						return JsonResponse({
+							'success': False,
+							'message': "ID file mancante."
+						})
+
 				# ----- Aggiornamento parametri comportamentali RAG -----
 				elif action == 'update_rag_behavior':
 					logger.debug(f'action: {action}, project_id: {project.id}')

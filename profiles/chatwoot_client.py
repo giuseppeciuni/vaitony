@@ -100,6 +100,7 @@ class ChatwootClient:
 		else:
 			logger.error(f"❌ Inizializzazione fallita: autenticazione non riuscita")
 
+
 	def _authenticate_jwt(self) -> bool:
 		"""
         Autentica utilizzando JWT con email/password.
@@ -144,6 +145,7 @@ class ChatwootClient:
 			logger.error(f"❌ Errore durante autenticazione: {str(e)}")
 			return False
 
+
 	def set_account_id(self, account_id: int):
 		"""Imposta l'ID dell'account Chatwoot."""
 		if not isinstance(account_id, int) or account_id <= 0:
@@ -152,6 +154,7 @@ class ChatwootClient:
 		self.account_id = account_id
 		logger.info(f"🏢 Account ID impostato: {account_id}")
 		return self
+
 
 	def _make_request_with_retry(self, method: str, url: str, **kwargs) -> requests.Response:
 		"""
@@ -197,6 +200,7 @@ class ChatwootClient:
 		else:
 			raise requests.exceptions.RequestException(f"Tutti i retry falliti per {method} {url}")
 
+
 	def _handle_response(self, response: requests.Response) -> Union[Dict, List]:
 		"""
         Gestisce le risposte HTTP e restituisce dati JSON.
@@ -216,6 +220,7 @@ class ChatwootClient:
 
 			logger.error(f"❌ Errore API: {response.status_code} - {error_message}")
 			raise Exception(f"Errore API Chatwoot: {response.status_code} - {error_message}")
+
 
 	@staticmethod
 	def sanitize_inbox_name(name: str) -> str:
@@ -246,6 +251,7 @@ class ChatwootClient:
 			sanitized = "RAG Chatbot"
 
 		return sanitized.strip()
+
 
 	def list_inboxes(self, use_cache: bool = True) -> List[Dict]:
 		"""
@@ -370,6 +376,7 @@ class ChatwootClient:
 		except Exception as e:
 			logger.error(f"❌ Errore nell'impostazione lingua utente: {str(e)}")
 			return False
+
 
 	def create_inbox(self, name: str, website_url: str,
 					 channel_attributes: Optional[Dict] = None) -> Dict:
@@ -805,6 +812,146 @@ class ChatwootClient:
 			logger.error(f"❌ Errore invio messaggio: {str(e)}")
 			raise e
 
+
+	def ensure_agent_assigned_and_online(self, inbox_id):
+		"""
+		Assicura che ci sia almeno un agente assegnato all'inbox e online.
+		Questo è FONDAMENTALE per evitare "We are offline".
+		"""
+		try:
+			logger.info(f"🔍 Verifica agenti per inbox {inbox_id}...")
+
+			# 1. Ottieni la lista di tutti gli agenti dell'account
+			agents_url = f"{self.base_url}/api/v1/accounts/{self.account_id}/agents"
+			response = self._make_request_with_retry('GET', agents_url)
+
+			if response.status_code != 200:
+				logger.error(f"❌ Impossibile ottenere lista agenti: {response.status_code}")
+				return False
+
+			agents = response.json()
+			logger.info(f"📋 Trovati {len(agents)} agenti nell'account")
+
+			# 2. Trova agenti amministratori o attivi
+			available_agents = []
+			for agent in agents:
+				if agent.get('role') == 'administrator' or agent.get('availability_status') == 'online':
+					available_agents.append(agent)
+					logger.info(
+						f"   ✅ Agente disponibile: {agent.get('name')} ({agent.get('email')}) - {agent.get('role')}")
+
+			if not available_agents:
+				logger.warning("⚠️ Nessun agente amministratore trovato, uso il primo agente disponibile")
+				available_agents = agents[:1]  # Prendi almeno il primo agente
+
+			# 3. Assegna i primi 2 agenti all'inbox (amministratori prima)
+			agents_to_assign = available_agents[:2]  # Assegna massimo 2 agenti
+
+			for agent in agents_to_assign:
+				agent_id = agent.get('id')
+				agent_name = agent.get('name')
+
+				# Assegna agente all'inbox
+				assign_url = f"{self.base_url}/api/v1/accounts/{self.account_id}/inboxes/{inbox_id}/agents"
+				assign_payload = {"user_ids": [agent_id]}
+
+				assign_response = self._make_request_with_retry('PATCH', assign_url, json=assign_payload)
+
+				if assign_response.status_code == 200:
+					logger.info(f"✅ Agente {agent_name} (ID: {agent_id}) assegnato all'inbox {inbox_id}")
+				else:
+					logger.warning(f"⚠️ Problema assegnazione agente {agent_name}: {assign_response.status_code}")
+
+			# 4. Forza lo stato online per gli agenti assegnati (se possibile)
+			self._force_agents_online_status(agents_to_assign)
+
+			return True
+
+		except Exception as e:
+			logger.error(f"❌ Errore nell'assegnazione agenti: {str(e)}")
+			return False
+
+
+	def _force_agents_online_status(self, agents):
+		"""
+		Tenta di impostare gli agenti come online (potrebbe non funzionare sempre).
+		"""
+		try:
+			for agent in agents:
+				agent_id = agent.get('id')
+				agent_name = agent.get('name')
+
+				# URL per aggiornare lo status dell'agente
+				status_url = f"{self.base_url}/api/v1/accounts/{self.account_id}/agents/{agent_id}"
+				status_payload = {
+					"availability_status": "online"
+				}
+
+				response = self._make_request_with_retry('PUT', status_url, json=status_payload)
+
+				if response.status_code == 200:
+					logger.info(f"✅ Stato 'online' impostato per agente {agent_name}")
+				else:
+					logger.info(
+						f"ℹ️ Impossibile forzare stato online per {agent_name} (normale se agente deve farlo manualmente)")
+
+		except Exception as e:
+			logger.warning(f"⚠️ Errore nel forzare stato online agenti: {str(e)}")
+
+
+	def configure_inbox_to_prevent_offline_message(self, inbox_id):
+		"""
+		Configura l'inbox per prevenire il messaggio "We are offline".
+		Configurazioni specifiche per eliminare completamente il messaggio offline.
+		"""
+		try:
+			logger.info(f"⚙️ Configurazione anti-offline per inbox {inbox_id}...")
+
+			# URL per configurare l'inbox
+			inbox_config_url = f"{self.base_url}/api/v1/accounts/{self.account_id}/inboxes/{inbox_id}"
+
+			# Configurazione per eliminare COMPLETAMENTE i messaggi offline
+			anti_offline_config = {
+				"inbox": {
+					# Business Hours - COMPLETAMENTE DISABILITATE
+					"working_hours_enabled": False,
+					"out_of_office_message": "",
+					"enable_business_availability": False,
+
+					# Auto-assignment sempre attivo
+					"enable_auto_assignment": True,
+
+					# Email collection disabilitata
+					"enable_email_collect": False,
+
+					# Greeting sempre abilitato
+					"greeting_enabled": True,
+					"greeting_message": "Benvenuto, fai qualsiasi domanda e provo ad aiutarti",
+
+					# CSAT abilitato
+					"csat_survey_enabled": True,
+
+					# Configurazioni aggiuntive per forzare "sempre online"
+					"channel_type": "Channel::WebWidget",
+					"continuity_via_email": False
+				}
+			}
+
+			response = self._make_request_with_retry('PATCH', inbox_config_url, json=anti_offline_config)
+
+			if response.status_code == 200:
+				logger.info("✅ Configurazione anti-offline applicata con successo")
+				return True
+			else:
+				logger.warning(f"⚠️ Problema nella configurazione anti-offline: {response.status_code}")
+				logger.warning(f"Response: {response.text}")
+				return False
+
+		except Exception as e:
+			logger.error(f"❌ Errore nella configurazione anti-offline: {str(e)}")
+			return False
+
+
 	def test_connection(self) -> Dict:
 		"""
         Testa la connessione a Chatwoot.
@@ -850,6 +997,7 @@ class ChatwootClient:
 			'endpoints_tested': results
 		}
 
+
 	def __repr__(self) -> str:
 		"""Rappresentazione string del client."""
 		auth_status = "✅ Autenticato" if self.authenticated else "❌ Non autenticato"
@@ -882,7 +1030,6 @@ def create_chatwoot_client_from_settings(settings_dict: Dict) -> ChatwootClient:
 		client.set_account_id(settings_dict['CHATWOOT_ACCOUNT_ID'])
 
 	return client
-
 
 
 def test_chatwoot_connection(base_url: str, email: str, password: str,

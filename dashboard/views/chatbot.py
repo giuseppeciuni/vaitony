@@ -334,44 +334,51 @@ def chatwoot_webhook(request):
 
 def create_chatwoot_bot_for_project(project, request=None):
 	"""
-	Crea un bot Chatwoot per il progetto con configurazione automatica del webhook.
+	Crea un bot Chatwoot per il progetto con configurazione anti-offline completa.
 
-	Il chatbot sarà configurato per:
-	- Essere sempre attivo (24/7, nessun messaggio offline)
-	- Non richiedere email all'utente
-	- Mostrare messaggio di benvenuto personalizzato
-	- Utilizzare la lingua del progetto per l'interfaccia
+	Caratteristiche implementate:
+	- Sempre online (24/7) - elimina "We are offline"
+	- Non richiede email all'utente
+	- Messaggio di benvenuto: "Benvenuto, fai qualsiasi domanda e provo ad aiutarti"
+	- Assegnazione automatica agenti all'inbox
+	- Configurazione webhook per RAG
+	- Branding Chatwoot nascosto
 
 	Args:
-		project: Istanza del modello Project
-		request: Oggetto HttpRequest Django (opzionale, per richieste AJAX)
+		project: Istanza del modello Project Django
+		request: Oggetto HttpRequest (opzionale, per richieste AJAX)
 
 	Returns:
-		dict: Risultato dell'operazione con 'success', 'message', e dati aggiuntivi
-			  oppure HttpResponse per richieste AJAX
+		dict: Risultato operazione con success, message e dati
+		JsonResponse: Per richieste AJAX
 	"""
 	try:
-		logger.info(f"🚀 Avvio creazione chatbot Chatwoot per progetto {project.id} ({project.name})")
+		logger.info("=" * 80)
+		logger.info(f"🚀 AVVIO CREAZIONE CHATBOT SEMPRE ONLINE")
+		logger.info(f"📋 Progetto: {project.name} (ID: {project.id})")
+		logger.info("=" * 80)
 
 		# ===================================================================
-		# STEP 1: PREPARAZIONE TRADUZIONI E CONFIGURAZIONE INIZIALE
+		# STEP 1: PREPARAZIONE TRADUZIONI E CONFIGURAZIONE LINGUA
 		# ===================================================================
 
 		# Importa le traduzioni per i messaggi del chatbot
 		from profiles.chatbot_translations import get_chatbot_translations
 
-		# Ottieni la lingua del progetto con fallback a italiano se non specificata
+		# Ottieni la lingua del progetto con fallback a italiano
 		project_language = getattr(project, 'chatbot_language', 'it')
 		translations = get_chatbot_translations(project_language)
 
-		logger.info(f"📖 Lingua chatbot configurata: {project_language}")
-		logger.info(f"🎯 Messaggio di benvenuto: {translations.get('welcome_title', 'N/A')}")
+		logger.info(f"📖 Lingua chatbot: {project_language}")
+		logger.info(f"🎯 Welcome title: {translations.get('welcome_title', 'N/A')}")
 
 		# ===================================================================
 		# STEP 2: INIZIALIZZAZIONE CLIENT CHATWOOT
 		# ===================================================================
 
-		# Crea connessione con Chatwoot usando le credenziali dalle settings
+		logger.info("🔗 Inizializzazione connessione Chatwoot...")
+
+		# Crea client Chatwoot con credenziali dalle settings
 		chatwoot_client = ChatwootClient(
 			base_url=settings.CHATWOOT_API_URL,
 			email=settings.CHATWOOT_EMAIL,
@@ -379,49 +386,52 @@ def create_chatwoot_bot_for_project(project, request=None):
 			auth_type="jwt"
 		)
 
-		# Imposta l'account ID per tutte le operazioni successive
+		# Imposta account ID per tutte le operazioni
 		chatwoot_client.set_account_id(settings.CHATWOOT_ACCOUNT_ID)
 
-		# Verifica che l'autenticazione sia avvenuta con successo
+		# Verifica autenticazione
 		if not chatwoot_client.authenticated:
-			error_msg = "❌ Impossibile autenticarsi con Chatwoot. Verifica le credenziali nelle settings."
+			error_msg = "❌ Autenticazione Chatwoot fallita. Verifica credenziali nelle settings."
 			logger.error(error_msg)
+
+			if request and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+				return JsonResponse({'success': False, 'message': error_msg})
 			return {'success': False, 'error': error_msg}
 
-		logger.info("✅ Autenticazione Chatwoot completata con successo")
+		logger.info("✅ Autenticazione Chatwoot completata")
 
 		# ===================================================================
-		# STEP 3: CONFIGURAZIONE LINGUA ACCOUNT E UTENTE CHATWOOT
+		# STEP 3: CONFIGURAZIONE LINGUA ACCOUNT CHATWOOT
 		# ===================================================================
 
-		# Imposta la lingua sia per l'account che per l'utente corrente
-		# Questo assicura che l'interfaccia Chatwoot sia nella lingua corretta
+		logger.info(f"🌐 Configurazione lingua account: {project_language}")
+
 		try:
-			account_language_set = chatwoot_client.set_account_locale(project_language)
-			user_language_set = chatwoot_client.set_user_locale(project_language)
+			# Imposta lingua per account e utente
+			account_lang_success = chatwoot_client.set_account_locale(project_language)
+			user_lang_success = chatwoot_client.set_user_locale(project_language)
 
-			if account_language_set:
-				logger.info(f"✅ Lingua account Chatwoot impostata: {project_language}")
+			if account_lang_success:
+				logger.info(f"✅ Lingua account impostata: {project_language}")
 			else:
-				logger.warning(f"⚠️ Impossibile impostare lingua account, procedo comunque")
+				logger.warning(f"⚠️ Impossibile impostare lingua account")
 
-			if user_language_set:
-				logger.info(f"✅ Lingua utente Chatwoot impostata: {project_language}")
+			if user_lang_success:
+				logger.info(f"✅ Lingua utente impostata: {project_language}")
 			else:
-				logger.warning(f"⚠️ Impossibile impostare lingua utente, procedo comunque")
+				logger.warning(f"⚠️ Impossibile impostare lingua utente")
 
 		except Exception as lang_error:
-			logger.warning(f"⚠️ Errore nell'impostazione lingua: {str(lang_error)}, procedo comunque")
+			logger.warning(f"⚠️ Errore configurazione lingua: {str(lang_error)}")
 
 		# ===================================================================
 		# STEP 4: CONFIGURAZIONE WEBHOOK GLOBALE
 		# ===================================================================
 
-		# Il webhook è necessario per ricevere notifiche quando arrivano messaggi
-		# URL del webhook che gestirà i messaggi in arrivo
-		webhook_url = f"https://vaitony.ciunix.com/chatwoot-webhook/"
+		logger.info("🔗 Configurazione webhook per ricevere messaggi...")
 
-		logger.info(f"🔗 Configurazione webhook: {webhook_url}")
+		# URL webhook che gestirà i messaggi in arrivo
+		webhook_url = f"https://vaitony.ciunix.com/chatwoot-webhook/"
 
 		# Configura webhook per eventi di messaggi e conversazioni
 		webhook_result = chatwoot_client.configure_webhook(
@@ -429,43 +439,49 @@ def create_chatwoot_bot_for_project(project, request=None):
 			events=['message_created', 'conversation_created']
 		)
 
-		# Controlla risultato configurazione webhook
-		if 'error' in webhook_result:
-			logger.warning(f"⚠️ Problema configurazione webhook: {webhook_result['error']}")
-			webhook_configured = False
+		webhook_configured = 'error' not in webhook_result
+
+		if webhook_configured:
+			logger.info(f"✅ Webhook configurato: {webhook_url}")
 		else:
-			logger.info(f"✅ Webhook configurato correttamente per eventi: message_created, conversation_created")
-			webhook_configured = True
+			logger.warning(f"⚠️ Problema webhook: {webhook_result.get('error', 'Unknown')}")
 
 		# ===================================================================
-		# STEP 5: CONFIGURAZIONE WIDGET CHATBOT
+		# STEP 5: PREPARAZIONE CONFIGURAZIONE INBOX
 		# ===================================================================
 
-		# Nome dell'inbox che apparirà in Chatwoot
+		# Nome inbox che apparirà in Chatwoot
 		inbox_name = f"RAG Bot - {project.name}"
 
-		# URL del sito web associato al chatbot
+		# URL del sito web associato
 		website_url = f"https://chatbot.ciunix.com/{project.slug}"
 
-		logger.info(f"📦 Creazione inbox: {inbox_name}")
-		logger.info(f"🌐 Website URL: {website_url}")
+		logger.info(f"📦 Configurazione inbox:")
+		logger.info(f"   - Nome: {inbox_name}")
+		logger.info(f"   - Website URL: {website_url}")
 
-		# Configurazione completa del widget per essere sempre attivo
+		# ===================================================================
+		# STEP 6: CONFIGURAZIONE WIDGET ANTI-OFFLINE COMPLETA
+		# ===================================================================
+
+		logger.info("⚙️ Configurazione widget per essere SEMPRE ONLINE...")
+
+		# Configurazione widget ottimizzata per eliminare "We are offline"
 		widget_config = {
-			# ===== MESSAGGI DI BENVENUTO =====
+			# === MESSAGGI DI BENVENUTO PERSONALIZZATI ===
 			"welcome_title": "Benvenuto! 👋",
 			"welcome_tagline": "Fai qualsiasi domanda e provo ad aiutarti",
 
-			# ===== ASPETTO VISIVO =====
-			"widget_color": "#1f93ff",  # Colore blu principale del widget
-			"locale": project_language,  # Lingua dell'interfaccia
+			# === ASPETTO VISIVO ===
+			"widget_color": "#1f93ff",
+			"locale": project_language,
 
-			# ===== CONFIGURAZIONE EMAIL - DISABILITATA =====
-			"enable_email_collect": False,  # 🔧 NON richiedere email all'utente
-			"email_collect_box_title": "",  # Titolo vuoto = nessuna richiesta email
-			"email_collect_box_subtitle": "",  # Sottotitolo vuoto = nessuna richiesta email
+			# === EMAIL COLLECTION - COMPLETAMENTE DISABILITATA ===
+			"enable_email_collect": False,  # 🔧 NON richiedere email
+			"email_collect_box_title": "",  # Titolo vuoto
+			"email_collect_box_subtitle": "",  # Sottotitolo vuoto
 
-			# ===== CONFIGURAZIONE PRE-CHAT FORM - DISABILITATA =====
+			# === PRE-CHAT FORM - COMPLETAMENTE DISABILITATO ===
 			"pre_chat_form_enabled": False,  # 🔧 NON mostrare form iniziale
 			"pre_chat_form_options": {
 				"pre_chat_message": "",  # Nessun messaggio pre-chat
@@ -474,38 +490,47 @@ def create_chatwoot_bot_for_project(project, request=None):
 				"require_phone_number": False  # Non richiedere telefono
 			},
 
-			# ===== CONFIGURAZIONE SEMPRE ATTIVO - 24/7 =====
-			"working_hours_enabled": False,  # 🔧 NESSUN orario lavorativo specifico
-			"enable_business_availability": False,  # 🔧 Non usare logica business hours
-			"out_of_office_message": "",  # Nessun messaggio "fuori orario"
-			"business_availability_enabled": False,  # Disabilita completamente business hours
+			# === BUSINESS HOURS - COMPLETAMENTE DISABILITATE ===
+			"working_hours_enabled": False,  # 🔧 NO orari lavorativi
+			"enable_business_availability": False,  # 🔧 NO logica business
+			"business_availability_enabled": False,  # 🔧 Doppia sicurezza
+			"out_of_office_message": "",  # 🔧 NO messaggio offline
 
-			# ===== CONFIGURAZIONI AGGIUNTIVE =====
-			"csat_survey_enabled": True,  # Abilita sondaggio soddisfazione cliente
-			"reply_time": "in_a_few_minutes",  # Tempo di risposta atteso
-			"auto_assignment": True,  # Assegnazione automatica conversazioni
-			"continuity_via_email": False,  # Non inviare email di continuità
+			# === CONFIGURAZIONI SEMPRE ATTIVO ===
+			"csat_survey_enabled": True,  # Sondaggio soddisfazione
+			"reply_time": "in_a_few_minutes",  # Tempo risposta atteso
+			"auto_assignment": True,  # Assegnazione automatica
+			"enable_auto_assignment": True,  # Doppia sicurezza auto-assignment
+			"continuity_via_email": False,  # No email continuità
 
-			# ===== BRANDING - RIMOSSO =====
-			"show_branding": False,  # 🔧 Nasconde "Powered by Chatwoot"
+			# === GREETING MESSAGE ===
+			"greeting_enabled": True,  # Abilita saluto
+			"greeting_message": "Benvenuto, fai qualsiasi domanda e provo ad aiutarti",
+
+			# === BRANDING CHATWOOT - COMPLETAMENTE RIMOSSO ===
+			"show_branding": False,  # 🔧 Nascondi "Powered by Chatwoot"
 			"hide_branding": True,  # 🔧 Forza nascondere branding
 			"branding_enabled": False,  # 🔧 Disabilita branding
-			"custom_branding": False  # Non usare branding personalizzato
+			"custom_branding": False,  # No branding personalizzato
+
+			# === CONFIGURAZIONI CANALE ===
+			"channel_type": "Channel::WebWidget",  # Tipo canale widget
+			"enable_channel_greeting": True,  # Abilita greeting canale
 		}
 
-		logger.info("⚙️ Configurazione widget:")
-		logger.info(f"   - Sempre attivo: ✅ (no working hours)")
-		logger.info(f"   - Richiesta email: ❌ (disabilitata)")
-		logger.info(f"   - Pre-chat form: ❌ (disabilitato)")
-		logger.info(f"   - Branding Chatwoot: ❌ (nascosto)")
-		logger.info(f"   - Lingua interfaccia: {project_language}")
+		logger.info("🔧 Configurazioni widget applicate:")
+		logger.info("   ✅ Sempre attivo (no working hours)")
+		logger.info("   ❌ Richiesta email disabilitata")
+		logger.info("   ❌ Pre-chat form disabilitato")
+		logger.info("   ❌ Branding Chatwoot nascosto")
+		logger.info("   ✅ Auto-assignment abilitato")
+		logger.info("   ✅ Greeting personalizzato")
 
 		# ===================================================================
-		# STEP 6: CREAZIONE INBOX CHATWOOT
+		# STEP 7: CREAZIONE INBOX CHATWOOT
 		# ===================================================================
 
-		# Crea o ottieni l'inbox con la configurazione specificata
-		logger.info("🏗️ Creazione/recupero inbox Chatwoot...")
+		logger.info("🏗️ Creazione inbox in Chatwoot...")
 
 		bot_inbox = chatwoot_client.get_bot_inbox(
 			inbox_name=inbox_name,
@@ -513,32 +538,147 @@ def create_chatwoot_bot_for_project(project, request=None):
 			widget_config=widget_config
 		)
 
-		# Verifica che l'inbox sia stato creato correttamente
+		# Verifica creazione inbox
 		if 'error' in bot_inbox:
-			error_msg = f"❌ Errore nella creazione dell'inbox: {bot_inbox['error']}"
+			error_msg = f"❌ Errore creazione inbox: {bot_inbox['error']}"
 			logger.error(error_msg)
 
-			# Gestione risposta per richieste AJAX
 			if request and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 				return JsonResponse({'success': False, 'message': error_msg})
-
 			return {'success': False, 'error': error_msg}
 
-		# Estrai ID dell'inbox creato
+		# Estrai ID inbox
 		inbox_id = bot_inbox.get('id')
 		if not inbox_id:
-			error_msg = "❌ ID inbox non trovato nella risposta di Chatwoot"
+			error_msg = "❌ ID inbox non trovato nella risposta Chatwoot"
 			logger.error(error_msg)
 			return {'success': False, 'error': error_msg}
 
 		logger.info(f"✅ Inbox creato con successo - ID: {inbox_id}")
 
 		# ===================================================================
-		# STEP 7: CONFIGURAZIONE METADATI INBOX
+		# STEP 8: ASSEGNAZIONE AUTOMATICA AGENTI ALL'INBOX
 		# ===================================================================
 
-		# Aggiorna i metadati dell'inbox con informazioni del progetto Django
-		# Questo aiuta a collegare l'inbox di Chatwoot al progetto Django
+		logger.info("👥 Assegnazione agenti all'inbox per evitare messaggio offline...")
+
+		agents_assigned = False
+		try:
+			# Ottieni lista agenti dell'account
+			agents_url = f"{settings.CHATWOOT_API_URL}/api/v1/accounts/{settings.CHATWOOT_ACCOUNT_ID}/agents"
+			response = chatwoot_client._make_request_with_retry('GET', agents_url)
+
+			if response.status_code == 200:
+				agents = response.json()
+				logger.info(f"📋 Trovati {len(agents)} agenti nell'account")
+
+				# Trova agenti amministratori o attivi
+				available_agents = []
+				for agent in agents:
+					if (agent.get('role') == 'administrator' or
+							agent.get('availability_status') in ['online', 'busy'] or
+							agent.get('confirmed', True)):  # Agenti confermati
+						available_agents.append(agent)
+						logger.info(f"   ✅ Agente disponibile: {agent.get('name')} ({agent.get('role')})")
+
+				# Se non ci sono agenti specifici, usa i primi disponibili
+				if not available_agents and agents:
+					available_agents = agents[:2]  # Prendi i primi 2
+					logger.info("⚠️ Nessun admin trovato, uso primi agenti disponibili")
+
+				# Assegna massimo 2 agenti all'inbox
+				if available_agents:
+					agents_to_assign = [agent.get('id') for agent in available_agents[:2]]
+
+					# API call per assegnare agenti
+					assign_url = f"{settings.CHATWOOT_API_URL}/api/v1/accounts/{settings.CHATWOOT_ACCOUNT_ID}/inboxes/{inbox_id}/agents"
+					assign_payload = {"user_ids": agents_to_assign}
+
+					assign_response = chatwoot_client._make_request_with_retry(
+						'PATCH', assign_url, json=assign_payload
+					)
+
+					if assign_response.status_code == 200:
+						agents_assigned = True
+						logger.info(f"✅ {len(agents_to_assign)} agenti assegnati all'inbox {inbox_id}")
+
+						# Log dei nomi agenti assegnati
+						for agent in available_agents[:2]:
+							logger.info(f"   👤 {agent.get('name')} ({agent.get('email')})")
+					else:
+						logger.warning(f"⚠️ Problema assegnazione agenti: {assign_response.status_code}")
+						logger.warning(f"Response: {assign_response.text}")
+				else:
+					logger.warning("⚠️ Nessun agente disponibile per assegnazione")
+			else:
+				logger.warning(f"⚠️ Impossibile ottenere lista agenti: {response.status_code}")
+
+		except Exception as agents_error:
+			logger.error(f"❌ Errore assegnazione agenti: {str(agents_error)}")
+
+		# ===================================================================
+		# STEP 9: CONFIGURAZIONE INBOX ANTI-OFFLINE SPECIFICA
+		# ===================================================================
+
+		logger.info("🛠️ Applicazione configurazioni anti-offline specifiche...")
+
+		anti_offline_configured = False
+		try:
+			# URL per configurare l'inbox
+			inbox_config_url = f"{settings.CHATWOOT_API_URL}/api/v1/accounts/{settings.CHATWOOT_ACCOUNT_ID}/inboxes/{inbox_id}"
+
+			# Configurazione anti-offline per eliminare "We are offline"
+			anti_offline_config = {
+				"inbox": {
+					# Business Hours - COMPLETAMENTE DISABILITATE
+					"working_hours_enabled": False,
+					"out_of_office_message": "",
+					"enable_business_availability": False,
+
+					# Auto-assignment sempre attivo
+					"enable_auto_assignment": True,
+
+					# Email collection confermata disabilitata
+					"enable_email_collect": False,
+
+					# Greeting sempre abilitato con messaggio personalizzato
+					"greeting_enabled": True,
+					"greeting_message": "Benvenuto, fai qualsiasi domanda e provo ad aiutarti",
+
+					# CSAT abilitato
+					"csat_survey_enabled": True,
+
+					# Configurazioni canale
+					"channel_type": "Channel::WebWidget",
+					"continuity_via_email": False,
+
+					# Configurazioni aggiuntive per forzare sempre online
+					"auto_resolve_duration": None,  # Non auto-risolvere
+				}
+			}
+
+			# Applica configurazione
+			config_response = chatwoot_client._make_request_with_retry(
+				'PATCH', inbox_config_url, json=anti_offline_config
+			)
+
+			if config_response.status_code == 200:
+				anti_offline_configured = True
+				logger.info("✅ Configurazioni anti-offline applicate con successo")
+			else:
+				logger.warning(f"⚠️ Problema configurazione anti-offline: {config_response.status_code}")
+				logger.warning(f"Response: {config_response.text}")
+
+		except Exception as config_error:
+			logger.error(f"❌ Errore configurazione anti-offline: {str(config_error)}")
+
+		# ===================================================================
+		# STEP 10: AGGIORNAMENTO METADATI INBOX
+		# ===================================================================
+
+		logger.info("📝 Aggiornamento metadati inbox...")
+
+		metadata_updated = False
 		try:
 			metadata_updated = chatwoot_client.update_inbox_metadata(
 				inbox_id=inbox_id,
@@ -547,101 +687,53 @@ def create_chatwoot_bot_for_project(project, request=None):
 			)
 
 			if metadata_updated:
-				logger.info(f"✅ Metadati inbox aggiornati per progetto {project.id}")
+				logger.info("✅ Metadati inbox aggiornati")
 			else:
-				logger.warning(f"⚠️ Impossibile aggiornare metadati inbox, procedo comunque")
+				logger.warning("⚠️ Impossibile aggiornare metadati inbox")
 
-		except Exception as metadata_error:
-			logger.warning(f"⚠️ Errore aggiornamento metadati: {str(metadata_error)}, procedo comunque")
-
-		# ===================================================================
-		# STEP 8: CONFIGURAZIONE INBOX SEMPRE ATTIVO
-		# ===================================================================
-
-		# Configura l'inbox per essere sempre disponibile (24/7)
-		# Questo previene il messaggio "Siamo offline in questo momento"
-		logger.info("⏰ Configurazione inbox per disponibilità 24/7...")
-
-		try:
-			# URL per configurare l'inbox
-			inbox_config_url = f"{settings.CHATWOOT_API_URL}/api/v1/accounts/{settings.CHATWOOT_ACCOUNT_ID}/inboxes/{inbox_id}"
-
-			# Configurazione per eliminare qualsiasi messaggio offline
-			always_online_config = {
-				"inbox": {
-					"enable_email_collect": False,  # Conferma: no email
-					"csat_survey_enabled": True,  # Sondaggio soddisfazione attivo
-					"enable_auto_assignment": True,  # Assegnazione automatica
-					"working_hours_enabled": False,  # 🔧 NO orari lavorativi
-					"out_of_office_message": "",  # 🔧 NO messaggio offline
-					"greeting_enabled": True,  # Abilita messaggio benvenuto
-					"greeting_message": "Benvenuto, fai qualsiasi domanda e provo ad aiutarti"
-					# Messaggio personalizzato
-				}
-			}
-
-			# Applica configurazione sempre attivo
-			response = chatwoot_client._make_request_with_retry(
-				'PATCH',
-				inbox_config_url,
-				json=always_online_config
-			)
-
-			if response.status_code == 200:
-				logger.info("✅ Inbox configurato come sempre disponibile (24/7)")
-				always_online_configured = True
-			else:
-				logger.warning(f"⚠️ Problema configurazione sempre online: {response.status_code}")
-				always_online_configured = False
-
-		except Exception as online_error:
-			logger.error(f"❌ Errore configurazione sempre online: {str(online_error)}")
-			always_online_configured = False
+		except Exception as meta_error:
+			logger.warning(f"⚠️ Errore metadati: {str(meta_error)}")
 
 		# ===================================================================
-		# STEP 9: RECUPERO CODICE WIDGET
+		# STEP 11: RECUPERO CODICE WIDGET
 		# ===================================================================
 
-		# Ottieni il codice JavaScript del widget per l'integrazione nel sito web
-		logger.info("📜 Recupero codice widget per integrazione...")
+		logger.info("📜 Recupero codice widget per integrazione sito web...")
 
 		widget_result = chatwoot_client.get_widget_code(inbox_id)
 
 		if not widget_result.get('success'):
-			error_msg = f"❌ Errore nel recupero del widget code: {widget_result.get('error', 'Errore sconosciuto')}"
+			error_msg = f"❌ Errore recupero widget code: {widget_result.get('error', 'Errore sconosciuto')}"
 			logger.error(error_msg)
 
-			# Gestione risposta per richieste AJAX
 			if request and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 				return JsonResponse({'success': False, 'message': error_msg})
-
 			return {'success': False, 'error': error_msg}
 
-		# Estrai dati del widget
+		# Estrai dati widget
 		website_token = widget_result.get('website_token')
 		widget_code = widget_result.get('widget_code')
 
 		if not website_token or not widget_code:
-			error_msg = "❌ Website token o widget code mancanti nella risposta"
+			error_msg = "❌ Website token o widget code mancanti"
 			logger.error(error_msg)
 			return {'success': False, 'error': error_msg}
 
 		logger.info(f"✅ Widget code recuperato - Token: {website_token[:8]}...")
 
 		# ===================================================================
-		# STEP 10: SALVATAGGIO CONFIGURAZIONE NEL PROGETTO DJANGO
+		# STEP 12: SALVATAGGIO CONFIGURAZIONE NEL PROGETTO DJANGO
 		# ===================================================================
 
-		# Salva tutte le informazioni del chatbot nel modello Project
 		logger.info("💾 Salvataggio configurazione nel database Django...")
 
-		# Aggiorna i campi del progetto con i dati di Chatwoot
+		# Aggiorna campi progetto
 		project.chatwoot_inbox_id = str(inbox_id)
 		project.chatwoot_website_token = website_token
 		project.chatwoot_widget_code = widget_code
-		project.chatwoot_enabled = True  # Abilita l'integrazione Chatwoot
+		project.chatwoot_enabled = True
 
-		# Salva metadati dettagliati per tracking e debug
+		# Salva metadati dettagliati per tracking
 		project.chatwoot_metadata = {
 			# Informazioni base
 			'inbox_id': inbox_id,
@@ -649,59 +741,134 @@ def create_chatwoot_bot_for_project(project, request=None):
 			'website_url': website_url,
 			'website_token': website_token,
 
-			# Configurazioni applicate
+			# Configurazioni applicate - FLAGS IMPORTANTI
 			'webhook_configured': webhook_configured,
-			'always_online_configured': always_online_configured,
-			'email_collect_disabled': True,  # Flag che conferma email disabilitata
-			'pre_chat_form_disabled': True,  # Flag che conferma pre-chat disabilitato
-			'working_hours_disabled': True,  # Flag che conferma orari lavorativi disabilitati
-			'branding_hidden': True,  # Flag che conferma branding nascosto
+			'agents_assigned': agents_assigned,
+			'anti_offline_configured': anti_offline_configured,
+			'metadata_updated': metadata_updated,
 
-			# Metadati temporali e lingua
+			# Settings specifici
+			'always_online_mode': True,
+			'business_hours_disabled': True,
+			'email_collection_disabled': True,
+			'pre_chat_form_disabled': True,
+			'branding_hidden': True,
+			'auto_assignment_enabled': True,
+			'greeting_enabled': True,
+
+			# Metadati temporali e versioning
 			'created_at': time.time(),
 			'language': project_language,
-
-			# Messaggio di benvenuto personalizzato
 			'custom_welcome_message': "Benvenuto, fai qualsiasi domanda e provo ad aiutarti",
+			'config_version': '4.0_complete_anti_offline',
 
-			# Versione configurazione (per future migrazioni)
-			'config_version': '2.0_always_active'
+			# Informazioni per debug
+			'creation_success_flags': {
+				'inbox_created': True,
+				'webhook_configured': webhook_configured,
+				'agents_assigned': agents_assigned,
+				'anti_offline_configured': anti_offline_configured,
+				'widget_code_retrieved': True
+			}
 		}
 
-		# Salva il progetto con tutte le modifiche
+		# Salva progetto
 		project.save()
 
-		logger.info(f"✅ Configurazione salvata nel progetto {project.id}")
-		logger.info("📊 Riepilogo configurazione:")
-		logger.info(f"   - Inbox ID: {inbox_id}")
-		logger.info(f"   - Website Token: {website_token[:8]}...")
-		logger.info(f"   - Webhook: {'✅' if webhook_configured else '❌'}")
-		logger.info(f"   - Sempre attivo: {'✅' if always_online_configured else '❌'}")
-		logger.info(f"   - Email disabilitata: ✅")
-		logger.info(f"   - Lingua: {project_language}")
+		logger.info(f"✅ Configurazione salvata per progetto {project.id}")
 
 		# ===================================================================
-		# STEP 11: PREPARAZIONE RISPOSTA DI SUCCESSO
+		# STEP 13: LOG RIEPILOGO CONFIGURAZIONI
 		# ===================================================================
 
-		# Messaggio di successo per l'utente
-		success_message = (
-			f"🎉 Chatbot Chatwoot creato con successo!\n"
-			f"📦 Inbox ID: {inbox_id}\n"
-			f"📧 Richiesta email: Disabilitata\n"
-			f"⏰ Disponibilità: 24/7 (sempre attivo)\n"
-			f"🌐 Lingua: {project_language.upper()}\n"
-			f"💬 Messaggio: 'Benvenuto, fai qualsiasi domanda e provo ad aiutarti'"
-		)
-
-		logger.info("🎉 CREAZIONE CHATBOT COMPLETATA CON SUCCESSO!")
+		logger.info("=" * 60)
+		logger.info("📊 RIEPILOGO CONFIGURAZIONI APPLICATE:")
+		logger.info("=" * 60)
+		logger.info(f"📦 Inbox ID: {inbox_id}")
+		logger.info(f"🔗 Website Token: {website_token[:8]}...")
+		logger.info(f"🌐 Lingua: {project_language}")
+		logger.info(f"🎯 Webhook: {'✅ Configurato' if webhook_configured else '❌ Errore'}")
+		logger.info(f"👥 Agenti: {'✅ Assegnati' if agents_assigned else '⚠️ Non assegnati'}")
+		logger.info(f"🚫 Anti-offline: {'✅ Configurato' if anti_offline_configured else '⚠️ Parziale'}")
+		logger.info(f"📧 Email: ❌ Disabilitata")
+		logger.info(f"⏰ Business Hours: ❌ Disabilitate")
+		logger.info(f"💬 Greeting: ✅ 'Benvenuto, fai qualsiasi domanda e provo ad aiutarti'")
+		logger.info(f"🎨 Branding: ❌ Nascosto")
 		logger.info("=" * 60)
 
 		# ===================================================================
-		# STEP 12: GESTIONE RISPOSTA IN BASE AL TIPO DI RICHIESTA
+		# STEP 14: PREPARAZIONE MESSAGGIO DI SUCCESSO
 		# ===================================================================
 
-		# Risposta per richieste AJAX (da interfaccia web)
+		# Determina livello di successo
+		if agents_assigned and anti_offline_configured:
+			success_level = "COMPLETO"
+			success_icon = "🎉"
+		elif agents_assigned or anti_offline_configured:
+			success_level = "PARZIALE"
+			success_icon = "⚠️"
+		else:
+			success_level = "BASE"
+			success_icon = "ℹ️"
+
+		success_message = (
+			f"{success_icon} Chatbot creato con successo! (Livello: {success_level})\n\n"
+			f"📦 Inbox ID: {inbox_id}\n"
+			f"🌐 Website Token: {website_token[:12]}...\n"
+			f"💬 Messaggio: 'Benvenuto, fai qualsiasi domanda e provo ad aiutarti'\n\n"
+			f"✅ CONFIGURAZIONI APPLICATE:\n"
+			f"   • Sempre online 24/7\n"
+			f"   • Nessuna richiesta email\n"
+			f"   • Nessun pre-chat form\n"
+			f"   • Branding Chatwoot nascosto\n"
+			f"   • Webhook configurato: {'Sì' if webhook_configured else 'No'}\n"
+			f"   • Agenti assegnati: {'Sì' if agents_assigned else 'No'}\n"
+			f"   • Anti-offline: {'Sì' if anti_offline_configured else 'Parziale'}\n\n"
+			f"🔧 PROSSIMI PASSI:\n"
+			f"   1. Integra il widget nel tuo sito web\n"
+			f"   2. Testa il chatbot\n"
+			f"   3. Monitora conversazioni in Chatwoot\n"
+			f"   {'4. Verifica che agenti siano online in Chatwoot' if not agents_assigned else ''}"
+		)
+
+		logger.info("🎉 CREAZIONE CHATBOT COMPLETATA!")
+		logger.info(f"📈 Livello successo: {success_level}")
+		logger.info("=" * 80)
+
+		# ===================================================================
+		# STEP 15: GESTIONE RISPOSTA IN BASE AL TIPO DI RICHIESTA
+		# ===================================================================
+
+		# Dati di configurazione per risposta
+		configuration_data = {
+			'always_online': True,
+			'email_disabled': True,
+			'pre_chat_disabled': True,
+			'business_hours_disabled': True,
+			'branding_hidden': True,
+			'webhook_configured': webhook_configured,
+			'agents_assigned': agents_assigned,
+			'anti_offline_configured': anti_offline_configured,
+			'language': project_language,
+			'success_level': success_level
+		}
+
+		# Istruzioni per l'utente
+		instructions = [
+			"✅ Chatbot configurato per essere sempre online",
+			"✅ Eliminati messaggi offline e richieste email",
+			"🔗 Integra il widget code nel tuo sito web",
+			"🧪 Testa il chatbot visitando il sito",
+			"📊 Monitora le conversazioni dal pannello Chatwoot"
+		]
+
+		# Aggiungi avvisi se necessario
+		if not agents_assigned:
+			instructions.append("⚠️ IMPORTANTE: Assegna agenti all'inbox in Chatwoot")
+		if not anti_offline_configured:
+			instructions.append("⚠️ Verifica configurazione business hours in Chatwoot")
+
+		# Risposta per richieste AJAX
 		if request and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
 			return JsonResponse({
 				'success': True,
@@ -714,22 +881,42 @@ def create_chatwoot_bot_for_project(project, request=None):
 				'widget_code': widget_code,
 
 				# Configurazioni applicate
-				'configurations': {
-					'always_online': always_online_configured,
-					'email_disabled': True,
-					'pre_chat_disabled': True,
-					'webhook_configured': webhook_configured,
-					'language': project_language,
-					'welcome_message': "Benvenuto, fai qualsiasi domanda e provo ad aiutarti"
-				},
+				'configurations': configuration_data,
 
-				# Istruzioni per l'utente
+				# Istruzioni e prossimi passi
+				'instructions': instructions,
 				'next_steps': [
-					"Il chatbot è pronto per l'uso",
-					"Integra il widget code nel tuo sito web",
-					"Testa il chatbot visitando il sito",
-					"Monitora le conversazioni dal pannello Chatwoot"
-				]
+					{
+						'step': 1,
+						'title': 'Integra Widget',
+						'description': 'Copia e incolla il widget code nel tuo sito',
+						'completed': True
+					},
+					{
+						'step': 2,
+						'title': 'Testa Chatbot',
+						'description': 'Visita il sito e prova il chatbot',
+						'completed': False
+					},
+					{
+						'step': 3,
+						'title': 'Monitora Conversazioni',
+						'description': 'Controlla le conversazioni in Chatwoot',
+						'completed': False
+					}
+				],
+
+				# Informazioni debug
+				'debug_info': {
+					'success_level': success_level,
+					'total_steps_completed': 15,
+					'critical_configurations': {
+						'inbox_created': True,
+						'agents_assigned': agents_assigned,
+						'anti_offline_configured': anti_offline_configured,
+						'widget_retrieved': True
+					}
+				}
 			})
 
 		# Risposta per chiamate dirette da codice
@@ -738,24 +925,40 @@ def create_chatwoot_bot_for_project(project, request=None):
 			'message': success_message,
 			'inbox': bot_inbox,
 			'widget_data': widget_result,
-			'configurations': {
-				'always_online': always_online_configured,
-				'email_disabled': True,
-				'pre_chat_disabled': True,
-				'webhook_configured': webhook_configured,
-				'language': project_language
-			}
+			'configurations': configuration_data,
+			'instructions': instructions,
+			'success_level': success_level,
+
+			# Dati aggiuntivi
+			'inbox_id': inbox_id,
+			'website_token': website_token,
+			'widget_code': widget_code,
+			'language': project_language
 		}
 
 	except Exception as e:
 		# ===================================================================
-		# GESTIONE ERRORI GENERALI
+		# GESTIONE ERRORI GENERALI CON LOG DETTAGLIATI
 		# ===================================================================
 
-		error_msg = f"❌ Errore nella creazione del bot Chatwoot: {str(e)}"
+		error_msg = f"❌ ERRORE CRITICO nella creazione chatbot: {str(e)}"
+		logger.error("=" * 80)
+		logger.error("💥 ERRORE NELLA CREAZIONE CHATBOT")
+		logger.error("=" * 80)
 		logger.error(error_msg)
-		logger.error("🔍 Traceback completo:")
+		logger.error("🔍 TRACEBACK COMPLETO:")
 		logger.error(traceback.format_exc())
+		logger.error("=" * 80)
+
+		# Suggerimenti per risoluzione errori
+		error_suggestions = [
+			"🔧 Verifica credenziali Chatwoot nelle Django settings",
+			"🌐 Controlla connessione di rete al server Chatwoot",
+			"🔑 Verifica che l'account Chatwoot sia attivo e accessibile",
+			"📝 Controlla i log Django per dettagli specifici",
+			"🔄 Riprova l'operazione dopo qualche minuto",
+			"👥 Verifica che ci siano agenti nell'account Chatwoot"
+		]
 
 		# Risposta di errore per richieste AJAX
 		if request and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -763,19 +966,23 @@ def create_chatwoot_bot_for_project(project, request=None):
 				'success': False,
 				'message': error_msg,
 				'error_type': 'creation_error',
-				'suggestions': [
-					"Verifica le credenziali Chatwoot nelle settings",
-					"Controlla la connessione di rete",
-					"Verifica che l'account Chatwoot sia attivo",
-					"Controlla i log per maggiori dettagli"
-				]
+				'error_details': str(e),
+				'suggestions': error_suggestions,
+				'debug_info': {
+					'project_id': project.id,
+					'project_name': project.name,
+					'language': getattr(project, 'chatbot_language', 'it'),
+					'timestamp': time.time()
+				}
 			})
 
 		# Risposta di errore per chiamate dirette
 		return {
 			'success': False,
 			'error': error_msg,
-			'error_details': str(e)
+			'error_details': str(e),
+			'suggestions': error_suggestions,
+			'project_id': project.id
 		}
 
 

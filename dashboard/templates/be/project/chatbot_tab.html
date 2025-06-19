@@ -27,22 +27,48 @@
                         <div id="chatwoot-enabled-content" {% if not project.chatwoot_enabled %}style="display: none;"{% endif %}>
                             {% if project.chatwoot_inbox_id %}
                             <div class="alert alert-success mb-4">
-                                <i class="bi bi-check-circle me-2"></i>
-                                Il chatbot Chatwoot è <strong>attivo</strong> per questo progetto con Inbox ID: {{ project.chatwoot_inbox_id }}.
+                                <i class="bi bi-robot me-2"></i>
+                                <strong>Agent Bot attivo!</strong> Il tuo chatbot è sempre online e risponde automaticamente.
+                                <br>
+                                <small class="d-block mt-2">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Inbox ID: <span class="font-monospace">{{ project.chatwoot_inbox_id }}</span>
+                                    {% if project.chatwoot_bot_id %}
+                                        | Bot ID: <span class="font-monospace">{{ project.chatwoot_bot_id }}</span>
+                                    {% endif %}
+                                    | Tipo: <span class="badge bg-primary">Agent Bot</span>
+                                </small>
                             </div>
 
-                            <h6 class="mb-3">Istruzioni di integrazione:</h6>
-                            <ol class="mb-4">
-                                <li>Accedi al tuo pannello Chatwoot (chatwoot.ciunix.com)</li>
-                                <li>Vai su Settings > Inboxes</li>
-                                <li>Trova l'inbox "RAG Bot - {{ project.name }}" (ID: {{ project.chatwoot_inbox_id }})</li>
-                                <li>Clicca su "Widget Settings" e copia il codice di integrazione</li>
-                                <li>Incolla il codice nel tuo sito web</li>
-                            </ol>
+                            <h6 class="mb-3">Il tuo Agent Bot è configurato e funzionante:</h6>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        <span><strong>Always Online:</strong> Niente più "offline"</span>
+                                    </div>
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        <span><strong>Risposte immediate:</strong> AI RAG integrata</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        <span><strong>Handoff intelligente:</strong> Passa agli umani se necessario</span>
+                                    </div>
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        <span><strong>24/7 disponibile:</strong> Sempre pronto a rispondere</span>
+                                    </div>
+                                </div>
+                            </div>
 
                             <div class="alert alert-info">
-                                <i class="bi bi-info-circle me-2"></i>
-                                Questo chatbot utilizzerà le informazioni RAG dal tuo progetto per rispondere alle domande degli utenti.
+                                <i class="bi bi-robot me-2"></i>
+                                <strong>Agent Bot attivo!</strong> Questo chatbot è configurato come <strong>Agent Bot</strong> su Chatwoot,
+                                il che significa che è sempre online e risponde immediatamente usando le informazioni RAG del tuo progetto.
+                                Se necessario, può trasferire le conversazioni a operatori umani.
                             </div>
 
                             <!-- Codice Widget sempre visibile -->
@@ -67,19 +93,32 @@
                             </div>
                             {% endif %}
 
-                            <div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                <strong>Importante:</strong> Assicurati di aver configurato il webhook Chatwoot per ricevere le notifiche dei messaggi.
-                                <p class="mt-2 mb-0">URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/</p>
+                            <div class="alert alert-success border-success">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <strong>Agent Bot configurato!</strong> Il webhook è attivo e il bot risponde automaticamente ai messaggi.
+                                <div class="mt-2">
+                                    <small class="text-muted d-block">
+                                        <i class="bi bi-link me-1"></i>URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/
+                                    </small>
+                                    <small class="text-muted d-block">
+                                        <i class="bi bi-info-circle me-1"></i>Il bot gestisce automaticamente le conversazioni con status "pending"
+                                    </small>
+                                </div>
                             </div>
                             {% else %}
                             <div class="alert alert-warning">
                                 <i class="bi bi-exclamation-triangle me-2"></i>
-                                Il chatbot Chatwoot non è stato ancora creato.
+                                L'Agent Bot Chatwoot non è stato ancora creato.
                             </div>
                             <button type="button" class="btn btn-primary" id="create-chatwoot-bot-btn">
-                                <i class="bi bi-plus-circle me-1"></i> Crea chatbot Chatwoot
+                                <i class="bi bi-robot me-1"></i> Crea Agent Bot Chatwoot
                             </button>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    L'Agent Bot sarà sempre online e risponderà automaticamente usando l'AI del progetto.
+                                </small>
+                            </div>
                             {% endif %}
                         </div>
 

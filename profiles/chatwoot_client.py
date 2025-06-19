@@ -100,6 +100,7 @@ class ChatwootClient:
 		else:
 			logger.error(f"❌ Inizializzazione fallita: autenticazione non riuscita")
 
+
 	def _authenticate_jwt(self) -> bool:
 		"""
         Autentica utilizzando JWT con email/password.
@@ -144,6 +145,7 @@ class ChatwootClient:
 			logger.error(f"❌ Errore durante autenticazione: {str(e)}")
 			return False
 
+
 	def set_account_id(self, account_id: int):
 		"""Imposta l'ID dell'account Chatwoot."""
 		if not isinstance(account_id, int) or account_id <= 0:
@@ -152,6 +154,7 @@ class ChatwootClient:
 		self.account_id = account_id
 		logger.info(f"🏢 Account ID impostato: {account_id}")
 		return self
+
 
 	def _make_request_with_retry(self, method: str, url: str, **kwargs) -> requests.Response:
 		"""
@@ -197,6 +200,7 @@ class ChatwootClient:
 		else:
 			raise requests.exceptions.RequestException(f"Tutti i retry falliti per {method} {url}")
 
+
 	def _handle_response(self, response: requests.Response) -> Union[Dict, List]:
 		"""
         Gestisce le risposte HTTP e restituisce dati JSON.
@@ -216,6 +220,7 @@ class ChatwootClient:
 
 			logger.error(f"❌ Errore API: {response.status_code} - {error_message}")
 			raise Exception(f"Errore API Chatwoot: {response.status_code} - {error_message}")
+
 
 	@staticmethod
 	def sanitize_inbox_name(name: str) -> str:
@@ -246,6 +251,7 @@ class ChatwootClient:
 			sanitized = "RAG Chatbot"
 
 		return sanitized.strip()
+
 
 	def list_inboxes(self, use_cache: bool = True) -> List[Dict]:
 		"""
@@ -370,6 +376,7 @@ class ChatwootClient:
 		except Exception as e:
 			logger.error(f"❌ Errore nell'impostazione lingua utente: {str(e)}")
 			return False
+
 
 	def create_inbox(self, name: str, website_url: str,
 					 channel_attributes: Optional[Dict] = None) -> Dict:
@@ -805,6 +812,139 @@ class ChatwootClient:
 			logger.error(f"❌ Errore invio messaggio: {str(e)}")
 			raise e
 
+	def create_agent_bot(self, bot_name: str, webhook_url: str):
+		"""
+		Crea un Agent Bot in Chatwoot per essere sempre online.
+		"""
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/agent_bots"
+
+		payload = {
+			"name": bot_name,
+			"outgoing_url": webhook_url,
+			"description": f"RAG AI Bot per {bot_name}"
+		}
+
+		logger.info(f"🤖 Creazione Agent Bot: {bot_name}")
+		logger.debug(f"📤 Payload bot: {payload}")
+
+		try:
+			response = self._make_request_with_retry('POST', endpoint, json=payload)
+			result = self._handle_response(response)
+
+			if isinstance(result, dict) and 'id' in result:
+				logger.info(f"✅ Agent Bot creato: ID {result['id']}")
+				return result
+			else:
+				logger.error(f"❌ Risposta bot non valida: {result}")
+				return {'error': 'Risposta bot non valida'}
+
+		except Exception as e:
+			logger.error(f"❌ Errore creazione bot: {str(e)}")
+			return {'error': str(e)}
+
+	def connect_bot_to_inbox(self, bot_id: int, inbox_id: int):
+		"""
+		Collega il bot a una inbox specifica.
+		"""
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/agent_bots/{bot_id}/agent_bot_inboxes"
+
+		payload = {
+			"inbox_id": inbox_id
+		}
+
+		logger.info(f"🔗 Collegamento Bot {bot_id} a Inbox {inbox_id}")
+
+		try:
+			response = self._make_request_with_retry('POST', endpoint, json=payload)
+			result = self._handle_response(response)
+
+			logger.info(f"✅ Bot collegato alla inbox")
+			return result
+
+		except Exception as e:
+			logger.error(f"❌ Errore collegamento bot: {str(e)}")
+			return {'error': str(e)}
+
+
+	# questa sezione serve per togliere lo status offline al bot  chatwoot
+	def create_agent_bot(self, bot_name: str, webhook_url: str):
+		"""
+		Crea un Agent Bot in Chatwoot per essere sempre online.
+		"""
+		logger.debug("---> create_agent_bot")
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/agent_bots"
+
+		payload = {
+			"name": bot_name,
+			"outgoing_url": webhook_url,
+			"description": f"RAG AI Bot per {bot_name}"
+		}
+
+		logger.info(f"🤖 Creazione Agent Bot: {bot_name}")
+		logger.debug(f"📤 Payload bot: {payload}")
+
+		try:
+			response = self._make_request_with_retry('POST', endpoint, json=payload)
+			result = self._handle_response(response)
+
+			if isinstance(result, dict) and 'id' in result:
+				logger.info(f"✅ Agent Bot creato: ID {result['id']}")
+				return result
+			else:
+				logger.error(f"❌ Risposta bot non valida: {result}")
+				return {'error': 'Risposta bot non valida'}
+
+		except Exception as e:
+			logger.error(f"❌ Errore creazione bot: {str(e)}")
+			return {'error': str(e)}
+
+	def connect_bot_to_inbox(self, bot_id: int, inbox_id: int):
+		"""
+		Collega il bot a una inbox specifica.
+		"""
+		logger.debug("---> connect_bot_to_inbox")
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/agent_bots/{bot_id}/agent_bot_inboxes"
+
+		payload = {
+			"inbox_id": inbox_id
+		}
+
+		logger.info(f"🔗 Collegamento Bot {bot_id} a Inbox {inbox_id}")
+
+		try:
+			response = self._make_request_with_retry('POST', endpoint, json=payload)
+			result = self._handle_response(response)
+
+			logger.info(f"✅ Bot collegato alla inbox")
+			return result
+
+		except Exception as e:
+			logger.error(f"❌ Errore collegamento bot: {str(e)}")
+			return {'error': str(e)}
+
+
+	def update_conversation_status(self, conversation_id: int, status: str):
+		"""
+		Aggiorna lo status di una conversazione (per handoff umano).
+		"""
+		logger.debug("---> update_conversation_status")
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/conversations/{conversation_id}"
+
+		payload = {
+			"status": status
+		}
+
+		try:
+			response = self._make_request_with_retry('PATCH', endpoint, json=payload)
+			return self._handle_response(response)
+
+		except Exception as e:
+			logger.error(f"❌ Errore aggiornamento status conversazione: {str(e)}")
+			return {'error': str(e)}
+
+
+
+
 	def test_connection(self) -> Dict:
 		"""
         Testa la connessione a Chatwoot.
@@ -849,6 +989,7 @@ class ChatwootClient:
 			'success_rate': success_rate,
 			'endpoints_tested': results
 		}
+
 
 	def __repr__(self) -> str:
 		"""Rappresentazione string del client."""

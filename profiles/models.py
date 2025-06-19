@@ -89,7 +89,7 @@ class Project(models.Model):
 	allowed_domains = models.JSONField(default=list, blank=True)
 	chatwoot_enabled = models.BooleanField(default=False)
 	chatwoot_inbox_id = models.CharField(max_length=50, blank=True, null=True)
-	#chatwoot_bot_id = models.CharField(max_length=50, blank=True, null=True)
+	chatwoot_bot_id = models.CharField(max_length=50, blank=True, null=True)  # Serve per far funzionare chatwoot con BOT e quindi togliere lo status camurrusu di offline
 	chatwoot_metadata = models.JSONField(default=dict, blank=True, null=True)
 	chatwoot_widget_code = models.TextField(null=True, blank=True, help_text="Codice JavaScript del widget Chatwoot")
 	chatwoot_website_token = models.CharField(max_length=255, null=True, blank=True, help_text="Token del website Chatwoot")

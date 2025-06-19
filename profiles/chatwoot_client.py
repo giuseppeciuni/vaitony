@@ -900,16 +900,18 @@ class ChatwootClient:
 
 	def connect_bot_to_inbox(self, bot_id: int, inbox_id: int):
 		"""
-		Collega il bot a una inbox specifica.
+		Collega il bot a una inbox specifica usando l'endpoint corretto.
 		"""
 		logger.debug("---> connect_bot_to_inbox")
-		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/agent_bots/{bot_id}/agent_bot_inboxes"
+		# ENDPOINT CORRETTO: tramite inbox invece che agent_bot
+		endpoint = f"{self.api_base_url}/accounts/{self.account_id}/inboxes/{inbox_id}/set_agent_bot"
 
 		payload = {
-			"inbox_id": inbox_id
+			"agent_bot": bot_id  # Passa l'ID del bot direttamente
 		}
 
 		logger.info(f"🔗 Collegamento Bot {bot_id} a Inbox {inbox_id}")
+		logger.debug(f"📤 Payload collegamento: {payload}")
 
 		try:
 			response = self._make_request_with_retry('POST', endpoint, json=payload)

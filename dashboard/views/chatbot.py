@@ -11,6 +11,9 @@ from dashboard.rag_utils import get_answer_from_project, create_project_rag_chai
 from profiles.chatwoot_client import ChatwootClient
 from profiles.models import Project, ProjectConversation, ProjectURL
 from django.utils import timezone
+from django.http import HttpResponse
+from django.views.decorators.cache import cache_control
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +170,6 @@ def should_handoff_to_human(answer):
 		logger.info(f"🔔 Handoff trigger rilevato: {answer[:100]}...")
 
 	return needs_handoff
-
 
 
 def create_chatwoot_bot_for_project(project, request):
@@ -377,3 +379,22 @@ def toggle_url_inclusion(request, project_id, url_id):
 		logger.warning(
 			f"Tentativo di accedere alla vista toggle_url_inclusion con metodo {request.method} (richiesto POST) per project_id={project_id}, url_id={url_id}")
 		return JsonResponse({'status': 'error', 'message': 'Metodo HTTP non permesso.'}, status=405)
+
+
+@cache_control(max_age=3600)  # Cache per 1 ora
+def serve_chat_widget(request):
+	"""
+	Serve il file JavaScript del chat widget con content-type corretto.
+	"""
+	try:
+		widget_path = os.path.join(settings.BASE_DIR, 'dashboard', 'static', 'js', 'rag-chat-widget.js')
+
+		with open(widget_path, 'r', encoding='utf-8') as f:
+			widget_js = f.read()
+
+		return HttpResponse(widget_js, content_type='application/javascript')
+
+	except FileNotFoundError:
+		return HttpResponse('// RAG Chat Widget not found', content_type='application/javascript', status=404)
+
+

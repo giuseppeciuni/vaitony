@@ -3,7 +3,8 @@ from django.conf.urls.static import static
 from django.urls import path
 from dashboard.api import external_chat_api
 from dashboard.dashboard_console import execute_management_command
-from dashboard.views.chatbot import chatbot_widget, chatbot_widget_js, chatwoot_webhook, toggle_url_inclusion
+from dashboard.views.chatbot import chatbot_widget, chatbot_widget_js, chatwoot_webhook, toggle_url_inclusion, \
+    serve_chat_widget
 from dashboard.views.project_config import project_config, project_prompts
 from dashboard.views.crawler import website_crawl
 from dashboard.views.dashboard import dashboard
@@ -47,6 +48,8 @@ urlpatterns = [
 
     # URL per il webhook di Chatwoot
     path('chatwoot-webhook/', chatwoot_webhook, name='chatwoot_webhook'),
+
+    path('widget/rag-chat.js', serve_chat_widget, name='rag_chat_widget'),
 
     # API per comandi management
     path('api/execute-command/', execute_management_command, name='execute_management_command'),

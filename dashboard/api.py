@@ -34,7 +34,7 @@ def external_chat_api(request, project_slug):
 
 		# Verifica l'API key
 		api_key = request.headers.get('X-API-Key')
-		if api_key != project.api_key:
+		if api_key != project.chat_bot_api_key:
 			return JsonResponse({
 				'success': False,
 				'error': 'Invalid API key'

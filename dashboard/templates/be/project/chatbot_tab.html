@@ -2,134 +2,650 @@
 <div class="tab-pane fade" id="chatbot" role="tabpanel" aria-labelledby="chatbot-tab">
     <div class="row">
         <div class="col-lg-10 mx-auto">
-            <!-- Profilo ChatWoot Tab -->
+            <!-- Widget Custom RAG Tab -->
             <div class="mt-4">
                 <div class="card">
                     <div class="card-header bg-info text-white">
                         <h5 class="card-title mb-0">
-                            <i class="bi bi-chat-square-dots me-2"></i>Integrazione Chatwoot
+                            <i class="bi bi-robot me-2"></i>Widget Chatbot Custom
                         </h5>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="mb-0">Chatbot Chatwoot</h6>
+                            <h6 class="mb-0">Chatbot AI sempre online</h6>
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="chatwoot-toggle"
-                                      {% if project.chatwoot_enabled %}checked{% endif %}>
-                                <label class="form-check-label" for="chatwoot-toggle">
-                                    <span id="chatwoot-status-text">
-                                        {% if project.chatwoot_enabled %}Attivo{% else %}Disattivo{% endif %}
+                                <input class="form-check-input" type="checkbox" id="chatbot-toggle"
+                                      {% if project.is_public_chat_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="chatbot-toggle">
+                                    <span id="chatbot-status-text">
+                                        {% if project.is_public_chat_enabled %}Attivo{% else %}Disattivo{% endif %}
                                     </span>
                                 </label>
                             </div>
                         </div>
 
-                        <div id="chatwoot-enabled-content" {% if not project.chatwoot_enabled %}style="display: none;"{% endif %}>
-                            {% if project.chatwoot_inbox_id %}
+                        <div id="chatbot-enabled-content" {% if not project.is_public_chat_enabled %}style="display: none;"{% endif %}>
+                            {% if project.chat_bot_api_key %}
                             <div class="alert alert-success mb-4">
                                 <i class="bi bi-robot me-2"></i>
-                                <strong>Agent Bot attivo!</strong> Il tuo chatbot è sempre online e risponde automaticamente.
+                                <strong>Widget Custom sempre online!</strong> Il tuo chatbot è operativo e risponde automaticamente 24/7.
                                 <br>
                                 <small class="d-block mt-2">
                                     <i class="bi bi-info-circle me-1"></i>
-                                    Inbox ID: <span class="font-monospace">{{ project.chatwoot_inbox_id }}</span>
-                                    {% if project.chatwoot_bot_id %}
-                                        | Bot ID: <span class="font-monospace">{{ project.chatwoot_bot_id }}</span>
-                                    {% endif %}
-                                    | Tipo: <span class="badge bg-primary">Agent Bot</span>
+                                    Progetto: <span class="font-monospace">{{ project.slug }}</span>
+                                    | API Key: <span class="font-monospace">{{ project.chat_bot_api_key|slice:":10" }}...</span>
+                                    | Tipo: <span class="badge bg-primary">Widget Custom RAG</span>
                                 </small>
                             </div>
 
-                            <h6 class="mb-3">Il tuo Agent Bot è configurato e funzionante:</h6>
                             <div class="row mb-4">
                                 <div class="col-md-6">
                                     <div class="d-flex align-items-center mb-2">
                                         <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                        <span><strong>Always Online:</strong> Niente più "offline"</span>
+                                        <span><strong>Sempre Online:</strong> Nessun "offline" mai</span>
                                     </div>
                                     <div class="d-flex align-items-center mb-2">
                                         <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                        <span><strong>Risposte immediate:</strong> AI RAG integrata</span>
+                                        <span><strong>Risposte immediate:</strong> API RAG diretta</span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="d-flex align-items-center mb-2">
                                         <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                        <span><strong>Handoff intelligente:</strong> Passa agli umani se necessario</span>
+                                        <span><strong>Zero dipendenze:</strong> Controllo completo</span>
                                     </div>
                                     <div class="d-flex align-items-center mb-2">
                                         <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                        <span><strong>24/7 disponibile:</strong> Sempre pronto a rispondere</span>
+                                        <span><strong>100% personalizzabile:</strong> Colori, stili, posizione</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="alert alert-info">
+                            <div class="alert alert-info mb-4">
                                 <i class="bi bi-robot me-2"></i>
-                                <strong>Agent Bot attivo!</strong> Questo chatbot è configurato come <strong>Agent Bot</strong> su Chatwoot,
-                                il che significa che è sempre online e risponde immediatamente usando le informazioni RAG del tuo progetto.
-                                Se necessario, può trasferire le conversazioni a operatori umani.
+                                <strong>Widget Custom RAG!</strong> Questo chatbot utilizza direttamente la tua API RAG
+                                senza servizi esterni. È sempre online, risponde immediatamente e può essere
+                                completamente personalizzato per adattarsi al tuo sito web.
                             </div>
 
                             <!-- Codice Widget sempre visibile -->
-                            {% if project.chatwoot_widget_code %}
                             <div class="card mb-4">
-                                <div class="card-header d-flex justify-content-between align-items-center bg-light">
-                                    <h6 class="mb-0"><i class="bi bi-code-slash me-2"></i>Codice di integrazione Widget</h6>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="copyWidgetCodePermanent()">
+                                <div class="card-header d-flex justify-content-between align-items-center bg-dark text-white">
+                                    <h6 class="mb-0"><i class="bi bi-code-slash me-2"></i>Codice Widget Completo</h6>
+                                    <button class="btn btn-sm btn-outline-light" onclick="copyWidgetCode()">
                                         <i class="bi bi-clipboard me-1"></i>Copia Codice
                                     </button>
                                 </div>
                                 <div class="card-body">
-                                    <p class="small text-muted mb-2">Copia questo codice e incollalo nel tuo sito web per integrare il chatbot:</p>
-                                    <pre class="bg-light p-3 mb-0 rounded"><code id="widget-code-permanent">{{ project.chatwoot_widget_code|escape }}</code></pre>
-                                </div>
-                                <div class="card-footer bg-white">
-                                    <small class="text-muted">
+                                    <p class="small text-muted mb-3">
                                         <i class="bi bi-info-circle me-1"></i>
-                                        Website Token: <span class="font-monospace">{{ project.chatwoot_website_token }}</span>
+                                        Copia questo codice completo e incollalo prima del tag <code>&lt;/body&gt;</code>
+                                        del tuo sito web. Non serve altro!
+                                    </p>
+                                    <pre class="bg-dark text-light p-3 mb-0 rounded" style="max-height: 400px; overflow-y: auto;"><code id="widget-code-complete">&lt;!-- Widget Chatbot AI per {{ project.name }} --&gt;
+&lt;script&gt;
+    // Configurazione Widget Chatbot
+    window.RAG_PROJECT_SLUG = '{{ project.slug }}';
+    window.RAG_API_KEY = '{{ project.chat_bot_api_key }}';
+    window.RAG_BASE_URL = '{{ request.scheme }}://{{ request.get_host }}';
+    window.RAG_PRIMARY_COLOR = '#1f93ff';
+    window.RAG_TITLE = 'Assistente AI - {{ project.name }}';
+    window.RAG_WELCOME_MESSAGE = '{% if project.chatbot_language == "en" %}Hello! I am the AI assistant for {{ project.name }}. How can I help you today?{% elif project.chatbot_language == "es" %}¡Hola! Soy el asistente de IA para {{ project.name }}. ¿Cómo puedo ayudarte hoy?{% elif project.chatbot_language == "de" %}Hallo! Ich bin der KI-Assistent für {{ project.name }}. Wie kann ich Ihnen heute helfen?{% elif project.chatbot_language == "fr" %}Bonjour! Je suis l\'assistant IA pour {{ project.name }}. Comment puis-je vous aider aujourd\'hui?{% else %}Ciao! Sono l\'assistente AI per {{ project.name }}. Come posso aiutarti oggi?{% endif %}';
+    window.RAG_PLACEHOLDER = '{% if project.chatbot_language == "en" %}Write your message...{% elif project.chatbot_language == "es" %}Escribe tu mensaje...{% elif project.chatbot_language == "de" %}Schreiben Sie Ihre Nachricht...{% elif project.chatbot_language == "fr" %}Écrivez votre message...{% else %}Scrivi il tuo messaggio...{% endif %}';
+    window.RAG_POSITION = 'bottom-right'; // Cambia in 'bottom-left' se preferisci
+&lt;/script&gt;
+
+&lt;!-- Widget Chatbot AI - Codice Completo --&gt;
+&lt;script&gt;
+(function() {
+    'use strict';
+
+    // Configurazione del widget
+    const config = {
+        projectSlug: window.RAG_PROJECT_SLUG || '',
+        apiKey: window.RAG_API_KEY || '',
+        baseUrl: window.RAG_BASE_URL || window.location.origin,
+        primaryColor: window.RAG_PRIMARY_COLOR || '#1f93ff',
+        position: window.RAG_POSITION || 'bottom-right',
+        welcomeMessage: window.RAG_WELCOME_MESSAGE || 'Ciao! Come posso aiutarti oggi?',
+        placeholderText: window.RAG_PLACEHOLDER || 'Scrivi un messaggio...',
+        title: window.RAG_TITLE || 'Assistente AI'
+    };
+
+    // Verifica configurazione
+    if (!config.projectSlug || !config.apiKey) {
+        console.error('RAG Chat Widget: Configurazione mancante');
+        return;
+    }
+
+    // CSS del widget
+    const widgetCSS = `
+        #rag-chat-widget {
+            position: fixed;
+            ${config.position === 'bottom-left' ? 'left: 20px;' : 'right: 20px;'}
+            bottom: 20px;
+            z-index: 9999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        #rag-chat-bubble {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, ${config.primaryColor}, ${config.primaryColor}dd);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            border: 3px solid white;
+        }
+
+        #rag-chat-bubble:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+        }
+
+        #rag-chat-bubble.has-notification {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        #rag-chat-window {
+            position: absolute;
+            bottom: 70px;
+            ${config.position === 'bottom-left' ? 'left: 0;' : 'right: 0;'}
+            width: 350px;
+            height: 500px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #e1e5e9;
+        }
+
+        @media (max-width: 480px) {
+            #rag-chat-window {
+                width: calc(100vw - 40px);
+                height: calc(100vh - 140px);
+                ${config.position === 'bottom-left' ? 'left: 20px;' : 'right: 20px;'}
+            }
+        }
+
+        #rag-chat-header {
+            background: linear-gradient(135deg, ${config.primaryColor}, ${config.primaryColor}dd);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        #rag-chat-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        #rag-chat-close:hover {
+            opacity: 1;
+            background: rgba(255,255,255,0.1);
+        }
+
+        #rag-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+
+        #rag-chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #rag-chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        #rag-chat-messages::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .rag-message {
+            margin-bottom: 15px;
+            max-width: 85%;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .rag-message.user {
+            margin-left: auto;
+            background: ${config.primaryColor};
+            color: white;
+            padding: 12px 16px;
+            border-radius: 18px 18px 4px 18px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .rag-message.bot {
+            background: white;
+            color: #333;
+            padding: 12px 16px;
+            border-radius: 18px 18px 18px 4px;
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            border: 1px solid #e9ecef;
+        }
+
+        .rag-paragraph {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        .rag-header {
+            color: ${config.primaryColor};
+            font-size: 15px;
+            display: block;
+            margin: 12px 0 6px 0;
+            border-left: 3px solid ${config.primaryColor};
+            padding-left: 8px;
+            font-weight: 600;
+        }
+
+        .rag-list-item {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 3px solid #e9ecef;
+        }
+
+        .rag-bullet-list {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .rag-bullet {
+            margin: 4px 0;
+            color: #555;
+        }
+
+        #rag-chat-input-area {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        #rag-chat-input {
+            flex: 1;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            padding: 10px 15px;
+            outline: none;
+            font-size: 14px;
+            resize: none;
+            min-height: 20px;
+            max-height: 80px;
+            transition: border-color 0.2s;
+        }
+
+        #rag-chat-input:focus {
+            border-color: ${config.primaryColor};
+            box-shadow: 0 0 0 2px ${config.primaryColor}33;
+        }
+
+        #rag-chat-send {
+            background: ${config.primaryColor};
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 16px;
+        }
+
+        #rag-chat-send:hover:not(:disabled) {
+            background: ${config.primaryColor}dd;
+            transform: scale(1.05);
+        }
+
+        #rag-chat-send:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .rag-typing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .rag-typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+
+        .rag-typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #6c757d;
+            animation: typingDot 1.4s infinite ease-in-out;
+        }
+
+        .rag-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .rag-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .rag-typing-dot:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes typingDot {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .rag-error {
+            background: #f8d7da !important;
+            color: #721c24 !important;
+            border: 1px solid #f5c6cb !important;
+        }
+    `;
+
+    // Inject CSS
+    const style = document.createElement('style');
+    style.textContent = widgetCSS;
+    document.head.appendChild(style);
+
+    // Create widget HTML
+    const widgetHTML = `
+        &lt;div id="rag-chat-widget"&gt;
+            &lt;div id="rag-chat-bubble"&gt;💬&lt;/div&gt;
+            &lt;div id="rag-chat-window"&gt;
+                &lt;div id="rag-chat-header"&gt;
+                    &lt;span&gt;${config.title}&lt;/span&gt;
+                    &lt;button id="rag-chat-close"&gt;×&lt;/button&gt;
+                &lt;/div&gt;
+                &lt;div id="rag-chat-messages"&gt;&lt;/div&gt;
+                &lt;div id="rag-chat-input-area"&gt;
+                    &lt;textarea id="rag-chat-input" placeholder="${config.placeholderText}" rows="1"&gt;&lt;/textarea&gt;
+                    &lt;button id="rag-chat-send"&gt;➤&lt;/button&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/div&gt;
+    `;
+
+    // Insert widget when DOM is ready
+    function insertWidget() {
+        if (document.getElementById('rag-chat-widget')) return;
+        document.body.insertAdjacentHTML('beforeend', widgetHTML.replace(/&lt;/g, '&lt;').replace(/&gt;/g, '&gt;'));
+        initializeWidget();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', insertWidget);
+    } else {
+        insertWidget();
+    }
+
+    // Widget functionality
+    function initializeWidget() {
+        const bubble = document.getElementById('rag-chat-bubble');
+        const chatWindow = document.getElementById('rag-chat-window');
+        const messages = document.getElementById('rag-chat-messages');
+        const input = document.getElementById('rag-chat-input');
+        const sendBtn = document.getElementById('rag-chat-send');
+        const closeBtn = document.getElementById('rag-chat-close');
+
+        let isOpen = false;
+        let messageHistory = [];
+
+        // Toggle chat window
+        function toggleChat() {
+            isOpen = !isOpen;
+            chatWindow.style.display = isOpen ? 'flex' : 'none';
+
+            if (isOpen) {
+                input.focus();
+                bubble.classList.remove('has-notification');
+
+                if (messageHistory.length === 0) {
+                    addMessage('bot', config.welcomeMessage);
+                }
+            }
+        }
+
+        // Event listeners
+        bubble.addEventListener('click', toggleChat);
+        closeBtn.addEventListener('click', toggleChat);
+
+        // Auto-resize textarea
+        input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+            sendBtn.disabled = !this.value.trim();
+        });
+
+        // Send message
+        function sendMessage() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMessage('user', text);
+            input.value = '';
+            input.style.height = 'auto';
+            sendBtn.disabled = true;
+
+            const typingMsg = addTypingIndicator();
+
+            fetch(`${config.baseUrl}/api/chat/${config.projectSlug}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': config.apiKey
+                },
+                body: JSON.stringify({ question: text })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                removeTypingIndicator(typingMsg);
+
+                if (data.success) {
+                    addMessage('bot', data.answer);
+                } else {
+                    addMessage('bot', `Errore: ${data.error || 'Si è verificato un errore.'}`, true);
+                }
+            })
+            .catch(error => {
+                removeTypingIndicator(typingMsg);
+                addMessage('bot', 'Errore di connessione. Verifica che il server sia attivo.', true);
+            });
+        }
+
+        // Add message to chat
+        function addMessage(sender, text, isError = false) {
+            const messageEl = document.createElement('div');
+            messageEl.className = `rag-message ${sender}`;
+            if (isError) messageEl.classList.add('rag-error');
+
+            if (sender === 'bot') {
+                messageEl.innerHTML = formatBotMessage(text);
+            } else {
+                messageEl.textContent = text;
+            }
+
+            messages.appendChild(messageEl);
+            messages.scrollTop = messages.scrollHeight;
+
+            messageHistory.push({ sender, text, timestamp: Date.now() });
+
+            if (!isOpen && sender === 'bot') {
+                bubble.classList.add('has-notification');
+            }
+
+            return messageEl;
+        }
+
+        // Enhanced format bot messages
+        function formatBotMessage(text) {
+            text = text.replace(/(\d+\.\s*\*\*[^*]+\*\*[^]*?)(?=\d+\.\s*\*\*|$)/g, (match) => {
+                return `&lt;div class="rag-list-item"&gt;${match}&lt;/div&gt;`;
+            });
+
+            text = text.replace(/\*\*([^*]+)\*\*/g, '&lt;strong class="rag-header"&gt;$1&lt;/strong&gt;');
+            text = text.replace(/^[\s]*[-•]\s*(.+)$/gm, '&lt;li class="rag-bullet"&gt;$1&lt;/li&gt;');
+            text = text.replace(/(&lt;li class="rag-bullet"&gt;[^&lt;]*&lt;\/li&gt;\s*)+/g, '&lt;ul class="rag-bullet-list"&gt;$&amp;&lt;/ul&gt;');
+            text = text.replace(/\n\n/g, '&lt;/p&gt;&lt;p class="rag-paragraph"&gt;');
+            text = `&lt;p class="rag-paragraph"&gt;${text}&lt;/p&gt;`;
+            text = text.replace(/\n/g, '&lt;br&gt;');
+            text = text.replace(/&lt;p class="rag-paragraph"&gt;\s*&lt;\/p&gt;/g, '');
+
+            return text;
+        }
+
+        // Add typing indicator
+        function addTypingIndicator() {
+            const typingEl = document.createElement('div');
+            typingEl.className = 'rag-message bot rag-typing';
+            typingEl.innerHTML = `
+                &lt;span&gt;Sto pensando&lt;/span&gt;
+                &lt;div class="rag-typing-dots"&gt;
+                    &lt;div class="rag-typing-dot"&gt;&lt;/div&gt;
+                    &lt;div class="rag-typing-dot"&gt;&lt;/div&gt;
+                    &lt;div class="rag-typing-dot"&gt;&lt;/div&gt;
+                &lt;/div&gt;
+            `;
+
+            messages.appendChild(typingEl);
+            messages.scrollTop = messages.scrollHeight;
+
+            return typingEl;
+        }
+
+        // Remove typing indicator
+        function removeTypingIndicator(typingEl) {
+            if (typingEl && typingEl.parentNode) {
+                typingEl.remove();
+            }
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', sendMessage);
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        sendBtn.disabled = true;
+
+        console.log('RAG Chat Widget initialized successfully');
+    }
+})();
+&lt;/script&gt;</code></pre>
+                                </div>
+                                <div class="card-footer bg-light">
+                                    <small class="text-muted d-block mb-2">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        <strong>Come usare:</strong> Copia tutto il codice sopra e incollalo prima del tag &lt;/body&gt;
+                                        del tuo sito web. Il widget apparirà automaticamente nell'angolo in basso a destra.
+                                    </small>
+                                    <small class="text-muted d-block">
+                                        <i class="bi bi-gear me-1"></i>
+                                        <strong>Personalizzazione:</strong> Modifica i valori nelle variabili window.RAG_*
+                                        per cambiare colori, posizione e messaggi.
                                     </small>
                                 </div>
                             </div>
-                            {% endif %}
 
                             <div class="alert alert-success border-success">
                                 <i class="bi bi-check-circle me-2"></i>
-                                <strong>Agent Bot configurato!</strong> Il webhook è attivo e il bot risponde automaticamente ai messaggi.
+                                <strong>Widget pronto all'uso!</strong> Il codice include tutto il necessario:
+                                CSS, JavaScript e logica completa del chatbot.
                                 <div class="mt-2">
                                     <small class="text-muted d-block">
-                                        <i class="bi bi-link me-1"></i>URL webhook: {{ request.scheme }}://{{ request.get_host }}/chatwoot-webhook/
+                                        <i class="bi bi-link me-1"></i>API Endpoint: {{ request.scheme }}://{{ request.get_host }}/api/chat/{{ project.slug }}/
                                     </small>
                                     <small class="text-muted d-block">
-                                        <i class="bi bi-info-circle me-1"></i>Il bot gestisce automaticamente le conversazioni con status "pending"
+                                        <i class="bi bi-shield-check me-1"></i>Il widget funziona su qualsiasi sito web moderno
                                     </small>
                                 </div>
                             </div>
                             {% else %}
                             <div class="alert alert-warning">
                                 <i class="bi bi-exclamation-triangle me-2"></i>
-                                L'Agent Bot Chatwoot non è stato ancora creato.
-                            </div>
-                            <button type="button" class="btn btn-primary" id="create-chatwoot-bot-btn">
-                                <i class="bi bi-robot me-1"></i> Crea Agent Bot Chatwoot
-                            </button>
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    L'Agent Bot sarà sempre online e risponderà automaticamente usando l'AI del progetto.
-                                </small>
+                                Il chatbot non è ancora configurato. Attiva il toggle sopra per generare l'API Key.
                             </div>
                             {% endif %}
                         </div>
 
-                        <div id="chatwoot-disabled-content" {% if project.chatwoot_enabled %}style="display: none;"{% endif %}>
+                        <div id="chatbot-disabled-content" {% if project.is_public_chat_enabled %}style="display: none;"{% endif %}>
                             <div class="alert alert-info mb-4">
                                 <i class="bi bi-info-circle me-2"></i>
-                                L'integrazione con Chatwoot ti permette di creare un chatbot che risponde alle domande utilizzando le informazioni di questo progetto.
+                                Il widget custom ti permette di avere un chatbot sempre online che utilizza
+                                l'intelligenza artificiale del tuo progetto per rispondere alle domande
+                                dei visitatori del sito web.
                             </div>
 
                             <div class="text-center">
-                                <p class="mb-3">Attiva l'integrazione Chatwoot utilizzando l'interruttore in alto.</p>
+                                <p class="mb-3">Attiva l'integrazione utilizzando l'interruttore in alto.</p>
                             </div>
                         </div>
                     </div>
@@ -199,12 +715,12 @@
                             </div>
                             <div class="col-md-6">
                                 <small class="text-muted">
-                                    {% if project.chatwoot_inbox_id %}
+                                    {% if project.chat_bot_api_key %}
                                         <i class="bi bi-check-circle text-success me-1"></i>
-                                        Chatbot configurato
+                                        Widget configurato
                                     {% else %}
                                         <i class="bi bi-exclamation-triangle text-warning me-1"></i>
-                                        Chatbot non ancora creato
+                                        Widget non ancora attivato
                                     {% endif %}
                                 </small>
                             </div>
@@ -212,11 +728,11 @@
                     </div>
 
                     <!-- Avviso per aggiornamenti -->
-                    {% if project.chatwoot_inbox_id %}
+                    {% if project.chat_bot_api_key %}
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle me-2"></i>
-                        <strong>Nota:</strong> Le modifiche alla lingua si applicheranno ai nuovi widget creati.
-                        Per aggiornare un widget esistente, potrebbe essere necessario riconfigurarlo in Chatwoot.
+                        <strong>Nota:</strong> Le modifiche alla lingua aggiorneranno automaticamente
+                        i messaggi del widget. Ri-copia il codice per applicare le modifiche.
                     </div>
                     {% endif %}
                 </div>
@@ -226,33 +742,55 @@
             <div class="card mt-4">
                 <div class="card-header bg-light">
                     <h6 class="mb-0">
-                        <i class="bi bi-lightbulb me-2"></i>Funzionalità del Chatbot
+                        <i class="bi bi-lightbulb me-2"></i>Caratteristiche del Widget Custom
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
                             <ul class="list-unstyled">
-                                <li><i class="bi bi-check-circle text-success me-2"></i>Risposte automatiche 24/7</li>
-                                <li><i class="bi bi-check-circle text-success me-2"></i>Basato sui tuoi documenti</li>
-                                <li><i class="bi bi-check-circle text-success me-2"></i>Integrazione semplice</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Sempre online 24/7</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Basato sui tuoi documenti RAG</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Zero dipendenze esterne</li>
                                 <li><i class="bi bi-check-circle text-success me-2"></i>Responsive su tutti i dispositivi</li>
                             </ul>
                         </div>
                         <div class="col-md-6">
                             <ul class="list-unstyled">
-                                <li><i class="bi bi-check-circle text-success me-2"></i>Personalizzabile nell'aspetto</li>
-                                <li><i class="bi bi-check-circle text-success me-2"></i>Multilingua</li>
-                                <li><i class="bi bi-check-circle text-success me-2"></i>Analytics integrate</li>
-                                <li><i class="bi bi-check-circle text-success me-2"></i>API JavaScript per controllo avanzato</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Completamente personalizzabile</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Multilingua integrato</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Formattazione automatica risposte</li>
+                                <li><i class="bi bi-check-circle text-success me-2"></i>Codice completo self-contained</li>
                             </ul>
                         </div>
                     </div>
 
                     <hr class="my-3">
-                    <div class="text-center">
-                        <p class="mb-2">Stato attuale del chatbot:
-                            <span id="chatbot-status-badge" class="badge {% if project.is_public_chat_enabled %}bg-success{% else %}bg-secondary{% endif %}">
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="bi bi-palette me-2"></i>Personalizzazioni Disponibili</h6>
+                            <ul class="list-unstyled small text-muted">
+                                <li>• <code>RAG_PRIMARY_COLOR</code>: Colore principale</li>
+                                <li>• <code>RAG_POSITION</code>: Posizione (bottom-right/left)</li>
+                                <li>• <code>RAG_TITLE</code>: Titolo della chat</li>
+                                <li>• <code>RAG_WELCOME_MESSAGE</code>: Messaggio di benvenuto</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="bi bi-shield-check me-2"></i>Sicurezza Integrata</h6>
+                            <ul class="list-unstyled small text-muted">
+                                <li>• API Key univoca per progetto</li>
+                                <li>• Rate limiting automatico</li>
+                                <li>• Sanitizzazione input/output</li>
+                                <li>• CORS e security headers</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <p class="mb-2">Stato attuale del widget:
+                            <span id="widget-status-badge" class="badge {% if project.is_public_chat_enabled %}bg-success{% else %}bg-secondary{% endif %}">
                                 {% if project.is_public_chat_enabled %}ATTIVO{% else %}DISATTIVO{% endif %}
                             </span>
                         </p>
@@ -262,3 +800,151 @@
         </div>
     </div>
 </div>
+
+<!-- JavaScript per gestire il copy del codice -->
+<script>
+function copyWidgetCode() {
+    try {
+        const codeElement = document.getElementById('widget-code-complete');
+        if (!codeElement) {
+            console.error('Elemento codice non trovato');
+            alert('Errore: elemento codice non trovato');
+            return;
+        }
+
+        const textToCopy = codeElement.textContent;
+
+        // Usa la Clipboard API moderna se disponibile
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showCopySuccess();
+            }).catch((err) => {
+                console.error('Errore Clipboard API:', err);
+                fallbackCopyTextToClipboard(textToCopy);
+            });
+        } else {
+            // Fallback per browser più vecchi
+            fallbackCopyTextToClipboard(textToCopy);
+        }
+    } catch (error) {
+        console.error('Errore nella copia:', error);
+        alert('Errore durante la copia del codice');
+    }
+}
+
+function fallbackCopyTextToClipboard(text) {
+    try {
+        const tempTextarea = document.createElement('textarea');
+        tempTextarea.value = text;
+        tempTextarea.style.position = 'fixed';
+        tempTextarea.style.left = '-999999px';
+        tempTextarea.style.top = '-999999px';
+        document.body.appendChild(tempTextarea);
+
+        tempTextarea.focus();
+        tempTextarea.select();
+        tempTextarea.setSelectionRange(0, 99999); // Per mobile
+
+        const successful = document.execCommand('copy');
+        document.body.removeChild(tempTextarea);
+
+        if (successful) {
+            showCopySuccess();
+        } else {
+            throw new Error('Comando copy fallito');
+        }
+    } catch (err) {
+        console.error('Errore fallback copy:', err);
+        alert('Impossibile copiare automaticamente. Seleziona manualmente il codice e premi Ctrl+C');
+    }
+}
+
+function showCopySuccess() {
+    // Trova il bottone che ha scatenato l'evento
+    const button = event ? event.target.closest('button') : document.querySelector('button[onclick="copyWidgetCode()"]');
+
+    if (button) {
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-check me-1"></i>Copiato!';
+        button.classList.remove('btn-outline-light');
+        button.classList.add('btn-success');
+
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-light');
+        }, 2000);
+    }
+
+    // Mostra anche un toast se disponibile
+    if (typeof showToast === 'function') {
+        showToast('Codice copiato negli appunti!', 'success');
+    }
+}
+
+// Gestione toggle chatbot
+document.addEventListener('DOMContentLoaded', function() {
+    const chatbotToggle = document.getElementById('chatbot-toggle');
+
+    if (chatbotToggle) {
+        chatbotToggle.addEventListener('change', function() {
+            const isEnabled = this.checked;
+            const enabledContent = document.getElementById('chatbot-enabled-content');
+            const disabledContent = document.getElementById('chatbot-disabled-content');
+            const statusText = document.getElementById('chatbot-status-text');
+            const statusBadge = document.getElementById('widget-status-badge');
+
+            if (enabledContent && disabledContent) {
+                if (isEnabled) {
+                    enabledContent.style.display = 'block';
+                    disabledContent.style.display = 'none';
+                } else {
+                    enabledContent.style.display = 'none';
+                    disabledContent.style.display = 'block';
+                }
+            }
+
+            if (statusText) {
+                statusText.textContent = isEnabled ? 'Attivo' : 'Disattivo';
+            }
+
+            if (statusBadge) {
+                statusBadge.textContent = isEnabled ? 'ATTIVO' : 'DISATTIVO';
+                if (isEnabled) {
+                    statusBadge.classList.remove('bg-secondary');
+                    statusBadge.classList.add('bg-success');
+                } else {
+                    statusBadge.classList.remove('bg-success');
+                    statusBadge.classList.add('bg-secondary');
+                }
+            }
+
+            // Qui potresti aggiungere una chiamata AJAX per salvare lo stato
+            // fetch('/api/toggle-chatbot', { ... })
+        });
+    }
+});
+
+// Auto-aggiornamento codice quando cambia lingua
+document.addEventListener('DOMContentLoaded', function() {
+    const languageForm = document.getElementById('chatbot-language-form');
+    const saveBtn = document.getElementById('save-language-btn');
+
+    if (languageForm && saveBtn) {
+        languageForm.addEventListener('submit', function(e) {
+            // Il form verrà inviato normalmente, la pagina si ricaricherà con la nuova lingua
+            const originalText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Salvando...';
+            saveBtn.disabled = true;
+
+            // Restore button se qualcosa va storto
+            setTimeout(() => {
+                if (saveBtn.disabled) {
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                }
+            }, 10000); // 10 secondi timeout
+        });
+    }
+});
+</script>

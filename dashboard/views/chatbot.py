@@ -381,20 +381,43 @@ def toggle_url_inclusion(request, project_id, url_id):
 		return JsonResponse({'status': 'error', 'message': 'Metodo HTTP non permesso.'}, status=405)
 
 
-@cache_control(max_age=3600)  # Cache per 1 ora
-def serve_chat_widget(request):
+@cache_control(max_age=86400)  # Cache 24 ore
+def serve_widget_css(request):
 	"""
-	Serve il file JavaScript del chat widget con content-type corretto.
+	Serve il CSS base del widget con personalizzazioni dinamiche.
 	"""
 	try:
-		widget_path = os.path.join(settings.BASE_DIR, 'dashboard', 'static', 'js', 'rag-chat-widget.js')
+		# PERCORSO CORRETTO: static/ invece di dashboard/static/
+		css_path = os.path.join(settings.BASE_DIR, 'static', 'css', 'rag-chat-widget.css')
 
-		with open(widget_path, 'r', encoding='utf-8') as f:
-			widget_js = f.read()
+		with open(css_path, 'r', encoding='utf-8') as f:
+			css_content = f.read()
 
-		return HttpResponse(widget_js, content_type='application/javascript')
+		# Personalizzazioni dinamiche se richieste
+		primary_color = request.GET.get('primary_color', '#1f93ff')
+		if primary_color and primary_color.startswith('#'):
+			css_content = css_content.replace('--rag-primary-color: #1f93ff;',
+											  f'--rag-primary-color: {primary_color};')
+
+		return HttpResponse(css_content, content_type='text/css')
 
 	except FileNotFoundError:
-		return HttpResponse('// RAG Chat Widget not found', content_type='application/javascript', status=404)
+		return HttpResponse('/* RAG Widget CSS not found */', content_type='text/css', status=404)
 
 
+@cache_control(max_age=86400)  # Cache 24 ore
+def serve_widget_js(request):
+	"""
+	Serve il JavaScript base del widget.
+	"""
+	try:
+		# PERCORSO CORRETTO: static/ invece di dashboard/static/
+		js_path = os.path.join(settings.BASE_DIR, 'static', 'js', 'rag-chat-widget.js')
+
+		with open(js_path, 'r', encoding='utf-8') as f:
+			js_content = f.read()
+
+		return HttpResponse(js_content, content_type='application/javascript')
+
+	except FileNotFoundError:
+		return HttpResponse('// RAG Widget JS not found', content_type='application/javascript', status=404)

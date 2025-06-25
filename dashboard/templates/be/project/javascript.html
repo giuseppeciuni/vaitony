@@ -1454,11 +1454,17 @@ document.addEventListener('DOMContentLoaded', function() {
         chatbotToggle.addEventListener('change', function() {
             const isEnabled = this.checked;
 
+            // Disabilita il toggle durante la richiesta
             this.disabled = true;
 
+            // Trova e aggiorna il testo di stato in modo sicuro
             const statusText = document.getElementById('chatbot-status-text');
-            const originalText = statusText.textContent;
-            statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
+            let originalText = '';
+
+            if (statusText) {
+                originalText = statusText.textContent;
+                statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
+            }
 
             fetch('{% url "project" project.id %}', {
                 method: 'POST',
@@ -1473,47 +1479,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             })
             .then(response => {
+                // Verifica che la risposta sia ok
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
+
+                // Verifica che la risposta sia JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('La risposta del server non è in formato JSON');
+                }
+
                 return response.json();
             })
             .then(data => {
                 if (data.success) {
+                    // Aggiorna l'interfaccia solo se gli elementi esistono
                     const enabledContent = document.getElementById('chatbot-enabled-content');
                     const disabledContent = document.getElementById('chatbot-disabled-content');
-                    const statusBadge = document.getElementById('chatbot-status-badge');
 
-                    if (isEnabled) {
-                        enabledContent.style.display = 'block';
-                        disabledContent.style.display = 'none';
-                        statusText.textContent = 'Attivo';
-                        statusBadge.textContent = 'ATTIVO';
-                        statusBadge.classList.remove('bg-secondary');
-                        statusBadge.classList.add('bg-success');
-                    } else {
-                        enabledContent.style.display = 'none';
-                        disabledContent.style.display = 'block';
-                        statusText.textContent = 'Disattivo';
-                        statusBadge.textContent = 'DISATTIVO';
-                        statusBadge.classList.remove('bg-success');
-                        statusBadge.classList.add('bg-secondary');
+                    if (enabledContent && disabledContent) {
+                        if (isEnabled) {
+                            enabledContent.style.display = 'block';
+                            disabledContent.style.display = 'none';
+                        } else {
+                            enabledContent.style.display = 'none';
+                            disabledContent.style.display = 'block';
+                        }
                     }
 
-                    showToast(data.message || 'Stato del chatbot aggiornato con successo', 'success');
+                    // Aggiorna il testo di stato in modo sicuro
+                    if (statusText) {
+                        statusText.textContent = isEnabled ? 'ATTIVO' : 'INATTIVO';
+                    }
+
+                    // Mostra messaggio di successo
+                    if (typeof showToast === 'function') {
+                        showToast(data.message || 'Chatbot aggiornato con successo', 'success');
+                    }
                 } else {
+                    // Ripristina lo stato precedente
                     this.checked = !isEnabled;
-                    statusText.textContent = originalText;
-                    showToast(data.message || 'Errore nell\'aggiornamento del chatbot', 'danger');
+                    if (statusText) {
+                        statusText.textContent = originalText;
+                    }
+
+                    if (typeof showToast === 'function') {
+                        showToast('Errore: ' + (data.message || 'Impossibile aggiornare il chatbot'), 'danger');
+                    }
                 }
             })
             .catch(error => {
-                console.error('Errore:', error);
+                console.error('Errore nel toggle chatbot:', error);
+
+                // Ripristina lo stato precedente
                 this.checked = !isEnabled;
-                statusText.textContent = originalText;
-                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+                if (statusText) {
+                    statusText.textContent = originalText;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+                }
             })
             .finally(() => {
+                // Riabilita il toggle
                 this.disabled = false;
             });
         });
@@ -2886,3 +2916,122 @@ if (!document.getElementById('conversational-css')) {
 </script>
 
 
+<script>
+// Gestione domini autorizzati dove poter inserire il chatbot in un sito web terzo
+document.addEventListener('DOMContentLoaded', function() {
+
+    // Gestione form domini autorizzati
+    const allowedDomainsForm = document.getElementById('allowed-domains-form');
+    const allowedDomainsTextarea = document.getElementById('allowed-domains');
+    const allowAllDomainsCheck = document.getElementById('allow-all-domains');
+    const testDomainBtn = document.getElementById('test-domain-btn');
+    const testDomainInput = document.getElementById('test-domain');
+    const testResult = document.getElementById('test-result');
+
+    if (allowedDomainsForm) {
+        // Toggle textarea quando si seleziona "permetti tutti"
+        if (allowAllDomainsCheck) {
+            allowAllDomainsCheck.addEventListener('change', function() {
+                if (allowedDomainsTextarea) {
+                    allowedDomainsTextarea.disabled = this.checked;
+                    if (this.checked) {
+                        allowedDomainsTextarea.value = '';
+                    }
+                }
+            });
+        }
+
+        // Gestione submit form
+        allowedDomainsForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const saveDomainsBt = document.getElementById('save-domains-btn');
+            if (!saveDomainsBt) return;
+
+            const originalText = saveDomainsBt.innerHTML;
+            saveDomainsBt.disabled = true;
+            saveDomainsBt.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+
+            let domains = [];
+            if (!allowAllDomainsCheck.checked && allowedDomainsTextarea.value.trim()) {
+                domains = allowedDomainsTextarea.value
+                    .split('\n')
+                    .map(d => d.trim())
+                    .filter(d => d.length > 0);
+            }
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'update_allowed_domains',
+                    'allowed_domains': JSON.stringify(domains),
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (typeof showToast === 'function') {
+                        showToast('Domini autorizzati aggiornati con successo', 'success');
+                    }
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast('Errore: ' + (data.message || 'Impossibile salvare'), 'danger');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                if (typeof showToast === 'function') {
+                    showToast('Errore di rete durante il salvataggio', 'danger');
+                }
+            })
+            .finally(() => {
+                saveDomainsBt.disabled = false;
+                saveDomainsBt.innerHTML = originalText;
+            });
+        });
+    }
+
+    // Test domini
+    if (testDomainBtn && testDomainInput && testResult) {
+        testDomainBtn.addEventListener('click', function() {
+            const testUrl = testDomainInput.value.trim();
+            if (!testUrl) {
+                testResult.innerHTML = '<div class="alert alert-warning">Inserisci un URL da testare</div>';
+                return;
+            }
+
+            testResult.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split"></i> Testando...</div>';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'test_domain_access',
+                    'test_url': testUrl,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.allowed) {
+                    testResult.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> ✅ Accesso consentito da questo dominio</div>';
+                } else {
+                    testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ❌ Accesso negato da questo dominio</div>';
+                }
+            })
+            .catch(error => {
+                testResult.innerHTML = '<div class="alert alert-danger">Errore nel test</div>';
+            });
+        });
+    }
+});
+</script>

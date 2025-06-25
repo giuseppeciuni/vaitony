@@ -1939,6 +1939,162 @@ def project(request, project_id=None):
 					# Reindirizza alla vista di crawling per l'elaborazione
 					return redirect('website_crawl', project_id=project.id)
 
+				elif action == 'update_allowed_domains':
+					try:
+						import json
+
+						# DEBUG: Log tutti i dati POST ricevuti
+						logger.info(f"🔍 POST data ricevuti: {dict(request.POST)}")
+						logger.info(f"🔍 Headers: {dict(request.headers)}")
+
+						allowed_domains_json = request.POST.get('allowed_domains', '[]')
+						logger.info(
+							f"🔍 allowed_domains_json raw: '{allowed_domains_json}' (tipo: {type(allowed_domains_json)})")
+
+						# Verifica che sia JSON valido
+						try:
+							allowed_domains = json.loads(allowed_domains_json)
+							logger.info(f"🔍 JSON parsing OK: {allowed_domains} (tipo: {type(allowed_domains)})")
+						except json.JSONDecodeError as json_err:
+							logger.error(f"❌ Errore parsing JSON: {json_err}")
+							logger.error(f"❌ Contenuto problematico: '{allowed_domains_json}'")
+							raise ValueError(f"JSON non valido: {json_err}")
+
+						# Valida i domini
+						validated_domains = []
+						for i, domain in enumerate(allowed_domains):
+							logger.info(f"🔍 Processando dominio {i}: '{domain}' (tipo: {type(domain)})")
+
+							domain = str(domain).strip().lower()
+							if domain and len(domain) > 0:
+								# Rimuovi protocollo se presente
+								if domain.startswith(('http://', 'https://')):
+									original_domain = domain
+									domain = domain.split('//', 1)[1]
+									logger.info(f"🔍 Rimosso protocollo: '{original_domain}' -> '{domain}'")
+
+								# Rimuovi path se presente
+								if '/' in domain:
+									original_domain = domain
+									domain = domain.split('/')[0]
+									logger.info(f"🔍 Rimosso path: '{original_domain}' -> '{domain}'")
+
+								validated_domains.append(domain)
+								logger.info(f"✅ Dominio validato: '{domain}'")
+
+						# Salva nel database
+						old_domains = list(project.allowed_domains) if project.allowed_domains else []
+						project.allowed_domains = validated_domains
+						project.save()
+
+						logger.info(f"✅ Domini aggiornati per progetto {project.id}:")
+						logger.info(f"   Prima: {old_domains}")
+						logger.info(f"   Dopo: {validated_domains}")
+
+						# Prepara risposta
+						message = f'Domini autorizzati aggiornati. {"Nessuna restrizione" if not validated_domains else f"{len(validated_domains)} domini configurati"}.'
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							response_data = {
+								'success': True,
+								'message': message,
+								'old_domains': old_domains,
+								'new_domains': validated_domains
+							}
+							logger.info(f"📤 Invio risposta JSON: {response_data}")
+							return JsonResponse(response_data)
+
+						messages.success(request, 'Domini autorizzati aggiornati con successo')
+						return redirect('project', project_id=project.id)
+
+					except Exception as e:
+						import traceback
+						logger.error(f"❌ Errore nell'aggiornamento domini autorizzati: {str(e)}")
+						logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
+
+						error_message = f'Errore: {str(e)}'
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							error_response = {'success': False, 'message': error_message}
+							logger.error(f"📤 Invio risposta errore: {error_response}")
+							return JsonResponse(error_response)
+
+						messages.error(request, error_message)
+						return redirect('project', project_id=project.id)
+
+				elif action == 'test_domain_access':
+					try:
+						test_url = request.POST.get('test_url', '').strip()
+						logger.info(f"🧪 [TEST] Test dominio per URL: '{test_url}'")
+
+						if not test_url:
+							logger.warning(f"🧪 [TEST] URL vuoto ricevuto")
+							return JsonResponse({'success': False, 'message': 'URL richiesto'})
+
+						# NORMALIZZAZIONE URL: Aggiungi https:// se manca
+						if not test_url.startswith(('http://', 'https://')):
+							test_url = 'https://' + test_url
+							logger.info(f"🧪 [TEST] URL normalizzato: '{test_url}'")
+
+						# Estrai dominio dall'URL di test
+						from urllib.parse import urlparse
+						parsed = urlparse(test_url)
+						test_domain = parsed.netloc.lower()
+
+						logger.info(f"🧪 [TEST] Dominio estratto: '{test_domain}' da URL: '{test_url}'")
+						logger.info(f"🧪 [TEST] Domini autorizzati nel progetto: {project.allowed_domains}")
+						logger.info(f"🧪 [TEST] Tipo allowed_domains: {type(project.allowed_domains)}")
+
+						allowed = True  # Default: permetti se nessuna restrizione
+
+						if project.allowed_domains:
+							logger.info(f"🧪 [TEST] Controllo restrizioni dominio...")
+							allowed = False
+
+							for i, allowed_domain in enumerate(project.allowed_domains):
+								logger.info(f"🧪 [TEST] Confronto {i}: '{test_domain}' con '{allowed_domain}'")
+
+								if allowed_domain == "*":
+									logger.info(f"🧪 [TEST] Match wildcard '*' - accesso consentito")
+									allowed = True
+									break
+								elif allowed_domain.startswith("*."):
+									# Wildcard subdomain
+									wildcard_domain = allowed_domain[2:]
+									logger.info(
+										f"🧪 [TEST] Controllo wildcard: '{test_domain}' endswith '{wildcard_domain}'")
+									if test_domain.endswith(wildcard_domain):
+										logger.info(f"🧪 [TEST] Match wildcard - accesso consentito")
+										allowed = True
+										break
+								elif test_domain == allowed_domain:
+									logger.info(f"🧪 [TEST] Match esatto - accesso consentito")
+									allowed = True
+									break
+								else:
+									logger.info(f"🧪 [TEST] Nessun match per: '{test_domain}' != '{allowed_domain}'")
+
+							logger.info(f"🧪 [TEST] Risultato finale: allowed = {allowed}")
+						else:
+							logger.info(f"🧪 [TEST] Nessuna restrizione dominio - accesso consentito")
+
+						response_data = {
+							'success': True,
+							'allowed': allowed,
+							'test_domain': test_domain,
+							'configured_domains': project.allowed_domains,
+							'domains_count': len(project.allowed_domains) if project.allowed_domains else 0
+						}
+
+						logger.info(f"🧪 [TEST] Risposta inviata: {response_data}")
+						return JsonResponse(response_data)
+
+					except Exception as e:
+						import traceback
+						logger.error(f"🧪 [TEST] Errore nel test dominio: {str(e)}")
+						logger.error(f"🧪 [TEST] Traceback: {traceback.format_exc()}")
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
 			# ===== PREPARAZIONE DATI PER IL TEMPLATE =====
 			# Prepara i dati per il rendering del template e l'interfaccia utente
 

@@ -23,6 +23,60 @@
                     </div>
                 </div>
 
+                <!-- Sezione configurazione domini autorizzati -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="bi bi-shield-check me-2"></i>Controllo Accesso Dominio
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Specifica i domini autorizzati ad utilizzare questo chatbot. Lascia vuoto per permettere accesso da qualsiasi dominio.
+                        </p>
+
+                        <form id="allowed-domains-form">
+                            <div class="mb-3">
+                                <label for="allowed-domains" class="form-label">Domini Autorizzati</label>
+                                <textarea class="form-control" id="allowed-domains" rows="4"
+                                          placeholder="esempio.com&#10;www.miosito.it&#10;*.sottodominio.com&#10;&#10;Un dominio per riga. Usa * come wildcard.">{% for domain in project.allowed_domains %}{{ domain }}{% if not forloop.last %}&#10;{% endif %}{% endfor %}</textarea>
+                                <small class="form-text text-muted">
+                                    Esempi: <code>esempio.com</code>, <code>www.miosito.it</code>, <code>*.sottodominio.com</code>
+                                </small>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <button type="submit" class="btn btn-primary" id="save-domains-btn">
+                                    <i class="bi bi-shield-check me-1"></i>Salva Domini
+                                </button>
+
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="allow-all-domains"
+                                           {% if not project.allowed_domains or project.allowed_domains|length == 0 %}checked{% endif %}>
+                                    <label class="form-check-label text-muted" for="allow-all-domains">
+                                        Permetti accesso da qualsiasi dominio
+                                    </label>
+                                </div>
+                            </div>
+                        </form>
+
+                        <hr>
+
+                        <!-- Test URL -->
+                        <div class="mt-3">
+                            <h6>Test Controllo Accesso</h6>
+                            <div class="input-group">
+                                <input type="url" class="form-control" id="test-domain"
+                                       placeholder="https://esempio.com" >
+                                <button class="btn btn-outline-secondary" type="button" id="test-domain-btn">
+                                    <i class="bi bi-search"></i> Testa
+                                </button>
+                            </div>
+                            <div id="test-result" class="mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Status Info -->
                 <div class="card-body">
                     {% if project.is_public_chat_enabled and project.chat_bot_api_key %}
@@ -455,243 +509,937 @@ window.addEventListener('ragChatClosed', function() {
     </div>
 </div>
 
-<!-- JavaScript per gestione interfaccia -->
+<!-- JavaScript per gestione completa interfaccia chatbot -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🤖 Inizializzazione JavaScript chatbot tab...');
 
-    // Gestione toggle chatbot
+    // ============ UTILITY FUNCTIONS ============
+
+    /**
+     * Ottiene il token CSRF in modo sicuro
+     */
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+               document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+               '{{ csrf_token }}';
+    }
+
+    /**
+     * Mostra toast di notifica
+     */
+    function showToast(message, type = 'info') {
+        if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+        } else {
+            // Fallback per alert
+            const prefix = type === 'success' ? '✅' : type === 'danger' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+            alert(`${prefix} ${message}`);
+        }
+    }
+
+    /**
+     * Log con timestamp per debug
+     */
+    function debugLog(message, data = null) {
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`[${timestamp}] 🤖 ${message}`, data || '');
+    }
+
+    // ============ GESTIONE TOGGLE CHATBOT ============
+
     const chatbotToggle = document.getElementById('chatbot-toggle');
     const statusText = document.getElementById('chatbot-status-text');
 
     if (chatbotToggle) {
         chatbotToggle.addEventListener('change', function() {
             const isEnabled = this.checked;
+            debugLog(`Toggle chatbot: ${isEnabled ? 'ATTIVAZIONE' : 'DISATTIVAZIONE'}`);
 
+            // Disabilita il toggle durante la richiesta
+            this.disabled = true;
+
+            // Aggiorna UI di stato in modo sicuro
+            let originalText = '';
             if (statusText) {
-                statusText.textContent = isEnabled ? 'ATTIVO' : 'INATTIVO';
+                originalText = statusText.textContent;
+                statusText.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Aggiornamento...';
             }
 
-            // Qui puoi aggiungere chiamata AJAX per salvare lo stato
-            // fetch('/api/toggle-chatbot', {...})
+            // Prepara i dati della richiesta
+            const requestData = new URLSearchParams({
+                'action': 'toggle_chatbot',
+                'is_enabled': isEnabled,
+                'csrfmiddlewaretoken': getCsrfToken()
+            });
 
-            // Ricarica la pagina per aggiornare l'interfaccia
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+            debugLog('Invio richiesta toggle chatbot', {
+                action: 'toggle_chatbot',
+                is_enabled: isEnabled,
+                hasToken: !!getCsrfToken()
+            });
+
+            // Esegui richiesta AJAX
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: requestData
+            })
+            .then(response => {
+                debugLog(`Response status: ${response.status}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                // Verifica che sia JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('La risposta del server non è in formato JSON');
+                }
+
+                return response.json();
+            })
+            .then(data => {
+                debugLog('Response data ricevuta', data);
+
+                if (data.success) {
+                    // Aggiorna interfaccia di successo
+                    updateChatbotInterface(isEnabled);
+
+                    if (statusText) {
+                        statusText.textContent = isEnabled ? 'ATTIVO' : 'INATTIVO';
+                    }
+
+                    showToast(data.message || `Chatbot ${isEnabled ? 'abilitato' : 'disabilitato'} con successo`, 'success');
+
+                    // Ricarica pagina dopo successo per aggiornare tutte le sezioni
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    // Errore dal server
+                    this.checked = !isEnabled; // Ripristina stato toggle
+                    if (statusText) {
+                        statusText.textContent = originalText;
+                    }
+                    showToast('Errore: ' + (data.message || 'Impossibile aggiornare il chatbot'), 'danger');
+                }
+            })
+            .catch(error => {
+                debugLog('Errore nella richiesta', error);
+
+                // Ripristina stato in caso di errore
+                this.checked = !isEnabled;
+                if (statusText) {
+                    statusText.textContent = originalText;
+                }
+
+                showToast('Errore di rete durante l\'aggiornamento: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                // Riabilita sempre il toggle
+                this.disabled = false;
+                debugLog('Toggle riabilitato');
+            });
         });
     }
 
-    // Gestione form lingua
+    /**
+     * Aggiorna l'interfaccia in base allo stato del chatbot
+     */
+    function updateChatbotInterface(isEnabled) {
+        const enabledContent = document.getElementById('chatbot-enabled-content');
+        const disabledContent = document.getElementById('chatbot-disabled-content');
+
+        if (enabledContent && disabledContent) {
+            if (isEnabled) {
+                enabledContent.style.display = 'block';
+                disabledContent.style.display = 'none';
+            } else {
+                enabledContent.style.display = 'none';
+                disabledContent.style.display = 'block';
+            }
+        }
+    }
+
+    // ============ GESTIONE DOMINI AUTORIZZATI ============
+
+    const allowedDomainsForm = document.getElementById('allowed-domains-form');
+    const allowedDomainsTextarea = document.getElementById('allowed-domains');
+    const allowAllDomainsCheck = document.getElementById('allow-all-domains');
+    const saveDomainsBt = document.getElementById('save-domains-btn');
+
+    if (allowedDomainsForm) {
+        debugLog('Inizializzazione gestione domini autorizzati');
+
+        // Gestione checkbox "permetti tutti i domini"
+        if (allowAllDomainsCheck && allowedDomainsTextarea) {
+            allowAllDomainsCheck.addEventListener('change', function() {
+                const isAllowAll = this.checked;
+                debugLog(`Checkbox "permetti tutti": ${isAllowAll}`);
+
+                allowedDomainsTextarea.disabled = isAllowAll;
+
+                if (isAllowAll) {
+                    allowedDomainsTextarea.value = '';
+                    allowedDomainsTextarea.style.backgroundColor = '#f8f9fa';
+                    allowedDomainsTextarea.placeholder = 'Accesso consentito da qualsiasi dominio';
+                } else {
+                    allowedDomainsTextarea.style.backgroundColor = '';
+                    allowedDomainsTextarea.placeholder = 'esempio.com\nwww.miosito.it\n*.sottodominio.com\n\nUn dominio per riga. Usa * come wildcard.';
+                }
+            });
+
+            // Inizializza stato al caricamento
+            if (allowAllDomainsCheck.checked) {
+                allowedDomainsTextarea.disabled = true;
+                allowedDomainsTextarea.style.backgroundColor = '#f8f9fa';
+            }
+        }
+
+        // Gestione submit form domini
+        // Fix per la gestione submit form domini - VERSIONE CORRETTA
+        // Fix definitivo per il loop - Gestione domini autorizzati
+        document.addEventListener('DOMContentLoaded', function() {
+
+            // Variabile di controllo per prevenire richieste multiple
+            let isSavingDomains = false;
+
+            const allowedDomainsForm = document.getElementById('allowed-domains-form');
+            const allowedDomainsTextarea = document.getElementById('allowed-domains');
+            const allowAllDomainsCheck = document.getElementById('allow-all-domains');
+            const saveDomainsBt = document.getElementById('save-domains-btn');
+
+            // Funzione per ottenere CSRF token
+            function getCsrfToken() {
+                return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                       document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                       '{{ csrf_token }}';
+            }
+
+            // Funzione per mostrare toast
+            function showToast(message, type = 'info') {
+                if (typeof window.showToast === 'function') {
+                    window.showToast(message, type);
+                } else {
+                    const prefix = type === 'success' ? '✅' : type === 'danger' ? '❌' : 'ℹ️';
+                    console.log(`${prefix} ${message}`);
+                    // Puoi aggiungere qui un alert se necessario
+                    // alert(`${prefix} ${message}`);
+                }
+            }
+
+            if (allowedDomainsForm && saveDomainsBt) {
+                console.log('🔧 Inizializzazione gestione domini autorizzati');
+
+                // Gestione checkbox "permetti tutti i domini"
+                if (allowAllDomainsCheck && allowedDomainsTextarea) {
+                    allowAllDomainsCheck.addEventListener('change', function() {
+                        const isAllowAll = this.checked;
+                        console.log(`🔍 Checkbox "permetti tutti": ${isAllowAll}`);
+
+                        allowedDomainsTextarea.disabled = isAllowAll;
+
+                        if (isAllowAll) {
+                            allowedDomainsTextarea.value = '';
+                            allowedDomainsTextarea.style.backgroundColor = '#f8f9fa';
+                            allowedDomainsTextarea.placeholder = 'Accesso consentito da qualsiasi dominio';
+                        } else {
+                            allowedDomainsTextarea.style.backgroundColor = '';
+                            allowedDomainsTextarea.placeholder = 'esempio.com\nwww.miosito.it\n*.sottodominio.com\n\nUn dominio per riga. Usa * come wildcard.';
+                        }
+                    });
+
+                    // Inizializza stato al caricamento
+                    if (allowAllDomainsCheck.checked) {
+                        allowedDomainsTextarea.disabled = true;
+                        allowedDomainsTextarea.style.backgroundColor = '#f8f9fa';
+                    }
+                }
+
+                // GESTIONE SUBMIT FORM - VERSIONE ANTI-LOOP
+                allowedDomainsForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+
+                    // PREVENZIONE LOOP: Se già in corso, ignora
+                    if (isSavingDomains) {
+                        console.warn('⚠️ [DOMINI] Richiesta già in corso, ignoro submit');
+                        return;
+                    }
+
+                    console.log('🚀 [DOMINI] Avvio salvataggio domini');
+
+                    // Imposta flag di controllo
+                    isSavingDomains = true;
+
+                    const originalButtonText = saveDomainsBt.innerHTML;
+
+                    // Disabilita bottone e mostra loading
+                    saveDomainsBt.disabled = true;
+                    saveDomainsBt.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+
+                    // Timeout di sicurezza
+                    const safetyTimeout = setTimeout(() => {
+                        console.error('⏰ [DOMINI] TIMEOUT di sicurezza attivato!');
+                        resetDomainButton();
+                        showToast('Timeout della richiesta. Riprova.', 'warning');
+                    }, 10000); // 10 secondi
+
+                    // Funzione per reset bottone
+                    function resetDomainButton() {
+                        clearTimeout(safetyTimeout);
+                        isSavingDomains = false;
+                        if (saveDomainsBt) {
+                            saveDomainsBt.disabled = false;
+                            saveDomainsBt.innerHTML = originalButtonText;
+                        }
+                        console.log('🔄 [DOMINI] Bottone reset, pronto per nuova richiesta');
+                    }
+
+                    // Processa domini dalla textarea
+                    let domains = [];
+
+                    // Solo se NON è selezionato "permetti tutti"
+                    if (!allowAllDomainsCheck || !allowAllDomainsCheck.checked) {
+                        if (allowedDomainsTextarea && allowedDomainsTextarea.value.trim()) {
+                            domains = allowedDomainsTextarea.value
+                                .split('\n')
+                                .map(d => d.trim())
+                                .filter(d => d.length > 0)
+                                .filter(d => !d.startsWith('#'))
+                                .filter(d => !d.startsWith('//'))
+                                .map(d => d.toLowerCase());
+                        }
+                    }
+
+                    console.log('🔍 [DOMINI] Domini da salvare:', domains);
+
+                    // Prepara dati per invio
+                    const requestBody = new URLSearchParams({
+                        'action': 'update_allowed_domains',
+                        'allowed_domains': JSON.stringify(domains),
+                        'csrfmiddlewaretoken': getCsrfToken()
+                    });
+
+                    console.log('📤 [DOMINI] Invio richiesta...');
+
+                    // FETCH con gestione semplificata
+                    fetch('{% url "project" project.id %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: requestBody
+                    })
+                    .then(response => {
+                        console.log('📥 [DOMINI] Risposta ricevuta:', {
+                            status: response.status,
+                            ok: response.ok,
+                            contentType: response.headers.get('content-type')
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+
+                        return response.text();
+                    })
+                    .then(responseText => {
+                        console.log('📄 [DOMINI] Response text:', responseText);
+
+                        let data;
+                        try {
+                            data = JSON.parse(responseText);
+                            console.log('✅ [DOMINI] JSON parsed:', data);
+                        } catch (parseError) {
+                            console.error('❌ [DOMINI] Errore parsing JSON:', parseError);
+                            throw new Error(`Response non è JSON: ${parseError.message}`);
+                        }
+
+                        // Gestisci risposta
+                        if (data.success) {
+                            console.log('🎉 [DOMINI] Salvataggio completato con successo!');
+
+                            showToast('Domini autorizzati aggiornati con successo', 'success');
+
+                            if (data.new_domains && data.new_domains.length > 0) {
+                                console.log(`📝 [DOMINI] ${data.new_domains.length} domini salvati:`, data.new_domains);
+                            } else {
+                                console.log('📝 [DOMINI] Nessuna restrizione - accesso da qualsiasi dominio');
+                            }
+                        } else {
+                            console.error('❌ [DOMINI] Errore dal server:', data.message);
+                            showToast('Errore: ' + (data.message || 'Impossibile salvare domini'), 'danger');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ [DOMINI] Errore fetch:', error);
+                        showToast('Errore durante il salvataggio: ' + error.message, 'danger');
+                    })
+                    .finally(() => {
+                        // SEMPRE reset bottone e flag
+                        console.log('🏁 [DOMINI] Operazione completata, reset in corso...');
+                        resetDomainButton();
+                    });
+                });
+            }
+
+            // ============ TEST CONTROLLO ACCESSO ============
+            const testDomainBtn = document.getElementById('test-domain-btn');
+            const testDomainInput = document.getElementById('test-domain');
+            const testResult = document.getElementById('test-result');
+
+            if (testDomainBtn && testDomainInput && testResult) {
+                console.log('🧪 Inizializzazione test controllo accesso');
+
+                testDomainBtn.addEventListener('click', function() {
+                    performDomainTest();
+                });
+
+                function performDomainTest() {
+                    const testUrl = testDomainInput.value.trim();
+
+                    if (!testUrl) {
+                        testResult.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> Inserisci un URL da testare</div>';
+                        return;
+                    }
+
+                    // Validazione URL
+                    try {
+                        new URL(testUrl);
+                    } catch (e) {
+                        testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle"></i> URL non valido. Usa formato: https://esempio.com</div>';
+                        return;
+                    }
+
+                    console.log(`🧪 [TEST] Test accesso per: ${testUrl}`);
+
+                    testResult.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split"></i> Testando accesso...</div>';
+
+                    fetch('{% url "project" project.id %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            'action': 'test_domain_access',
+                            'test_url': testUrl,
+                            'csrfmiddlewaretoken': getCsrfToken()
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('🧪 [TEST] Risultato:', data);
+
+                        if (data.success) {
+                            if (data.allowed) {
+                                testResult.innerHTML = `
+                                    <div class="alert alert-success">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <strong>✅ Accesso CONSENTITO</strong>
+                                        <br><small class="text-muted">Dominio: <code>${data.test_domain}</code></small>
+                                    </div>`;
+                            } else {
+                                testResult.innerHTML = `
+                                    <div class="alert alert-danger">
+                                        <i class="bi bi-x-circle-fill"></i>
+                                        <strong>❌ Accesso NEGATO</strong>
+                                        <br><small class="text-muted">Dominio: <code>${data.test_domain}</code></small>
+                                        <br><small class="text-muted">Aggiungi questo dominio per consentire l'accesso.</small>
+                                    </div>`;
+                            }
+                        } else {
+                            testResult.innerHTML = '<div class="alert alert-danger">Errore nel test: ' + (data.message || 'Errore sconosciuto') + '</div>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('🧪 [TEST] Errore:', error);
+                        testResult.innerHTML = '<div class="alert alert-danger">Errore di rete durante il test</div>';
+                    });
+                }
+
+                // Test automatico durante digitazione (con debounce)
+                let testTimeout;
+                testDomainInput.addEventListener('input', function() {
+                    clearTimeout(testTimeout);
+                    testResult.innerHTML = '';
+
+                    const testUrl = this.value.trim();
+                    if (testUrl.length > 10) {
+                        testTimeout = setTimeout(() => {
+                            performDomainTest();
+                        }, 1000);
+                    }
+                });
+            }
+
+            console.log('✅ [DOMINI] Inizializzazione completata');
+        });
+    }
+
+    // ============ TEST CONTROLLO ACCESSO ============
+
+    const testDomainBtn = document.getElementById('test-domain-btn');
+    const testDomainInput = document.getElementById('test-domain');
+    const testResult = document.getElementById('test-result');
+
+    if (testDomainBtn && testDomainInput && testResult) {
+        debugLog('Inizializzazione test controllo accesso');
+
+        // Test manuale con click del bottone
+        testDomainBtn.addEventListener('click', function() {
+            performDomainTest();
+        });
+
+        // Test automatico durante la digitazione (con debounce)
+        let testTimeout;
+        testDomainInput.addEventListener('input', function() {
+            clearTimeout(testTimeout);
+            testResult.innerHTML = ''; // Pulisci risultati precedenti
+
+            const testUrl = this.value.trim();
+            if (testUrl.length > 10) { // Attiva test automatico solo per URL ragionevoli
+                testTimeout = setTimeout(() => {
+                    performDomainTest();
+                }, 1000); // Test automatico dopo 1 secondo di inattività
+            }
+        });
+
+        // Test con Enter
+        testDomainInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                performDomainTest();
+            }
+        });
+
+        /**
+         * Esegue il test di accesso per un dominio
+         */
+        function performDomainTest() {
+            const testUrl = testDomainInput.value.trim();
+
+            if (!testUrl) {
+                testResult.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> Inserisci un URL da testare</div>';
+                return;
+            }
+
+            // Validazione URL
+            try {
+                new URL(testUrl);
+            } catch (e) {
+                testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle"></i> URL non valido. Usa formato completo: https://esempio.com</div>';
+                return;
+            }
+
+            debugLog(`Test accesso per URL: ${testUrl}`);
+
+            // Mostra loading
+            testResult.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split"></i> Testando accesso...</div>';
+
+            // Esegui test
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'test_domain_access',
+                    'test_url': testUrl,
+                    'csrfmiddlewaretoken': getCsrfToken()
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                debugLog('Test result', data);
+
+                if (data.success) {
+                    if (data.allowed) {
+                        testResult.innerHTML = `
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill"></i>
+                                <strong>✅ Accesso CONSENTITO</strong>
+                                <br><small class="text-muted">Dominio testato: <code>${data.test_domain}</code></small>
+                                <br><small class="text-success">Il chatbot risponderà a richieste da questo dominio.</small>
+                            </div>`;
+                    } else {
+                        testResult.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="bi bi-x-circle-fill"></i>
+                                <strong>❌ Accesso NEGATO</strong>
+                                <br><small class="text-muted">Dominio testato: <code>${data.test_domain}</code></small>
+                                <br><small class="text-danger">Il chatbot NON risponderà a richieste da questo dominio.</small>
+                                <br><small class="text-muted mt-1">💡 Aggiungi questo dominio alla lista autorizzata per consentire l'accesso.</small>
+                            </div>`;
+                    }
+                } else {
+                    testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Errore nel test: ' + (data.message || 'Errore sconosciuto') + '</div>';
+                }
+            })
+            .catch(error => {
+                debugLog('Errore test dominio', error);
+                testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Errore di rete durante il test</div>';
+            });
+        }
+    }
+
+    // ============ COPIA CODICE EMBED ============
+
+    // Gestione copia codice embed
+    window.copyEmbedCode = function() {
+        try {
+            const codeElement = document.getElementById('embed-code');
+            if (!codeElement) {
+                throw new Error('Elemento codice non trovato');
+            }
+
+            const textToCopy = codeElement.textContent;
+            debugLog('Tentativo copia codice embed', { length: textToCopy.length });
+
+            // Usa Clipboard API se disponibile
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showCopySuccess();
+                }).catch(() => {
+                    fallbackCopyToClipboard(textToCopy);
+                });
+            } else {
+                fallbackCopyToClipboard(textToCopy);
+            }
+        } catch (error) {
+            debugLog('Errore copia codice', error);
+            showToast('Errore durante la copia. Seleziona manualmente il codice e premi Ctrl+C', 'danger');
+        }
+    };
+
+    /**
+     * Fallback per copia tramite execCommand
+     */
+    function fallbackCopyToClipboard(text) {
+        const tempTextarea = document.createElement('textarea');
+        tempTextarea.value = text;
+        tempTextarea.style.position = 'fixed';
+        tempTextarea.style.left = '-9999px';
+        tempTextarea.style.opacity = '0';
+        document.body.appendChild(tempTextarea);
+
+        tempTextarea.select();
+        tempTextarea.setSelectionRange(0, 99999);
+
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showCopySuccess();
+            } else {
+                throw new Error('Copy command failed');
+            }
+        } catch (err) {
+            debugLog('Fallback copy failed', err);
+            showToast('Impossibile copiare automaticamente. Seleziona il codice manualmente.', 'warning');
+        } finally {
+            document.body.removeChild(tempTextarea);
+        }
+    }
+
+    /**
+     * Mostra feedback di copia riuscita
+     */
+    function showCopySuccess() {
+        showToast('📋 Codice copiato negli appunti!', 'success');
+
+        // Trova bottone e mostra feedback visivo
+        const copyButton = document.querySelector('.copy-embed-btn');
+        if (copyButton) {
+            const originalText = copyButton.innerHTML;
+            copyButton.innerHTML = '<i class="bi bi-check-lg text-success"></i> Copiato!';
+            copyButton.classList.add('btn-success');
+            copyButton.classList.remove('btn-outline-secondary');
+
+            setTimeout(() => {
+                copyButton.innerHTML = originalText;
+                copyButton.classList.remove('btn-success');
+                copyButton.classList.add('btn-outline-secondary');
+            }, 2000);
+        }
+    }
+
+
+    // Test domini - VERSIONE CON DEBUG COMPLETO
+    function performDomainTest() {
+        const testUrl = testDomainInput.value.trim();
+
+        console.log('🧪 [TEST-JS] Avvio test per URL:', testUrl);
+
+        if (!testUrl) {
+            testResult.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> Inserisci un URL da testare</div>';
+            return;
+        }
+
+        // Validazione URL
+        try {
+            const urlObj = new URL(testUrl);
+            console.log('🧪 [TEST-JS] URL valido, dominio estratto:', urlObj.hostname);
+        } catch (e) {
+            console.error('🧪 [TEST-JS] URL non valido:', e);
+            testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle"></i> URL non valido. Usa formato: https://esempio.com</div>';
+            return;
+        }
+
+        testResult.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split"></i> Testando accesso...</div>';
+
+        const requestData = new URLSearchParams({
+            'action': 'test_domain_access',
+            'test_url': testUrl,
+            'csrfmiddlewaretoken': getCsrfToken()
+        });
+
+        console.log('🧪 [TEST-JS] Invio richiesta con dati:', {
+            action: 'test_domain_access',
+            test_url: testUrl,
+            csrf_token: !!getCsrfToken()
+        });
+
+        fetch('{% url "project" project.id %}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: requestData
+        })
+        .then(response => {
+            console.log('🧪 [TEST-JS] Response ricevuta:', {
+                status: response.status,
+                ok: response.ok,
+                contentType: response.headers.get('content-type')
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            return response.text();
+        })
+        .then(responseText => {
+            console.log('🧪 [TEST-JS] Response text:', responseText);
+
+            let data;
+            try {
+                data = JSON.parse(responseText);
+                console.log('🧪 [TEST-JS] JSON parsed:', data);
+            } catch (parseError) {
+                console.error('🧪 [TEST-JS] Errore parsing JSON:', parseError);
+                throw new Error('Response non è JSON');
+            }
+
+            if (data.success) {
+                console.log('🧪 [TEST-JS] Test completato:', {
+                    allowed: data.allowed,
+                    test_domain: data.test_domain,
+                    configured_domains: data.configured_domains,
+                    domains_count: data.domains_count
+                });
+
+                if (data.allowed) {
+                    testResult.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <strong>✅ Accesso CONSENTITO</strong>
+                            <br><small class="text-muted">Dominio testato: <code>${data.test_domain}</code></small>
+                            <br><small class="text-success">Il chatbot risponderà a richieste da questo dominio.</small>
+                            ${data.configured_domains && data.configured_domains.length > 0 ?
+                                `<br><small class="text-muted">Domini configurati: ${data.configured_domains.join(', ')}</small>` :
+                                '<br><small class="text-muted">Nessuna restrizione - accesso da qualsiasi dominio</small>'}
+                        </div>`;
+                } else {
+                    testResult.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-x-circle-fill"></i>
+                            <strong>❌ Accesso NEGATO</strong>
+                            <br><small class="text-muted">Dominio testato: <code>${data.test_domain}</code></small>
+                            <br><small class="text-danger">Il chatbot NON risponderà a richieste da questo dominio.</small>
+                            ${data.configured_domains && data.configured_domains.length > 0 ?
+                                `<br><small class="text-muted">Domini autorizzati: <code>${data.configured_domains.join('</code>, <code>')}</code></small>` : ''}
+                            <br><small class="text-muted mt-1">💡 Aggiungi questo dominio alla lista autorizzata per consentire l'accesso.</small>
+                        </div>`;
+                }
+            } else {
+                console.error('🧪 [TEST-JS] Errore dal server:', data.message);
+                testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Errore nel test: ' + (data.message || 'Errore sconosciuto') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('🧪 [TEST-JS] Errore fetch:', error);
+            testResult.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Errore di rete durante il test: ' + error.message + '</div>';
+        });
+    }
+
+
+
+    // ============ GESTIONE FORM LINGUA ============
+
     const languageForm = document.getElementById('language-form');
     const saveLanguageBtn = document.getElementById('save-language-btn');
 
     if (languageForm && saveLanguageBtn) {
+        debugLog('Inizializzazione gestione lingua');
+
         languageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
             const originalText = saveLanguageBtn.innerHTML;
             saveLanguageBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Aggiornando...';
             saveLanguageBtn.disabled = true;
 
-            // Restore in caso di errore
-            setTimeout(() => {
-                if (saveLanguageBtn.disabled) {
-                    saveLanguageBtn.innerHTML = originalText;
-                    saveLanguageBtn.disabled = false;
+            const selectedLanguage = document.getElementById('chatbot_language')?.value;
+            debugLog(`Aggiornamento lingua: ${selectedLanguage}`);
+
+            const formData = new FormData(this);
+            formData.append('action', 'update_chatbot_language');
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
-            }, 10000);
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Lingua aggiornata con successo', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showToast('Errore: ' + (data.message || 'Impossibile aggiornare la lingua'), 'danger');
+                }
+            })
+            .catch(error => {
+                debugLog('Errore aggiornamento lingua', error);
+                showToast('Errore di rete durante l\'aggiornamento', 'danger');
+            })
+            .finally(() => {
+                saveLanguageBtn.innerHTML = originalText;
+                saveLanguageBtn.disabled = false;
+            });
         });
     }
-});
 
-// Funzione per copiare il codice embed
-function copyEmbedCode() {
-    try {
-        const codeElement = document.getElementById('embed-code');
-        if (!codeElement) {
-            throw new Error('Elemento codice non trovato');
-        }
+    // ============ UTILITY PER SVILUPPATORI ============
 
-        const textToCopy = codeElement.textContent;
+    // Funzioni di debug e diagnostica accessibili dalla console
+    window.RAGWidgetDev = {
+        // Test configurazione
+        validateConfig: function() {
+            const config = {
+                projectSlug: '{{ project.slug }}',
+                apiKey: '{{ project.chat_bot_api_key|default:"" }}',
+                isEnabled: {{ project.is_public_chat_enabled|yesno:"true,false" }},
+                allowedDomains: {{ project.allowed_domains|safe|default:"[]" }},
+                language: '{{ project.chatbot_language|default:"it" }}'
+            };
 
-        // Usa Clipboard API se disponibile
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                showCopySuccess();
-            }).catch(() => {
-                fallbackCopyToClipboard(textToCopy);
+            console.group('🔍 Configurazione Widget');
+            console.log('Configurazione attuale:', config);
+
+            const isValid = config.projectSlug && config.apiKey && config.isEnabled;
+            console.log('✅ Configurazione valida:', isValid);
+
+            if (!isValid) {
+                console.warn('⚠️ Problemi rilevati:');
+                if (!config.projectSlug) console.warn('  - Project slug mancante');
+                if (!config.apiKey) console.warn('  - API key mancante');
+                if (!config.isEnabled) console.warn('  - Widget non abilitato');
+            }
+
+            console.groupEnd();
+            return isValid;
+        },
+
+        // Test API connectivity
+        testAPI: function() {
+            const apiUrl = '{{ request.scheme }}://{{ request.get_host }}/api/chat/{{ project.slug }}/';
+            const apiKey = '{{ project.chat_bot_api_key|default:"" }}';
+
+            if (!apiKey) {
+                console.error('❌ API Key non disponibile');
+                return;
+            }
+
+            console.log('🔍 Test connettività API...');
+
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey
+                },
+                body: JSON.stringify({ question: 'test diagnostica' })
+            })
+            .then(response => {
+                console.log('✅ API Status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ API Response:', data.success ? 'OK' : 'ERROR', data);
+            })
+            .catch(error => {
+                console.error('❌ API Error:', error);
             });
-        } else {
-            fallbackCopyToClipboard(textToCopy);
+        },
+
+        // Export configurazione
+        exportConfig: function() {
+            const config = {
+                projectSlug: '{{ project.slug }}',
+                apiKey: '{{ project.chat_bot_api_key|default:"" }}',
+                baseUrl: '{{ request.scheme }}://{{ request.get_host }}',
+                allowedDomains: {{ project.allowed_domains|safe|default:"[]" }},
+                language: '{{ project.chatbot_language|default:"it" }}',
+                exportDate: new Date().toISOString()
+            };
+
+            const dataStr = JSON.stringify(config, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `widget-config-{{ project.slug }}.json`;
+            link.click();
+
+            console.log('📄 Configurazione esportata');
+        },
+
+        // Debug logging toggle
+        enableDebug: function(enable = true) {
+            window.RAGWidgetDebug = enable;
+            console.log(`🐛 Debug logging ${enable ? 'abilitato' : 'disabilitato'}`);
         }
-    } catch (error) {
-        console.error('Errore copia:', error);
-        alert('Errore durante la copia. Seleziona manualmente il codice e premi Ctrl+C');
-    }
-}
-
-function fallbackCopyToClipboard(text) {
-    const tempTextarea = document.createElement('textarea');
-    tempTextarea.value = text;
-    tempTextarea.style.position = 'fixed';
-    tempTextarea.style.left = '-9999px';
-    document.body.appendChild(tempTextarea);
-
-    tempTextarea.select();
-    tempTextarea.setSelectionRange(0, 99999);
-
-    try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-            showCopySuccess();
-        } else {
-            throw new Error('Copy command failed');
-        }
-    } catch (err) {
-        console.error('Fallback copy failed:', err);
-        alert('Impossibile copiare automaticamente. Seleziona il codice manualmente.');
-    } finally {
-        document.body.removeChild(tempTextarea);
-    }
-}
-
-function showCopySuccess() {
-    // Trova il bottone e mostra feedback
-    const button = event ? event.target.closest('button') : document.querySelector('button[onclick="copyEmbedCode()"]');
-
-    if (button) {
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copiato!';
-        button.classList.remove('btn-outline-light');
-        button.classList.add('btn-success');
-
-        setTimeout(() => {
-            button.innerHTML = originalText;
-            button.classList.remove('btn-success');
-            button.classList.add('btn-outline-light');
-        }, 2500);
-    }
-
-    // Mostra toast se disponibile
-    if (typeof showToast === 'function') {
-        showToast('Codice widget copiato negli appunti!', 'success');
-    }
-
-    console.log('✅ Codice widget copiato con successo');
-}
-
-// Smooth scroll per ancore
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-            target.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start'
-            });
-        }
-    });
-});
-
-// Auto-save delle personalizzazioni (opzionale)
-function autoSaveConfig() {
-    const formData = new FormData();
-    formData.append('action', 'auto_save_widget_config');
-    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-
-    // Salva automaticamente le modifiche (implementa se necessario)
-    // fetch('/auto-save-config/', { method: 'POST', body: formData });
-}
-
-// Preview colori in tempo reale (funzionalità futura)
-function previewColorChange(color) {
-    // Implementa preview live del colore
-    console.log('Preview colore:', color);
-}
-
-// Validazione configurazione widget
-function validateWidgetConfig() {
-    const requiredFields = ['projectSlug', 'apiKey', 'baseUrl'];
-    const config = window.RAG_WIDGET_CONFIG || {};
-
-    const missing = requiredFields.filter(field => !config[field]);
-
-    if (missing.length > 0) {
-        console.warn('Configurazione widget incompleta. Campi mancanti:', missing);
-        return false;
-    }
-
-    console.log('✅ Configurazione widget valida');
-    return true;
-}
-
-// Export della configurazione (feature utile)
-function exportWidgetConfig() {
-    const config = {
-        projectSlug: '{{ project.slug }}',
-        apiKey: '{{ project.chat_bot_api_key }}',
-        baseUrl: '{{ request.scheme }}://{{ request.get_host }}',
-        language: '{{ project.chatbot_language|default:"it" }}',
-        exportDate: new Date().toISOString()
     };
 
-    const dataStr = JSON.stringify(config, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    // ============ INIZIALIZZAZIONE FINALE ============
 
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = `widget-config-{{ project.slug }}.json`;
-    link.click();
+    debugLog('✅ JavaScript chatbot tab inizializzato con successo');
+    console.log('💡 Usa window.RAGWidgetDev per funzioni di sviluppo');
 
-    console.log('📄 Configurazione esportata');
-}
-
-// Diagnostica widget (per debug)
-function runWidgetDiagnostics() {
-    console.group('🔍 Diagnostica Widget RAG');
-
-    // Test connettività API
-    fetch('{{ request.scheme }}://{{ request.get_host }}/api/chat/{{ project.slug }}/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': '{{ project.chat_bot_api_key }}'
-        },
-        body: JSON.stringify({ question: 'test diagnostica' })
-    })
-    .then(response => {
-        console.log('✅ API Status:', response.status);
-        return response.json();
-    })
-    .then(data => {
-        console.log('✅ API Response:', data.success ? 'OK' : 'ERROR');
-    })
-    .catch(error => {
-        console.error('❌ API Error:', error);
-    });
-
-    // Test file statici
-    fetch('{{ request.scheme }}://{{ request.get_host }}/widget/rag-widget.css')
-        .then(response => console.log('✅ CSS Status:', response.status))
-        .catch(error => console.error('❌ CSS Error:', error));
-
-    fetch('{{ request.scheme }}://{{ request.get_host }}/widget/rag-widget.js')
-        .then(response => console.log('✅ JS Status:', response.status))
-        .catch(error => console.error('❌ JS Error:', error));
-
-    console.groupEnd();
-}
-
-// Helper per sviluppatori (accessibile da console)
-window.RAGWidgetDev = {
-    validateConfig: validateWidgetConfig,
-    exportConfig: exportWidgetConfig,
-    runDiagnostics: runWidgetDiagnostics,
-    previewColor: previewColorChange
-};
-
-console.log('🤖 RAG Widget Admin Panel caricato');
-console.log('💡 Usa window.RAGWidgetDev per funzioni di sviluppo');
-
+    // Valida configurazione automaticamente in console
+    if (window.console) {
+        setTimeout(() => {
+            if (window.RAGWidgetDev) {
+                window.RAGWidgetDev.validateConfig();
+            }
+        }, 1000);
+    }
+});
 </script>
 
 <!-- Stili CSS aggiuntivi per l'interfaccia -->

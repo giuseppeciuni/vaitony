@@ -1,4 +1,4 @@
-// RAG Chat Widget - JavaScript Base
+// RAG Chat Widget - JavaScript Base (Versione Aggiornata)
 (function() {
     'use strict';
 
@@ -11,7 +11,10 @@
         title: 'Assistente AI',
         showBranding: false,
         autoOpen: false,
-        openDelay: 0
+        openDelay: 0,
+        chatWidth: '350px',      // AGGIUNTO: Supporto dimensioni
+        chatHeight: '500px',     // AGGIUNTO: Supporto dimensioni
+        enableSounds: true
     };
 
     // Configurazione globale del widget
@@ -27,8 +30,10 @@
     }
 
     // Applica CSS personalizzato
-    function applyCustomColors() {
+    function applyCustomStyles() {
         const root = document.documentElement;
+
+        // Applica colori personalizzati
         if (config.primaryColor) {
             root.style.setProperty('--rag-primary-color', config.primaryColor);
         }
@@ -37,6 +42,14 @@
         }
         if (config.backgroundColor) {
             root.style.setProperty('--rag-bg-light', config.backgroundColor);
+        }
+
+        // NUOVO: Applica dimensioni personalizzate
+        if (config.chatWidth) {
+            root.style.setProperty('--rag-chat-width', config.chatWidth);
+        }
+        if (config.chatHeight) {
+            root.style.setProperty('--rag-chat-height', config.chatHeight);
         }
     }
 
@@ -69,10 +82,24 @@
         }
 
         // Applica personalizzazioni CSS
-        applyCustomColors();
+        applyCustomStyles();
 
         // Inserisce HTML
         document.body.insertAdjacentHTML('beforeend', createWidgetHTML());
+
+        // NUOVO: Applica dimensioni specifiche dopo l'inserimento
+        const chatWindow = document.getElementById('rag-chat-window');
+        if (chatWindow && (config.chatWidth || config.chatHeight)) {
+            // Forza le dimensioni direttamente sugli elementi
+            if (config.chatWidth) {
+                chatWindow.style.width = config.chatWidth;
+                chatWindow.style.maxWidth = config.chatWidth;
+            }
+            if (config.chatHeight) {
+                chatWindow.style.height = config.chatHeight;
+                chatWindow.style.maxHeight = config.chatHeight;
+            }
+        }
 
         // Inizializza funzionalità
         initializeWidget();
@@ -320,11 +347,26 @@
             getHistory: () => [...messageHistory],
             updateConfig: (newConfig) => {
                 Object.assign(config, newConfig);
-                applyCustomColors();
+                applyCustomStyles();
 
                 // Aggiorna elementi visibili
                 document.querySelector('#rag-chat-header span').textContent = config.title;
                 input.placeholder = config.placeholderText;
+
+                // NUOVO: Aggiorna dimensioni se cambiate
+                if (newConfig.chatWidth || newConfig.chatHeight) {
+                    const chatWindow = document.getElementById('rag-chat-window');
+                    if (chatWindow) {
+                        if (newConfig.chatWidth) {
+                            chatWindow.style.width = newConfig.chatWidth;
+                            chatWindow.style.maxWidth = newConfig.chatWidth;
+                        }
+                        if (newConfig.chatHeight) {
+                            chatWindow.style.height = newConfig.chatHeight;
+                            chatWindow.style.maxHeight = newConfig.chatHeight;
+                        }
+                    }
+                }
             }
         };
 

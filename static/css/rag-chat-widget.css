@@ -1,4 +1,4 @@
-/* RAG Chat Widget - CSS Base */
+/* RAG Chat Widget - CSS Base (Versione Aggiornata) */
 :root {
     --rag-primary-color: #1f93ff;
     --rag-secondary-color: #6c757d;
@@ -12,6 +12,10 @@
     --rag-radius: 12px;
     --rag-radius-sm: 8px;
     --rag-radius-pill: 20px;
+
+    /* NUOVO: Variabili per dimensioni personalizzabili */
+    --rag-chat-width: 350px;
+    --rag-chat-height: 500px;
 }
 
 #rag-chat-widget {
@@ -75,8 +79,9 @@
     position: absolute;
     bottom: 70px;
     right: 0;
-    width: 350px;
-    height: 500px;
+    /* AGGIORNATO: Usa le variabili CSS per dimensioni dinamiche */
+    width: var(--rag-chat-width);
+    height: var(--rag-chat-height);
     background: white;
     border-radius: var(--rag-radius);
     box-shadow: var(--rag-shadow);

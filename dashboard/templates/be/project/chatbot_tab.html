@@ -802,7 +802,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Funzione per aggiornare preview
     function updatePreview() {
         if (!chatBubble || !chatWindow || !previewWidget) return;
 
@@ -816,9 +815,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Aggiorna posizione
         previewWidget.className = `widget-container ${currentConfig.position}`;
 
-        // Aggiorna dimensioni
+        // Aggiorna dimensioni - IMPORTANTE: forza le dimensioni anche nel CSS
         chatWindow.style.width = currentConfig.width + 'px';
         chatWindow.style.height = currentConfig.height + 'px';
+        // Forza le dimensioni anche con !important via setAttribute
+        chatWindow.setAttribute('style', `
+            width: ${currentConfig.width}px !important;
+            height: ${currentConfig.height}px !important;
+            ${chatWindow.getAttribute('style') || ''}
+        `.replace(/width:[^;]*;?/g, '').replace(/height:[^;]*;?/g, ''));
 
         // Aggiorna testi
         if (previewTitle) previewTitle.textContent = currentConfig.title;
@@ -913,7 +918,16 @@ window.RAG_WIDGET_CONFIG = {
     enableSounds: ${config.enableSounds}
 };
 <\/script>
-<script src="${baseUrl}/widget/rag-chat-widget.js"><\/script>`;
+<script src="${baseUrl}/widget/rag-chat-widget.js"><\/script>
+<style>
+/* Forza le dimensioni personalizzate del widget */
+#rag-chat-window {
+    width: ${config.width}px !important;
+    height: ${config.height}px !important;
+    max-width: ${config.width}px !important;
+    max-height: ${config.height}px !important;
+}
+</style>`;
 
         const codeElement = document.getElementById('generated-code');
         if (codeElement) {

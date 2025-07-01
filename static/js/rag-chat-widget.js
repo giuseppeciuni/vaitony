@@ -1,4 +1,4 @@
-// RAG Chat Widget - JavaScript Base (Versione Aggiornata)
+// RAG Chat Widget - JavaScript Sicuro (Versione Completa Aggiornata)
 (function() {
     'use strict';
 
@@ -12,20 +12,20 @@
         showBranding: false,
         autoOpen: false,
         openDelay: 0,
-        chatWidth: '350px',      // AGGIUNTO: Supporto dimensioni
-        chatHeight: '500px',     // AGGIUNTO: Supporto dimensioni
+        chatWidth: '350px',
+        chatHeight: '500px',
         enableSounds: true
     };
 
-    // Configurazione globale del widget
+    // Configurazione globale del widget (caricata dinamicamente)
     const config = {
         ...defaultConfig,
         ...window.RAG_WIDGET_CONFIG
     };
 
-    // Verifica configurazione obbligatoria
-    if (!config.projectSlug || !config.apiKey || !config.baseUrl) {
-        console.error('RAG Widget: Configurazione mancante (projectSlug, apiKey, baseUrl)');
+    // Verifica configurazione obbligatoria SICURA
+    if (!config.authToken || !config.widgetToken || !config.apiEndpoint) {
+        console.error('RAG Widget: Configurazione di sicurezza mancante');
         return;
     }
 
@@ -44,7 +44,7 @@
             root.style.setProperty('--rag-bg-light', config.backgroundColor);
         }
 
-        // NUOVO: Applica dimensioni personalizzate
+        // Applica dimensioni personalizzate
         if (config.chatWidth) {
             root.style.setProperty('--rag-chat-width', config.chatWidth);
         }
@@ -68,7 +68,7 @@
                         <textarea id="rag-chat-input" placeholder="${config.placeholderText}" rows="1"></textarea>
                         <button id="rag-chat-send" aria-label="Invia messaggio">➤</button>
                     </div>
-                    ${config.showBranding ? '<div class="rag-branding">Powered by RAG AI</div>' : ''}
+                    ${config.showBranding ? '<div class="rag-branding">Powered by Vaitony AI</div>' : ''}
                 </div>
             </div>
         `;
@@ -87,10 +87,9 @@
         // Inserisce HTML
         document.body.insertAdjacentHTML('beforeend', createWidgetHTML());
 
-        // NUOVO: Applica dimensioni specifiche dopo l'inserimento
+        // Applica dimensioni specifiche dopo l'inserimento
         const chatWindow = document.getElementById('rag-chat-window');
         if (chatWindow && (config.chatWidth || config.chatHeight)) {
-            // Forza le dimensioni direttamente sugli elementi
             if (config.chatWidth) {
                 chatWindow.style.width = config.chatWidth;
                 chatWindow.style.maxWidth = config.chatWidth;
@@ -162,8 +161,8 @@
             // Mostra typing indicator
             const typingMsg = addTypingIndicator();
 
-            // Chiamata API
-            callRAGAPI(text)
+            // Chiamata API SICURA
+            callSecureRAGAPI(text)
                 .then(response => {
                     removeTypingIndicator(typingMsg);
 
@@ -181,23 +180,34 @@
                 .catch(error => {
                     removeTypingIndicator(typingMsg);
                     console.error('RAG API Error:', error);
-                    addMessage('bot', 'Errore di connessione. Verifica la connessione internet.', true);
+
+                    // Gestisci errori specifici
+                    if (error.message.includes('401') || error.message.includes('Token')) {
+                        addMessage('bot', 'Sessione scaduta. Ricarica la pagina per continuare.', true);
+                    } else if (error.message.includes('403') || error.message.includes('Dominio')) {
+                        addMessage('bot', 'Accesso non autorizzato da questo dominio.', true);
+                    } else {
+                        addMessage('bot', 'Errore di connessione. Verifica la connessione internet.', true);
+                    }
                 });
         }
 
-        // Chiamata API RAG
-        async function callRAGAPI(question) {
+        // Chiamata API RAG SICURA con JWT
+        async function callSecureRAGAPI(question) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
             try {
-                const response = await fetch(`${config.baseUrl}/api/chat/${config.projectSlug}/`, {
+                const response = await fetch(config.apiEndpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': config.apiKey
+                        'Authorization': `Bearer ${config.authToken}` // JWT invece di API key
                     },
-                    body: JSON.stringify({ question }),
+                    body: JSON.stringify({
+                        question: question,
+                        widget_token: config.widgetToken
+                    }),
                     signal: controller.signal
                 });
 
@@ -329,7 +339,7 @@
             }, config.openDelay);
         }
 
-        // API pubblica del widget
+        // API pubblica del widget SICURA
         window.RAGWidget = {
             open: () => { if (!isOpen) toggleChat(); },
             close: () => { if (isOpen) toggleChat(); },
@@ -346,14 +356,22 @@
             },
             getHistory: () => [...messageHistory],
             updateConfig: (newConfig) => {
-                Object.assign(config, newConfig);
+                // SICUREZZA: Solo alcuni campi UI possono essere aggiornati
+                const allowedFields = ['title', 'welcomeMessage', 'placeholderText', 'primaryColor'];
+
+                Object.keys(newConfig).forEach(key => {
+                    if (allowedFields.includes(key)) {
+                        config[key] = newConfig[key];
+                    }
+                });
+
                 applyCustomStyles();
 
                 // Aggiorna elementi visibili
                 document.querySelector('#rag-chat-header span').textContent = config.title;
                 input.placeholder = config.placeholderText;
 
-                // NUOVO: Aggiorna dimensioni se cambiate
+                // Aggiorna dimensioni se cambiate (solo da configurazione sicura)
                 if (newConfig.chatWidth || newConfig.chatHeight) {
                     const chatWindow = document.getElementById('rag-chat-window');
                     if (chatWindow) {
@@ -367,22 +385,49 @@
                         }
                     }
                 }
+            },
+            // NUOVO: Verifica stato autenticazione
+            checkAuth: () => {
+                return !!config.authToken;
+            },
+            // NUOVO: Informazioni sicure del widget
+            getInfo: () => {
+                return {
+                    widgetToken: config.widgetToken,
+                    hasAuth: !!config.authToken,
+                    version: '2.0-secure',
+                    messageCount: messageHistory.length
+                };
             }
         };
 
-        console.log('RAG Widget inizializzato con successo');
+        console.log('RAG Widget Sicuro inizializzato con successo');
 
-        // Trigger evento di inizializzazione
-        window.dispatchEvent(new CustomEvent('ragWidgetReady', {
-            detail: { config }
+        // Trigger evento di inizializzazione SICURA
+        window.dispatchEvent(new CustomEvent('ragSecureWidgetReady', {
+            detail: {
+                widgetToken: config.widgetToken,
+                version: '2.0-secure'
+            }
         }));
     }
 
-    // Inizializzazione
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', insertWidget);
-    } else {
-        insertWidget();
+    // Inizializzazione con controllo sicurezza
+    function initializeSecureWidget() {
+        // Verifica che la configurazione sia stata caricata correttamente
+        if (!config.authToken) {
+            console.error('RAG Widget: Token di autenticazione mancante');
+            return;
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', insertWidget);
+        } else {
+            insertWidget();
+        }
     }
+
+    // Avvia inizializzazione sicura
+    initializeSecureWidget();
 
 })();

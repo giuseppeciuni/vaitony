@@ -16,7 +16,7 @@ from dashboard.views.chatbot import create_chatwoot_bot_for_project
 from profiles.chatwoot_client import ChatwootClient
 from profiles.models import Project, UserAPIKey, ProjectLLMConfiguration, LLMEngine, LLMProvider, ProjectRAGConfig, \
 	ProjectIndexStatus, ProjectPromptConfig, AnswerSource, ProjectFile, ProjectURL, ProjectNote, ProjectConversation, \
-	ConversationSession
+	ConversationSession, OwnChatbot
 from dashboard.conversational_rag_utils import ConversationalRAGManager, get_conversational_suggestions
 
 
@@ -2008,7 +2008,6 @@ def project(request, project_id=None):
 						return redirect('project', project_id=project.id)
 
 					except Exception as e:
-						import traceback
 						logger.error(f"❌ Errore nell'aggiornamento domini autorizzati: {str(e)}")
 						logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
 
@@ -2090,9 +2089,248 @@ def project(request, project_id=None):
 						return JsonResponse(response_data)
 
 					except Exception as e:
-						import traceback
 						logger.error(f"🧪 [TEST] Errore nel test dominio: {str(e)}")
 						logger.error(f"🧪 [TEST] Traceback: {traceback.format_exc()}")
+						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+				# ----- Toggle Attivazione Own ChatBot ----
+				elif action == 'toggle_own_chatbot':
+					try:
+						is_enabled = request.POST.get('is_enabled') == 'true'
+
+						# Ottieni o crea il chatbot nativo
+						own_chatbot, created = OwnChatbot.objects.get_or_create(project=project)
+
+						old_status = own_chatbot.is_enabled
+						own_chatbot.is_enabled = is_enabled
+						own_chatbot.save()
+
+						# Log per debug
+						logger.info(
+							f"Own Chatbot {'abilitato' if is_enabled else 'disabilitato'} per il progetto {project.id}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': f'Chatbot {"abilitato" if is_enabled else "disabilitato"} con successo!',
+								'was_created': created,
+								'old_status': old_status
+							})
+
+						messages.success(request,
+										 f'Chatbot {"abilitato" if is_enabled else "disabilitato"} con successo!')
+						return redirect('project', project_id=project.id)
+
+					except Exception as e:
+						logger.error(f"Errore nel toggle del own chatbot: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f'Errore durante l\'aggiornamento: {str(e)}'
+							})
+
+						messages.error(request, f"Errore: {str(e)}")
+						return redirect('project', project_id=project.id)
+
+				# ----- Aggiornamento configurazione Own ChatBot -----
+				elif action == 'update_own_chatbot_config':
+					try:
+						# Ottieni il chatbot nativo
+						own_chatbot = get_object_or_404(OwnChatbot, project=project)
+
+						# Aggiorna configurazione con validazione
+						primary_color = request.POST.get('primary_color', '#1f93ff')
+						if not primary_color.startswith('#') or len(primary_color) != 7:
+							primary_color = '#1f93ff'
+
+						chat_width = int(request.POST.get('chat_width', 350))
+						chat_height = int(request.POST.get('chat_height', 500))
+
+						# Validazione dimensioni
+						chat_width = max(300, min(500, chat_width))
+						chat_height = max(400, min(700, chat_height))
+
+						position = request.POST.get('position', 'bottom-right')
+						if position not in ['bottom-right', 'bottom-left', 'top-right', 'top-left']:
+							position = 'bottom-right'
+
+						auto_open = request.POST.get('auto_open') == 'true'
+						open_delay = int(request.POST.get('open_delay', 3))
+						open_delay = max(1, min(10, open_delay))
+
+						title = request.POST.get('title', '').strip()[:100]
+						welcome_message = request.POST.get('welcome_message', '').strip()[:200]
+						placeholder_text = request.POST.get('placeholder_text', '').strip()[:50]
+
+						show_branding = request.POST.get('show_branding') == 'true'
+						enable_sounds = request.POST.get('enable_sounds') == 'true'
+
+						# Aggiorna il modello
+						own_chatbot.primary_color = primary_color
+						own_chatbot.chat_width = chat_width
+						own_chatbot.chat_height = chat_height
+						own_chatbot.position = position
+						own_chatbot.auto_open = auto_open
+						own_chatbot.open_delay = open_delay
+						own_chatbot.title = title or f"Assistente AI - {project.name}"
+						own_chatbot.welcome_message = welcome_message or "Ciao! Come posso aiutarti oggi?"
+						own_chatbot.placeholder_text = placeholder_text or "Scrivi un messaggio..."
+						own_chatbot.show_branding = show_branding
+						own_chatbot.enable_sounds = enable_sounds
+
+						own_chatbot.save()
+
+						logger.info(f"Configurazione Own Chatbot aggiornata per progetto {project.id}")
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': 'Configurazione salvata con successo!'
+							})
+
+						messages.success(request, 'Configurazione salvata con successo!')
+						return redirect('project', project_id=project.id)
+
+					except OwnChatbot.DoesNotExist:
+						error_msg = "Chatbot non trovato per questo progetto"
+						logger.error(error_msg)
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': error_msg})
+
+						messages.error(request, error_msg)
+						return redirect('project', project_id=project.id)
+
+					except ValueError as e:
+						error_msg = f"Valori di configurazione non validi: {str(e)}"
+						logger.error(error_msg)
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': error_msg})
+
+						messages.error(request, error_msg)
+						return redirect('project', project_id=project.id)
+
+					except Exception as e:
+						logger.error(f"Errore nell'aggiornamento configurazione Own Chatbot: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': False,
+								'message': f'Errore: {str(e)}'
+							})
+
+						messages.error(request, f"Errore: {str(e)}")
+						return redirect('project', project_id=project.id)
+
+				# ----- Aggiornamento domini autorizzati Own ChatBot -----
+				elif action == 'update_own_chatbot_domains':
+					try:
+						import json
+
+						# Ottieni il chatbot nativo
+						own_chatbot = get_object_or_404(OwnChatbot, project=project)
+
+						allowed_domains_json = request.POST.get('allowed_domains', '[]')
+						logger.info(f"Domini ricevuti: {allowed_domains_json}")
+
+						try:
+							allowed_domains = json.loads(allowed_domains_json)
+						except json.JSONDecodeError as json_err:
+							logger.error(f"Errore parsing JSON domini: {json_err}")
+							raise ValueError(f"JSON non valido: {json_err}")
+
+						# Valida e pulisci i domini
+						validated_domains = []
+						for domain in allowed_domains:
+							domain = str(domain).strip().lower()
+							if domain and len(domain) > 0:
+								# Rimuovi protocollo se presente
+								if domain.startswith(('http://', 'https://')):
+									domain = domain.split('//', 1)[1]
+								# Rimuovi path se presente
+								if '/' in domain:
+									domain = domain.split('/')[0]
+								validated_domains.append(domain)
+
+						# Aggiorna domini autorizzati
+						own_chatbot.allowed_domains = validated_domains
+						own_chatbot.save()
+
+						logger.info(f"Domini autorizzati aggiornati per progetto {project.id}: {validated_domains}")
+
+						message = f'Domini autorizzati aggiornati. {"Nessuna restrizione" if not validated_domains else f"{len(validated_domains)} domini configurati"}.'
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({
+								'success': True,
+								'message': message,
+								'domains_count': len(validated_domains)
+							})
+
+						messages.success(request, 'Domini autorizzati aggiornati con successo')
+						return redirect('project', project_id=project.id)
+
+					except OwnChatbot.DoesNotExist:
+						error_msg = "Chatbot non trovato per questo progetto"
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': error_msg})
+
+						messages.error(request, error_msg)
+						return redirect('project', project_id=project.id)
+
+					except Exception as e:
+						logger.error(f"Errore nell'aggiornamento domini Own Chatbot: {str(e)}")
+						logger.error(traceback.format_exc())
+
+						if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+							return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
+
+						messages.error(request, f"Errore: {str(e)}")
+						return redirect('project', project_id=project.id)
+
+				# ----- Test accesso dominio Own ChatBot -----
+				elif action == 'test_own_chatbot_domain':
+					try:
+						test_url = request.POST.get('test_url', '').strip()
+						logger.info(f"Test dominio Own Chatbot per URL: '{test_url}'")
+
+						if not test_url:
+							return JsonResponse({'success': False, 'message': 'URL richiesto'})
+
+						# Normalizza URL
+						if not test_url.startswith(('http://', 'https://')):
+							test_url = 'https://' + test_url
+
+						# Ottieni il chatbot nativo
+						own_chatbot = get_object_or_404(OwnChatbot, project=project)
+
+						# Test autorizzazione dominio
+						allowed = own_chatbot.is_domain_allowed(test_url)
+
+						# Estrai dominio per log
+						from urllib.parse import urlparse
+						parsed = urlparse(test_url)
+						test_domain = parsed.netloc.lower()
+
+						logger.info(f"Test dominio Own Chatbot: '{test_domain}' -> allowed = {allowed}")
+
+						return JsonResponse({
+							'success': True,
+							'allowed': allowed,
+							'test_domain': test_domain,
+							'configured_domains': own_chatbot.allowed_domains,
+							'domains_count': len(own_chatbot.allowed_domains) if own_chatbot.allowed_domains else 0
+						})
+
+					except OwnChatbot.DoesNotExist:
+						return JsonResponse({'success': False, 'message': 'Chatbot non trovato'})
+					except Exception as e:
+						logger.error(f"Errore nel test dominio Own Chatbot: {str(e)}")
 						return JsonResponse({'success': False, 'message': f'Errore: {str(e)}'})
 
 			# ===== PREPARAZIONE DATI PER IL TEMPLATE =====

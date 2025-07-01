@@ -82,7 +82,7 @@ class Project(models.Model):
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
-	# Campi per chatbot esterno
+	# Campi per chatbot esterno (mantenuti per compatibilità con il codice esistente)
 	slug = models.SlugField(max_length=100, unique=True, db_index=True)
 	chat_bot_api_key = models.CharField(max_length=64, unique=True, blank=True, null=True)
 	is_public_chat_enabled = models.BooleanField(default=False)
@@ -126,6 +126,22 @@ class Project(models.Model):
 			self.chat_bot_api_key = hashlib.sha256(f"{self.slug}-{uuid.uuid4()}".encode()).hexdigest()
 
 		super().save(*args, **kwargs)
+
+	@property
+	def active_chatbot_type(self):
+		"""Restituisce il tipo di chatbot attivo per questo progetto."""
+		if hasattr(self, 'own_chatbot') and self.own_chatbot.is_enabled:
+			return 'own'
+		elif hasattr(self, 'chatwoot_chatbot') and self.chatwoot_chatbot.is_enabled:
+			return 'chatwoot'
+		elif self.is_public_chat_enabled:  # Fallback per compatibilità
+			return 'legacy'
+		return None
+
+	@property
+	def has_active_chatbot(self):
+		"""Verifica se il progetto ha un chatbot attivo."""
+		return self.active_chatbot_type is not None
 
 
 class ProjectFile(models.Model):
@@ -183,21 +199,38 @@ class ProjectNote(models.Model):
 
 class ProjectConversation(models.Model):
 	"""
-    Memorizza le conversazioni (domande e risposte) associate a un progetto.
-    Registra il tempo di elaborazione e consente di tracciare la cronologia
-    delle interazioni con l'assistente AI nel contesto di un progetto.
-    """
+	Memorizza le conversazioni (domande e risposte) associate a un progetto.
+	AGGIORNATO: Aggiunge tracking della fonte del chatbot.
+	"""
 	project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='conversations')
 	question = models.TextField()
 	answer = models.TextField()
 	processing_time = models.FloatField(null=True, blank=True)
+
+	# NUOVO: Traccia la fonte della conversazione
+	CHATBOT_SOURCE_CHOICES = [
+		('own', 'Chatbot Nativo'),
+		('chatwoot', 'Chatwoot'),
+		('api', 'API Diretta'),
+		('internal', 'Interfaccia Interna'),
+	]
+	chatbot_source = models.CharField(
+		max_length=10,
+		choices=CHATBOT_SOURCE_CHOICES,
+		default='internal',
+		help_text="Fonte della conversazione"
+	)
+
+	# Metadati per tracking avanzato
+	session_metadata = models.JSONField(default=dict, blank=True, help_text="Dati sessione chatbot")
+
 	created_at = models.DateTimeField(auto_now_add=True)
 
 	class Meta:
 		ordering = ['-created_at']
 
 	def __str__(self):
-		return f"{self.project.name} - Q: {self.question[:50]}..."
+		return f"{self.project.name} - Q: {self.question[:50]}... [{self.get_chatbot_source_display()}]"
 
 
 class ProjectURL(models.Model):
@@ -259,6 +292,186 @@ class ProjectURL(models.Model):
 			if len(parts) > 3:
 				return '/' + '/'.join(parts[3:])
 			return '/'
+
+
+class OwnChatbot(models.Model):
+	"""
+	Configurazione per il chatbot nativo della piattaforma.
+	Ogni progetto può avere un solo chatbot own attivo per default.
+	"""
+	project = models.OneToOneField(Project, on_delete=models.CASCADE, related_name='own_chatbot')
+
+	# Configurazioni UI/UX
+	primary_color = models.CharField(max_length=7, default='#1f93ff', help_text="Colore principale del widget (hex)")
+	secondary_color = models.CharField(max_length=7, default='#6c757d', blank=True)
+	chat_width = models.PositiveIntegerField(default=350, help_text="Larghezza widget in px")
+	chat_height = models.PositiveIntegerField(default=500, help_text="Altezza widget in px")
+
+	# Posizionamento
+	POSITION_CHOICES = [
+		('bottom-right', 'Basso Destra'),
+		('bottom-left', 'Basso Sinistra'),
+		('top-right', 'Alto Destra'),
+		('top-left', 'Alto Sinistra'),
+	]
+	position = models.CharField(max_length=15, choices=POSITION_CHOICES, default='bottom-right')
+
+	# Comportamento
+	auto_open = models.BooleanField(default=False, help_text="Apertura automatica del widget")
+	open_delay = models.PositiveIntegerField(default=3, help_text="Ritardo apertura in secondi")
+	enable_sounds = models.BooleanField(default=True, help_text="Abilita suoni notifiche")
+	show_branding = models.BooleanField(default=False, help_text="Mostra logo/branding della piattaforma")
+
+	# Messaggi personalizzabili
+	title = models.CharField(max_length=100, blank=True, help_text="Titolo del widget")
+	welcome_message = models.CharField(max_length=200, default='Ciao! Come posso aiutarti oggi?')
+	placeholder_text = models.CharField(max_length=50, default='Scrivi un messaggio...')
+
+	# Sicurezza e controllo accessi
+	is_enabled = models.BooleanField(default=True, help_text="Widget attivo/disattivo")
+	allowed_domains = models.JSONField(default=list, blank=True, help_text="Domini autorizzati per l'embed")
+
+	# Token JWT per autenticazione sicura
+	jwt_secret = models.CharField(max_length=255, blank=True, help_text="Chiave segreta per JWT")
+	widget_token = models.CharField(max_length=64, unique=True, blank=True, help_text="Token pubblico del widget")
+
+	# Metadati e statistiche
+	embed_code_generated_at = models.DateTimeField(null=True, blank=True)
+	total_interactions = models.PositiveIntegerField(default=0)
+	last_interaction_at = models.DateTimeField(null=True, blank=True)
+
+	# Timestamp
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		verbose_name = "Chatbot Nativo"
+		verbose_name_plural = "Chatbot Nativi"
+
+	def __str__(self):
+		return f"Chatbot per {self.project.name}"
+
+	def save(self, *args, **kwargs):
+		# Genera token widget se non esiste
+		if not self.widget_token:
+			import uuid
+			self.widget_token = str(uuid.uuid4()).replace('-', '')[:32]
+
+		# Genera JWT secret se non esiste
+		if not self.jwt_secret:
+			import secrets
+			self.jwt_secret = secrets.token_urlsafe(32)
+
+		# Imposta titolo di default se vuoto
+		if not self.title:
+			self.title = f"Assistente AI - {self.project.name}"
+
+		super().save(*args, **kwargs)
+
+	def generate_jwt_token(self, expires_in_hours=24):
+		"""
+		Genera un JWT token per l'autenticazione del widget.
+		Il token contiene solo dati essenziali e ha scadenza.
+		"""
+		import jwt
+		from datetime import datetime, timedelta
+
+		payload = {
+			'widget_token': self.widget_token,
+			'project_id': self.project.id,
+			'iat': datetime.utcnow(),
+			'exp': datetime.utcnow() + timedelta(hours=expires_in_hours),
+			'iss': 'vaitony-platform'
+		}
+
+		return jwt.encode(payload, self.jwt_secret, algorithm='HS256')
+
+	def verify_jwt_token(self, token):
+		"""
+		Verifica un JWT token e restituisce il payload se valido.
+		"""
+		import jwt
+
+		try:
+			payload = jwt.decode(token, self.jwt_secret, algorithms=['HS256'])
+			return payload
+		except jwt.ExpiredSignatureError:
+			return None
+		except jwt.InvalidTokenError:
+			return None
+
+	def is_domain_allowed(self, domain_or_url):
+		"""
+		Verifica se un dominio è autorizzato per l'embed.
+		"""
+		if not self.allowed_domains:
+			return True  # Nessuna restrizione = permetti tutto
+
+		# Estrai dominio se è un URL completo
+		if domain_or_url.startswith(('http://', 'https://')):
+			from urllib.parse import urlparse
+			domain = urlparse(domain_or_url).netloc.lower()
+		else:
+			domain = domain_or_url.lower()
+
+		for allowed in self.allowed_domains:
+			if allowed == "*":
+				return True
+			elif allowed.startswith("*."):
+				if domain.endswith(allowed[2:]):
+					return True
+			elif domain == allowed.lower():
+				return True
+
+		return False
+
+	def get_minimal_embed_code(self, request):
+		"""
+		Restituisce il codice embed minimale e sicuro (max 4 righe).
+		"""
+		base_url = f"{request.scheme}://{request.get_host()}"
+
+		return f'''<script>window.VAITONY_WIDGET_ID='{self.widget_token}';</script>
+<script src="{base_url}/widget/embed.js"></script>'''
+
+
+class ChatwootChatbot(models.Model):
+	"""
+	Configurazione per l'integrazione con Chatwoot (mantenuta per compatibilità).
+	"""
+	project = models.OneToOneField(Project, on_delete=models.CASCADE, related_name='chatwoot_chatbot')
+
+	# Configurazioni Chatwoot
+	is_enabled = models.BooleanField(default=False, help_text="Integrazione Chatwoot attiva")
+	inbox_id = models.CharField(max_length=50, blank=True, null=True, help_text="ID Inbox Chatwoot")
+	bot_id = models.CharField(max_length=50, blank=True, null=True, help_text="ID Bot Chatwoot")
+	website_token = models.CharField(max_length=255, blank=True, null=True, help_text="Token website Chatwoot")
+	widget_code = models.TextField(blank=True, null=True, help_text="Codice widget Chatwoot")
+
+	# Lingua dell'interfaccia
+	LANGUAGE_CHOICES = [
+		('it', 'Italiano'),
+		('en', 'English'),
+		('es', 'Español'),
+		('fr', 'Français'),
+		('de', 'Deutsch'),
+	]
+	language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default='it')
+
+	# Metadati
+	metadata = models.JSONField(default=dict, blank=True, help_text="Dati aggiuntivi Chatwoot")
+
+	# Timestamp
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		verbose_name = "Chatbot Chatwoot"
+		verbose_name_plural = "Chatbot Chatwoot"
+
+	def __str__(self):
+		return f"Chatwoot per {self.project.name}"
+
 
 class ProjectIndexStatus(models.Model):
 	"""
@@ -816,8 +1029,6 @@ class ConversationSession(models.Model):
 					# Salva di nuovo SOLO il campo title per evitare loop infiniti
 					super().save(update_fields=['title'])
 
-
-
 	def get_recent_context(self, max_turns=None):
 		"""
 		Restituisce il contesto conversazionale recente per mantenere la continuità.
@@ -946,7 +1157,6 @@ class ConversationTurn(models.Model):
 		"""
 		Restituisce un riassunto delle fonti utilizzate in questo turno.
 		"""
-		from profiles.models import AnswerSource
 		sources = AnswerSource.objects.filter(conversation_turn=self)
 
 		summary = {
@@ -1005,6 +1215,7 @@ class ConversationTurn(models.Model):
 			'needs_previous_context': len(found_indicators) > 0 or any(
 				word in user_message_lower for word in ['quando', 'quanto', 'posso', 'continua', 'ancora', 'di più'])
 		}
+
 
 # AGGIORNAMENTO MODELLO ANSWERSOURCE PER SUPPORTARE CONVERSAZIONI
 class AnswerSource(models.Model):
@@ -1073,6 +1284,7 @@ class AnswerSource(models.Model):
 def create_project_configs(sender, instance, created, **kwargs):
 	"""
     Crea automaticamente tutte le configurazioni necessarie quando viene creato un nuovo progetto.
+    AGGIORNATO: Include creazione OwnChatbot di default.
     """
 	if created:
 		logger.info(f"Initializing configurations for new project {instance.id} ({instance.name})")
@@ -1092,7 +1304,6 @@ def create_project_configs(sender, instance, created, **kwargs):
 				project=instance
 			)
 			if prompt_created:
-				# Assegna il prompt di sistema predefinito se disponibile
 				default_prompt = DefaultSystemPrompts.objects.filter(is_default=True).first()
 				if default_prompt:
 					prompt_config.default_system_prompt = default_prompt
@@ -1104,7 +1315,6 @@ def create_project_configs(sender, instance, created, **kwargs):
 				project=instance
 			)
 			if llm_created:
-				# Assegna il motore predefinito se disponibile
 				default_engine = LLMEngine.objects.filter(is_default=True).first()
 				if default_engine:
 					llm_config.engine = default_engine
@@ -1113,6 +1323,20 @@ def create_project_configs(sender, instance, created, **kwargs):
 
 			# 4. Crea lo stato dell'indice
 			ProjectIndexStatus.objects.get_or_create(project=instance)
+
+			# 5. NUOVO: Crea OwnChatbot di default
+			own_chatbot, chatbot_created = OwnChatbot.objects.get_or_create(
+				project=instance
+			)
+			if chatbot_created:
+				logger.info(f"Created default OwnChatbot for project {instance.id}")
+
+			# 6. NUOVO: Crea ChatwootChatbot (disabilitato per compatibilità)
+			chatwoot_chatbot, chatwoot_created = ChatwootChatbot.objects.get_or_create(
+				project=instance
+			)
+			if chatwoot_created:
+				logger.info(f"Created disabled ChatwootChatbot for project {instance.id}")
 
 			logger.info(f"Successfully initialized all configurations for project {instance.id}")
 
@@ -1241,3 +1465,21 @@ def save_user_profile(sender, instance, **kwargs):
 	"""Salva il profilo utente quando l'utente viene aggiornato"""
 	if hasattr(instance, 'profile'):
 		instance.profile.save()
+
+
+@receiver(post_save, sender=OwnChatbot)
+def update_own_chatbot_embed_timestamp(sender, instance, **kwargs):
+	"""
+	Aggiorna il timestamp quando viene modificata la configurazione del chatbot.
+	"""
+	from django.utils import timezone
+
+	# Aggiorna solo se non è una creazione e alcuni campi sono cambiati
+	if not kwargs.get('created', False):
+		update_fields = kwargs.get('update_fields')
+		if update_fields and any(field in update_fields for field in [
+			'primary_color', 'chat_width', 'chat_height', 'position',
+			'title', 'welcome_message', 'placeholder_text'
+		]):
+			instance.embed_code_generated_at = timezone.now()
+			instance.save(update_fields=['embed_code_generated_at'])

@@ -193,36 +193,52 @@
         }
 
         // Chiamata API RAG SICURA con JWT
-        async function callSecureRAGAPI(question) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+async function callSecureRAGAPI(question) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-            try {
-                const response = await fetch(config.apiEndpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${config.authToken}` // JWT invece di API key
-                    },
-                    body: JSON.stringify({
-                        question: question,
-                        widget_token: config.widgetToken
-                    }),
-                    signal: controller.signal
-                });
+    try {
+        // Usa il nuovo endpoint sicuro se disponibile
+        const apiEndpoint = config.apiEndpoint || `${config.baseUrl}/api/chat/${config.projectSlug}/`;
+        const isSecureEndpoint = apiEndpoint.includes('/api/chat/secure/');
 
-                clearTimeout(timeoutId);
+        const headers = {
+            'Content-Type': 'application/json'
+        };
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+        const body = {
+            question: question,
+            widget_token: config.widgetToken
+        };
 
-                return await response.json();
-            } catch (error) {
-                clearTimeout(timeoutId);
-                throw error;
-            }
+        // Se è l'endpoint sicuro, usa JWT
+        if (isSecureEndpoint && config.authToken) {
+            headers['Authorization'] = `Bearer ${config.authToken}`;
+        } else {
+            // Retrocompatibilità con vecchio sistema
+            headers['X-API-Key'] = config.apiKey;
+            body.project_slug = config.projectSlug;
         }
+
+        const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+    }
+}
 
         // Aggiunge messaggio alla chat
         function addMessage(sender, text, isError = false) {

@@ -1,25 +1,26 @@
 import logging
 import os
-import time
 import shutil  # cancellazione ricorsiva di directory su FS
+import time
 import traceback
 from datetime import timedelta, datetime
+
 from django.conf import settings
 from django.contrib import messages
 from django.http.response import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from dashboard.rag_utils import handle_delete_note, get_answer_from_project, handle_project_file_upload, \
+
+from dashboard.conversational_rag_utils import ConversationalRAGManager, get_conversational_suggestions
+from dashboard.rag_utils import handle_delete_note, handle_project_file_upload, \
 	create_project_rag_chain, handle_add_note, handle_update_note, add_file_to_index, remove_file_from_index
 from dashboard.views.chatbot import create_chatwoot_bot_for_project
 from profiles.chatwoot_client import ChatwootClient
 from profiles.models import Project, UserAPIKey, ProjectLLMConfiguration, LLMEngine, LLMProvider, ProjectRAGConfig, \
 	ProjectIndexStatus, ProjectPromptConfig, AnswerSource, ProjectFile, ProjectURL, ProjectNote, ProjectConversation, \
-	ConversationSession, OwnChatbot
-from dashboard.conversational_rag_utils import ConversationalRAGManager, get_conversational_suggestions
-
-
+	ConversationSession
+from profiles.models import OwnChatbot
 logger = logging.getLogger(__name__)
 
 def new_project(request):
@@ -2099,6 +2100,7 @@ def project(request, project_id=None):
 						is_enabled = request.POST.get('is_enabled') == 'true'
 
 						# Ottieni o crea il chatbot nativo
+						from profiles.models import OwnChatbot
 						own_chatbot, created = OwnChatbot.objects.get_or_create(project=project)
 
 						old_status = own_chatbot.is_enabled
@@ -2138,6 +2140,7 @@ def project(request, project_id=None):
 				elif action == 'update_own_chatbot_config':
 					try:
 						# Ottieni il chatbot nativo
+						from profiles.models import OwnChatbot
 						own_chatbot = get_object_or_404(OwnChatbot, project=project)
 
 						# Aggiorna configurazione con validazione
@@ -2232,6 +2235,7 @@ def project(request, project_id=None):
 						import json
 
 						# Ottieni il chatbot nativo
+						from profiles.models import OwnChatbot
 						own_chatbot = get_object_or_404(OwnChatbot, project=project)
 
 						allowed_domains_json = request.POST.get('allowed_domains', '[]')
@@ -2307,6 +2311,7 @@ def project(request, project_id=None):
 							test_url = 'https://' + test_url
 
 						# Ottieni il chatbot nativo
+						from profiles.models import OwnChatbot
 						own_chatbot = get_object_or_404(OwnChatbot, project=project)
 
 						# Test autorizzazione dominio
@@ -2415,6 +2420,21 @@ def project(request, project_id=None):
 
 			# Ottieni le note del progetto
 			project_notes = ProjectNote.objects.filter(project=project).order_by('-created_at')
+			# Verifica/crea OwnChatbot se non esiste
+			if not hasattr(project, 'own_chatbot'):
+				from profiles.models import OwnChatbot
+				import uuid
+
+				own_chatbot = OwnChatbot.objects.create(
+					project=project,
+					is_enabled=True,
+					title=f'Assistente AI - {project.name}',
+					welcome_message='Ciao! Come posso aiutarti oggi?',
+					placeholder_text='Scrivi un messaggio...',
+					widget_token=str(uuid.uuid4()).replace('-', '')[:32],
+					jwt_secret=str(uuid.uuid4())
+				)
+				logger.info(f"Creato OwnChatbot per progetto {project.id}")
 
 			# Prepara il contesto base per il template
 			context = {

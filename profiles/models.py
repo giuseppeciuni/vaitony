@@ -425,14 +425,21 @@ class OwnChatbot(models.Model):
 
 		return False
 
-	def get_minimal_embed_code(self, request):
+	def get_minimal_embed_code(self, request=None):
 		"""
-		Restituisce il codice embed minimale e sicuro (max 4 righe).
+		Restituisce il codice embed minimale e sicuro (max 2 righe).
+		Usa solo il widget_token pubblico, nessuna API key.
 		"""
-		base_url = f"{request.scheme}://{request.get_host()}"
+		if request:
+			base_url = f"{request.scheme}://{request.get_host()}"
+		else:
+			# Fallback per quando request non è disponibile
+			from django.conf import settings
+			base_url = getattr(settings, 'SITE_URL', 'https://tuodominio.com')
 
+		# Codice super minimale - solo 2 righe effettive
 		return f'''<script>window.VAITONY_WIDGET_ID='{self.widget_token}';</script>
-<script src="{base_url}/widget/embed.js"></script>'''
+	<script src="{base_url}/widget/embed.js"></script>'''
 
 
 class ChatwootChatbot(models.Model):
@@ -1324,12 +1331,24 @@ def create_project_configs(sender, instance, created, **kwargs):
 			# 4. Crea lo stato dell'indice
 			ProjectIndexStatus.objects.get_or_create(project=instance)
 
-			# 5. NUOVO: Crea OwnChatbot di default
+			# 5. NUOVO: Crea OwnChatbot di default ATTIVO
 			own_chatbot, chatbot_created = OwnChatbot.objects.get_or_create(
-				project=instance
+				project=instance,
+				defaults={
+					'is_enabled': True,  # ATTIVO per default
+					'title': f'Assistente AI - {instance.name}',
+					'welcome_message': 'Ciao! Come posso aiutarti oggi?',
+					'placeholder_text': 'Scrivi un messaggio...'
+				}
 			)
 			if chatbot_created:
-				logger.info(f"Created default OwnChatbot for project {instance.id}")
+				logger.info(f"Created default OwnChatbot (ENABLED) for project {instance.id}")
+			else:
+				# Se esiste già ma è disabilitato, abilitalo
+				if not own_chatbot.is_enabled:
+					own_chatbot.is_enabled = True
+					own_chatbot.save()
+					logger.info(f"Enabled existing OwnChatbot for project {instance.id}")
 
 			# 6. NUOVO: Crea ChatwootChatbot (disabilitato per compatibilità)
 			chatwoot_chatbot, chatwoot_created = ChatwootChatbot.objects.get_or_create(

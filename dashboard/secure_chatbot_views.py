@@ -9,6 +9,7 @@ from django.views.decorators.cache import cache_control
 from django.shortcuts import get_object_or_404
 from profiles.models import OwnChatbot, ProjectConversation
 from dashboard.rag_utils import get_answer_from_project
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ def serve_secure_widget_js(request):
 	Serve il JavaScript del widget sicuro.
 	Questo file carica dinamicamente la configurazione via widget_token.
 	"""
+	logger.debug("---> serve_secure_widget_js")
 	js_content = '''
 // Vaitony Widget Loader - Sicuro
 (function() {
@@ -77,6 +79,7 @@ def get_widget_config(request, widget_token):
 	Restituisce la configurazione del widget per un token specifico.
 	Verifica dominio e genera JWT per autenticazione.
 	"""
+	logger.debug("--->get_widget_config")
 	try:
 		chatbot = get_object_or_404(OwnChatbot, widget_token=widget_token, is_enabled=True)
 
@@ -137,6 +140,9 @@ def secure_chat_api(request):
 	API sicura per chat che usa JWT per autenticazione.
 	Non espone dati sensibili e verifica ogni richiesta.
 	"""
+	logger.debug("---> secure_chat_api")
+	logger.info("=== CHIAMATA CORRETTA a secure_chat_api ===")
+
 	# Gestione CORS per OPTIONS
 	if request.method == "OPTIONS":
 		response = JsonResponse({})

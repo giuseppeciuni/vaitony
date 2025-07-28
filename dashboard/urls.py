@@ -1,4 +1,4 @@
-# dashboard/urls.py - AGGIORNAMENTO COMPLETO
+# dashboard/urls.py
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -7,7 +7,7 @@ from dashboard.api import external_chat_api
 from dashboard.dashboard_console import execute_management_command
 from dashboard.views.chatbot import chatbot_widget, chatbot_widget_js, chatwoot_webhook, toggle_url_inclusion, \
      serve_widget_css, serve_widget_js
-from dashboard.secure_chatbot_views import serve_secure_widget_js, get_widget_config, secure_chat_api  # NUOVO IMPORT
+from dashboard.secure_chatbot_views import serve_secure_widget_js, get_widget_config, secure_chat_api
 from dashboard.views.project_config import project_config, project_prompts
 from dashboard.views.crawler import website_crawl
 from dashboard.views.dashboard import dashboard
@@ -44,15 +44,15 @@ urlpatterns = [
     path('settings/ia-engine/', ia_engine, name='ia_engine'),   #Gestione chiavi dei vari LLM
     path('settings/billing/', billing_settings, name='billing_settings'),
 
-    # URLs per il chatbot esterno (VECCHI - compatibilità)
-    path('api/chat/<slug:project_slug>/', external_chat_api, name='external_chat_api'),
-    path('chatbot/<slug:project_slug>/', chatbot_widget, name='chatbot_widget'),
-    path('chatbot/<slug:project_slug>/widget.js', chatbot_widget_js, name='chatbot_widget_js'),
-
-    # NUOVI URLs per il chatbot SICURO
+    # NUOVI URLs per il chatbot SICURO (DEVONO VENIRE PRIMA!)
     path('widget/embed.js', serve_secure_widget_js, name='secure_widget_js'),
     path('widget/config/<str:widget_token>/', get_widget_config, name='widget_config'),
-    path('api/chat/secure/', secure_chat_api, name='secure_chat_api'),
+    path('api/chat/secure/', secure_chat_api, name='secure_chat_api'),  # QUESTO DEVE VENIRE PRIMA!
+
+    # URLs per il chatbot esterno (VECCHI - compatibilità)
+    path('api/chat/<slug:project_slug>/', external_chat_api, name='external_chat_api'),  # QUESTO DOPO!
+    path('chatbot/<slug:project_slug>/', chatbot_widget, name='chatbot_widget'),
+    path('chatbot/<slug:project_slug>/widget.js', chatbot_widget_js, name='chatbot_widget_js'),
 
     # URL per il webhook di Chatwoot
     path('chatwoot-webhook/', chatwoot_webhook, name='chatwoot_webhook'),

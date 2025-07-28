@@ -257,6 +257,10 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 PUBLIC_SITE_URL = ''
 
 
+# URL base del sito (usato per generare codice embed)
+SITE_URL = 'http://localhost:8000'  # In produzione: 'https://tuodominio.com'
+
+
 
 # set maximum value for a database table id key to an integer of 64 bit (in case this app is used a lot)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

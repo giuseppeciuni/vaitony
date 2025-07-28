@@ -18,6 +18,10 @@ def external_chat_api(request, project_slug):
     API per il chatbot esterno che si interfaccia con un progetto specifico
     """
 	# Gestione CORS per iframe
+
+	logger.error(f"!!! ATTENZIONE: Chiamata external_chat_api per slug: {project_slug}")
+	logger.error(f"!!! Questo NON dovrebbe essere chiamato per /api/chat/secure/")
+
 	origin = request.headers.get('Origin')
 
 	# Verifica CORS per OPTIONS

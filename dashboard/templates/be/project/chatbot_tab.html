@@ -2,679 +2,1119 @@
 
 <!-- Widget Chatbot - Tab con Configuratore UX/UI Ottimizzato -->
 <div class="tab-pane fade" id="chatbot" role="tabpanel" aria-labelledby="chatbot-tab">
-    <div class="container-fluid">
-        <!-- Header con Status -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center bg-gradient-primary text-white">
-                <div>
-                    <h5 class="mb-1"><i class="bi bi-robot me-2"></i>Widget Chatbot AI</h5>
-                    <small class="opacity-75">Configuratore visuale per integrazione semplice</small>
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input fs-5" type="checkbox" id="chatbot-toggle"
-                          {% if project.is_public_chat_enabled %}checked{% endif %}>
-                    <label class="form-check-label text-white fw-bold" for="chatbot-toggle">
-                        <span id="chatbot-status-text">
-                            {% if project.is_public_chat_enabled %}ATTIVO{% else %}INATTIVO{% endif %}
-                        </span>
-                    </label>
-                </div>
-            </div>
-        </div>
+    <div class="row">
+        <div class="col-12">
+            <h2 class="h4 mb-4">
+                <i class="bi bi-chat-dots me-2"></i>
+                Configurazione Chatbot
+            </h2>
 
-        {% if project.is_public_chat_enabled and project.chat_bot_api_key %}
-        <div class="row">
-            <!-- Colonna Configurazione -->
-            <div class="col-lg-6">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-sliders me-2"></i>Configurazione Widget</h6>
+            <!-- Tabs per diversi tipi di chatbot -->
+            <ul class="nav nav-pills mb-4" id="chatbotTypeTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="ownchatbot-tab-btn" data-bs-toggle="tab"
+                            data-bs-target="#ownchatbot-content" type="button" role="tab">
+                        <i class="bi bi-house-fill me-1"></i>
+                        Chatbot Nativo
+                        <span class="badge bg-success ms-1">Default</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="chatwoot-tab-btn" data-bs-toggle="tab"
+                            data-bs-target="#chatwoot-content" type="button" role="tab">
+                        <i class="bi bi-chat-square-dots me-1"></i>
+                        Chatwoot
+                        <span class="badge bg-secondary ms-1">Opzionale</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="chatbotTypeContent">
+                <!-- OwnChatbot Tab -->
+                <div class="tab-pane fade show active" id="ownchatbot-content" role="tabpanel">
+                    <!-- Header con Status -->
+                    <div class="card mb-4 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-gradient-primary text-white">
+                            <div>
+                                <h5 class="mb-1"><i class="bi bi-robot me-2"></i>Widget Chatbot AI</h5>
+                                <small class="opacity-75">Configuratore visuale per integrazione semplice</small>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input fs-5" type="checkbox" id="own-chatbot-toggle"
+                                      {% if project.own_chatbot and project.own_chatbot.is_enabled %}checked{% endif %}>
+                                <label class="form-check-label text-white fw-bold" for="own-chatbot-toggle">
+                                    <span id="own-chatbot-status-text">
+                                        {% if project.own_chatbot and project.own_chatbot.is_enabled %}ATTIVO{% else %}INATTIVO{% endif %}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <form id="widget-config-form">
-                            <!-- Sezione Aspetto -->
-                            <div class="config-section mb-4">
-                                <h6 class="section-title"><i class="bi bi-palette me-1"></i>Aspetto</h6>
 
-                                <!-- Colore Principale -->
-                                <div class="form-group mb-3">
-                                    <label class="form-label">Colore principale</label>
-                                    <div class="color-picker-group">
-                                        <input type="color" id="primary-color" value="#1f93ff" class="form-control form-control-color">
-                                        <span class="color-name" id="primary-color-name">#1f93ff</span>
+                    {% if project.own_chatbot %}
+                    <!-- Sezione Codice di Integrazione (sempre visibile se OwnChatbot esiste) -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="bi bi-code-square me-2"></i>Codice di Integrazione</h6>
+                            <button class="btn btn-success btn-sm" onclick="copyEmbedCode()">
+                                <i class="bi bi-clipboard me-1"></i>Copia Codice
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="bi bi-shield-check text-success me-2"></i>
+                                <strong>Integrazione sicura con JWT</strong>
+                                <p class="mb-0 small mt-1">Copia queste 2 righe e incollale nel tuo sito prima del tag <code>&lt;/body&gt;</code></p>
+                            </div>
+
+                            <div class="position-relative">
+                                <pre class="bg-light p-3 rounded border mb-0"><code id="embed-code-display">&lt;script&gt;window.VAITONY_WIDGET_ID='{{ project.own_chatbot.widget_token }}';&lt;/script&gt;
+&lt;script src="{{ request.scheme }}://{{ request.get_host }}/widget/embed.js"&gt;&lt;/script&gt;</code></pre>
+                            </div>
+
+                            <!-- Domini autorizzati -->
+                            <div class="mt-4">
+                                <h6 class="mb-2"><i class="bi bi-shield-lock me-1"></i>Domini Autorizzati</h6>
+                                <form id="allowed-domains-form" class="mb-3">
+                                    {% csrf_token %}
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="allow-all-domains"
+                                               {% if not project.own_chatbot.allowed_domains %}checked{% endif %}>
+                                        <label class="form-check-label" for="allow-all-domains">
+                                            Permetti tutti i domini
+                                        </label>
                                     </div>
-                                </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small text-muted">Domini autorizzati (uno per riga)</label>
+                                        <textarea class="form-control" id="allowed-domains" rows="3"
+                                                  placeholder="esempio.com&#10;*.esempio.com&#10;app.esempio.com"
+                                                  {% if not project.own_chatbot.allowed_domains %}disabled{% endif %}>{% for domain in project.own_chatbot.allowed_domains %}{{ domain }}{% if not forloop.last %}
+{% endif %}{% endfor %}</textarea>
+                                        <small class="form-text text-muted">Usa * per wildcard (es: *.esempio.com)</small>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-sm" id="save-domains-btn">
+                                        <i class="bi bi-save me-1"></i>Salva Domini
+                                    </button>
+                                </form>
 
-                                <!-- Dimensioni -->
-                                <div class="row mb-3">
-                                    <div class="col-6">
-                                        <label class="form-label">Larghezza</label>
-                                        <div class="range-group">
-                                            <input type="range" id="chat-width" min="300" max="500" value="350" class="form-range">
-                                            <span class="range-value" id="chat-width-value">350px</span>
+                                <!-- Test dominio -->
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title small">Test Accesso Dominio</h6>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control" id="test-domain"
+                                                   placeholder="https://esempio.com">
+                                            <button class="btn btn-outline-secondary" type="button" id="test-domain-btn">
+                                                <i class="bi bi-check-circle me-1"></i>Test
+                                            </button>
                                         </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label">Altezza</label>
-                                        <div class="range-group">
-                                            <input type="range" id="chat-height" min="400" max="700" value="500" class="form-range">
-                                            <span class="range-value" id="chat-height-value">500px</span>
-                                        </div>
+                                        <div id="test-result" class="mt-2"></div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Sezione Posizione -->
-                            <div class="config-section mb-4">
-                                <h6 class="section-title"><i class="bi bi-geo-alt me-1"></i>Posizione</h6>
-
-                                <div class="position-selector">
-                                    <div class="position-grid">
-                                        <button type="button" class="position-btn" data-position="top-left">
-                                            <i class="bi bi-arrow-up-left"></i>
-                                            <span>Alto Sx</span>
-                                        </button>
-                                        <button type="button" class="position-btn" data-position="top-right">
-                                            <i class="bi bi-arrow-up-right"></i>
-                                            <span>Alto Dx</span>
-                                        </button>
-                                        <button type="button" class="position-btn" data-position="bottom-left">
-                                            <i class="bi bi-arrow-down-left"></i>
-                                            <span>Basso Sx</span>
-                                        </button>
-                                        <button type="button" class="position-btn active" data-position="bottom-right">
-                                            <i class="bi bi-arrow-down-right"></i>
-                                            <span>Basso Dx</span>
-                                        </button>
-                                    </div>
-                                </div>
+                            <div class="alert alert-success mt-3 small">
+                                <i class="bi bi-lock-fill me-1"></i>
+                                <strong>Sicurezza garantita:</strong> Il widget usa autenticazione JWT.
+                                Nessuna chiave API è esposta nel codice.
                             </div>
-
-                            <!-- Sezione Comportamento -->
-                            <div class="config-section mb-4">
-                                <h6 class="section-title"><i class="bi bi-gear me-1"></i>Comportamento</h6>
-
-                                <!-- Auto Open -->
-                                <div class="form-check form-switch mb-3">
-                                    <input class="form-check-input" type="checkbox" id="auto-open">
-                                    <label class="form-check-label" for="auto-open">
-                                        Apertura automatica
-                                    </label>
-                                </div>
-
-                                <!-- Delay apertura -->
-                                <div id="auto-open-delay" class="mb-3" style="display: none;">
-                                    <label class="form-label">Ritardo apertura</label>
-                                    <div class="range-group">
-                                        <input type="range" id="open-delay" min="1" max="10" value="3" class="form-range">
-                                        <span class="range-value" id="open-delay-value">3s</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Sezione Messaggi -->
-                            <div class="config-section mb-4">
-                                <h6 class="section-title"><i class="bi bi-chat-text me-1"></i>Messaggi</h6>
-
-                                <div class="mb-3">
-                                    <label class="form-label">Titolo</label>
-                                    <input type="text" class="form-control" id="widget-title"
-                                           value="Assistente AI - {{ project.name }}" maxlength="50">
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label">Messaggio di benvenuto</label>
-                                    <textarea class="form-control" id="welcome-message" rows="2" maxlength="150">Ciao! Come posso aiutarti oggi?</textarea>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label">Placeholder input</label>
-                                    <input type="text" class="form-control" id="placeholder-text"
-                                           value="Scrivi un messaggio..." maxlength="30">
-                                </div>
-                            </div>
-
-                            <!-- Sezione Opzioni -->
-                            <div class="config-section mb-4">
-                                <h6 class="section-title"><i class="bi bi-toggles me-1"></i>Opzioni Avanzate</h6>
-
-                                <div class="form-check form-switch mb-2">
-                                    <input class="form-check-input" type="checkbox" id="show-branding">
-                                    <label class="form-check-label" for="show-branding">
-                                        Mostra logo/branding
-                                    </label>
-                                </div>
-
-                                <div class="form-check form-switch mb-2">
-                                    <input class="form-check-input" type="checkbox" id="enable-sounds" checked>
-                                    <label class="form-check-label" for="enable-sounds">
-                                        Suoni notifiche
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Pulsanti Azione -->
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-outline-secondary" id="reset-config">
-                                    <i class="bi bi-arrow-clockwise me-1"></i>Reset
-                                </button>
-                                <button type="button" class="btn btn-primary flex-grow-1" id="generate-code">
-                                    <i class="bi bi-code-slash me-1"></i>Genera Codice
-                                </button>
-                            </div>
-                        </form>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Colonna Preview -->
-            <div class="col-lg-6">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-eye me-2"></i>Anteprima Live</h6>
-                    </div>
-                    <div class="card-body p-0">
-                        <!-- Area Preview -->
-                        <div class="preview-container">
-                            <div class="preview-screen">
-                                <!-- Mockup pagina web -->
-                                <div class="mockup-page">
-                                    <div class="mockup-header">
-                                        <div class="mockup-nav">
-                                            <span class="mockup-logo">{{ project.name }}</span>
-                                            <div class="mockup-menu">
-                                                <span>Home</span>
-                                                <span>Servizi</span>
-                                                <span>Contatti</span>
+                    <!-- Configurazione Visuale (solo se attivo) -->
+                    {% if project.own_chatbot.is_enabled %}
+                    <div class="row">
+                        <!-- Colonna Configurazione -->
+                        <div class="col-lg-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-sliders me-2"></i>Personalizza Aspetto</h6>
+                                </div>
+                                <div class="card-body">
+                                    <form id="own-widget-config-form">
+                                        {% csrf_token %}
+                                        <!-- Sezione Aspetto -->
+                                        <div class="config-section mb-4">
+                                            <h6 class="section-title"><i class="bi bi-palette me-1"></i>Aspetto</h6>
+
+                                            <!-- Colore Principale -->
+                                            <div class="form-group mb-3">
+                                                <label class="form-label">Colore principale</label>
+                                                <div class="color-picker-group">
+                                                    <input type="color" id="primary-color" name="primary_color"
+                                                           value="{{ project.own_chatbot.primary_color }}"
+                                                           class="form-control form-control-color">
+                                                    <span class="color-name" id="primary-color-name">{{ project.own_chatbot.primary_color }}</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Dimensioni -->
+                                            <div class="row mb-3">
+                                                <div class="col-6">
+                                                    <label class="form-label">Larghezza</label>
+                                                    <div class="range-group">
+                                                        <input type="range" id="chat-width" name="chat_width"
+                                                               min="300" max="500"
+                                                               value="{{ project.own_chatbot.chat_width }}"
+                                                               class="form-range">
+                                                        <span class="range-value" id="chat-width-value">{{ project.own_chatbot.chat_width }}px</span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label">Altezza</label>
+                                                    <div class="range-group">
+                                                        <input type="range" id="chat-height" name="chat_height"
+                                                               min="400" max="700"
+                                                               value="{{ project.own_chatbot.chat_height }}"
+                                                               class="form-range">
+                                                        <span class="range-value" id="chat-height-value">{{ project.own_chatbot.chat_height }}px</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="mockup-content">
-                                        <h2>Benvenuti sul nostro sito</h2>
-                                        <p>Questo è un esempio di come apparirà il widget sul tuo sito web.</p>
-                                        <div class="mockup-cards">
-                                            <div class="mockup-card"></div>
-                                            <div class="mockup-card"></div>
-                                            <div class="mockup-card"></div>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <!-- Widget Preview -->
-                                <div id="widget-preview" class="widget-container bottom-right">
-                                    <div id="chat-bubble" class="chat-bubble">
-                                        <i class="bi bi-chat-dots"></i>
-                                    </div>
+                                        <!-- Sezione Posizione -->
+                                        <div class="config-section mb-4">
+                                            <h6 class="section-title"><i class="bi bi-geo-alt me-1"></i>Posizione</h6>
 
-                                    <div id="chat-window" class="chat-window" style="display: none;">
-                                        <div class="chat-header">
-                                            <span id="preview-title">Assistente AI</span>
-                                            <button class="close-btn">&times;</button>
-                                        </div>
-                                        <div class="chat-body">
-                                            <div class="message bot-message">
-                                                <span id="preview-welcome">Ciao! Come posso aiutarti oggi?</span>
+                                            <div class="position-selector">
+                                                <div class="position-grid">
+                                                    <button type="button" class="position-btn {% if project.own_chatbot.position == 'top-left' %}active{% endif %}"
+                                                            data-position="top-left">
+                                                        <i class="bi bi-arrow-up-left"></i>
+                                                        <span>Alto Sx</span>
+                                                    </button>
+                                                    <button type="button" class="position-btn {% if project.own_chatbot.position == 'top-right' %}active{% endif %}"
+                                                            data-position="top-right">
+                                                        <i class="bi bi-arrow-up-right"></i>
+                                                        <span>Alto Dx</span>
+                                                    </button>
+                                                    <button type="button" class="position-btn {% if project.own_chatbot.position == 'bottom-left' %}active{% endif %}"
+                                                            data-position="bottom-left">
+                                                        <i class="bi bi-arrow-down-left"></i>
+                                                        <span>Basso Sx</span>
+                                                    </button>
+                                                    <button type="button" class="position-btn {% if project.own_chatbot.position == 'bottom-right' %}active{% endif %}"
+                                                            data-position="bottom-right">
+                                                        <i class="bi bi-arrow-down-right"></i>
+                                                        <span>Basso Dx</span>
+                                                    </button>
+                                                </div>
+                                                <input type="hidden" id="position" name="position" value="{{ project.own_chatbot.position }}">
                                             </div>
                                         </div>
-                                        <div class="chat-footer">
-                                            <input type="text" id="preview-placeholder" placeholder="Scrivi un messaggio..." disabled>
-                                            <button class="send-btn" disabled><i class="bi bi-send"></i></button>
+
+                                        <!-- Sezione Comportamento -->
+                                        <div class="config-section mb-4">
+                                            <h6 class="section-title"><i class="bi bi-gear me-1"></i>Comportamento</h6>
+
+                                            <!-- Auto Open -->
+                                            <div class="form-check form-switch mb-3">
+                                                <input class="form-check-input" type="checkbox" id="auto-open" name="auto_open"
+                                                       {% if project.own_chatbot.auto_open %}checked{% endif %}>
+                                                <label class="form-check-label" for="auto-open">
+                                                    Apertura automatica
+                                                </label>
+                                            </div>
+
+                                            <!-- Delay apertura -->
+                                            <div id="auto-open-delay" class="mb-3" {% if not project.own_chatbot.auto_open %}style="display: none;"{% endif %}>
+                                                <label class="form-label">Ritardo apertura</label>
+                                                <div class="range-group">
+                                                    <input type="range" id="open-delay" name="open_delay"
+                                                           min="1" max="10"
+                                                           value="{{ project.own_chatbot.open_delay }}"
+                                                           class="form-range">
+                                                    <span class="range-value" id="open-delay-value">{{ project.own_chatbot.open_delay }}s</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Sezione Messaggi -->
+                                        <div class="config-section mb-4">
+                                            <h6 class="section-title"><i class="bi bi-chat-text me-1"></i>Messaggi</h6>
+
+                                            <div class="mb-3">
+                                                <label class="form-label">Titolo</label>
+                                                <input type="text" class="form-control" id="widget-title" name="title"
+                                                       value="{{ project.own_chatbot.title }}" maxlength="50">
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label">Messaggio di benvenuto</label>
+                                                <textarea class="form-control" id="welcome-message" name="welcome_message"
+                                                          rows="2" maxlength="150">{{ project.own_chatbot.welcome_message }}</textarea>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label">Placeholder input</label>
+                                                <input type="text" class="form-control" id="placeholder-text" name="placeholder_text"
+                                                       value="{{ project.own_chatbot.placeholder_text }}" maxlength="30">
+                                            </div>
+                                        </div>
+
+                                        <!-- Sezione Opzioni -->
+                                        <div class="config-section mb-4">
+                                            <h6 class="section-title"><i class="bi bi-toggles me-1"></i>Opzioni Avanzate</h6>
+
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="show-branding" name="show_branding"
+                                                       {% if project.own_chatbot.show_branding %}checked{% endif %}>
+                                                <label class="form-check-label" for="show-branding">
+                                                    Mostra logo/branding
+                                                </label>
+                                            </div>
+
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enable-sounds" name="enable_sounds"
+                                                       {% if project.own_chatbot.enable_sounds %}checked{% endif %}>
+                                                <label class="form-check-label" for="enable-sounds">
+                                                    Suoni notifiche
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <!-- Pulsanti Azione -->
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-secondary" id="reset-config">
+                                                <i class="bi bi-arrow-clockwise me-1"></i>Reset
+                                            </button>
+                                            <button type="submit" class="btn btn-primary flex-grow-1" id="save-config">
+                                                <i class="bi bi-save me-1"></i>Salva Configurazione
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Colonna Preview -->
+                        <div class="col-lg-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-eye me-2"></i>Anteprima Live</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <!-- Area Preview -->
+                                    <div class="preview-container">
+                                        <div class="preview-screen">
+                                            <!-- Mockup pagina web -->
+                                            <div class="mockup-page">
+                                                <div class="mockup-header">
+                                                    <div class="mockup-nav">
+                                                        <span class="mockup-logo">{{ project.name }}</span>
+                                                        <div class="mockup-menu">
+                                                            <span>Home</span>
+                                                            <span>Servizi</span>
+                                                            <span>Contatti</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="mockup-content">
+                                                    <h2>Benvenuti sul nostro sito</h2>
+                                                    <p>Questo è un esempio di come apparirà il widget sul tuo sito web.</p>
+                                                    <div class="mockup-cards">
+                                                        <div class="mockup-card"></div>
+                                                        <div class="mockup-card"></div>
+                                                        <div class="mockup-card"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Widget Preview -->
+                                            <div id="widget-preview" class="widget-container {{ project.own_chatbot.position }}">
+                                                <div id="chat-bubble" class="chat-bubble" style="background-color: {{ project.own_chatbot.primary_color }}">
+                                                    <i class="bi bi-chat-dots"></i>
+                                                </div>
+
+                                                <div id="chat-window" class="chat-window" style="display: none; width: {{ project.own_chatbot.chat_width }}px; height: {{ project.own_chatbot.chat_height }}px;">
+                                                    <div class="chat-header" style="background-color: {{ project.own_chatbot.primary_color }}">
+                                                        <span id="preview-title">{{ project.own_chatbot.title }}</span>
+                                                        <button class="close-btn">&times;</button>
+                                                    </div>
+                                                    <div class="chat-body">
+                                                        <div class="message bot-message">
+                                                            <span id="preview-welcome">{{ project.own_chatbot.welcome_message }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="chat-footer">
+                                                        <input type="text" id="preview-placeholder" placeholder="{{ project.own_chatbot.placeholder_text }}" disabled>
+                                                        <button class="send-btn" style="background-color: {{ project.own_chatbot.primary_color }}" disabled><i class="bi bi-send"></i></button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    {% endif %}
+
+                    <!-- Debug info (rimuovi in produzione) -->
+                    {% if project.own_chatbot %}
+                    <div class="alert alert-warning small mt-2">
+                        <strong>Debug Info:</strong><br>
+                        Widget Token = {{ project.own_chatbot.widget_token }}<br>
+                        Is Enabled = {{ project.own_chatbot.is_enabled }}<br>
+                        Has JWT Secret = {% if project.own_chatbot.jwt_secret %}Yes{% else %}No{% endif %}<br>
+                        Title = {{ project.own_chatbot.title }}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-danger small mt-2">
+                        <strong>Debug:</strong> Nessun OwnChatbot trovato per questo progetto!
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <!-- Stato Non Configurato -->
+                    <div class="alert alert-warning">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-3"></i>
+                            <div>
+                                <h6 class="alert-heading mb-1">Chatbot Non Configurato</h6>
+                                <p class="mb-0">Il chatbot non è stato ancora configurato per questo progetto.</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <!-- Fine OwnChatbot Tab -->
+
+                <!-- Chatwoot Tab (retrocompatibilità) -->
+                <div class="tab-pane fade" id="chatwoot-content" role="tabpanel">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Chatwoot:</strong> Integrazione con piattaforma esterna di supporto chat.
+                        <br><small class="text-muted">Funzionalità mantenuta per retrocompatibilità.</small>
+                    </div>
+                    <!-- Qui puoi includere il contenuto Chatwoot esistente se necessario -->
                 </div>
             </div>
         </div>
-
-        <!-- Sezione Codice Generato -->
-        <div class="card" id="generated-code-section" style="display: none;">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-code-square me-2"></i>Codice di Integrazione</h6>
-                <button class="btn btn-success btn-sm" id="copy-code-btn">
-                    <i class="bi bi-clipboard me-1"></i>Copia Codice
-                </button>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <strong>Semplice da installare:</strong> Copia questo codice e incollalo nel tuo sito web prima del tag <code>&lt;/body&gt;</code>
-                </div>
-
-                <div class="code-container">
-                    <pre><code id="generated-code" class="language-html"><!-- Il codice verrà generato qui --></code></pre>
-                </div>
-
-                <div class="mt-3">
-                    <h6>📋 Istruzioni:</h6>
-                    <ol class="small">
-                        <li>Copia il codice sopra</li>
-                        <li>Incollalo nel tuo sito prima del tag <code>&lt;/body&gt;</code></li>
-                        <li>Il widget apparirà automaticamente</li>
-                    </ol>
-                </div>
-            </div>
-        </div>
-
-        {% else %}
-        <!-- Stato Inattivo -->
-        <div class="alert alert-warning">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-3"></i>
-                <div>
-                    <h6 class="alert-heading mb-1">Widget Non Configurato</h6>
-                    <p class="mb-0">Attiva il toggle sopra per abilitare il configuratore del chatbot.</p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
 </div>
 
-<!-- Dati per JavaScript (hidden) -->
-<script type="application/json" id="chatbot-config-data">
-{
-    "projectName": "{{ project.name|escapejs }}",
-    "projectSlug": "{{ project.slug|escapejs }}",
-    "apiKey": "{{ project.chat_bot_api_key|escapejs }}",
-    "csrfToken": "{{ csrf_token }}",
-    "staticUrl": "/static/"
+<!-- Script JavaScript inline -->
+<script>
+function copyEmbedCode() {
+    const code = document.getElementById('embed-code-display').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        if (typeof showToast === 'function') {
+            showToast('Codice copiato negli appunti!', 'success');
+        } else {
+            alert('Codice copiato negli appunti!');
+        }
+    }).catch(err => {
+        console.error('Errore nel copiare:', err);
+        alert('Errore nel copiare il codice');
+    });
 }
+
+// Gestione toggle OwnChatbot
+document.addEventListener('DOMContentLoaded', function() {
+    const ownChatbotToggle = document.getElementById('own-chatbot-toggle');
+    if (ownChatbotToggle) {
+        ownChatbotToggle.addEventListener('change', function() {
+            const isEnabled = this.checked;
+            const statusText = document.getElementById('own-chatbot-status-text');
+
+            // Disabilita durante la richiesta
+            this.disabled = true;
+            statusText.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Aggiornamento...';
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'action': 'toggle_own_chatbot',
+                    'is_enabled': isEnabled,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusText.textContent = isEnabled ? 'ATTIVO' : 'INATTIVO';
+                    // Ricarica la pagina per aggiornare l'interfaccia
+                    setTimeout(() => location.reload(), 500);
+                } else {
+                    this.checked = !isEnabled;
+                    statusText.textContent = !isEnabled ? 'ATTIVO' : 'INATTIVO';
+                    if (typeof showToast === 'function') {
+                        showToast('Errore: ' + data.message, 'danger');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                this.checked = !isEnabled;
+                statusText.textContent = !isEnabled ? 'ATTIVO' : 'INATTIVO';
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Gestione form configurazione
+    const configForm = document.getElementById('own-widget-config-form');
+    if (configForm) {
+        configForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            formData.append('action', 'update_own_chatbot_config');
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch('{% url "project" project.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: new URLSearchParams(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (typeof showToast === 'function') {
+                        showToast('Configurazione salvata con successo!', 'success');
+                    }
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast('Errore: ' + data.message, 'danger');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Errore:', error);
+                if (typeof showToast === 'function') {
+                    showToast('Errore durante il salvataggio', 'danger');
+                }
+            });
+        });
+    }
+
+    // Gestione posizione
+    document.querySelectorAll('.position-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const position = this.getAttribute('data-position');
+            document.getElementById('position').value = position;
+
+            // Aggiorna preview
+            const preview = document.getElementById('widget-preview');
+            if (preview) {
+                preview.className = 'widget-container ' + position;
+            }
+        });
+    });
+
+    // Gestione auto-open toggle
+    const autoOpenCheck = document.getElementById('auto-open');
+    const autoOpenDelay = document.getElementById('auto-open-delay');
+    if (autoOpenCheck && autoOpenDelay) {
+        autoOpenCheck.addEventListener('change', function() {
+            autoOpenDelay.style.display = this.checked ? 'block' : 'none';
+        });
+    }
+
+    // Preview interattiva
+    const chatBubble = document.getElementById('chat-bubble');
+    const chatWindow = document.getElementById('chat-window');
+    if (chatBubble && chatWindow) {
+        chatBubble.addEventListener('click', function() {
+            chatWindow.style.display = chatWindow.style.display === 'none' ? 'block' : 'none';
+        });
+
+        const closeBtn = chatWindow.querySelector('.close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                chatWindow.style.display = 'none';
+            });
+        }
+    }
+
+    // Aggiornamento live dei valori
+    // Colore
+    const colorInput = document.getElementById('primary-color');
+    if (colorInput) {
+        colorInput.addEventListener('input', function() {
+            document.getElementById('primary-color-name').textContent = this.value;
+            // Aggiorna preview
+            const bubble = document.getElementById('chat-bubble');
+            const header = document.querySelector('.chat-header');
+            const sendBtn = document.querySelector('.send-btn');
+            if (bubble) bubble.style.backgroundColor = this.value;
+            if (header) header.style.backgroundColor = this.value;
+            if (sendBtn) sendBtn.style.backgroundColor = this.value;
+        });
+    }
+
+    // Dimensioni
+    const widthInput = document.getElementById('chat-width');
+    if (widthInput) {
+        widthInput.addEventListener('input', function() {
+            document.getElementById('chat-width-value').textContent = this.value + 'px';
+            const chatWindow = document.getElementById('chat-window');
+            if (chatWindow) chatWindow.style.width = this.value + 'px';
+        });
+    }
+
+    const heightInput = document.getElementById('chat-height');
+    if (heightInput) {
+        heightInput.addEventListener('input', function() {
+            document.getElementById('chat-height-value').textContent = this.value + 'px';
+            const chatWindow = document.getElementById('chat-window');
+            if (chatWindow) chatWindow.style.height = this.value + 'px';
+        });
+    }
+
+    // Delay
+    const delayInput = document.getElementById('open-delay');
+    if (delayInput) {
+        delayInput.addEventListener('input', function() {
+            document.getElementById('open-delay-value').textContent = this.value + 's';
+        });
+    }
+
+    // Testi
+    const titleInput = document.getElementById('widget-title');
+    if (titleInput) {
+        titleInput.addEventListener('input', function() {
+            const previewTitle = document.getElementById('preview-title');
+            if (previewTitle) previewTitle.textContent = this.value;
+        });
+    }
+
+    const welcomeInput = document.getElementById('welcome-message');
+    if (welcomeInput) {
+        welcomeInput.addEventListener('input', function() {
+            const previewWelcome = document.getElementById('preview-welcome');
+            if (previewWelcome) previewWelcome.textContent = this.value;
+        });
+    }
+
+    const placeholderInput = document.getElementById('placeholder-text');
+    if (placeholderInput) {
+        placeholderInput.addEventListener('input', function() {
+            const previewPlaceholder = document.getElementById('preview-placeholder');
+            if (previewPlaceholder) previewPlaceholder.placeholder = this.value;
+        });
+    }
+
+// Domini autorizzati
+   const allowAllCheck = document.getElementById('allow-all-domains');
+   const domainsTextarea = document.getElementById('allowed-domains');
+
+   if (allowAllCheck && domainsTextarea) {
+       allowAllCheck.addEventListener('change', function() {
+           domainsTextarea.disabled = this.checked;
+           if (this.checked) {
+               domainsTextarea.value = '';
+           }
+       });
+   }
+
+   // Form domini autorizzati
+   const domainsForm = document.getElementById('allowed-domains-form');
+   if (domainsForm) {
+       domainsForm.addEventListener('submit', function(e) {
+           e.preventDefault();
+
+           let domains = [];
+           if (!allowAllCheck.checked && domainsTextarea.value.trim()) {
+               domains = domainsTextarea.value
+                   .split('\n')
+                   .map(d => d.trim())
+                   .filter(d => d.length > 0);
+           }
+
+           fetch('{% url "project" project.id %}', {
+               method: 'POST',
+               headers: {
+                   'X-Requested-With': 'XMLHttpRequest',
+                   'Content-Type': 'application/x-www-form-urlencoded',
+               },
+               body: new URLSearchParams({
+                   'action': 'update_own_chatbot_domains',
+                   'allowed_domains': JSON.stringify(domains),
+                   'csrfmiddlewaretoken': '{{ csrf_token }}'
+               })
+           })
+           .then(response => response.json())
+           .then(data => {
+               if (data.success) {
+                   if (typeof showToast === 'function') {
+                       showToast('Domini autorizzati aggiornati', 'success');
+                   }
+               } else {
+                   if (typeof showToast === 'function') {
+                       showToast('Errore: ' + data.message, 'danger');
+                   }
+               }
+           })
+           .catch(error => {
+               console.error('Errore:', error);
+               if (typeof showToast === 'function') {
+                   showToast('Errore durante il salvataggio', 'danger');
+               }
+           });
+       });
+   }
+
+   // Test dominio
+   const testDomainBtn = document.getElementById('test-domain-btn');
+   const testDomainInput = document.getElementById('test-domain');
+   const testResult = document.getElementById('test-result');
+
+   if (testDomainBtn && testDomainInput && testResult) {
+       testDomainBtn.addEventListener('click', function() {
+           const testUrl = testDomainInput.value.trim();
+           if (!testUrl) {
+               testResult.innerHTML = '<div class="alert alert-warning small">Inserisci un URL da testare</div>';
+               return;
+           }
+
+           testResult.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split"></i> Test in corso...</div>';
+
+           fetch('{% url "project" project.id %}', {
+               method: 'POST',
+               headers: {
+                   'X-Requested-With': 'XMLHttpRequest',
+                   'Content-Type': 'application/x-www-form-urlencoded',
+               },
+               body: new URLSearchParams({
+                   'action': 'test_own_chatbot_domain',
+                   'test_url': testUrl,
+                   'csrfmiddlewaretoken': '{{ csrf_token }}'
+               })
+           })
+           .then(response => response.json())
+           .then(data => {
+               if (data.allowed) {
+                   testResult.innerHTML = '<div class="alert alert-success small"><i class="bi bi-check-circle"></i> Accesso consentito</div>';
+               } else {
+                   testResult.innerHTML = '<div class="alert alert-danger small"><i class="bi bi-x-circle"></i> Accesso negato</div>';
+               }
+           })
+           .catch(error => {
+               testResult.innerHTML = '<div class="alert alert-danger small">Errore nel test</div>';
+           });
+       });
+   }
+
+   // Reset configurazione
+   const resetBtn = document.getElementById('reset-config');
+   if (resetBtn) {
+       resetBtn.addEventListener('click', function() {
+           if (confirm('Ripristinare la configurazione predefinita?')) {
+               // Reset valori
+               if (colorInput) colorInput.value = '#1f93ff';
+               if (widthInput) widthInput.value = 350;
+               if (heightInput) heightInput.value = 500;
+               if (delayInput) delayInput.value = 3;
+               if (autoOpenCheck) autoOpenCheck.checked = false;
+               if (titleInput) titleInput.value = 'Assistente AI - {{ project.name }}';
+               if (welcomeInput) welcomeInput.value = 'Ciao! Come posso aiutarti oggi?';
+               if (placeholderInput) placeholderInput.value = 'Scrivi un messaggio...';
+
+               // Trigger eventi per aggiornare preview
+               [colorInput, widthInput, heightInput, delayInput, titleInput, welcomeInput, placeholderInput].forEach(el => {
+                   if (el) el.dispatchEvent(new Event('input'));
+               });
+
+               if (autoOpenCheck) autoOpenCheck.dispatchEvent(new Event('change'));
+
+               // Reset posizione
+               document.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
+               const bottomRightBtn = document.querySelector('[data-position="bottom-right"]');
+               if (bottomRightBtn) {
+                   bottomRightBtn.click();
+               }
+           }
+       });
+   }
+});
 </script>
 
-<!-- Includi JavaScript separato per evitare problemi CSP -->
-<script src="{% static 'js/chatbot-configurator.js' %}"></script>
-
+<!-- Stili CSS -->
 <style>
 /* Configuratore Chatbot Styles */
 .bg-gradient-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
 
 .config-section {
-    border-left: 3px solid #e9ecef;
-    padding-left: 1rem;
+   border-left: 3px solid #e9ecef;
+   padding-left: 1rem;
 }
 
 .section-title {
-    color: #495057;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    font-size: 0.95rem;
+   color: #495057;
+   font-weight: 600;
+   margin-bottom: 1rem;
+   font-size: 0.95rem;
 }
 
 /* Color Picker */
 .color-picker-group {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+   display: flex;
+   align-items: center;
+   gap: 0.75rem;
 }
 
 .form-control-color {
-    width: 50px;
-    height: 38px;
-    border-radius: 8px;
-    border: 2px solid #dee2e6;
-    cursor: pointer;
+   width: 50px;
+   height: 38px;
+   border-radius: 8px;
+   border: 2px solid #dee2e6;
+   cursor: pointer;
 }
 
 .color-name {
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    color: #6c757d;
-    background: #f8f9fa;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
+   font-family: 'Courier New', monospace;
+   font-size: 0.9rem;
+   color: #6c757d;
+   background: #f8f9fa;
+   padding: 0.25rem 0.5rem;
+   border-radius: 4px;
 }
 
 /* Range Inputs */
 .range-group {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+   display: flex;
+   align-items: center;
+   gap: 0.5rem;
 }
 
 .form-range {
-    flex: 1;
+   flex: 1;
 }
 
 .range-value {
-    min-width: 60px;
-    text-align: center;
-    font-size: 0.9rem;
-    color: #6c757d;
-    background: #f8f9fa;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-family: 'Courier New', monospace;
+   min-width: 60px;
+   text-align: center;
+   font-size: 0.9rem;
+   color: #6c757d;
+   background: #f8f9fa;
+   padding: 0.25rem 0.5rem;
+   border-radius: 4px;
+   font-family: 'Courier New', monospace;
 }
 
 /* Position Selector */
 .position-selector {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 1rem;
+   background: #f8f9fa;
+   border-radius: 12px;
+   padding: 1rem;
 }
 
 .position-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 0.5rem;
 }
 
 .position-btn {
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 0.75rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
+   background: white;
+   border: 2px solid #e9ecef;
+   border-radius: 8px;
+   padding: 0.75rem;
+   cursor: pointer;
+   transition: all 0.2s ease;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 0.25rem;
 }
 
 .position-btn:hover {
-    border-color: #667eea;
-    background: #f8f9ff;
+   border-color: #667eea;
+   background: #f8f9ff;
 }
 
 .position-btn.active {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+   border-color: #667eea;
+   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+   color: white;
 }
 
 .position-btn i {
-    font-size: 1.2rem;
+   font-size: 1.2rem;
 }
 
 .position-btn span {
-    font-size: 0.8rem;
-    font-weight: 500;
+   font-size: 0.8rem;
+   font-weight: 500;
 }
 
 /* Preview Container */
 .preview-container {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 600px;
-    position: relative;
+   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+   min-height: 600px;
+   position: relative;
 }
 
 .preview-screen {
-    position: relative;
-    width: 100%;
-    height: 600px;
-    overflow: hidden;
+   position: relative;
+   width: 100%;
+   height: 600px;
+   overflow: hidden;
 }
 
 /* Mockup Page */
 .mockup-page {
-    background: white;
-    width: 100%;
-    height: 100%;
-    position: relative;
+   background: white;
+   width: 100%;
+   height: 100%;
+   position: relative;
 }
 
 .mockup-header {
-    background: #ffffff;
-    border-bottom: 1px solid #e9ecef;
-    padding: 1rem;
+   background: #ffffff;
+   border-bottom: 1px solid #e9ecef;
+   padding: 1rem;
 }
 
 .mockup-nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
 }
 
 .mockup-logo {
-    font-weight: bold;
-    color: #495057;
+   font-weight: bold;
+   color: #495057;
 }
 
 .mockup-menu {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.9rem;
-    color: #6c757d;
+   display: flex;
+   gap: 1rem;
+   font-size: 0.9rem;
+   color: #6c757d;
 }
 
 .mockup-content {
-    padding: 2rem;
-    text-align: center;
+   padding: 2rem;
+   text-align: center;
 }
 
 .mockup-content h2 {
-    color: #495057;
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
+   color: #495057;
+   margin-bottom: 1rem;
+   font-size: 1.5rem;
 }
 
 .mockup-content p {
-    color: #6c757d;
-    margin-bottom: 2rem;
+   color: #6c757d;
+   margin-bottom: 2rem;
 }
 
 .mockup-cards {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
+   display: flex;
+   gap: 1rem;
+   justify-content: center;
 }
 
 .mockup-card {
-    background: #f8f9fa;
-    width: 80px;
-    height: 60px;
-    border-radius: 8px;
-    border: 1px solid #e9ecef;
+   background: #f8f9fa;
+   width: 80px;
+   height: 60px;
+   border-radius: 8px;
+   border: 1px solid #e9ecef;
 }
 
 /* Widget Preview */
 .widget-container {
-    position: absolute;
-    z-index: 1000;
+   position: absolute;
+   z-index: 1000;
 }
 
 .widget-container.bottom-right {
-    bottom: 20px;
-    right: 20px;
+   bottom: 20px;
+   right: 20px;
 }
 
 .widget-container.bottom-left {
-    bottom: 20px;
-    left: 20px;
+   bottom: 20px;
+   left: 20px;
 }
 
 .widget-container.top-right {
-    top: 80px;
-    right: 20px;
+   top: 80px;
+   right: 20px;
 }
 
 .widget-container.top-left {
-    top: 80px;
-    left: 20px;
+   top: 80px;
+   left: 20px;
 }
 
 .chat-bubble {
-    width: 60px;
-    height: 60px;
-    background: #1f93ff;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.5rem;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    transition: all 0.3s ease;
+   width: 60px;
+   height: 60px;
+   background: #1f93ff;
+   border-radius: 50%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   color: white;
+   font-size: 1.5rem;
+   cursor: pointer;
+   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+   transition: all 0.3s ease;
 }
 
 .chat-bubble:hover {
-    transform: scale(1.1);
+   transform: scale(1.1);
 }
 
 .chat-window {
-    position: absolute;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-    overflow: hidden;
-    transition: all 0.3s ease;
-    width: 350px;
-    height: 500px;
+   position: absolute;
+   background: white;
+   border-radius: 12px;
+   box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+   overflow: hidden;
+   transition: all 0.3s ease;
+   width: 350px;
+   height: 500px;
 }
 
 .widget-container.bottom-right .chat-window,
 .widget-container.bottom-left .chat-window {
-    bottom: 70px;
+   bottom: 70px;
 }
 
 .widget-container.top-right .chat-window,
 .widget-container.top-left .chat-window {
-    top: 70px;
+   top: 70px;
 }
 
 .widget-container.bottom-left .chat-window,
 .widget-container.top-left .chat-window {
-    left: 0;
+   left: 0;
 }
 
 .widget-container.bottom-right .chat-window,
 .widget-container.top-right .chat-window {
-    right: 0;
+   right: 0;
 }
 
 .chat-header {
-    background: #1f93ff;
-    color: white;
-    padding: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
+   background: #1f93ff;
+   color: white;
+   padding: 1rem;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   font-weight: 600;
 }
 
 .close-btn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.2rem;
-    cursor: pointer;
-    opacity: 0.8;
+   background: none;
+   border: none;
+   color: white;
+   font-size: 1.2rem;
+   cursor: pointer;
+   opacity: 0.8;
 }
 
 .close-btn:hover {
-    opacity: 1;
+   opacity: 1;
 }
 
 .chat-body {
-    padding: 1rem;
-    background: #f8f9fa;
-    height: 380px;
-    overflow-y: auto;
+   padding: 1rem;
+   background: #f8f9fa;
+   height: 380px;
+   overflow-y: auto;
 }
 
 .bot-message {
-    background: white;
-    padding: 0.75rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    font-size: 0.9rem;
-    line-height: 1.4;
+   background: white;
+   padding: 0.75rem;
+   border-radius: 12px;
+   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+   font-size: 0.9rem;
+   line-height: 1.4;
 }
 
 .chat-footer {
-    padding: 1rem;
-    background: white;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    gap: 0.5rem;
+   padding: 1rem;
+   background: white;
+   border-top: 1px solid #e9ecef;
+   display: flex;
+   gap: 0.5rem;
 }
 
 .chat-footer input {
-    flex: 1;
-    border: 1px solid #dee2e6;
-    border-radius: 20px;
-    padding: 0.5rem 1rem;
-    outline: none;
-    font-size: 0.9rem;
+   flex: 1;
+   border: 1px solid #dee2e6;
+   border-radius: 20px;
+   padding: 0.5rem 1rem;
+   outline: none;
+   font-size: 0.9rem;
 }
 
 .send-btn {
-    background: #1f93ff;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    color: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+   background: #1f93ff;
+   border: none;
+   border-radius: 50%;
+   width: 40px;
+   height: 40px;
+   color: white;
+   cursor: pointer;
+   display: flex;
+   align-items: center;
+   justify-content: center;
 }
 
 .send-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* Code Container */
-.code-container {
-    background: #2d3748;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.code-container pre {
-    background: none;
-    color: #e2e8f0;
-    margin: 0;
-    padding: 1.5rem;
-    font-size: 0.85rem;
-    line-height: 1.5;
-    overflow-x: auto;
+   opacity: 0.6;
+   cursor: not-allowed;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .position-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 0.25rem;
-    }
+   .position-grid {
+       grid-template-columns: 1fr 1fr;
+       gap: 0.25rem;
+   }
 
-    .position-btn {
-        padding: 0.5rem;
-        font-size: 0.8rem;
-    }
+   .position-btn {
+       padding: 0.5rem;
+       font-size: 0.8rem;
+   }
 
-    .preview-screen {
-        height: 400px;
-    }
+   .preview-screen {
+       height: 400px;
+   }
 
-    .chat-window {
-        width: 280px;
-        height: 400px;
-    }
+   .chat-window {
+       width: 280px !important;
+       height: 400px !important;
+   }
 }
 
 /* Animazioni */
 @keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+   from {
+       opacity: 0;
+       transform: translateY(10px);
+   }
+   to {
+       opacity: 1;
+       transform: translateY(0);
+   }
 }
 
 .chat-window {
-    animation: slideIn 0.3s ease;
+   animation: slideIn 0.3s ease;
 }
 </style>

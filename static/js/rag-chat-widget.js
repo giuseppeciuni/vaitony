@@ -65,23 +65,48 @@
             if (isOpen) {
                 // Salva la posizione attuale dello scroll
                 const scrollY = window.scrollY;
+
+                // Aggiungi classe al body per CSS targeting
+                document.body.classList.add('rag-chat-open');
+
+                // Applica stili inline per sicurezza
                 document.body.style.position = 'fixed';
                 document.body.style.top = `-${scrollY}px`;
+                document.body.style.left = '0';
+                document.body.style.right = '0';
                 document.body.style.width = '100%';
+                document.body.style.height = '100%';
                 document.body.style.overflow = 'hidden';
+
                 // Salva la posizione per il ripristino
                 document.body.dataset.scrollY = scrollY;
+
+                // Forza il ridisegno
+                document.body.offsetHeight;
             } else {
+                // Rimuovi classe dal body
+                document.body.classList.remove('rag-chat-open');
+
                 // Ripristina la posizione dello scroll
                 const scrollY = document.body.dataset.scrollY;
+
+                // Rimuovi stili inline
                 document.body.style.position = '';
                 document.body.style.top = '';
+                document.body.style.left = '';
+                document.body.style.right = '';
                 document.body.style.width = '';
+                document.body.style.height = '';
                 document.body.style.overflow = '';
+
+                // Ripristina scroll
                 if (scrollY) {
                     window.scrollTo(0, parseInt(scrollY || '0'));
                 }
                 delete document.body.dataset.scrollY;
+
+                // Forza il ridisegno
+                document.body.offsetHeight;
             }
         }
     }

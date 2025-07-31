@@ -18,49 +18,355 @@ logger = logging.getLogger(__name__)
 
 
 @cache_control(max_age=3600)  # Cache 1 ora
+# Aggiungi questo alla view serve_secure_widget_js in secure_chatbot_views.py
+
 def serve_secure_widget_js(request):
 	"""
-	Serve il JavaScript minimale per caricare il widget.
-	Questo è l'unico file JS che l'utente deve includere.
-	CSP-safe: non usa eval() o new Function()
+	Serve il JavaScript del widget sicuro con ottimizzazioni mobile
 	"""
+
 	js_content = """
 (function() {
-    var w = window.VAITONY_WIDGET_ID;
-    if (!w) return;
+    'use strict';
 
-    // Carica CSS
-    var l = document.createElement('link');
-    l.rel = 'stylesheet';
-    l.href = '""" + request.build_absolute_uri('/widget/rag-chat-widget.css') + """';
-    document.head.appendChild(l);
+    // Configurazione widget
+    const widgetId = window.VAITONY_WIDGET_ID;
+    if (!widgetId) {
+        console.error('VAITONY_WIDGET_ID non trovato');
+        return;
+    }
 
-    // Fetch configurazione
-    fetch('""" + request.build_absolute_uri('/widget/config/') + """' + w)
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d.success) {
-                // Salva configurazione globalmente
-                window.RAG_WIDGET_CONFIG = d.config;
-                window.RAG_WIDGET_CONFIG.apiEndpoint = '""" + request.build_absolute_uri('/api/chat/secure/') + """';
-                window.RAG_WIDGET_CONFIG.authToken = d.token;
-                window.RAG_WIDGET_CONFIG.widgetToken = w;
+    // FUNZIONI MOBILE UTILITY
+    function isMobileDevice() {
+        const userAgent = navigator.userAgent.toLowerCase();
+        const mobileKeywords = ['android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 'iemobile', 'opera mini'];
+        const isMobileUA = mobileKeywords.some(keyword => userAgent.includes(keyword));
+        const isMobileScreen = window.innerWidth <= 768;
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        return isMobileUA || (isMobileScreen && isTouchDevice);
+    }
 
-                // Carica widget JS principale
-                var s = document.createElement('script');
-                s.src = '""" + request.build_absolute_uri('/widget/rag-chat-widget.js') + """';
-                document.head.appendChild(s);
+    function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent);
+    }
+
+    // GESTIONE VIEWPORT MOBILE
+    function setupMobileViewport() {
+        if (isMobileDevice()) {
+            let viewport = document.querySelector('meta[name=viewport]');
+            if (!viewport) {
+                viewport = document.createElement('meta');
+                viewport.name = 'viewport';
+                document.head.appendChild(viewport);
             }
-        })
-        .catch(function(err) {
-            console.error('Errore caricamento widget:', err);
-        });
+            viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+        }
+    }
+
+    // PREVENZIONE SCROLL BODY
+    function preventBodyScroll(enable) {
+        if (isMobileDevice()) {
+            if (enable) {
+                const scrollY = window.scrollY;
+                document.body.style.position = 'fixed';
+                document.body.style.top = `-${scrollY}px`;
+                document.body.style.left = '0';
+                document.body.style.right = '0';
+                document.body.style.width = '100%';
+                document.body.style.overflow = 'hidden';
+                document.body.dataset.scrollY = scrollY;
+            } else {
+                const scrollY = document.body.dataset.scrollY;
+                document.body.style.position = '';
+                document.body.style.top = '';
+                document.body.style.left = '';
+                document.body.style.right = '';
+                document.body.style.width = '';
+                document.body.style.overflow = '';
+                if (scrollY) {
+                    window.scrollTo(0, parseInt(scrollY));
+                }
+                delete document.body.dataset.scrollY;
+            }
+        }
+    }
+
+    // FORZA FULLSCREEN MOBILE - VERSIONE AGGRESSIVA
+    function forceMobileFullscreen(chatWindow, enable) {
+        if (!isMobileDevice() || !chatWindow) return;
+
+        if (enable) {
+            console.log('🔧 Forcing mobile fullscreen...');
+
+            // CSS aggressivo per fullscreen
+            const fullscreenCSS = `
+                position: fixed !important;
+                top: 0px !important;
+                left: 0px !important;
+                right: 0px !important;
+                bottom: 0px !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                min-width: 100vw !important;
+                min-height: 100vh !important;
+                max-width: 100vw !important;
+                max-height: 100vh !important;
+                z-index: 2147483647 !important;
+                border: none !important;
+                border-radius: 0px !important;
+                margin: 0px !important;
+                padding: 0px !important;
+                box-shadow: none !important;
+                background: white !important;
+                display: flex !important;
+                flex-direction: column !important;
+                transform: none !important;
+                overflow: hidden !important;
+            `;
+
+            chatWindow.style.cssText = fullscreenCSS;
+
+            // GESTIONE KEYBOARD MOBILE - IL PUNTO CRITICO
+            let keyboardHeight = 0;
+            let initialHeight = window.innerHeight;
+
+            const handleResize = () => {
+                const currentHeight = window.innerHeight;
+                keyboardHeight = Math.max(0, initialHeight - currentHeight);
+
+                if (keyboardHeight > 150) {
+                    // Keyboard aperta - adatta il layout
+                    console.log('🎹 Keyboard detected, height:', keyboardHeight);
+
+                    const messages = chatWindow.querySelector('[id*="message"], .messages, .chat-messages');
+                    const inputArea = chatWindow.querySelector('[id*="input"], .input-area, .chat-input');
+
+                    if (messages && inputArea) {
+                        // Ridimensiona area messaggi per fare spazio alla keyboard
+                        messages.style.height = `calc(100vh - 60px - 80px - ${keyboardHeight}px)`;
+                        messages.style.paddingBottom = '20px';
+
+                        // Forza l'input area in fondo ma sopra la keyboard
+                        inputArea.style.position = 'fixed';
+                        inputArea.style.bottom = `${keyboardHeight}px`;
+                        inputArea.style.left = '0';
+                        inputArea.style.right = '0';
+                        inputArea.style.zIndex = '2147483648';
+                        inputArea.style.backgroundColor = 'white';
+
+                        // Scroll ai messaggi più recenti
+                        setTimeout(() => {
+                            messages.scrollTop = messages.scrollHeight;
+                        }, 100);
+                    }
+                } else {
+                    // Keyboard chiusa - ripristina layout normale
+                    console.log('🎹 Keyboard hidden');
+
+                    const messages = chatWindow.querySelector('[id*="message"], .messages, .chat-messages');
+                    const inputArea = chatWindow.querySelector('[id*="input"], .input-area, .chat-input');
+
+                    if (messages && inputArea) {
+                        messages.style.height = '';
+                        messages.style.paddingBottom = '';
+                        inputArea.style.position = '';
+                        inputArea.style.bottom = '';
+                        inputArea.style.left = '';
+                        inputArea.style.right = '';
+                        inputArea.style.zIndex = '';
+                        inputArea.style.backgroundColor = '';
+                    }
+                }
+
+                // Mantieni sempre il fullscreen
+                chatWindow.style.cssText = fullscreenCSS;
+            };
+
+            window.addEventListener('resize', handleResize);
+            chatWindow._resizeHandler = handleResize;
+
+            // Observer per prevenire modifiche CSS
+            const observer = new MutationObserver(() => {
+                if (!chatWindow.style.cssText.includes('position: fixed')) {
+                    chatWindow.style.cssText = fullscreenCSS;
+                }
+            });
+
+            observer.observe(chatWindow, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+
+            chatWindow._styleObserver = observer;
+
+        } else {
+            // Cleanup
+            if (chatWindow._resizeHandler) {
+                window.removeEventListener('resize', chatWindow._resizeHandler);
+                delete chatWindow._resizeHandler;
+            }
+            if (chatWindow._styleObserver) {
+                chatWindow._styleObserver.disconnect();
+                delete chatWindow._styleObserver;
+            }
+        }
+    }
+
+    // INIETTTA CSS MOBILE OTTIMIZZATO
+    function injectMobileCSS() {
+        if (!isMobileDevice()) return;
+
+        const css = `
+            /* Mobile fullscreen chat */
+            @media screen and (max-width: 768px) {
+                [id*="chat-window"], [class*="chat-window"] {
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    right: 0 !important;
+                    bottom: 0 !important;
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    z-index: 2147483647 !important;
+                    border: none !important;
+                    border-radius: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                }
+
+                /* Header mobile */
+                [id*="chat-header"], [class*="chat-header"] {
+                    min-height: 60px !important;
+                    padding: 15px 20px !important;
+                    flex-shrink: 0 !important;
+                    padding-top: max(15px, env(safe-area-inset-top)) !important;
+                }
+
+                /* Messages area mobile */
+                [id*="message"], [class*="message"], .messages, .chat-messages {
+                    flex: 1 !important;
+                    overflow-y: auto !important;
+                    padding: 15px !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
+
+                /* Input area mobile */
+                [id*="input"], [class*="input"], .input-area, .chat-input {
+                    flex-shrink: 0 !important;
+                    padding: 15px 20px !important;
+                    min-height: 70px !important;
+                    padding-bottom: max(15px, env(safe-area-inset-bottom)) !important;
+                }
+
+                /* Input field mobile */
+                input[type="text"], textarea {
+                    font-size: 16px !important; /* Previene zoom iOS */
+                    min-height: 44px !important;
+                }
+
+                /* Buttons mobile */
+                button {
+                    min-width: 44px !important;
+                    min-height: 44px !important;
+                }
+
+                /* Body lock */
+                body.chat-open {
+                    overflow: hidden !important;
+                    position: fixed !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                }
+            }
+        `;
+
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.appendChild(style);
+    }
+
+    // INIZIALIZZAZIONE
+    function initWidget() {
+        setupMobileViewport();
+        injectMobileCSS();
+
+        // Aspetta che il widget originale si carichi
+        const checkWidget = setInterval(() => {
+            const chatWindow = document.querySelector('[id*="chat-window"], [class*="chat-window"]');
+            const bubble = document.querySelector('[id*="chat-bubble"], [class*="chat-bubble"], [id*="bubble"]');
+
+            if (chatWindow && bubble) {
+                clearInterval(checkWidget);
+                console.log('✅ Widget trovato, applicando fix mobile');
+
+                // Intercetta click bubble
+                bubble.addEventListener('click', () => {
+                    setTimeout(() => {
+                        const isVisible = chatWindow.style.display !== 'none' && 
+                                        getComputedStyle(chatWindow).display !== 'none';
+
+                        if (isVisible) {
+                            console.log('💬 Chat aperta, applicando fullscreen mobile');
+                            preventBodyScroll(true);
+                            forceMobileFullscreen(chatWindow, true);
+                            document.body.classList.add('chat-open');
+                        } else {
+                            console.log('💬 Chat chiusa, ripristinando layout');
+                            preventBodyScroll(false);
+                            forceMobileFullscreen(chatWindow, false);
+                            document.body.classList.remove('chat-open');
+                        }
+                    }, 50);
+                });
+
+                // Intercetta close button
+                const closeBtn = chatWindow.querySelector('[id*="close"], [class*="close"], button');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => {
+                        setTimeout(() => {
+                            preventBodyScroll(false);
+                            forceMobileFullscreen(chatWindow, false);
+                            document.body.classList.remove('chat-open');
+                        }, 50);
+                    });
+                }
+
+                console.log('🚀 Mobile chat fix applicato con successo');
+            }
+        }, 100);
+
+        // Timeout di sicurezza
+        setTimeout(() => {
+            clearInterval(checkWidget);
+        }, 10000);
+    }
+
+    // Avvia quando il DOM è pronto
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initWidget);
+    } else {
+        initWidget();
+    }
+
+    // Carica il widget originale
+    const script = document.createElement('script');
+    script.src = '/static/js/rag-chat-widget.js'; // o il percorso corretto
+    script.onload = () => {
+        console.log('📱 Widget originale caricato, fix mobile attivo');
+    };
+    document.head.appendChild(script);
+
 })();
-"""
+    """
 
 	response = HttpResponse(js_content, content_type='application/javascript')
-	response[
-		'Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+	response['Access-Control-Allow-Origin'] = '*'
+	response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+	response['Pragma'] = 'no-cache'
+	response['Expires'] = '0'
+
 	return response
 
 

@@ -1,4 +1,4 @@
-// RAG Chat Widget - JavaScript Sicuro (Versione Completa Aggiornata)
+// RAG Chat Widget - JavaScript Completo Mobile-Optimized (Versione Sicura)
 (function() {
     'use strict';
 
@@ -29,6 +29,207 @@
         return;
     }
 
+    // ===== FUNZIONI MOBILE UTILITY =====
+
+    // Funzione per rilevare dispositivi mobile
+    function isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+               window.innerWidth <= 768;
+    }
+
+    // Funzione per rilevare iOS
+    function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent);
+    }
+
+    // Funzione per gestire il viewport mobile
+    function handleMobileViewport() {
+        if (isMobileDevice()) {
+            let viewport = document.querySelector('meta[name=viewport]');
+            if (viewport) {
+                viewport.setAttribute('content',
+                    'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+                );
+            } else {
+                const newViewport = document.createElement('meta');
+                newViewport.name = 'viewport';
+                newViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+                document.head.appendChild(newViewport);
+            }
+        }
+    }
+
+    // Funzione per prevenire lo scroll del body quando la chat è aperta su mobile
+    function preventBodyScroll(isOpen) {
+        if (isMobileDevice()) {
+            if (isOpen) {
+                // Salva la posizione attuale dello scroll
+                const scrollY = window.scrollY;
+                document.body.style.position = 'fixed';
+                document.body.style.top = `-${scrollY}px`;
+                document.body.style.width = '100%';
+                document.body.style.overflow = 'hidden';
+                // Salva la posizione per il ripristino
+                document.body.dataset.scrollY = scrollY;
+            } else {
+                // Ripristina la posizione dello scroll
+                const scrollY = document.body.dataset.scrollY;
+                document.body.style.position = '';
+                document.body.style.top = '';
+                document.body.style.width = '';
+                document.body.style.overflow = '';
+                if (scrollY) {
+                    window.scrollTo(0, parseInt(scrollY || '0'));
+                }
+                delete document.body.dataset.scrollY;
+            }
+        }
+    }
+
+    // Funzione per gestire la keyboard mobile
+    function handleMobileKeyboard() {
+        const input = document.getElementById('rag-chat-input');
+        const chatWindow = document.getElementById('rag-chat-window');
+
+        if (!input || !chatWindow || !isMobileDevice()) return;
+
+        // Gestisci apertura keyboard
+        input.addEventListener('focusin', () => {
+            if (isMobileDevice()) {
+                chatWindow.classList.add('rag-keyboard-open');
+
+                // Scorri ai messaggi più recenti con delay
+                setTimeout(() => {
+                    const messages = document.getElementById('rag-chat-messages');
+                    if (messages) {
+                        messages.scrollTop = messages.scrollHeight;
+                    }
+                }, 300);
+            }
+        });
+
+        // Gestisci chiusura keyboard
+        input.addEventListener('focusout', () => {
+            if (isMobileDevice()) {
+                setTimeout(() => {
+                    chatWindow.classList.remove('rag-keyboard-open');
+                }, 100);
+            }
+        });
+    }
+
+    // Funzione per gestire i touch events
+    function handleTouchEvents() {
+        const bubble = document.getElementById('rag-chat-bubble');
+        const sendBtn = document.getElementById('rag-chat-send');
+        const closeBtn = document.getElementById('rag-chat-close');
+
+        if (!isMobileDevice()) return;
+
+        // Feedback tattile per il bubble
+        if (bubble) {
+            bubble.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                bubble.style.transform = 'scale(0.95)';
+            }, { passive: false });
+
+            bubble.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                bubble.style.transform = 'scale(1)';
+            }, { passive: false });
+        }
+
+        // Feedback per il send button
+        if (sendBtn) {
+            sendBtn.addEventListener('touchstart', (e) => {
+                if (!sendBtn.disabled) {
+                    sendBtn.style.transform = 'scale(0.95)';
+                }
+            });
+
+            sendBtn.addEventListener('touchend', (e) => {
+                sendBtn.style.transform = 'scale(1)';
+            });
+        }
+
+        // Feedback per il close button
+        if (closeBtn) {
+            closeBtn.addEventListener('touchstart', (e) => {
+                closeBtn.style.transform = 'scale(0.9)';
+            });
+
+            closeBtn.addEventListener('touchend', (e) => {
+                closeBtn.style.transform = 'scale(1)';
+            });
+        }
+    }
+
+    // Funzione per gestire il safe area su iOS
+    function handleSafeArea() {
+        if (isIOS()) {
+            document.documentElement.style.setProperty('--safe-area-inset-top', 'env(safe-area-inset-top)');
+            document.documentElement.style.setProperty('--safe-area-inset-bottom', 'env(safe-area-inset-bottom)');
+        }
+    }
+
+    // Funzione per gestire il cambio di orientamento
+    function handleOrientationChange() {
+        if (isMobileDevice()) {
+            setTimeout(() => {
+                const messages = document.getElementById('rag-chat-messages');
+                if (messages) {
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                // Riposiziona il focus se necessario
+                const input = document.getElementById('rag-chat-input');
+                if (input && document.activeElement === input) {
+                    input.blur();
+                    setTimeout(() => input.focus(), 100);
+                }
+            }, 100);
+        }
+    }
+
+    // Funzione per inizializzare le features mobile
+    function initializeMobileFeatures() {
+        if (isMobileDevice()) {
+            console.log('Inizializzazione features mobile');
+
+            handleMobileViewport();
+            handleSafeArea();
+            handleMobileKeyboard();
+            handleTouchEvents();
+
+            // Event listener per cambio orientamento
+            window.addEventListener('orientationchange', handleOrientationChange);
+
+            // Event listener per resize (keyboard mobile)
+            let initialHeight = window.innerHeight;
+            let resizeTimeout;
+
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    const currentHeight = window.innerHeight;
+                    const heightDiff = initialHeight - currentHeight;
+                    const chatWindow = document.getElementById('rag-chat-window');
+
+                    if (chatWindow) {
+                        // Se la differenza è significativa, probabilmente è la keyboard
+                        if (heightDiff > 150) {
+                            chatWindow.classList.add('rag-keyboard-open');
+                        } else {
+                            chatWindow.classList.remove('rag-keyboard-open');
+                        }
+                    }
+                }, 150);
+            });
+        }
+    }
+
+    // ===== FUNZIONI CORE WIDGET =====
+
     // Applica CSS personalizzato
     function applyCustomStyles() {
         const root = document.documentElement;
@@ -57,16 +258,20 @@
     function createWidgetHTML() {
         return `
             <div id="rag-chat-widget" class="${config.position}">
-                <div id="rag-chat-bubble">💬</div>
-                <div id="rag-chat-window">
+                <div id="rag-chat-bubble" tabindex="0" role="button" aria-label="Apri chat">💬</div>
+                <div id="rag-chat-window" role="dialog" aria-labelledby="rag-chat-title" aria-modal="true">
                     <div id="rag-chat-header">
-                        <span>${config.title}</span>
-                        <button id="rag-chat-close" aria-label="Chiudi chat">×</button>
+                        <span id="rag-chat-title">${config.title}</span>
+                        <button id="rag-chat-close" aria-label="Chiudi chat" tabindex="0">×</button>
                     </div>
-                    <div id="rag-chat-messages"></div>
+                    <div id="rag-chat-messages" role="log" aria-live="polite" aria-label="Messaggi chat"></div>
                     <div id="rag-chat-input-area">
-                        <textarea id="rag-chat-input" placeholder="${config.placeholderText}" rows="1"></textarea>
-                        <button id="rag-chat-send" aria-label="Invia messaggio">➤</button>
+                        <textarea id="rag-chat-input" 
+                            placeholder="${config.placeholderText}" 
+                            rows="1" 
+                            aria-label="Scrivi un messaggio"
+                            maxlength="1000"></textarea>
+                        <button id="rag-chat-send" aria-label="Invia messaggio" disabled>➤</button>
                     </div>
                     ${config.showBranding ? '<div class="rag-branding">Powered by Vaitony AI</div>' : ''}
                 </div>
@@ -121,13 +326,32 @@
             isOpen = !isOpen;
             chatWindow.style.display = isOpen ? 'flex' : 'none';
 
+            // Gestione mobile
+            preventBodyScroll(isOpen);
+
             if (isOpen) {
-                input.focus();
+                // Focus management per accessibilità
+                if (isMobileDevice()) {
+                    // Su mobile, focus dopo un delay per evitare problemi con la keyboard
+                    setTimeout(() => input.focus(), 100);
+                } else {
+                    input.focus();
+                }
+
                 bubble.classList.remove('has-notification');
 
                 // Messaggio di benvenuto solo alla prima apertura
                 if (messageHistory.length === 0) {
                     addMessage('bot', config.welcomeMessage);
+                }
+
+                // Scroll ottimizzato per mobile
+                if (isMobileDevice()) {
+                    setTimeout(() => {
+                        if (messages) {
+                            messages.scrollTop = messages.scrollHeight;
+                        }
+                    }, 100);
                 }
 
                 // Trigger evento personalizzato
@@ -139,13 +363,57 @@
 
         // Event listeners principali
         bubble.addEventListener('click', toggleChat);
-        closeBtn.addEventListener('click', toggleChat);
+        bubble.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleChat();
+            }
+        });
 
-        // Auto-resize textarea
+        closeBtn.addEventListener('click', toggleChat);
+        closeBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                toggleChat();
+            }
+        });
+
+        // Auto-resize textarea con limiti mobile-friendly
         input.addEventListener('input', function() {
             this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 80) + 'px';
-            sendBtn.disabled = !this.value.trim();
+            const maxHeight = isMobileDevice() ? 100 : 80;
+            this.style.height = Math.min(this.scrollHeight, maxHeight) + 'px';
+
+            const hasContent = this.value.trim().length > 0;
+            sendBtn.disabled = !hasContent;
+
+            // Feedback visivo per mobile
+            if (isMobileDevice() && hasContent) {
+                sendBtn.style.opacity = '1';
+                sendBtn.style.transform = 'scale(1)';
+            } else if (isMobileDevice()) {
+                sendBtn.style.opacity = '0.6';
+            }
+        });
+
+        // Gestione caratteri rimanenti per mobile
+        input.addEventListener('input', function() {
+            const remaining = 1000 - this.value.length;
+            if (remaining < 50 && isMobileDevice()) {
+                // Mostra contatore caratteri su mobile quando vicino al limite
+                let counter = document.getElementById('rag-char-counter');
+                if (!counter) {
+                    counter = document.createElement('div');
+                    counter.id = 'rag-char-counter';
+                    counter.style.cssText = 'font-size: 12px; color: #666; text-align: right; margin-top: 4px;';
+                    this.parentNode.appendChild(counter);
+                }
+                counter.textContent = `${remaining} caratteri rimanenti`;
+                counter.style.color = remaining < 20 ? '#dc3545' : '#666';
+            } else {
+                const counter = document.getElementById('rag-char-counter');
+                if (counter) counter.remove();
+            }
         });
 
         // Invio messaggio
@@ -153,10 +421,20 @@
             const text = input.value.trim();
             if (!text || sendBtn.disabled) return;
 
+            // Validazione lunghezza
+            if (text.length > 1000) {
+                addMessage('bot', 'Il messaggio è troppo lungo. Massimo 1000 caratteri.', true);
+                return;
+            }
+
             addMessage('user', text);
             input.value = '';
             input.style.height = 'auto';
             sendBtn.disabled = true;
+
+            // Rimuovi contatore caratteri se presente
+            const counter = document.getElementById('rag-char-counter');
+            if (counter) counter.remove();
 
             // Mostra typing indicator
             const typingMsg = addTypingIndicator();
@@ -186,59 +464,55 @@
                         addMessage('bot', 'Sessione scaduta. Ricarica la pagina per continuare.', true);
                     } else if (error.message.includes('403') || error.message.includes('Dominio')) {
                         addMessage('bot', 'Accesso non autorizzato da questo dominio.', true);
+                    } else if (error.name === 'AbortError') {
+                        addMessage('bot', 'Richiesta interrotta per timeout. Riprova.', true);
                     } else {
                         addMessage('bot', 'Errore di connessione. Verifica la connessione internet.', true);
                     }
                 });
         }
 
-        // Chiamata API RAG SICURA con JWT
-async function callSecureRAGAPI(question) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        // Chiamata API RAG SICURA con JWT e gestione timeout migliorata
+        async function callSecureRAGAPI(question) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-    try {
-        // Usa il nuovo endpoint sicuro se disponibile
-        const apiEndpoint = config.apiEndpoint || `${config.baseUrl}/api/chat/${config.projectSlug}/`;
-        const isSecureEndpoint = apiEndpoint.includes('/api/chat/secure/');
+            try {
+                const response = await fetch(config.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${config.authToken}` // JWT invece di API key
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        widget_token: config.widgetToken,
+                        user_agent: navigator.userAgent,
+                        is_mobile: isMobileDevice(),
+                        timestamp: Date.now()
+                    }),
+                    signal: controller.signal
+                });
 
-        const headers = {
-            'Content-Type': 'application/json'
-        };
+                clearTimeout(timeoutId);
 
-        const body = {
-            question: question,
-            widget_token: config.widgetToken
-        };
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
 
-        // Se è l'endpoint sicuro, usa JWT
-        if (isSecureEndpoint && config.authToken) {
-            headers['Authorization'] = `Bearer ${config.authToken}`;
-        } else {
-            // Retrocompatibilità con vecchio sistema
-            headers['X-API-Key'] = config.apiKey;
-            body.project_slug = config.projectSlug;
+                const result = await response.json();
+
+                // Validazione risposta
+                if (!result || typeof result !== 'object') {
+                    throw new Error('Risposta API non valida');
+                }
+
+                return result;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error;
+            }
         }
-
-        const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(body),
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        return await response.json();
-    } catch (error) {
-        clearTimeout(timeoutId);
-        throw error;
-    }
-}
 
         // Aggiunge messaggio alla chat
         function addMessage(sender, text, isError = false) {
@@ -253,8 +527,25 @@ async function callSecureRAGAPI(question) {
                 messageEl.textContent = text;
             }
 
+            // Accessibilità
+            messageEl.setAttribute('role', sender === 'bot' ? 'status' : 'text');
+            if (sender === 'bot') {
+                messageEl.setAttribute('aria-live', 'polite');
+            }
+
             messages.appendChild(messageEl);
-            messages.scrollTop = messages.scrollHeight;
+
+            // Scroll smooth ottimizzato per mobile
+            if (isMobileDevice()) {
+                // Su mobile, scroll immediato senza animazione per prestazioni migliori
+                messages.scrollTop = messages.scrollHeight;
+            } else {
+                // Su desktop, scroll smooth
+                messages.scrollTo({
+                    top: messages.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
 
             // Salva nella cronologia
             messageHistory.push({
@@ -268,6 +559,11 @@ async function callSecureRAGAPI(question) {
             if (!isOpen && sender === 'bot') {
                 bubble.classList.add('has-notification');
 
+                // Vibrazione su mobile se supportata
+                if (isMobileDevice() && navigator.vibrate) {
+                    navigator.vibrate([200, 100, 200]);
+                }
+
                 // Trigger evento
                 window.dispatchEvent(new CustomEvent('ragNotificationReceived', {
                     detail: { message: text }
@@ -279,6 +575,18 @@ async function callSecureRAGAPI(question) {
 
         // Formattazione avanzata messaggi bot
         function formatBotMessage(text) {
+            // Escape HTML per sicurezza
+            text = text.replace(/[<>&"']/g, function(match) {
+                const escapeMap = {
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '&': '&amp;',
+                    '"': '&quot;',
+                    "'": '&#x27;'
+                };
+                return escapeMap[match];
+            });
+
             // Auto-format liste numerate con headers
             text = text.replace(/(\d+\.\s*\*\*[^*]+\*\*[^]*?)(?=\d+\.\s*\*\*|$)/g, (match) => {
                 return `<div class="rag-list-item">${match}</div>`;
@@ -289,7 +597,7 @@ async function callSecureRAGAPI(question) {
 
             // Bullet points
             text = text.replace(/^[\s]*[-•]\s*(.+)$/gm, '<li class="rag-bullet">$1</li>');
-            text = text.replace(/(<li class="rag-bullet">[^<]*<\/li>\s*)+/g, '<ul class="rag-bullet-list">$&</ul>');
+            text = text.replace(/(<li class="rag-bullet">[^<]*<\/li>\s*)+/g, '<ul class="rag-bullet-list">                        // Se la differenza è significativa, probabilmente è la keyboard</ul>');
 
             // Paragrafi
             text = text.replace(/\n\n/g, '</p><p class="rag-paragraph">');
@@ -304,6 +612,9 @@ async function callSecureRAGAPI(question) {
             // Codice inline
             text = text.replace(/`([^`]+)`/g, '<code class="rag-code">$1</code>');
 
+            // Link (sicuri)
+            text = text.replace(/(https?:\/\/[^\s<>"']+)/gi, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+
             // Pulizia paragrafi vuoti
             text = text.replace(/<p class="rag-paragraph">\s*<\/p>/g, '');
 
@@ -314,6 +625,7 @@ async function callSecureRAGAPI(question) {
         function addTypingIndicator() {
             const typingEl = document.createElement('div');
             typingEl.className = 'rag-message bot rag-typing';
+            typingEl.setAttribute('aria-label', 'L\'assistente sta scrivendo');
             typingEl.innerHTML = `
                 <span>Sto pensando</span>
                 <div class="rag-typing-dots">
@@ -324,7 +636,16 @@ async function callSecureRAGAPI(question) {
             `;
 
             messages.appendChild(typingEl);
-            messages.scrollTop = messages.scrollHeight;
+
+            // Scroll ottimizzato per mobile
+            if (isMobileDevice()) {
+                messages.scrollTop = messages.scrollHeight;
+            } else {
+                messages.scrollTo({
+                    top: messages.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
 
             return typingEl;
         }
@@ -345,6 +666,19 @@ async function callSecureRAGAPI(question) {
             }
         });
 
+        // Gestione paste per mobile
+        input.addEventListener('paste', (e) => {
+            setTimeout(() => {
+                const text = input.value;
+                if (text.length > 1000) {
+                    input.value = text.substring(0, 1000);
+                    addMessage('bot', 'Il testo incollato è stato troncato a 1000 caratteri.', true);
+                }
+                // Trigger input event per aggiornare UI
+                input.dispatchEvent(new Event('input'));
+            }, 10);
+        });
+
         // Inizialmente disabilita send button
         sendBtn.disabled = true;
 
@@ -355,15 +689,22 @@ async function callSecureRAGAPI(question) {
             }, config.openDelay);
         }
 
+        // Inizializza features mobile
+        initializeMobileFeatures();
+
         // API pubblica del widget SICURA
         window.RAGWidget = {
             open: () => { if (!isOpen) toggleChat(); },
             close: () => { if (isOpen) toggleChat(); },
             toggle: toggleChat,
             isOpen: () => isOpen,
+            isMobile: () => isMobileDevice(),
             sendMessage: (text) => {
-                input.value = text;
-                sendMessage();
+                if (text && text.trim()) {
+                    input.value = text.trim().substring(0, 1000);
+                    input.dispatchEvent(new Event('input'));
+                    sendMessage();
+                }
             },
             clearHistory: () => {
                 messageHistory = [];
@@ -384,13 +725,14 @@ async function callSecureRAGAPI(question) {
                 applyCustomStyles();
 
                 // Aggiorna elementi visibili
-                document.querySelector('#rag-chat-header span').textContent = config.title;
-                input.placeholder = config.placeholderText;
+                const titleEl = document.querySelector('#rag-chat-header span');
+                if (titleEl) titleEl.textContent = config.title;
+                if (input) input.placeholder = config.placeholderText;
 
                 // Aggiorna dimensioni se cambiate (solo da configurazione sicura)
                 if (newConfig.chatWidth || newConfig.chatHeight) {
                     const chatWindow = document.getElementById('rag-chat-window');
-                    if (chatWindow) {
+                    if (chatWindow && !isMobileDevice()) {
                         if (newConfig.chatWidth) {
                             chatWindow.style.width = newConfig.chatWidth;
                             chatWindow.style.maxWidth = newConfig.chatWidth;
@@ -409,21 +751,37 @@ async function callSecureRAGAPI(question) {
             // NUOVO: Informazioni sicure del widget
             getInfo: () => {
                 return {
-                    widgetToken: config.widgetToken,
+                    widgetToken: config.widgetToken ? config.widgetToken.substring(0, 8) + '...' : null,
                     hasAuth: !!config.authToken,
-                    version: '2.0-secure',
-                    messageCount: messageHistory.length
+                    version: '2.0-secure-mobile',
+                    messageCount: messageHistory.length,
+                    isMobile: isMobileDevice(),
+                    isOpen: isOpen
+                };
+            },
+            // NUOVO: Funzioni debug per mobile
+            debugMobile: () => {
+                return {
+                    isMobile: isMobileDevice(),
+                    isIOS: isIOS(),
+                    screenSize: {
+                        width: window.innerWidth,
+                        height: window.innerHeight
+                    },
+                    viewport: document.querySelector('meta[name=viewport]')?.content,
+                    userAgent: navigator.userAgent
                 };
             }
         };
 
-        console.log('RAG Widget Sicuro inizializzato con successo');
+        console.log('RAG Widget Sicuro Mobile-Optimized inizializzato con successo');
 
         // Trigger evento di inizializzazione SICURA
         window.dispatchEvent(new CustomEvent('ragSecureWidgetReady', {
             detail: {
-                widgetToken: config.widgetToken,
-                version: '2.0-secure'
+                widgetToken: config.widgetToken ? config.widgetToken.substring(0, 8) + '...' : null,
+                version: '2.0-secure-mobile',
+                isMobile: isMobileDevice()
             }
         }));
     }

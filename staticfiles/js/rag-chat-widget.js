@@ -59,8 +59,7 @@
     }
 
     // API endpoint con JWT token
-    const baseUrl = config.baseUrl || window.location.origin;
-    const API_ENDPOINT = `${baseUrl}/api/chat/secure/`;
+    const API_ENDPOINT = `${window.location.origin}/api/chat/secure/`;
     const TOKEN = config.token;
 
     if (!TOKEN) {

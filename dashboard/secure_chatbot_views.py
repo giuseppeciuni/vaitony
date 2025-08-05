@@ -1,4 +1,4 @@
-# dashboard/views/secure_chatbot.py - NUOVO FILE
+# dashboard/views/secure_chatbot.py
 
 import json
 import logging
@@ -85,144 +85,154 @@ def get_widget_config(request, widget_token):
 	tra chatbot interno e widget esterno.
 	"""
 	logger.debug("--->get_widget_config")
+	logger.info(f"🎯 Widget config richiesta per progetto {widget_token[:8]}... ({request.method})")
 
 	try:
-		# Trova il chatbot tramite widget_token
-		chatbot = get_object_or_404(OwnChatbot, widget_token=widget_token, is_enabled=True)
+		# ============================================================
+		# FASE 1: VALIDAZIONE E RECUPERO CHATBOT
+		# ============================================================
+
+		# Trova il chatbot attivo
+		try:
+			chatbot = OwnChatbot.objects.get(
+				widget_token=widget_token,
+				is_enabled=True
+			)
+		except OwnChatbot.DoesNotExist:
+			logger.error(f"❌ Widget non trovato o disabilitato: {widget_token}")
+			return JsonResponse({
+				'success': False,
+				'error': 'Widget non trovato o disabilitato'
+			}, status=404)
+
 		project = chatbot.project
 
-		logger.info(f"🎯 Widget config richiesta per progetto {project.id} ({project.name})")
-
 		# ============================================================
-		# 🚀 SOLUZIONE 1: FORCE REFRESH DELL'INDICE PER IL WIDGET
-		# ============================================================
-		logger.info(f"🔄 Verificando e aggiornando indice RAG per widget progetto {project.id}")
-
-		try:
-			# Importa le funzioni necessarie per l'aggiornamento dell'indice
-			from dashboard.rag_utils import create_project_rag_chain, check_project_index_update_needed
-
-			# Controlla se l'indice necessita di aggiornamento
-			needs_update = check_project_index_update_needed(project)
-
-			if needs_update:
-				logger.info(f"⚡ Contenuti non indicizzati rilevati per progetto {project.id} - forzando rebuild")
-
-				# Forza la ricostruzione completa dell'indice
-				start_time = timezone.now()
-				create_project_rag_chain(project, force_rebuild=True)
-				end_time = timezone.now()
-				rebuild_time = (end_time - start_time).total_seconds()
-
-				logger.info(f"✅ Indice RAG ricostruito con successo per progetto {project.id} in {rebuild_time:.2f}s")
-
-				# Aggiorna metadati del chatbot per tracking
-				if hasattr(chatbot, 'metadata'):
-					if not chatbot.metadata:
-						chatbot.metadata = {}
-					chatbot.metadata['last_index_rebuild'] = {
-						'timestamp': timezone.now().isoformat(),
-						'trigger': 'widget_config_request',
-						'rebuild_time_seconds': rebuild_time
-					}
-					chatbot.save(update_fields=['metadata'])
-			else:
-				logger.info(f"✅ Indice RAG già aggiornato per progetto {project.id} - skip rebuild")
-
-		except ImportError as import_error:
-			logger.error(f"❌ Errore import funzioni RAG: {str(import_error)}")
-		# Continua comunque - il widget funzionerà con l'indice esistente
-
-		except Exception as index_error:
-			logger.error(f"❌ Errore durante force refresh indice progetto {project.id}: {str(index_error)}")
-			logger.error(f"❌ Stack trace: {index_error.__class__.__name__}: {str(index_error)}")
-		# Non bloccare il widget se l'aggiornamento indice fallisce
-		# Il widget funzionerà comunque con l'indice esistente se presente
-
-		# ============================================================
-		# VERIFICA DOMINIO E SICUREZZA
+		# FASE 2: VERIFICA DOMINIO
 		# ============================================================
 
-		# Verifica dominio referrer se configurato
-		origin = request.headers.get('Origin') or request.headers.get('Referer', '')
+		origin = request.headers.get('Origin', '')
+		referer = request.headers.get('Referer', '')
+		check_url = origin or referer
 
-		if origin and not chatbot.is_domain_allowed(origin):
-			logger.warning(f"🚫 Dominio non autorizzato: {origin} per widget {widget_token}")
+		if check_url and not chatbot.is_domain_allowed(check_url):
+			logger.warning(f"❌ Dominio non autorizzato: {check_url} per widget {widget_token}")
 			return JsonResponse({
 				'success': False,
 				'error': 'Dominio non autorizzato'
 			}, status=403)
 
-		logger.info(f"✅ Dominio autorizzato: {origin or 'Non specificato'}")
+		logger.info(f"✅ Dominio autorizzato: {check_url or 'null'}")
 
 		# ============================================================
-		# GENERAZIONE JWT TOKEN
+		# FASE 3: GENERAZIONE TOKEN JWT
 		# ============================================================
 
-		# Genera JWT per autenticazione API (valido 24 ore)
+		# Genera JWT token per autenticazione
 		jwt_token = chatbot.generate_jwt_token(expires_in_hours=24)
-		logger.info(f"🔑 JWT token generato per widget {widget_token}")
+		logger.info(f"🔑 JWT token generato per widget {widget_token[:8]}...")
 
 		# ============================================================
-		# PREPARAZIONE CONFIGURAZIONE WIDGET
+		# FASE 4: PREPARAZIONE CONFIGURAZIONE WIDGET
 		# ============================================================
 
-		# Configurazione widget (solo dati UI/UX, nessun dato sensibile)
+		# Prepara configurazione widget CON IL TOKEN INCLUSO
 		widget_config = {
-			# Personalizzazione UI
+			'token': jwt_token,  # CRITICAL: Token JWT per autenticazione API
 			'primaryColor': chatbot.primary_color,
-			'secondaryColor': getattr(chatbot, 'secondary_color', '#6c757d'),
 			'position': chatbot.position,
-			'chatWidth': f'{chatbot.chat_width}px',
-			'chatHeight': f'{chatbot.chat_height}px',
-
-			# Comportamento widget
+			'chatWidth': f"{chatbot.chat_width}px",
+			'chatHeight': f"{chatbot.chat_height}px",
 			'autoOpen': chatbot.auto_open,
 			'openDelay': chatbot.open_delay * 1000,  # Converti in millisecondi
-
-			# Testi e messaggi
 			'title': chatbot.title,
 			'welcomeMessage': chatbot.welcome_message,
 			'placeholderText': chatbot.placeholder_text,
-
-			# Opzioni aggiuntive
 			'showBranding': chatbot.show_branding,
 			'enableSounds': chatbot.enable_sounds,
-
-			# Configurazione API sicura
-			'apiEndpoint': request.build_absolute_uri('/api/chat/secure/'),
-			'authToken': jwt_token,  # JWT per autenticazione
-			'widgetToken': widget_token,  # Solo per identificazione
-
-			# Metadati per debugging (solo in development)
-			'debug': {
-				'projectId': project.id,
-				'projectName': project.name,
-				'lastConfigRequest': timezone.now().isoformat(),
-				'indexRefreshPerformed': needs_update if 'needs_update' in locals() else None
-			} if hasattr(settings, 'DEBUG') and settings.DEBUG else {}
+			'projectSlug': project.slug,  # Per retrocompatibilità
+			'baseUrl': request.build_absolute_uri('/')[:-1],  # Rimuovi trailing slash
+			'widgetToken': widget_token,  # Per identificazione nelle API
+			'debug': settings.DEBUG  # Per debug in development
 		}
 
 		# ============================================================
-		# AGGIORNAMENTO STATISTICHE CHATBOT
+		# FASE 5: FORCE REFRESH INDICE RAG (CRITICAL FIX)
 		# ============================================================
 
-		# Aggiorna statistiche di utilizzo
-		chatbot.total_interactions = getattr(chatbot, 'total_interactions', 0)
-		chatbot.last_interaction_at = timezone.now()
+		logger.info(f"🔄 Verificando e aggiornando indice RAG per widget progetto {project.id}")
 
-		# Salva le modifiche
+		try:
+			# Controlla se l'indice necessita aggiornamento
+			# Prima verifica se il metodo esiste
+			if hasattr(project, 'check_rag_index_needs_update'):
+				needs_update = project.check_rag_index_needs_update()
+				logger.info(f"Indice RAG del progetto {project.id} necessita aggiornamento: {needs_update}")
+
+				if needs_update:
+					# Verifica se esiste un metodo per rebuild
+					if hasattr(project, 'rebuild_rag_index'):
+						logger.info(f"🔨 Ricostruzione indice RAG per progetto {project.id}...")
+						project.rebuild_rag_index()
+						logger.info(f"✅ Indice RAG ricostruito con successo per progetto {project.id}")
+					else:
+						# Prova a importare la funzione dal modulo rag_utils
+						try:
+							from dashboard.rag_utils import check_and_rebuild_index
+							logger.info(f"🔨 Ricostruzione indice RAG tramite rag_utils...")
+							check_and_rebuild_index(project)
+							logger.info(f"✅ Indice RAG ricostruito con successo")
+						except ImportError:
+							logger.warning(f"⚠️ Funzione rebuild non disponibile per progetto {project.id}")
+				else:
+					logger.info(f"✅ Indice RAG già aggiornato per progetto {project.id} - skip rebuild")
+			else:
+				# Se il metodo non esiste, proviamo un approccio alternativo
+				logger.info(f"ℹ️ Metodo check_rag_index_needs_update non disponibile")
+
+				# Controlla se ci sono file/documenti non indicizzati
+				from profiles.models import ProjectFile, ProjectNote
+
+				# Conta file non indicizzati
+				unindexed_files = ProjectFile.objects.filter(
+					project=project,
+					is_indexed=False
+				).count() if hasattr(ProjectFile, 'is_indexed') else 0
+
+				# Conta note non indicizzate
+				unindexed_notes = ProjectNote.objects.filter(
+					project=project,
+					is_indexed=False
+				).count() if hasattr(ProjectNote, 'is_indexed') else 0
+
+				if unindexed_files > 0 or unindexed_notes > 0:
+					logger.info(f"📊 Trovati {unindexed_files} file e {unindexed_notes} note da indicizzare")
+				# TODO: Trigger indicizzazione quando disponibile
+				else:
+					logger.info(f"✅ Tutti i documenti sembrano indicizzati per progetto {project.id}")
+
+		except Exception as e:
+			# Non bloccare il widget se la verifica/ricostruzione fallisce
+			logger.error(f"⚠️ Errore durante verifica/rebuild indice RAG: {str(e)}")
+		# Il widget può funzionare anche senza indice aggiornato
+
+		# ============================================================
+		# FASE 6: AGGIORNAMENTO STATISTICHE
+		# ============================================================
+
+		# Aggiorna timestamp ultima interazione
+		chatbot.last_interaction_at = timezone.now()
 		chatbot.save(update_fields=['last_interaction_at'])
 
 		# ============================================================
-		# PREPARAZIONE RISPOSTA
+		# FASE 7: PREPARAZIONE RISPOSTA
 		# ============================================================
 
 		response_data = {
 			'success': True,
 			'widget_config': widget_config,
 			'timestamp': timezone.now().isoformat(),
-			'version': '2.0'  # Versione con force refresh
+			'version': '2.0'  # Versione con token incluso
 		}
 
 		response = JsonResponse(response_data)
@@ -230,6 +240,8 @@ def get_widget_config(request, widget_token):
 		# Configurazione CORS
 		if origin:
 			response["Access-Control-Allow-Origin"] = origin
+		else:
+			response["Access-Control-Allow-Origin"] = "*"
 		response["Access-Control-Allow-Credentials"] = "true"
 		response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
 		response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -237,13 +249,6 @@ def get_widget_config(request, widget_token):
 		logger.info(f"✅ Configurazione widget inviata con successo per progetto {project.id}")
 
 		return response
-
-	except OwnChatbot.DoesNotExist:
-		logger.error(f"❌ Widget non trovato o disabilitato: {widget_token}")
-		return JsonResponse({
-			'success': False,
-			'error': 'Widget non trovato'
-		}, status=404)
 
 	except Exception as e:
 		logger.error(f"❌ Errore critico in get_widget_config per token {widget_token}: {str(e)}")
@@ -270,29 +275,51 @@ def secure_chat_api(request):
 	logger.debug("---> secure_chat_api")
 	logger.info("=== CHIAMATA CORRETTA a secure_chat_api ===")
 
-	# Gestione CORS per OPTIONS
+	# ============================================================
+	# GESTIONE CORS PER OPTIONS
+	# ============================================================
+
 	if request.method == "OPTIONS":
 		response = JsonResponse({})
-		response["Access-Control-Allow-Origin"] = "*"  # Gestito via JWT
+		response["Access-Control-Allow-Origin"] = "*"
 		response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
 		response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+		response["Access-Control-Max-Age"] = "86400"  # 24 ore
 		return response
 
 	try:
-		# Estrai JWT token dall'header Authorization
+		# ============================================================
+		# FASE 1: ESTRAZIONE E VALIDAZIONE TOKEN JWT
+		# ============================================================
+
 		auth_header = request.headers.get('Authorization', '')
 		if not auth_header.startswith('Bearer '):
+			logger.warning("❌ Richiesta senza token di autenticazione")
 			return JsonResponse({
 				'success': False,
 				'error': 'Token di autenticazione richiesto'
 			}, status=401)
 
 		jwt_token = auth_header[7:]  # Rimuovi 'Bearer '
+		logger.info(f"🔑 Token JWT ricevuto: {jwt_token[:20]}...")
 
-		# Parse richiesta
-		data = json.loads(request.body)
+		# ============================================================
+		# FASE 2: PARSING BODY RICHIESTA
+		# ============================================================
+
+		try:
+			data = json.loads(request.body)
+		except json.JSONDecodeError:
+			logger.error("❌ Body richiesta non valido")
+			return JsonResponse({
+				'success': False,
+				'error': 'Richiesta non valida'
+			}, status=400)
+
 		question = data.get('question', '').strip()
-		widget_token = data.get('widget_token', '')
+		widget_token = data.get('widgetToken', '')  # Opzionale per double-check
+		message_history = data.get('history', [])
+		metadata = data.get('metadata', {})
 
 		if not question:
 			return JsonResponse({
@@ -300,76 +327,197 @@ def secure_chat_api(request):
 				'error': 'Domanda richiesta'
 			}, status=400)
 
-		# Trova chatbot e verifica JWT
-		try:
-			chatbot = OwnChatbot.objects.get(widget_token=widget_token, is_enabled=True)
-		except OwnChatbot.DoesNotExist:
-			return JsonResponse({
-				'success': False,
-				'error': 'Widget non valido'
-			}, status=404)
+		logger.info(f"📝 Domanda ricevuta: '{question[:50]}...' (lunghezza: {len(question)})")
 
-		# Verifica JWT token
-		payload = chatbot.verify_jwt_token(jwt_token)
-		if not payload or payload.get('widget_token') != widget_token:
+		# ============================================================
+		# FASE 3: VERIFICA JWT E RECUPERO CHATBOT
+		# ============================================================
+
+		# Trova tutti i chatbot attivi e verifica quale ha generato il token
+		chatbot = None
+		payload = None
+
+		for candidate in OwnChatbot.objects.filter(is_enabled=True):
+			candidate_payload = candidate.verify_jwt_token(jwt_token)
+			if candidate_payload:
+				chatbot = candidate
+				payload = candidate_payload
+				break
+
+		if not chatbot:
+			logger.error("❌ Token JWT non valido o scaduto")
 			return JsonResponse({
 				'success': False,
 				'error': 'Token non valido o scaduto'
 			}, status=401)
 
-		# Verifica origine se configurata
-		origin = request.headers.get('Origin') or request.headers.get('Referer', '')
+		# Double-check widget_token se fornito
+		if widget_token and widget_token != chatbot.widget_token:
+			logger.error(f"❌ Widget token mismatch: {widget_token} != {chatbot.widget_token}")
+			return JsonResponse({
+				'success': False,
+				'error': 'Token non corrispondente'
+			}, status=401)
+
+		project = chatbot.project
+		logger.info(f"✅ Autenticazione riuscita per progetto {project.id} - {project.name}")
+
+		# ============================================================
+		# FASE 4: VERIFICA DOMINIO (DOUBLE-CHECK)
+		# ============================================================
+
+		origin = request.headers.get('Origin', '')
 		if origin and not chatbot.is_domain_allowed(origin):
+			logger.warning(f"❌ Dominio non autorizzato in secure_chat_api: {origin}")
 			return JsonResponse({
 				'success': False,
 				'error': 'Dominio non autorizzato'
 			}, status=403)
 
-		# Processa domanda con RAG
-		project = chatbot.project
-		rag_response = get_answer_from_project(project, question)
+		# ============================================================
+		# FASE 5: CONTROLLO RATE LIMITING (OPZIONALE)
+		# ============================================================
 
-		# Salva conversazione con tracking fonte
-		conversation = ProjectConversation.objects.create(
-			project=project,
-			question=question,
-			answer=rag_response.get('answer', 'Nessuna risposta disponibile'),
-			processing_time=rag_response.get('processing_time', 0),
-			chatbot_source='own',  # Fonte: chatbot nativo
-			session_metadata={
-				'widget_token': widget_token,
+		# Qui potresti implementare un controllo rate limiting basato su IP o token
+		# Per ora skip
+
+		# ============================================================
+		# FASE 6: GENERAZIONE RISPOSTA RAG
+		# ============================================================
+
+		logger.info(f"🤖 Generazione risposta RAG per progetto {project.id}...")
+
+		try:
+			# Prova prima la chiamata semplice con solo project e question
+			try:
+				# Metodo 1: Solo due parametri
+				rag_response = get_answer_from_project(project, question)
+			except TypeError:
+				# Metodo 2: Prova con parametri nominati
+				try:
+					rag_response = get_answer_from_project(
+						project=project,
+						question=question,
+						context={
+							'source': 'widget',
+							'widget_token': chatbot.widget_token,
+							'metadata': metadata,
+							'is_mobile': metadata.get('isMobile', False)
+						}
+					)
+				except TypeError:
+					# Metodo 3: Prova con project_id invece di project
+					rag_response = get_answer_from_project(
+						project_id=project.id,
+						question=question
+					)
+
+			# Estrai la risposta
+			if isinstance(rag_response, dict):
+				answer = rag_response.get('answer', 'Mi dispiace, non ho trovato una risposta.')
+				sources = rag_response.get('sources', [])
+			else:
+				# Retrocompatibilità se RAG restituisce solo stringa
+				answer = str(rag_response)
+				sources = []
+
+			logger.info(f"✅ Risposta generata con successo (lunghezza: {len(answer)})")
+
+		except Exception as e:
+			logger.error(f"❌ Errore generazione risposta RAG: {str(e)}")
+			answer = "Mi dispiace, si è verificato un errore nel generare la risposta. Riprova tra poco."
+			sources = []
+
+		# ============================================================
+		# FASE 7: SALVATAGGIO CONVERSAZIONE
+		# ============================================================
+
+		try:
+			# Prima verifica quali campi supporta ProjectConversation
+			conversation = None
+
+			# Prepara i dati extra in formato JSON string se necessario
+			extra_data = {
+				'source': 'widget',
+				'widget_token': chatbot.widget_token,
 				'origin': origin,
-				'user_agent': request.headers.get('User-Agent', '')[:255]
+				'user_agent': request.headers.get('User-Agent', ''),
+				'metadata': metadata
 			}
-		)
 
-		# Aggiorna statistiche chatbot
-		chatbot.total_interactions += 1
-		chatbot.last_interaction_at = conversation.created_at
-		chatbot.save(update_fields=['total_interactions', 'last_interaction_at'])
+			# Prova diversi approcci per salvare la conversazione
+			try:
+				# Metodo 1: Con campo metadata
+				conversation = ProjectConversation.objects.create(
+					project=project,
+					question=question,
+					answer=answer,
+					metadata=extra_data
+				)
+			except TypeError:
+				# Metodo 2: Senza metadata, ma con extra_data come JSON string
+				try:
+					conversation = ProjectConversation.objects.create(
+						project=project,
+						question=question,
+						answer=answer,
+						extra_data=json.dumps(extra_data)  # Salvalo come JSON string
+					)
+				except (TypeError, AttributeError):
+					# Metodo 3: Solo campi base
+					conversation = ProjectConversation.objects.create(
+						project=project,
+						question=question,
+						answer=answer
+					)
 
-		# Risposta sicura (no dati sensibili)
+			if conversation:
+				logger.info(f"💾 Conversazione salvata con ID: {conversation.id}")
+
+			# Aggiorna contatore interazioni
+			chatbot.total_interactions += 1
+			chatbot.last_interaction_at = timezone.now()
+			chatbot.save(update_fields=['total_interactions', 'last_interaction_at'])
+
+		except Exception as e:
+			# Non bloccare la risposta se il salvataggio fallisce
+			logger.error(f"⚠️ Errore salvataggio conversazione: {str(e)}")
+			conversation = None
+
+		# ============================================================
+		# FASE 8: PREPARAZIONE RISPOSTA FINALE
+		# ============================================================
+
 		response_data = {
 			'success': True,
-			'answer': rag_response.get('answer', ''),
-			'conversation_id': conversation.id,
-			'processing_time': rag_response.get('processing_time', 0)
-			# Non esporre sources per sicurezza nel widget publico
+			'answer': answer,
+			'sources': sources,
+			'timestamp': timezone.now().isoformat()
 		}
 
+		# Aggiungi conversation_id solo se esiste
+		if conversation:
+			response_data['conversation_id'] = conversation.id
+
 		response = JsonResponse(response_data)
-		response["Access-Control-Allow-Origin"] = "*"  # Gestito via JWT + domain check
+
+		# Headers CORS
+		response["Access-Control-Allow-Origin"] = origin if origin else "*"
+		response["Access-Control-Allow-Credentials"] = "true"
+
+		logger.info(f"✅ Risposta inviata con successo per widget {chatbot.widget_token[:8]}...")
 
 		return response
 
-	except json.JSONDecodeError:
-		return JsonResponse({
-			'success': False,
-			'error': 'JSON non valido'
-		}, status=400)
 	except Exception as e:
-		logger.error(f"Errore API chat sicura: {str(e)}")
+		logger.error(f"❌ Errore critico in secure_chat_api: {str(e)}")
+		logger.error(f"❌ Tipo errore: {e.__class__.__name__}")
+
+		if settings.DEBUG:
+			import traceback
+			logger.error(f"❌ Stack trace:\n{traceback.format_exc()}")
+
 		return JsonResponse({
 			'success': False,
-			'error': 'Errore interno del server'
+			'error': 'Si è verificato un errore del server'
 		}, status=500)

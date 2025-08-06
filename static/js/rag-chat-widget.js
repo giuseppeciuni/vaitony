@@ -1,3 +1,79 @@
+/**
+ * Converte una risposta di testo in HTML ben strutturato per mobile e desktop
+ */
+function formatResponseToHTML(text) {
+    if (!text || typeof text !== 'string') return text;
+
+    let html = text;
+
+    // 1. TITOLI E SEZIONI
+    // ### Titolo -> <h3 class="section-title">
+    html = html.replace(/### (.*?)(?:\n|$)/gm, '<h3 class="section-title">$1</h3>');
+
+    // ## Titolo -> <h2 class="main-title">
+    html = html.replace(/## (.*?)(?:\n|$)/gm, '<h2 class="main-title">$1</h2>');
+
+    // 2. GRASSETTO E CORSIVO
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // 3. LINK CLICCABILI - Pattern [Testo](URL)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" class="rag-source-link">$1</a>');
+
+    // 4. LISTE con -
+    const lines = html.split('\n');
+    let inList = false;
+    let result = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        if (line.startsWith('- ')) {
+            if (!inList) {
+                result.push('<ul class="rag-list">');
+                inList = true;
+            }
+            result.push('<li>' + line.substring(2) + '</li>');
+        } else {
+            if (inList) {
+                result.push('</ul>');
+                inList = false;
+            }
+            result.push(line);
+        }
+    }
+
+    if (inList) {
+        result.push('</ul>');
+    }
+
+    html = result.join('\n');
+
+    // 5. SEZIONI SPECIALI
+    // Gestisce il pattern "Fonti:" alla fine
+    html = html.replace(/(Fonti:|Sources:)\s*\n(.*)/gis, function(match, title, content) {
+        return '<div class="rag-sources"><div class="rag-sources-title">' + title + '</div>' + content + '</div>';
+    });
+
+    // 6. PARAGRAFI - Converti doppie newline in paragrafi
+    html = html.replace(/\n\s*\n/g, '</p>\n<p>');
+
+    // Avvolgi tutto in un paragrafo iniziale se non ci sono già tag HTML
+    if (!html.includes('<h') && !html.includes('<div') && !html.includes('<ul')) {
+        html = '<p>' + html + '</p>';
+    }
+
+    // 7. PULIZIA FINALE
+    html = html.replace(/<p>\s*<\/p>/g, ''); // Rimuovi paragrafi vuoti
+    html = html.replace(/<p>(\s*<[hd])/g, '$1'); // Rimuovi <p> prima di heading/div
+    html = html.replace(/(<\/[hd][^>]*>)\s*<\/p>/g, '$1'); // Rimuovi </p> dopo heading/div
+
+    return html;
+}
+
+
+
 // RAG Chat Widget - Versione CSP-Safe
 // Codice sicuro senza uso di innerHTML o eval()
 
@@ -697,72 +773,65 @@
 
         // Aggiunge messaggio alla chat - VERSIONE SICURA
         function addMessage(sender, text, isError = false) {
+            const messages = document.getElementById('rag-chat-messages');
+            if (!messages) return;
+
             const messageEl = document.createElement('div');
             messageEl.className = `rag-message ${sender}`;
             if (isError) messageEl.classList.add('rag-error');
 
-            // Usa textContent per sicurezza
-            messageEl.textContent = text;
+            // NOVITÀ: Formatta il testo se è un messaggio del bot
+            if (sender === 'bot' && !isError) {
+                const formattedHTML = formatResponseToHTML(text);
+                messageEl.innerHTML = formattedHTML;
 
-            // Accessibilità
-            messageEl.setAttribute('role', sender === 'bot' ? 'status' : 'text');
-            if (sender === 'bot') {
-                messageEl.setAttribute('aria-live', 'polite');
+                // Rendi tutti i link sicuri e cliccabili
+                const links = messageEl.querySelectorAll('a');
+                links.forEach(link => {
+                    if (!link.hasAttribute('target')) {
+                        link.setAttribute('target', '_blank');
+                        link.setAttribute('rel', 'noopener noreferrer');
+                    }
+                    // Aggiungi classe per lo styling
+                    link.classList.add('rag-clickable-link');
+                });
+            } else {
+                // Per messaggi utente o errori, usa textContent per sicurezza
+                messageEl.textContent = text;
             }
 
-            // Timestamp per debug
-            messageEl.setAttribute('data-timestamp', Date.now());
+            // Aggiungi timestamp opzionale
+            const now = new Date();
+            const timeEl = document.createElement('div');
+            timeEl.className = 'rag-message-time';
+            timeEl.textContent = now.toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            messageEl.appendChild(timeEl);
+
+            // Accessibilità
+            messageEl.setAttribute('role', sender === 'bot' ? 'status' : 'log');
+            messageEl.setAttribute('aria-live', sender === 'bot' ? 'polite' : 'off');
 
             messages.appendChild(messageEl);
 
-            // Scroll ottimizzato per dispositivo
+            // Scroll automatico al bottom
             setTimeout(() => {
-                if (isMobileDevice()) {
-                    // Su mobile, scroll immediato per prestazioni migliori
-                    messages.scrollTop = messages.scrollHeight;
-                } else {
-                    // Su desktop, scroll smooth
-                    messages.scrollTo({
-                        top: messages.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                }
-            }, 10);
+                messages.scrollTop = messages.scrollHeight;
+            }, 100);
 
             // Salva nella cronologia
-            messageHistory.push({
-                sender,
-                text,
-                timestamp: Date.now(),
-                isError,
-                isMobile: isMobileDevice()
-            });
-
-            // Limita dimensione cronologia
-            if (messageHistory.length > config.historyLimit) {
-                messageHistory = messageHistory.slice(-config.historyLimit);
+            if (window.messageHistory) {
+                window.messageHistory.push({
+                    sender: sender,
+                    text: text,
+                    timestamp: now.toISOString(),
+                    formatted: sender === 'bot' ? formattedHTML : text
+                });
             }
 
-            // Notifica se chat chiusa
-            if (!isOpen && sender === 'bot') {
-                bubble.classList.add('has-notification');
-
-                // Vibrazione su mobile se supportata
-                if (isMobileDevice() && navigator.vibrate) {
-                    navigator.vibrate([200, 100, 200]);
-                }
-
-                // Trigger evento
-                window.dispatchEvent(new CustomEvent('ragNotificationReceived', {
-                    detail: {
-                        message: text,
-                        isMobile: isMobileDevice()
-                    }
-                }));
-            }
-
-            console.log(`Messaggio ${sender} aggiunto:`, text.substring(0, 50) + '...');
-            return messageEl;
+            console.log(`Messaggio aggiunto: ${sender} - ${text.substring(0, 50)}...`);
         }
 
         // Typing indicator - VERSIONE SICURA

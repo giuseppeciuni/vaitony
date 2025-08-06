@@ -543,6 +543,12 @@
                 // Reset notifica
                 bubble.classList.remove('has-notification');
 
+                // Mobile body lock per apertura
+                if (isMobileDevice()) {
+                    document.body.classList.add('rag-chat-mobile-open');
+                    document.getElementById('rag-chat-widget').classList.add('chat-open');
+                }
+
                 // Focus su input
                 setTimeout(() => {
                     input.focus();
@@ -571,6 +577,13 @@
                     });
                 }
             } else {
+
+                // Mobile body lock per chiusura
+                if (isMobileDevice()) {
+                    document.body.classList.remove('rag-chat-mobile-open');
+                    document.getElementById('rag-chat-widget').classList.remove('chat-open');
+                }
+
                 // Su mobile, rimuovi fullscreen
                 if (isMobileDevice()) {
                     forceMobileFullscreen(chatWindow, false);

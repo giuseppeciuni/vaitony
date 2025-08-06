@@ -1,40 +1,50 @@
-/* RAG Chat Widget - CSS Completo Mobile-Optimized */
+/* RAG Chat Widget - WhatsApp Style Layout */
+
+/* CSS Variables per personalizzazione */
 :root {
     --rag-primary-color: #1f93ff;
-    --rag-secondary-color: #6c757d;
-    --rag-success-color: #28a745;
-    --rag-error-color: #dc3545;
-    --rag-bg-light: #f8f9fa;
-    --rag-border-color: #e1e5e9;
-    --rag-text-color: #333;
-    --rag-text-muted: #6c757d;
-    --rag-shadow: 0 8px 32px rgba(0,0,0,0.15);
-    --rag-radius: 12px;
-    --rag-radius-sm: 8px;
-    --rag-radius-pill: 20px;
+    --rag-secondary-color: #0066cc;
+    --rag-accent-color: #E3F2FD;
+    --rag-user-bubble-color: #E3F2FD;
+    --rag-bot-bubble-color: #FFFFFF;
+    --rag-header-bg: #1f93ff;
+    --rag-input-bg: #F0F0F0;
+    --rag-border-color: #E1E5E9;
+    --rag-text-color: #303030;
+    --rag-text-muted: #8696A0;
+    --rag-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --rag-shadow-heavy: 0 8px 32px rgba(0,0,0,0.15);
+    --rag-border-radius: 8px;
+    --rag-bubble-radius: 18px;
+    --rag-animation-timing: 0.2s ease;
 
-    /* Variabili per dimensioni personalizzabili */
-    --rag-chat-width: 350px;
-    --rag-chat-height: 500px;
-
-    /* Variabili mobile */
-    --rag-mobile-header-height: 60px;
-    --rag-mobile-input-height: 70px;
+    /* Dimensioni personalizzabili */
+    --rag-chat-width: 360px;
+    --rag-chat-height: 520px;
+    --rag-header-height: 60px;
+    --rag-input-area-height: 70px;
+    --rag-bubble-size: 56px;
 }
 
-/* Reset e base */
+/* Reset globale per il widget */
 #rag-chat-widget * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
+/* Contenitore principale del widget */
 #rag-chat-widget {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    z-index: 9999;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     font-size: 14px;
     line-height: 1.4;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 /* Posizionamento del widget */
@@ -55,262 +65,379 @@
     right: auto;
 }
 
-/* Bubble chat */
+/* Floating Action Button (FAB) - Bubble principale */
 #rag-chat-bubble {
-    width: 60px;
-    height: 60px;
+    width: var(--rag-bubble-size);
+    height: var(--rag-bubble-size);
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--rag-primary-color), var(--rag-primary-color)dd);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    background: linear-gradient(135deg, var(--rag-primary-color) 0%, var(--rag-secondary-color) 100%);
+    box-shadow: var(--rag-shadow-heavy);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    font-size: 24px;
-    transition: all 0.3s ease;
+    font-size: 26px;
+    transition: all var(--rag-animation-timing);
     border: 3px solid white;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    position: relative;
+    overflow: visible;
+}
+
+/* Icona nuvoletta più visibile */
+#rag-chat-bubble svg {
+    width: 28px !important;
+    height: 28px !important;
+    fill: white !important;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+/* Fallback con emoji se l'SVG non funziona */
+#rag-chat-bubble::before {
+    content: attr(data-icon);
+    font-size: 24px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+}
+
+/* Nascondi l'emoji quando c'è l'SVG */
+#rag-chat-bubble:has(svg)::before {
+    display: none;
 }
 
 #rag-chat-bubble:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+    transform: scale(1.05);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
 }
 
 #rag-chat-bubble:active {
     transform: scale(0.95);
 }
 
-#rag-chat-bubble.has-notification {
+/* Animazione pulse per notifiche */
+#rag-chat-bubble.has-notification::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    background: #FF4444;
+    border-radius: 50%;
+    border: 2px solid white;
     animation: rag-pulse 2s infinite;
 }
 
 @keyframes rag-pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
-/* Finestra chat */
+/* Finestra chat principale */
 #rag-chat-window {
     position: absolute;
-    bottom: 70px;
+    bottom: calc(var(--rag-bubble-size) + 10px);
     right: 0;
     width: var(--rag-chat-width);
     height: var(--rag-chat-height);
     background: white;
-    border-radius: var(--rag-radius);
-    box-shadow: var(--rag-shadow);
+    border-radius: var(--rag-border-radius);
+    box-shadow: var(--rag-shadow-heavy);
     display: none;
     flex-direction: column;
     overflow: hidden;
     border: 1px solid var(--rag-border-color);
-    transition: all 0.3s ease;
+    transition: all var(--rag-animation-timing);
+    transform-origin: bottom right;
 }
 
+/* Posizionamento finestra chat per diverse posizioni */
 #rag-chat-widget.bottom-left #rag-chat-window {
     left: 0;
     right: auto;
+    transform-origin: bottom left;
 }
 
 #rag-chat-widget.top-right #rag-chat-window {
-    top: 70px;
+    top: calc(var(--rag-bubble-size) + 10px);
     bottom: auto;
+    transform-origin: top right;
 }
 
 #rag-chat-widget.top-left #rag-chat-window {
-    top: 70px;
+    top: calc(var(--rag-bubble-size) + 10px);
     bottom: auto;
     left: 0;
     right: auto;
+    transform-origin: top left;
 }
 
-/* Header chat */
+/* Header chat - stile WhatsApp */
 #rag-chat-header {
-    background: linear-gradient(135deg, var(--rag-primary-color), var(--rag-primary-color)dd);
+    background: linear-gradient(135deg, var(--rag-header-bg) 0%, var(--rag-secondary-color) 100%);
     color: white;
-    padding: 15px 20px;
+    padding: 0;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    font-weight: 600;
-    font-size: 16px;
-    min-height: 50px;
+    justify-content: space-between;
+    height: var(--rag-header-height);
+    min-height: var(--rag-header-height);
     flex-shrink: 0;
+    position: relative;
 }
 
+/* Contenuto header sinistra */
+.rag-header-content {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    padding: 0 16px;
+    min-width: 0;
+}
+
+/* Avatar bot nel header */
+.rag-bot-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #FFFFFF 0%, #F0F0F0 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    font-size: 18px;
+    color: var(--rag-header-bg);
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Info header */
+.rag-header-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+.rag-header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rag-header-status {
+    font-size: 12px;
+    color: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.rag-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4CAF50;
+    margin-right: 6px;
+    animation: rag-online-pulse 3s infinite;
+}
+
+@keyframes rag-online-pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* Pulsante chiudi */
 #rag-chat-close {
     background: none;
     border: none;
     color: white;
-    font-size: 20px;
     cursor: pointer;
-    padding: 4px;
-    width: 32px;
-    height: 32px;
+    padding: 8px;
+    margin-right: 8px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    opacity: 0.8;
-    transition: all 0.2s;
-    -webkit-tap-highlight-color: transparent;
+    transition: background var(--rag-animation-timing);
+    flex-shrink: 0;
 }
 
 #rag-chat-close:hover {
-    opacity: 1;
     background: rgba(255,255,255,0.1);
 }
 
 #rag-chat-close:active {
+    background: rgba(255,255,255,0.2);
     transform: scale(0.9);
 }
 
-/* Area messaggi */
+#rag-chat-close svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* Area messaggi - stile WhatsApp */
 #rag-chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 15px;
-    background: var(--rag-bg-light);
+    padding: 16px 12px 8px 12px;
+    background: linear-gradient(to bottom, #ECE5DD 0%, #D1C7B8 100%);
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0iIzAwMDAwMCIgZmlsbC1vcGFjaXR5PSIwLjAyIi8+Cjwvc3ZnPgo=');
+    background-repeat: repeat;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
 }
 
+/* Scrollbar personalizzata per area messaggi */
 #rag-chat-messages::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
 }
 
 #rag-chat-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
+    background: transparent;
 }
 
 #rag-chat-messages::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 2px;
 }
 
 #rag-chat-messages::-webkit-scrollbar-thumb:hover {
-    background: #a1a1a1;
+    background: rgba(0,0,0,0.3);
 }
 
-/* Messaggi */
+/* Contenitore messaggio */
 .rag-message {
-    margin-bottom: 15px;
+    margin-bottom: 12px;
     max-width: 85%;
     word-wrap: break-word;
-    animation: rag-slide-in 0.3s ease-out;
+    animation: rag-message-appear 0.3s ease-out;
     clear: both;
+    position: relative;
 }
 
-@keyframes rag-slide-in {
+@keyframes rag-message-appear {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(20px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
+/* Messaggio utente - stile WhatsApp */
 .rag-message.user {
     margin-left: auto;
-    background: var(--rag-primary-color);
-    color: white;
-    padding: 12px 16px;
-    border-radius: 18px 18px 4px 18px;
+    background: var(--rag-user-bubble-color);
+    color: var(--rag-text-color);
+    padding: 8px 12px 8px 12px;
+    border-radius: var(--rag-bubble-radius) var(--rag-bubble-radius) 4px var(--rag-bubble-radius);
     font-size: 14px;
     line-height: 1.4;
     float: right;
     clear: both;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    min-height: 32px;
+    display: flex;
+    align-items: center;
 }
 
+/* Messaggio bot - stile WhatsApp */
 .rag-message.bot {
-    background: white;
+    background: var(--rag-bot-bubble-color);
     color: var(--rag-text-color);
-    padding: 12px 16px;
-    border-radius: 18px 18px 18px 4px;
+    padding: 8px 12px 8px 12px;
+    border-radius: var(--rag-bubble-radius) var(--rag-bubble-radius) var(--rag-bubble-radius) 4px;
     font-size: 14px;
     line-height: 1.5;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    border: 1px solid var(--rag-border-color);
     float: left;
     clear: both;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    border: 1px solid #F0F0F0;
+    position: relative;
+    min-height: 32px;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
-/* Formattazione messaggi bot */
-.rag-paragraph {
-    margin: 8px 0;
+/* Timestamp nei messaggi */
+.rag-message-time {
+    font-size: 11px;
+    color: var(--rag-text-muted);
+    margin-top: 4px;
+    text-align: right;
+    opacity: 0.7;
+}
+
+/* Formattazione contenuto messaggi bot */
+.rag-message.bot p {
+    margin: 6px 0;
     line-height: 1.5;
 }
 
-.rag-paragraph:first-child {
+.rag-message.bot p:first-child {
     margin-top: 0;
 }
 
-.rag-paragraph:last-child {
+.rag-message.bot p:last-child {
     margin-bottom: 0;
 }
 
-.rag-header {
-    color: var(--rag-primary-color);
-    font-size: 15px;
-    display: block;
-    margin: 12px 0 6px 0;
-    border-left: 3px solid var(--rag-primary-color);
-    padding-left: 8px;
+.rag-message.bot strong {
+    color: var(--rag-secondary-color);
     font-weight: 600;
 }
 
-.rag-list-item {
-    margin: 15px 0;
-    padding: 10px;
-    background: var(--rag-bg-light);
-    border-radius: var(--rag-radius-sm);
-    border-left: 3px solid var(--rag-border-color);
-}
-
-.rag-bullet-list {
-    margin: 10px 0;
+.rag-message.bot ul,
+.rag-message.bot ol {
+    margin: 8px 0;
     padding-left: 20px;
 }
 
-.rag-bullet {
+.rag-message.bot li {
     margin: 4px 0;
-    color: #555;
-    list-style-type: disc;
+    line-height: 1.4;
 }
 
-.rag-section-title {
-    font-weight: 600;
-    color: var(--rag-text-color);
-    margin: 15px 0 8px 0;
-    padding: 8px 12px;
-    background: linear-gradient(135deg, var(--rag-bg-light), #e9ecef);
-    border-radius: 6px;
-    border-left: 4px solid var(--rag-primary-color);
-}
-
-.rag-code {
-    background: #f1f3f4;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-    color: #d63384;
-}
-
-/* Typing indicator */
+/* Typing indicator - stile WhatsApp */
 .rag-typing {
+    background: var(--rag-bot-bubble-color);
+    border-radius: var(--rag-bubble-radius) var(--rag-bubble-radius) var(--rag-bubble-radius) 4px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    max-width: 85%;
+    float: left;
+    clear: both;
     display: flex;
     align-items: center;
     gap: 8px;
-    opacity: 0.7;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    border: 1px solid #F0F0F0;
+    animation: rag-message-appear 0.3s ease-out;
+}
+
+.rag-typing-text {
+    color: var(--rag-text-muted);
     font-style: italic;
-    padding: 12px 16px;
+    font-size: 13px;
 }
 
 .rag-typing-dots {
@@ -323,143 +450,151 @@
     height: 6px;
     border-radius: 50%;
     background: var(--rag-text-muted);
-    animation: rag-typing-dot 1.4s infinite ease-in-out;
+    animation: rag-typing-bounce 1.4s infinite ease-in-out;
 }
 
 .rag-typing-dot:nth-child(1) { animation-delay: -0.32s; }
 .rag-typing-dot:nth-child(2) { animation-delay: -0.16s; }
 .rag-typing-dot:nth-child(3) { animation-delay: 0s; }
 
-@keyframes rag-typing-dot {
+@keyframes rag-typing-bounce {
     0%, 80%, 100% {
         transform: scale(0.8);
         opacity: 0.5;
     }
     40% {
-        transform: scale(1);
+        transform: scale(1.2);
         opacity: 1;
     }
 }
 
-/* Area input */
-#rag-chat-input-area {
-    padding: 15px;
+/* Area input - stile WhatsApp */
+.rag-input-container {
     background: white;
     border-top: 1px solid var(--rag-border-color);
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-    min-height: 70px;
+    min-height: var(--rag-input-area-height);
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
 }
 
+.rag-input-wrapper {
+    padding: 12px 16px;
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+/* Campo input */
 #rag-chat-input {
     flex: 1;
-    border: 1px solid #dee2e6;
-    border-radius: var(--rag-radius-pill);
-    padding: 10px 15px;
+    border: 1px solid #DDD;
+    border-radius: 24px;
+    padding: 10px 16px;
     outline: none;
     font-size: 14px;
+    font-family: inherit;
     resize: none;
     min-height: 20px;
-    max-height: 80px;
-    transition: border-color 0.2s;
-    font-family: inherit;
-    -webkit-tap-highlight-color: transparent;
+    max-height: 100px;
+    transition: border-color var(--rag-animation-timing);
+    background: white;
     line-height: 1.4;
+    overflow-y: auto;
+    word-wrap: break-word;
 }
 
 #rag-chat-input:focus {
     border-color: var(--rag-primary-color);
-    box-shadow: 0 0 0 2px var(--rag-primary-color)33;
+    box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.1);
 }
 
 #rag-chat-input::placeholder {
     color: var(--rag-text-muted);
 }
 
+/* Pulsante invio */
 #rag-chat-send {
-    background: var(--rag-primary-color);
-    color: white;
+    width: 44px;
+    height: 44px;
     border: none;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    background: var(--rag-primary-color);
+    color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
     font-size: 16px;
-    -webkit-tap-highlight-color: transparent;
-    min-width: 40px;
-    min-height: 40px;
+    transition: all var(--rag-animation-timing);
     flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
 }
 
-#rag-chat-send:hover:not(:disabled) {
-    background: var(--rag-primary-color)dd;
+#rag-chat-send:hover {
+    background: var(--rag-secondary-color);
     transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
 }
 
-#rag-chat-send:active:not(:disabled) {
+#rag-chat-send:active {
     transform: scale(0.95);
 }
 
 #rag-chat-send:disabled {
-    opacity: 0.6;
+    background: #CCC;
     cursor: not-allowed;
-    background: var(--rag-text-muted);
+    transform: none;
+    box-shadow: none;
 }
 
-/* Stati di errore */
-.rag-error {
-    background: #f8d7da !important;
-    color: #721c24 !important;
-    border: 1px solid #f5c6cb !important;
+#rag-chat-send svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    transform: translateX(1px);
 }
 
-/* Branding */
+/* Branding footer */
 .rag-branding {
+    padding: 8px 16px;
     text-align: center;
-    padding: 8px;
     font-size: 11px;
     color: var(--rag-text-muted);
-    background: var(--rag-bg-light);
-    border-top: 1px solid var(--rag-border-color);
+    border-top: 1px solid rgba(0,0,0,0.05);
+    background: #FAFAFA;
+    flex-shrink: 0;
 }
 
-/* Loading states */
-.rag-loading {
-    pointer-events: none;
-    opacity: 0.7;
+.rag-branding a {
+    color: var(--rag-primary-color);
+    text-decoration: none;
 }
 
-.rag-loading #rag-chat-send {
-    animation: rag-spin 1s linear infinite;
+.rag-branding a:hover {
+    text-decoration: underline;
 }
 
-@keyframes rag-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* MOBILE OPTIMIZATION - Responsive Design */
-@media (max-width: 768px) {
+/* RESPONSIVE - MOBILE FIRST */
+@media screen and (max-width: 768px) {
+    /* Widget occupa tutto lo schermo su mobile */
     #rag-chat-widget {
-        bottom: 15px;
-        right: 15px;
+        position: fixed;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 999999;
     }
 
-    #rag-chat-bubble {
-        width: 65px;
-        height: 65px;
-        font-size: 26px;
-        bottom: 20px;
-        right: 20px;
+    /* Bubble nascosto quando finestra aperta su mobile */
+    #rag-chat-widget.chat-open #rag-chat-bubble {
+        display: none !important;
     }
 
-    /* FULLSCREEN CHAT SU MOBILE - FORZATO */
+    /* Finestra chat a schermo intero su mobile */
     #rag-chat-window {
         position: fixed !important;
         top: 0 !important;
@@ -468,259 +603,289 @@
         bottom: 0 !important;
         width: 100vw !important;
         height: 100vh !important;
-        max-width: 100vw !important;
-        max-height: 100vh !important;
-        min-width: 100vw !important;
-        min-height: 100vh !important;
+        max-width: none !important;
+        max-height: none !important;
         border-radius: 0 !important;
-        z-index: 10000 !important;
-        box-shadow: none !important;
         border: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        transform: none !important;
+        transform-origin: center !important;
+        animation: rag-mobile-slide-up 0.3s ease-out;
     }
 
-    /* Override tutte le posizioni per mobile */
-    #rag-chat-widget.bottom-left #rag-chat-window,
-    #rag-chat-widget.bottom-right #rag-chat-window,
-    #rag-chat-widget.top-left #rag-chat-window,
-    #rag-chat-widget.top-right #rag-chat-window {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
+    @keyframes rag-mobile-slide-up {
+        from {
+            opacity: 0;
+            transform: translateY(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
-    /* Header mobile ottimizzato */
+    /* Header mobile */
     #rag-chat-header {
-        min-height: var(--rag-mobile-header-height);
-        padding: 15px 20px;
-        font-size: 18px;
-        /* Safe area per notch iPhone */
-        padding-top: max(15px, env(safe-area-inset-top));
+        height: calc(var(--rag-header-height) + env(safe-area-inset-top)) !important;
+        padding-top: env(safe-area-inset-top) !important;
+        position: relative;
+    }
+
+    .rag-header-content {
+        padding: 0 20px !important;
+    }
+
+    .rag-bot-avatar {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 16px !important;
+    }
+
+    .rag-header-title {
+        font-size: 18px !important;
+        font-weight: 600 !important;
+    }
+
+    .rag-header-status {
+        font-size: 13px !important;
     }
 
     #rag-chat-close {
-        width: 36px;
-        height: 36px;
-        font-size: 24px;
-        /* Area touch più grande per mobile */
-        min-width: 44px;
-        min-height: 44px;
-        padding: 8px;
+        width: 48px !important;
+        height: 48px !important;
+        margin-right: 4px !important;
+    }
+
+    #rag-chat-close svg {
+        width: 24px !important;
+        height: 24px !important;
     }
 
     /* Area messaggi mobile */
     #rag-chat-messages {
-        padding: 12px 15px;
-        /* Padding bottom per evitare sovrapposizione con input */
-        padding-bottom: 20px;
+        padding: 20px 16px 8px 16px !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
     }
 
+    /* Messaggi mobile */
     .rag-message {
-        max-width: 90%;
-        font-size: 15px;
-        margin-bottom: 12px;
+        max-width: 90% !important;
+        font-size: 15px !important;
+        margin-bottom: 16px !important;
     }
 
     .rag-message.user,
     .rag-message.bot {
-        padding: 14px 16px;
-        line-height: 1.5;
-    }
-
-    .rag-message.user {
-        font-size: 15px;
+        padding: 12px 16px !important;
+        line-height: 1.5 !important;
+        min-height: 40px !important;
+        border-radius: 20px 20px 8px 20px !important;
     }
 
     .rag-message.bot {
-        font-size: 15px;
-    }
-
-    /* Input area mobile ottimizzata */
-    #rag-chat-input-area {
-        padding: 15px 20px;
-        min-height: var(--rag-mobile-input-height);
-        /* Safe area per home indicator */
-        padding-bottom: max(15px, env(safe-area-inset-bottom));
-        gap: 12px;
-    }
-
-    #rag-chat-input {
-        font-size: 16px; /* Previene zoom su iOS */
-        padding: 12px 16px;
-        min-height: 44px; /* Apple HIG recommendation */
-        border-radius: 22px;
-        line-height: 1.4;
-    }
-
-    #rag-chat-send {
-        width: 44px;
-        height: 44px;
-        min-width: 44px;
-        min-height: 44px;
-        font-size: 18px;
+        border-radius: 20px 20px 20px 8px !important;
     }
 
     /* Typing indicator mobile */
     .rag-typing {
-        font-size: 15px;
-        padding: 14px 16px;
+        max-width: 90% !important;
+        font-size: 15px !important;
+        padding: 14px 18px !important;
+        border-radius: 20px 20px 20px 8px !important;
     }
 
     .rag-typing-dot {
-        width: 8px;
-        height: 8px;
+        width: 8px !important;
+        height: 8px !important;
     }
 
-    /* Keyboard management */
-    .rag-keyboard-open #rag-chat-messages {
-        padding-bottom: 20px;
+    /* Area input mobile */
+    .rag-input-container {
+        min-height: calc(var(--rag-input-area-height) + env(safe-area-inset-bottom)) !important;
+        padding-bottom: env(safe-area-inset-bottom) !important;
     }
 
-    .rag-keyboard-open #rag-chat-input-area {
-        position: relative;
-    }
-}
-
-/* TABLET OPTIMIZATION */
-@media (min-width: 769px) and (max-width: 1024px) {
-    #rag-chat-window {
-        width: 400px;
-        height: 600px;
-        max-width: 400px;
-        max-height: 600px;
+    .rag-input-wrapper {
+        padding: 16px 20px !important;
+        gap: 16px !important;
     }
 
-    #rag-chat-bubble {
-        width: 65px;
-        height: 65px;
-        font-size: 26px;
-    }
-
+    /* Input field mobile */
     #rag-chat-input {
-        font-size: 15px;
+        font-size: 16px !important; /* Evita zoom su iOS */
+        padding: 12px 18px !important;
+        min-height: 24px !important;
+        border-radius: 25px !important;
+        border-width: 1.5px !important;
+    }
+
+    /* Send button mobile */
+    #rag-chat-send {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 18px !important;
+        box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3) !important;
+    }
+
+    #rag-chat-send svg {
+        width: 22px !important;
+        height: 22px !important;
+    }
+
+    /* Branding mobile */
+    .rag-branding {
+        padding: 12px 20px !important;
+        font-size: 12px !important;
+    }
+
+    /* Prevenire scroll del body quando chat è aperta */
+    body.rag-chat-mobile-open {
+        overflow: hidden !important;
+        position: fixed !important;
+        width: 100% !important;
+        height: 100% !important;
+        top: 0 !important;
+        left: 0 !important;
     }
 }
 
-/* LANDSCAPE MOBILE */
-@media (max-width: 768px) and (orientation: landscape) {
+/* Landscape mobile adjustments */
+@media screen and (max-width: 768px) and (orientation: landscape) {
     #rag-chat-header {
-        min-height: 50px;
-        padding: 10px 20px;
-        font-size: 16px;
+        height: 50px !important;
+        padding-top: 0 !important;
     }
 
-    #rag-chat-input-area {
-        min-height: 60px;
-        padding: 10px 20px;
+    .rag-input-wrapper {
+        padding: 12px 20px !important;
+    }
+
+    .rag-input-container {
+        min-height: 60px !important;
     }
 }
 
-/* HIGH DPI SCREENS */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+/* Tablet adjustments */
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+    :root {
+        --rag-chat-width: 400px;
+        --rag-chat-height: 600px;
+    }
+
     #rag-chat-bubble {
-        border-width: 2px;
+        width: 64px;
+        height: 64px;
+        font-size: 24px;
     }
 }
 
-/* DARK MODE SUPPORT */
+/* Desktop large adjustments */
+@media screen and (min-width: 1200px) {
+    :root {
+        --rag-chat-width: 380px;
+        --rag-chat-height: 550px;
+    }
+}
+
+/* Animazioni di apertura e chiusura */
+@keyframes rag-chat-window-open {
+    from {
+        opacity: 0;
+        transform: scale(0.8) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes rag-chat-window-close {
+    from {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.8) translateY(20px);
+    }
+}
+
+/* Classi per animazioni */
+#rag-chat-window.opening {
+    animation: rag-chat-window-open 0.3s ease-out;
+}
+
+#rag-chat-window.closing {
+    animation: rag-chat-window-close 0.2s ease-in;
+}
+
+/* Accessibilità */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus states per accessibilità */
+#rag-chat-bubble:focus,
+#rag-chat-close:focus,
+#rag-chat-send:focus {
+    outline: 2px solid var(--rag-primary-color);
+    outline-offset: 2px;
+}
+
+#rag-chat-input:focus {
+    outline: none; /* Già gestito con box-shadow */
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    :root {
+        --rag-border-color: #000000;
+        --rag-text-muted: #000000;
+    }
+
+    .rag-message.bot {
+        border: 2px solid #000000;
+    }
+
+    .rag-message.user {
+        border: 2px solid #000000;
+    }
+}
+
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
     :root {
-        --rag-bg-light: #1a1a1a;
-        --rag-text-color: #ffffff;
-        --rag-border-color: #333333;
-        --rag-text-muted: #888888;
-    }
-
-    #rag-chat-window {
-        background: #1a1a1a;
+        --rag-bot-bubble-color: #2D2D2D;
+        --rag-user-bubble-color: #1E88E5;
+        --rag-text-color: #E0E0E0;
+        --rag-text-muted: #B0B0B0;
+        --rag-border-color: #404040;
+        --rag-input-bg: #2D2D2D;
     }
 
     #rag-chat-messages {
-        background: #1a1a1a;
-    }
-
-    .rag-message.bot {
-        background: #2a2a2a;
-        border-color: #404040;
-        color: #ffffff;
-    }
-
-    #rag-chat-input-area {
-        background: #1a1a1a;
-        border-top-color: #333333;
+        background: linear-gradient(to bottom, #1A1A1A 0%, #0D0D0D 100%);
     }
 
     #rag-chat-input {
-        background: #2a2a2a;
-        color: white;
-        border-color: #404040;
+        background: var(--rag-input-bg);
+        color: var(--rag-text-color);
+        border-color: var(--rag-border-color);
     }
 
-    #rag-chat-input::placeholder {
-        color: #888888;
+    .rag-input-container {
+        background: #1F1F1F;
+        border-top-color: var(--rag-border-color);
     }
 
     .rag-branding {
-        background: #1a1a1a;
-        color: #888888;
+        background: #1A1A1A;
+        border-top-color: var(--rag-border-color);
     }
-}
-
-/* REDUCED MOTION */
-@media (prefers-reduced-motion: reduce) {
-    #rag-chat-bubble,
-    .rag-message,
-    #rag-chat-send,
-    #rag-chat-window {
-        animation: none;
-        transition: none;
-    }
-
-    .rag-typing-dot {
-        animation: none;
-    }
-}
-
-/* HIGH CONTRAST MODE */
-@media (prefers-contrast: high) {
-    #rag-chat-bubble {
-        border: 3px solid black;
-    }
-
-    .rag-message.bot {
-        border: 2px solid var(--rag-text-color);
-    }
-
-    #rag-chat-input {
-        border: 2px solid var(--rag-text-color);
-    }
-
-    #rag-chat-close {
-        background: rgba(255,255,255,0.2);
-    }
-}
-
-/* FOCUS MANAGEMENT PER ACCESSIBILITÀ */
-#rag-chat-close:focus,
-#rag-chat-send:focus,
-#rag-chat-input:focus,
-#rag-chat-bubble:focus {
-    outline: 2px solid var(--rag-primary-color);
-    outline-offset: 2px;
-}
-
-/* Accessibilità keyboard navigation */
-#rag-chat-bubble:focus-visible,
-#rag-chat-close:focus-visible,
-#rag-chat-send:focus-visible {
-    outline: 2px solid var(--rag-primary-color);
-    outline-offset: 2px;
 }
 
 /* Print styles */
@@ -730,262 +895,65 @@
     }
 }
 
+/* Utilities */
+.rag-hidden {
+    display: none !important;
+}
 
-/* MOBILE FULLSCREEN - VERSIONE FORZATA */
-/* Sostituisci la sezione mobile del CSS con questa versione più aggressiva */
+.rag-sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
 
-@media screen and (max-width: 768px), (max-device-width: 768px) {
-    /* Widget container mobile */
-    #rag-chat-widget {
-        bottom: 15px !important;
-        right: 15px !important;
-    }
+/* Smooth scrolling per Safari */
+html {
+    -webkit-text-size-adjust: 100%;
+}
 
-    /* Bubble più grande su mobile */
-    #rag-chat-bubble {
-        width: 65px !important;
-        height: 65px !important;
-        font-size: 26px !important;
-    }
-
-    /* FULLSCREEN ASSOLUTO - FORZA TUTTO */
-    #rag-chat-window,
-    #rag-chat-widget #rag-chat-window,
-    #rag-chat-widget.bottom-left #rag-chat-window,
-    #rag-chat-widget.bottom-right #rag-chat-window,
-    #rag-chat-widget.top-left #rag-chat-window,
-    #rag-chat-widget.top-right #rag-chat-window {
-        position: fixed !important;
-        top: 0px !important;
-        left: 0px !important;
-        right: 0px !important;
-        bottom: 0px !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        min-width: 100vw !important;
-        min-height: 100vh !important;
-        max-width: 100vw !important;
-        max-height: 100vh !important;
-        border: none !important;
-        border-radius: 0px !important;
-        margin: 0px !important;
-        padding: 0px !important;
-        transform: none !important;
-        z-index: 2147483647 !important;
-        box-shadow: none !important;
-        background: white !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }
-
-    /* Header mobile */
-    #rag-chat-window #rag-chat-header {
-        min-height: 60px !important;
-        padding: 15px 20px !important;
-        font-size: 18px !important;
-        flex-shrink: 0 !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        padding-top: max(15px, env(safe-area-inset-top)) !important;
-    }
-
-    /* Close button mobile */
-    #rag-chat-window #rag-chat-close {
-        width: 44px !important;
-        height: 44px !important;
-        font-size: 24px !important;
-        min-width: 44px !important;
-        min-height: 44px !important;
-    }
-
-    /* Messages area mobile */
-    #rag-chat-window #rag-chat-messages {
-        flex: 1 !important;
-        overflow-y: auto !important;
-        padding: 12px 15px !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        background: #f8f9fa !important;
-    }
-
-    /* Input area mobile */
-    #rag-chat-window #rag-chat-input-area {
-        padding: 15px 20px !important;
-        min-height: 70px !important;
-        flex-shrink: 0 !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        gap: 12px !important;
-        display: flex !important;
-        align-items: flex-end !important;
-        padding-bottom: max(15px, env(safe-area-inset-bottom)) !important;
-    }
-
-    /* Input field mobile */
-    #rag-chat-window #rag-chat-input {
-        font-size: 16px !important;
-        padding: 12px 16px !important;
-        min-height: 44px !important;
-        border-radius: 22px !important;
-        flex: 1 !important;
-    }
-
-    /* Send button mobile */
-    #rag-chat-window #rag-chat-send {
-        width: 44px !important;
-        height: 44px !important;
-        min-width: 44px !important;
-        min-height: 44px !important;
-        font-size: 18px !important;
-        flex-shrink: 0 !important;
-    }
-
-    /* Messages styling mobile */
-    #rag-chat-window .rag-message {
-        max-width: 90% !important;
-        font-size: 15px !important;
-        margin-bottom: 12px !important;
-    }
-
-    #rag-chat-window .rag-message.user,
-    #rag-chat-window .rag-message.bot {
-        padding: 14px 16px !important;
-        line-height: 1.5 !important;
-    }
-
-    /* Typing indicator mobile */
-    #rag-chat-window .rag-typing {
-        font-size: 15px !important;
-        padding: 14px 16px !important;
-    }
-
-    #rag-chat-window .rag-typing-dot {
-        width: 8px !important;
-        height: 8px !important;
-    }
-
-    /* Body lock per mobile */
-    body.rag-chat-open {
-        overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-        height: 100% !important;
-        top: 0 !important;
-        left: 0 !important;
-    }
-
-    /* Branding mobile */
-    #rag-chat-window .rag-branding {
-        padding: 8px 20px !important;
-        font-size: 11px !important;
-        flex-shrink: 0 !important;
+/* Fix per iOS Safari viewport */
+@supports (-webkit-touch-callout: none) {
+    @media screen and (max-width: 768px) {
+        #rag-chat-window {
+            height: 100vh !important;
+            height: -webkit-fill-available !important;
+        }
     }
 }
 
-/* Landscape mobile */
-@media screen and (max-width: 768px) and (orientation: landscape) {
-    #rag-chat-window #rag-chat-header {
-        min-height: 50px !important;
-        padding: 10px 20px !important;
-        font-size: 16px !important;
-    }
-
-    #rag-chat-window #rag-chat-input-area {
-        min-height: 60px !important;
-        padding: 10px 20px !important;
-    }
-}
-
-/* iPhone X e successivi */
-@media screen and (max-width: 768px) and (-webkit-min-device-pixel-ratio: 2) {
+/* Compatibilità per browser più vecchi */
+@supports not (display: flex) {
     #rag-chat-window {
-        height: 100vh !important;
-        height: calc(100vh + env(safe-area-inset-top) + env(safe-area-inset-bottom)) !important;
+        display: block;
+    }
+
+    #rag-chat-header {
+        display: block;
+        height: auto;
+        padding: 15px 20px;
+    }
+
+    .rag-input-wrapper {
+        display: block;
+    }
+
+    #rag-chat-input {
+        width: calc(100% - 60px);
+        display: inline-block;
+        vertical-align: top;
+    }
+
+    #rag-chat-send {
+        display: inline-block;
+        vertical-align: top;
+        margin-left: 12px;
     }
 }
 
-/* Debug overlay - RIMUOVI DOPO IL TEST */
-@media screen and (max-width: 768px) {
-    #rag-chat-window::after {
-        content: "MOBILE FULLSCREEN ATTIVO" !important;
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        background: rgba(255, 0, 0, 0.8) !important;
-        color: white !important;
-        padding: 10px 20px !important;
-        border-radius: 5px !important;
-        font-size: 12px !important;
-        z-index: 999999 !important;
-        pointer-events: none !important;
-        /* RIMUOVI QUESTA REGOLA DOPO AVER VERIFICATO CHE FUNZIONA */
-    }
-}
-
-/* Fix per icone SVG troppo grandi */
-.rag-bot-avatar svg,
-.rag-bubble-icon svg,
-.rag-close-btn svg,
-.rag-send-btn svg {
-    width: 24px !important;
-    height: 24px !important;
-    max-width: 24px !important;
-    max-height: 24px !important;
-}
-
-/* Fix specifico per avatar nel header */
-.rag-bot-avatar {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #f0f0f0;
-    border-radius: 50%;
-}
-
-/* Fix per bubble icon */
-.rag-bubble-icon {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Fix per scrollbar su webkit browsers */
-.rag-chat-messages::-webkit-scrollbar {
-    width: 8px;
-}
-
-.rag-chat-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.rag-chat-messages::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-.rag-chat-messages::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* Fix per Firefox */
-.rag-chat-messages {
-    scrollbar-width: thin;
-    scrollbar-color: #888 #f1f1f1;
-}
-
-/* Fix per mobile */
-@media (max-width: 768px) {
-    .rag-chat-window {
-        font-size: 16px; /* Previene zoom su iOS */
-    }
-
-    .rag-chat-input {
-        font-size: 16px; /* Previene zoom su iOS */
-    }
-}
+/* Fine del file CSS */

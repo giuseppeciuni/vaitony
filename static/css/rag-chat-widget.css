@@ -1,4 +1,4 @@
-/* RAG Chat Widget - CSS Completo Mobile-First */
+/* RAG Chat Widget - CSS Completo Mobile-First con correzioni Android */
 
 /* ===============================================
    CSS VARIABLES - PERSONALIZZABILI
@@ -352,6 +352,7 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: rgba(0,0,0,0.2) transparent;
+    position: relative;
 }
 
 /* Scrollbar personalizzata */
@@ -940,8 +941,10 @@
 }
 
 /* ===============================================
-   RESPONSIVE - MOBILE FIRST
+   RESPONSIVE - MOBILE FIRST CON CORREZIONI ANDROID
    =============================================== */
+
+/* MOBILE GENERALE - Base per tutti i dispositivi mobili */
 @media screen and (max-width: 768px) {
     /* Widget occupa tutto lo schermo su mobile */
     #rag-chat-widget {
@@ -975,6 +978,8 @@
         border: none !important;
         transform-origin: center !important;
         animation: rag-mobile-slide-up var(--rag-animation-slow);
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     @keyframes rag-mobile-slide-up {
@@ -993,6 +998,7 @@
         height: calc(var(--rag-header-height) + var(--rag-safe-top)) !important;
         padding-top: var(--rag-safe-top) !important;
         position: relative;
+        flex-shrink: 0 !important;
     }
 
     .rag-header-content {
@@ -1025,12 +1031,38 @@
         height: 24px !important;
     }
 
-    /* Area messaggi mobile */
+    /* Area messaggi mobile MIGLIORATA PER ANDROID */
     #rag-chat-messages {
-        padding: 20px 16px 8px 16px !important;
         flex: 1 !important;
         overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 20px 16px 8px 16px !important;
+        background: linear-gradient(to bottom, #f8f9fa 0%, #f1f3f4 100%) !important;
+        scroll-behavior: smooth !important;
         -webkit-overflow-scrolling: touch !important;
+        /* NUOVO: Proprietà specifiche per Android */
+        overscroll-behavior-y: contain !important;
+        position: relative !important;
+        min-height: 0 !important;
+    }
+
+    /* NUOVO: Gestione keyboard Android */
+    #rag-chat-window.rag-android-keyboard-open #rag-chat-messages {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        overscroll-behavior-y: contain !important;
+        height: auto !important;
+        min-height: 200px !important;
+        max-height: none !important;
+    }
+
+    #rag-chat-window.rag-android-keyboard-open .rag-input-container {
+        position: sticky !important;
+        bottom: 0 !important;
+        z-index: 1000 !important;
+        background: white !important;
+        border-top: 2px solid var(--rag-border-color) !important;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1) !important;
     }
 
     /* Messaggi mobile */
@@ -1137,24 +1169,37 @@
         height: 8px !important;
     }
 
-    /* Area input mobile con safe area */
+    /* Area input mobile con safe area MIGLIORATA PER ANDROID */
     .rag-input-container {
         min-height: calc(var(--rag-input-area-height) + var(--rag-safe-bottom)) !important;
         padding-bottom: var(--rag-safe-bottom) !important;
+        flex-shrink: 0 !important;
+        background: white !important;
+        border-top: 1px solid var(--rag-border-color) !important;
+        position: relative !important;
+        z-index: 10 !important;
     }
 
     .rag-input-wrapper {
         padding: 16px 20px !important;
         gap: 16px !important;
+        display: flex !important;
+        align-items: flex-end !important;
     }
 
-    /* Input field mobile */
+    /* Input field mobile OTTIMIZZATO PER ANDROID */
     #rag-chat-input {
-        font-size: 16px !important; /* Evita zoom su iOS */
+        font-size: 16px !important; /* Evita zoom su iOS e Android */
         padding: 12px 18px !important;
         min-height: 24px !important;
         border-radius: 25px !important;
         border-width: 1.5px !important;
+        flex: 1 !important;
+        /* NUOVO: Proprietà specifiche per Android */
+        touch-action: manipulation !important;
+        -webkit-user-select: text !important;
+        user-select: text !important;
+        max-height: 120px !important;
     }
 
     /* Send button mobile */
@@ -1163,6 +1208,7 @@
         height: 48px !important;
         font-size: 18px !important;
         box-shadow: 0 4px 12px rgba(31, 147, 255, 0.3) !important;
+        flex-shrink: 0 !important;
     }
 
     #rag-chat-send svg {
@@ -1176,7 +1222,7 @@
         font-size: 12px !important;
     }
 
-    /* Prevenire scroll del body quando chat è aperta */
+    /* NUOVO: Prevenire scroll del body quando chat è aperta - migliorato per Android */
     body.rag-chat-mobile-open {
         overflow: hidden !important;
         position: fixed !important;
@@ -1184,9 +1230,12 @@
         height: 100% !important;
         top: 0 !important;
         left: 0 !important;
+        /* Android specific */
+        touch-action: none !important;
+        -webkit-overflow-scrolling: touch !important;
     }
 
-    /* Keyboard mobile handling */
+    /* NUOVO: Gestione viewport dinamico Android */
     #rag-chat-window.keyboard-open {
         height: 100vh !important;
         height: calc(100vh - env(keyboard-inset-height, 0px)) !important;
@@ -1194,6 +1243,60 @@
 
     #rag-chat-window.keyboard-open #rag-chat-messages {
         padding-bottom: 20px !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+    }
+}
+
+/* ===============================================
+   ANDROID SPECIFICO - Media queries aggiuntive
+   =============================================== */
+
+/* Android Chrome - gestione specifica della keyboard */
+@media screen and (max-width: 768px) {
+    /* Forza altezze minime su Android quando keyboard è aperta */
+    .rag-android-keyboard-open #rag-chat-messages {
+        min-height: 200px !important;
+        height: auto !important;
+        max-height: calc(100vh - 200px) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior: contain !important;
+    }
+
+    /* Input sempre visibile su Android */
+    .rag-android-keyboard-open .rag-input-container {
+        position: sticky !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        z-index: 1001 !important;
+        background: white !important;
+        border-top: 2px solid var(--rag-border-color) !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15) !important;
+    }
+
+    /* Miglioramenti scroll per Android */
+    .rag-android-keyboard-open #rag-chat-messages::-webkit-scrollbar {
+        width: 6px !important;
+    }
+
+    .rag-android-keyboard-open #rag-chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.4) !important;
+        border-radius: 3px !important;
+    }
+
+    /* Padding aggiuntivo per evitare sovrapposizioni su Android */
+    .rag-android-keyboard-open .rag-message:last-child {
+        margin-bottom: 20px !important;
+    }
+
+    /* Focus migliorato per Android */
+    .rag-android-keyboard-open #rag-chat-input:focus {
+        border-color: var(--rag-primary-color) !important;
+        box-shadow: 0 0 0 3px rgba(31, 147, 255, 0.2) !important;
+        outline: none !important;
     }
 }
 
@@ -1222,6 +1325,12 @@
         width: 32px !important;
         height: 32px !important;
         font-size: 14px !important;
+    }
+
+    /* Android landscape - keyboard handling */
+    .rag-android-keyboard-open #rag-chat-messages {
+        min-height: 150px !important;
+        max-height: calc(100vh - 150px) !important;
     }
 }
 
@@ -1390,6 +1499,12 @@
     .rag-message.bot .rag-source-link:hover {
         background: #4A4A4A !important;
     }
+
+    /* Dark mode per Android keyboard */
+    .rag-android-keyboard-open .rag-input-container {
+        background: #1F1F1F !important;
+        border-top-color: var(--rag-border-color) !important;
+    }
 }
 
 /* ===============================================
@@ -1451,6 +1566,25 @@
     }
 }
 
+/* ===============================================
+   FIX SPECIFICI PER ANDROID
+   =============================================== */
+
+/* Fix per Android Chrome - gestione viewport units */
+@supports (-webkit-appearance: none) {
+    @media screen and (max-width: 768px) {
+        #rag-chat-window {
+            height: 100vh !important;
+            height: -webkit-fill-available !important;
+        }
+
+        .rag-android-keyboard-open #rag-chat-window {
+            height: 100vh !important;
+            height: calc(var(--vh, 1vh) * 100) !important;
+        }
+    }
+}
+
 /* Fix per iOS Safari viewport */
 @supports (-webkit-touch-callout: none) {
     @media screen and (max-width: 768px) {
@@ -1461,11 +1595,28 @@
     }
 }
 
-/* Fix per Android Chrome address bar */
+/* Fix per Android Chrome address bar - gestione dinamica altezza viewport */
 @media screen and (max-width: 768px) {
     #rag-chat-window {
         height: 100vh;
         height: calc(var(--vh, 1vh) * 100);
+    }
+
+    /* Android specific - forza scroll container */
+    .rag-android-keyboard-open {
+        height: 100vh !important;
+        height: calc(var(--vh, 1vh) * 100) !important;
+        overflow: hidden !important;
+    }
+
+    .rag-android-keyboard-open #rag-chat-messages {
+        height: auto !important;
+        flex: 1 !important;
+        min-height: 200px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain !important;
+        touch-action: pan-y !important;
     }
 }
 

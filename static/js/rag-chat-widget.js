@@ -72,9 +72,7 @@ function formatResponseToHTML(text) {
     return html;
 }
 
-
-
-// RAG Chat Widget - Versione CSP-Safe
+// RAG Chat Widget - Versione CSP-Safe con correzioni Android complete
 // Codice sicuro senza uso di innerHTML o eval()
 
 (function() {
@@ -180,6 +178,18 @@ function formatResponseToHTML(text) {
         return isMobileUA || (isMobileScreen && hasTouchScreen);
     }
 
+    // NUOVO: Rileva specificamente Android
+    function isAndroidDevice() {
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        return /android/i.test(userAgent.toLowerCase());
+    }
+
+    // NUOVO: Rileva iOS
+    function isIOSDevice() {
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        return /iPad|iPhone|iPod/.test(userAgent);
+    }
+
     // Applica stili personalizzati in modo sicuro
     function applyCustomStyles() {
         const style = document.createElement('style');
@@ -258,6 +268,7 @@ function formatResponseToHTML(text) {
         // Header
         const header = document.createElement('div');
         header.className = 'rag-chat-header';
+        header.id = 'rag-chat-header';
 
         const headerContent = document.createElement('div');
         headerContent.className = 'rag-header-content';
@@ -421,9 +432,129 @@ function formatResponseToHTML(text) {
         }
     }
 
-    // Gestione keyboard mobile
+    // NUOVO: Gestione keyboard Android migliorata
+    function handleAndroidKeyboard() {
+        if (!isAndroidDevice()) return;
+
+        console.log('Configurazione keyboard Android attivata');
+
+        const input = document.getElementById('rag-chat-input');
+        const messages = document.getElementById('rag-chat-messages');
+        const chatWindow = document.getElementById('rag-chat-window');
+        const inputContainer = document.querySelector('.rag-input-container');
+
+        if (!input || !messages || !chatWindow || !inputContainer) return;
+
+        let initialViewportHeight = window.innerHeight;
+        let keyboardHeight = 0;
+        let isKeyboardOpen = false;
+
+        // Gestione apertura/chiusura keyboard
+        function handleViewportChange() {
+            const currentHeight = window.innerHeight;
+            const heightDiff = initialViewportHeight - currentHeight;
+
+            // Su Android, consideriamo keyboard aperta se la differenza è > 150px
+            const keyboardThreshold = 150;
+            const newKeyboardState = heightDiff > keyboardThreshold;
+
+            if (newKeyboardState !== isKeyboardOpen) {
+                isKeyboardOpen = newKeyboardState;
+                keyboardHeight = newKeyboardState ? heightDiff : 0;
+
+                console.log(`Android keyboard ${isKeyboardOpen ? 'aperta' : 'chiusa'}, altezza: ${keyboardHeight}px`);
+
+                if (isKeyboardOpen) {
+                    // Keyboard aperta - adatta il layout
+                    chatWindow.classList.add('rag-android-keyboard-open');
+
+                    // Forza l'altezza dell'area messaggi per Android
+                    const headerHeight = document.getElementById('rag-chat-header').offsetHeight || 60;
+                    const inputHeight = inputContainer.offsetHeight || 70;
+                    const availableHeight = currentHeight - headerHeight - inputHeight - 10; // 10px di margine
+
+                    messages.style.height = `${Math.max(availableHeight, 200)}px`;
+                    messages.style.maxHeight = `${availableHeight}px`;
+                    messages.style.overflowY = 'auto';
+
+                    // Assicura che l'input rimanga visibile
+                    inputContainer.style.position = 'sticky';
+                    inputContainer.style.bottom = '0';
+                    inputContainer.style.zIndex = '1000';
+                    inputContainer.style.backgroundColor = 'white';
+
+                    // Scroll al bottom dopo un piccolo delay
+                    setTimeout(() => {
+                        messages.scrollTop = messages.scrollHeight;
+                    }, 100);
+
+                } else {
+                    // Keyboard chiusa - ripristina layout
+                    chatWindow.classList.remove('rag-android-keyboard-open');
+
+                    // Ripristina stili originali
+                    messages.style.height = '';
+                    messages.style.maxHeight = '';
+                    inputContainer.style.position = '';
+                    inputContainer.style.bottom = '';
+                    inputContainer.style.zIndex = '';
+                    inputContainer.style.backgroundColor = '';
+
+                    // Scroll al bottom
+                    setTimeout(() => {
+                        messages.scrollTop = messages.scrollHeight;
+                    }, 300);
+                }
+            }
+        }
+
+        // Event listeners per Android
+        window.addEventListener('resize', handleViewportChange);
+
+        // Focus input - Android specific
+        input.addEventListener('focus', () => {
+            console.log('Android input focus');
+
+            // Forza scroll al bottom quando l'input viene focalizzato
+            setTimeout(() => {
+                messages.scrollTop = messages.scrollHeight;
+
+                // Assicura che l'input sia visibile scrollando la pagina se necessario
+                input.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                    inline: 'nearest'
+                });
+            }, 300);
+        });
+
+        // Blur input - Android specific
+        input.addEventListener('blur', () => {
+            console.log('Android input blur');
+
+            // Dopo la perdita del focus, riaggiorna il layout
+            setTimeout(() => {
+                handleViewportChange();
+            }, 300);
+        });
+
+        // Gestione input text per Android
+        input.addEventListener('input', () => {
+            if (isKeyboardOpen) {
+                // Mantieni l'input sempre visibile durante la digitazione
+                setTimeout(() => {
+                    input.scrollIntoView({
+                        behavior: 'auto',
+                        block: 'nearest'
+                    });
+                }, 10);
+            }
+        });
+    }
+
+    // Gestione keyboard mobile (mantenuta per iOS)
     function handleMobileKeyboard() {
-        if (isMobileDevice()) {
+        if (isMobileDevice() && !isAndroidDevice()) {
             const input = document.getElementById('rag-chat-input');
             if (!input) return;
 
@@ -435,7 +566,7 @@ function formatResponseToHTML(text) {
 
                 if (currentHeight < originalHeight * 0.75) {
                     // Keyboard aperta
-                    console.log('Mobile keyboard rilevata');
+                    console.log('iOS keyboard rilevata');
                     if (chatWindow) {
                         chatWindow.classList.add('keyboard-open');
                     }
@@ -450,7 +581,7 @@ function formatResponseToHTML(text) {
         }
     }
 
-    // Gestione touch events
+    // Gestione touch events migliorata per Android
     function handleTouchEvents() {
         if (isMobileDevice()) {
             let touchStartY = 0;
@@ -468,10 +599,26 @@ function formatResponseToHTML(text) {
                 const touchY = e.touches[0].clientY;
                 const deltaY = touchY - touchStartY;
 
-                // Previeni scroll elastico su iOS
-                if ((messages.scrollTop === 0 && deltaY > 0) ||
-                    (messages.scrollTop + messages.clientHeight >= messages.scrollHeight && deltaY < 0)) {
-                    e.preventDefault();
+                // Migliora il bounce su Android
+                if (isAndroidDevice()) {
+                    // Su Android, gestisci il scroll in modo più permissivo
+                    if (messages.scrollTop === 0 && deltaY > 0) {
+                        // Permetti un piccolo bounce in alto
+                        if (deltaY > 50) {
+                            e.preventDefault();
+                        }
+                    } else if (messages.scrollTop + messages.clientHeight >= messages.scrollHeight && deltaY < 0) {
+                        // Permetti un piccolo bounce in basso
+                        if (deltaY < -50) {
+                            e.preventDefault();
+                        }
+                    }
+                } else {
+                    // iOS - comportamento originale
+                    if ((messages.scrollTop === 0 && deltaY > 0) ||
+                        (messages.scrollTop + messages.clientHeight >= messages.scrollHeight && deltaY < 0)) {
+                        e.preventDefault();
+                    }
                 }
             }, { passive: false });
 
@@ -499,10 +646,17 @@ function formatResponseToHTML(text) {
                 document.documentElement.style.overflow = 'hidden';
 
                 // iOS specific
-                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                if (isIOSDevice()) {
                     document.body.style.position = 'fixed';
                     document.body.style.width = '100%';
                     document.body.style.height = '100%';
+                }
+
+                // Android specific
+                if (isAndroidDevice()) {
+                    // Su Android, imposta l'altezza a 100vh invece di 100%
+                    chatWindow.style.height = '100vh';
+                    chatWindow.style.minHeight = '100vh';
                 }
             } else {
                 // Ripristina stili originali
@@ -529,10 +683,10 @@ function formatResponseToHTML(text) {
         }
     }
 
-    // Gestione cambio orientamento
+    // NUOVO: Gestione cambio orientamento migliorata per Android
     function handleOrientationChange() {
         if (isMobileDevice()) {
-            setTimeout(() => {
+            const handleResize = () => {
                 const messages = document.getElementById('rag-chat-messages');
                 const chatWindow = document.getElementById('rag-chat-window');
 
@@ -545,15 +699,33 @@ function formatResponseToHTML(text) {
                     forceMobileFullscreen(chatWindow, true);
                 }
 
-                // Riposiziona il focus se necessario
-                const input = document.getElementById('rag-chat-input');
-                if (input && document.activeElement === input) {
-                    input.blur();
-                    setTimeout(() => input.focus(), 100);
+                // Android specific: riaggiorna keyboard handling
+                if (isAndroidDevice()) {
+                    const input = document.getElementById('rag-chat-input');
+                    if (input && document.activeElement === input) {
+                        // Ritarda il rifocus per permettere al layout di stabilizzarsi
+                        input.blur();
+                        setTimeout(() => {
+                            input.focus();
+                        }, 300);
+                    }
+                }
+
+                // iOS specific
+                if (isIOSDevice()) {
+                    const input = document.getElementById('rag-chat-input');
+                    if (input && document.activeElement === input) {
+                        input.blur();
+                        setTimeout(() => input.focus(), 100);
+                    }
                 }
 
                 console.log('Orientamento cambiato, layout adattato');
-            }, 100);
+            };
+
+            // Usa un timeout più lungo per Android
+            const timeout = isAndroidDevice() ? 500 : 100;
+            setTimeout(handleResize, timeout);
         }
     }
 
@@ -625,7 +797,8 @@ function formatResponseToHTML(text) {
                     document.getElementById('rag-chat-widget').classList.add('chat-open');
                 }
 
-                // Focus su input
+                // Focus su input con delay più lungo per Android
+                const focusDelay = isAndroidDevice() ? 300 : 100;
                 setTimeout(() => {
                     input.focus();
 
@@ -633,12 +806,13 @@ function formatResponseToHTML(text) {
                     if (isMobileDevice()) {
                         forceMobileFullscreen(chatWindow, true);
 
-                        // Scroll al bottom
+                        // Scroll al bottom con delay più lungo per Android
+                        const scrollDelay = isAndroidDevice() ? 200 : 100;
                         setTimeout(() => {
                             messages.scrollTop = messages.scrollHeight;
-                        }, 100);
+                        }, scrollDelay);
                     }
-                }, 100);
+                }, focusDelay);
 
                 // Mostra messaggio di benvenuto se prima apertura
                 if (messages.children.length === 0) {
@@ -712,6 +886,13 @@ function formatResponseToHTML(text) {
             } else {
                 input.style.borderColor = '';
             }
+
+            // NUOVO: Mantieni scroll per Android durante la digitazione
+            if (isAndroidDevice() && document.activeElement === input) {
+                setTimeout(() => {
+                    messages.scrollTop = messages.scrollHeight;
+                }, 50);
+            }
         });
 
         // Chiamata API sicura
@@ -739,6 +920,8 @@ function formatResponseToHTML(text) {
                         history: config.enableMessageHistory ? messageHistory.slice(-10) : [],
                         metadata: {
                             isMobile: isMobileDevice(),
+                            isAndroid: isAndroidDevice(),
+                            isIOS: isIOSDevice(),
                             viewport: {
                                 width: window.innerWidth,
                                 height: window.innerHeight
@@ -816,10 +999,18 @@ function formatResponseToHTML(text) {
 
             messages.appendChild(messageEl);
 
-            // Scroll automatico al bottom
+            // Scroll automatico al bottom con gestione Android specifica
+            const scrollDelay = isAndroidDevice() ? 150 : 100;
             setTimeout(() => {
                 messages.scrollTop = messages.scrollHeight;
-            }, 100);
+
+                // NUOVO: Doppio scroll per Android per assicurarsi che funzioni
+                if (isAndroidDevice()) {
+                    setTimeout(() => {
+                        messages.scrollTop = messages.scrollHeight;
+                    }, 100);
+                }
+            }, scrollDelay);
 
             // Salva nella cronologia
             if (window.messageHistory) {
@@ -859,6 +1050,7 @@ function formatResponseToHTML(text) {
             messages.appendChild(typingEl);
 
             // Scroll ottimizzato per dispositivo
+            const scrollDelay = isAndroidDevice() ? 50 : 10;
             setTimeout(() => {
                 if (isMobileDevice()) {
                     messages.scrollTop = messages.scrollHeight;
@@ -868,7 +1060,14 @@ function formatResponseToHTML(text) {
                         behavior: 'smooth'
                     });
                 }
-            }, 10);
+
+                // NUOVO: Doppio scroll per Android
+                if (isAndroidDevice()) {
+                    setTimeout(() => {
+                        messages.scrollTop = messages.scrollHeight;
+                    }, 100);
+                }
+            }, scrollDelay);
 
             console.log('Typing indicator aggiunto');
             return typingEl;
@@ -905,8 +1104,50 @@ function formatResponseToHTML(text) {
             }, 10);
         });
 
-        // Event listener per focus (mobile)
-        if (isMobileDevice()) {
+        // NUOVO: Event listener per focus Android specifico
+        if (isAndroidDevice()) {
+            input.addEventListener('focus', () => {
+                console.log('Android input focus - gestione speciale');
+
+                // Assicura che la chat sia pronta per l'input
+                setTimeout(() => {
+                    const messages = document.getElementById('rag-chat-messages');
+                    if (messages && isOpen) {
+                        messages.scrollTop = messages.scrollHeight;
+                    }
+
+                    // Forza la visibilità dell'input su Android
+                    input.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'end',
+                        inline: 'nearest'
+                    });
+                }, 400);
+
+                // Secondo tentativo di scroll per Android
+                setTimeout(() => {
+                    const messages = document.getElementById('rag-chat-messages');
+                    if (messages) {
+                        messages.scrollTop = messages.scrollHeight;
+                    }
+                }, 600);
+            });
+
+            input.addEventListener('blur', () => {
+                console.log('Android input blur');
+
+                // Su Android, quando l'input perde il focus, aspetta un po' prima di riaggiustare
+                setTimeout(() => {
+                    const messages = document.getElementById('rag-chat-messages');
+                    if (messages && isOpen) {
+                        messages.scrollTop = messages.scrollHeight;
+                    }
+                }, 400);
+            });
+        }
+
+        // Event listener per focus (iOS e altri)
+        if (isMobileDevice() && !isAndroidDevice()) {
             input.addEventListener('focus', () => {
                 // Assicura che la chat sia visibile quando keyboard apre
                 setTimeout(() => {
@@ -915,14 +1156,14 @@ function formatResponseToHTML(text) {
                         messages.scrollTop = messages.scrollHeight;
                     }
                     // iOS fix per keyboard
-                    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    if (isIOSDevice()) {
                         window.scrollTo(0, 0);
                         document.body.scrollTop = 0;
                     }
                 }, 300);
             });
 
-            // Fix per keyboard Android
+            // Fix per keyboard altri dispositivi
             let previousHeight = window.innerHeight;
             window.addEventListener('resize', () => {
                 const currentHeight = window.innerHeight;
@@ -939,11 +1180,11 @@ function formatResponseToHTML(text) {
                 }
                 // Trigger input event per aggiornare UI
                 input.dispatchEvent(new Event('input'));
-            }, 10);
+            });
         }
 
-        // Event listener per perdita di focus (mobile)
-        if (isMobileDevice()) {
+        // Event listener per perdita di focus (mobile non Android)
+        if (isMobileDevice() && !isAndroidDevice()) {
             input.addEventListener('blur', () => {
                 // Su mobile, quando l'input perde il focus, la keyboard si chiude
                 // Aspetta un po' per far sì che la transizione sia smooth
@@ -960,9 +1201,10 @@ function formatResponseToHTML(text) {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && isOpen && isMobileDevice()) {
                 // Quando la pagina torna visibile su mobile, riapplica fullscreen
+                const delay = isAndroidDevice() ? 200 : 100;
                 setTimeout(() => {
                     forceMobileFullscreen(chatWindow, true);
-                }, 100);
+                }, delay);
             }
         });
 
@@ -1005,6 +1247,8 @@ function formatResponseToHTML(text) {
             // Stato
             isOpen: () => isOpen,
             isMobile: () => isMobileDevice(),
+            isAndroid: () => isAndroidDevice(),
+            isIOS: () => isIOSDevice(),
 
             // Messaggi
             sendMessage: (text) => {
@@ -1068,7 +1312,7 @@ function formatResponseToHTML(text) {
             },
 
             // Utility
-            version: '2.0.0',
+            version: '2.1.0',
             isSupported: () => {
                 return 'fetch' in window && 'Promise' in window;
             }
@@ -1111,6 +1355,17 @@ function formatResponseToHTML(text) {
                 if (response.success && response.answer) {
                     addMessage('bot', response.answer);
 
+                    // NUOVO: Scroll aggiuntivo per Android dopo aver aggiunto la risposta
+                    if (isAndroidDevice()) {
+                        setTimeout(() => {
+                            messages.scrollTop = messages.scrollHeight;
+                        }, 200);
+
+                        setTimeout(() => {
+                            messages.scrollTop = messages.scrollHeight;
+                        }, 500);
+                    }
+
                     // Analytics
                     if (window.gtag) {
                         window.gtag('event', 'message_sent', {
@@ -1126,7 +1381,8 @@ function formatResponseToHTML(text) {
                             message,
                             response: response.answer,
                             duration: endTime - startTime,
-                            isMobile: isMobileDevice()
+                            isMobile: isMobileDevice(),
+                            isAndroid: isAndroidDevice()
                         }
                     }));
                 } else {
@@ -1157,7 +1413,8 @@ function formatResponseToHTML(text) {
                     detail: {
                         error: error.message,
                         message,
-                        isMobile: isMobileDevice()
+                        isMobile: isMobileDevice(),
+                        isAndroid: isAndroidDevice()
                     }
                 }));
 
@@ -1178,7 +1435,19 @@ function formatResponseToHTML(text) {
                 input.disabled = false;
                 sendBtn.disabled = false;
                 input.placeholder = originalPlaceholder;
-                input.focus();
+
+                // Focus con delay specifico per dispositivo
+                const focusDelay = isAndroidDevice() ? 200 : 50;
+                setTimeout(() => {
+                    input.focus();
+
+                    // NUOVO: Assicura scroll finale per Android
+                    if (isAndroidDevice()) {
+                        setTimeout(() => {
+                            messages.scrollTop = messages.scrollHeight;
+                        }, 100);
+                    }
+                }, focusDelay);
             }
         }
 

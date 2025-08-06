@@ -436,120 +436,138 @@ function formatResponseToHTML(text) {
     function handleAndroidKeyboard() {
         if (!isAndroidDevice()) return;
 
-        console.log('Configurazione keyboard Android attivata');
+        console.log('🤖 Android keyboard handler attivato');
 
         const input = document.getElementById('rag-chat-input');
         const messages = document.getElementById('rag-chat-messages');
         const chatWindow = document.getElementById('rag-chat-window');
         const inputContainer = document.querySelector('.rag-input-container');
 
-        if (!input || !messages || !chatWindow || !inputContainer) return;
+        if (!input || !messages || !chatWindow || !inputContainer) {
+            console.error('❌ Elementi Android non trovati');
+            return;
+        }
 
         let initialViewportHeight = window.innerHeight;
-        let keyboardHeight = 0;
         let isKeyboardOpen = false;
+        let scrollToBottomTimer = null;
 
-        // Gestione apertura/chiusura keyboard
+        // FORZA SCROLL AL BOTTOM - Android specific
+        function forceScrollToBottom() {
+            if (scrollToBottomTimer) clearTimeout(scrollToBottomTimer);
+
+            scrollToBottomTimer = setTimeout(() => {
+                messages.scrollTop = messages.scrollHeight;
+                console.log('📱 Scroll forzato Android:', messages.scrollTop, '/', messages.scrollHeight);
+            }, 50);
+        }
+
+        // GESTIONE VIEWPORT ANDROID MIGLIORATA
         function handleViewportChange() {
             const currentHeight = window.innerHeight;
             const heightDiff = initialViewportHeight - currentHeight;
-
-            // Su Android, consideriamo keyboard aperta se la differenza è > 150px
-            const keyboardThreshold = 150;
+            const keyboardThreshold = 100; // Ridotto per Android
             const newKeyboardState = heightDiff > keyboardThreshold;
+
+            console.log(`📱 Android viewport: ${currentHeight}px (diff: ${heightDiff}px)`);
 
             if (newKeyboardState !== isKeyboardOpen) {
                 isKeyboardOpen = newKeyboardState;
-                keyboardHeight = newKeyboardState ? heightDiff : 0;
 
-                console.log(`Android keyboard ${isKeyboardOpen ? 'aperta' : 'chiusa'}, altezza: ${keyboardHeight}px`);
+                console.log(`⌨️ Android keyboard: ${isKeyboardOpen ? 'APERTA' : 'CHIUSA'}`);
 
                 if (isKeyboardOpen) {
-                    // Keyboard aperta - adatta il layout
+                    // KEYBOARD APERTA
                     chatWindow.classList.add('rag-android-keyboard-open');
 
-                    // Forza l'altezza dell'area messaggi per Android
-                    const headerHeight = document.getElementById('rag-chat-header').offsetHeight || 60;
-                    const inputHeight = inputContainer.offsetHeight || 70;
-                    const availableHeight = currentHeight - headerHeight - inputHeight - 10; // 10px di margine
+                    // CALCOLA LAYOUT
+                    const headerHeight = 60;
+                    const inputHeight = 80;
+                    const availableHeight = currentHeight - headerHeight - inputHeight - 20;
 
+                    console.log(`📐 Layout Android: header=${headerHeight}, input=${inputHeight}, available=${availableHeight}`);
+
+                    // APPLICA STILI DIRETTI
                     messages.style.height = `${Math.max(availableHeight, 200)}px`;
                     messages.style.maxHeight = `${availableHeight}px`;
-                    messages.style.overflowY = 'auto';
+                    messages.style.overflow = 'auto';
+                    messages.style.webkitOverflowScrolling = 'touch';
 
-                    // Assicura che l'input rimanga visibile
-                    inputContainer.style.position = 'sticky';
+                    // INPUT SEMPRE VISIBILE
+                    inputContainer.style.position = 'fixed';
                     inputContainer.style.bottom = '0';
+                    inputContainer.style.left = '0';
+                    inputContainer.style.right = '0';
                     inputContainer.style.zIndex = '1000';
                     inputContainer.style.backgroundColor = 'white';
+                    inputContainer.style.borderTop = '2px solid #1f93ff';
+                    inputContainer.style.boxShadow = '0 -4px 20px rgba(0,0,0,0.1)';
 
-                    // Scroll al bottom dopo un piccolo delay
-                    setTimeout(() => {
-                        messages.scrollTop = messages.scrollHeight;
-                    }, 100);
+                    // FORZA SCROLL
+                    forceScrollToBottom();
 
                 } else {
-                    // Keyboard chiusa - ripristina layout
+                    // KEYBOARD CHIUSA
                     chatWindow.classList.remove('rag-android-keyboard-open');
 
-                    // Ripristina stili originali
+                    // RIPRISTINA LAYOUT
                     messages.style.height = '';
                     messages.style.maxHeight = '';
                     inputContainer.style.position = '';
                     inputContainer.style.bottom = '';
+                    inputContainer.style.left = '';
+                    inputContainer.style.right = '';
                     inputContainer.style.zIndex = '';
                     inputContainer.style.backgroundColor = '';
+                    inputContainer.style.borderTop = '';
+                    inputContainer.style.boxShadow = '';
 
-                    // Scroll al bottom
-                    setTimeout(() => {
-                        messages.scrollTop = messages.scrollHeight;
-                    }, 300);
+                    // SCROLL DOPO CHIUSURA
+                    setTimeout(forceScrollToBottom, 300);
                 }
             }
         }
 
-        // Event listeners per Android
+        // EVENT LISTENERS ANDROID
         window.addEventListener('resize', handleViewportChange);
-
-        // Focus input - Android specific
-        input.addEventListener('focus', () => {
-            console.log('Android input focus');
-
-            // Forza scroll al bottom quando l'input viene focalizzato
+        window.addEventListener('orientationchange', () => {
             setTimeout(() => {
-                messages.scrollTop = messages.scrollHeight;
-
-                // Assicura che l'input sia visibile scrollando la pagina se necessario
-                input.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                    inline: 'nearest'
-                });
-            }, 300);
-        });
-
-        // Blur input - Android specific
-        input.addEventListener('blur', () => {
-            console.log('Android input blur');
-
-            // Dopo la perdita del focus, riaggiorna il layout
-            setTimeout(() => {
+                initialViewportHeight = window.innerHeight;
                 handleViewportChange();
-            }, 300);
+            }, 500);
         });
 
-        // Gestione input text per Android
+        // FOCUS/BLUR ANDROID
+        input.addEventListener('focus', () => {
+            console.log('🎯 Android input focus');
+
+            setTimeout(() => {
+                forceScrollToBottom();
+
+                // SCROLL INPUT IN VIEW
+                input.scrollIntoView({
+                    behavior: 'auto',
+                    block: 'end'
+                });
+            }, 100);
+
+            // SECONDO TENTATIVO
+            setTimeout(forceScrollToBottom, 400);
+        });
+
+        input.addEventListener('blur', () => {
+            console.log('🎯 Android input blur');
+            setTimeout(forceScrollToBottom, 300);
+        });
+
+        // INPUT TEXT ANDROID
         input.addEventListener('input', () => {
             if (isKeyboardOpen) {
-                // Mantieni l'input sempre visibile durante la digitazione
-                setTimeout(() => {
-                    input.scrollIntoView({
-                        behavior: 'auto',
-                        block: 'nearest'
-                    });
-                }, 10);
+                forceScrollToBottom();
             }
         });
+
+        console.log('✅ Android keyboard handler configurato');
     }
 
     // Gestione keyboard mobile (mantenuta per iOS)
@@ -625,6 +643,32 @@ function formatResponseToHTML(text) {
             console.log('Touch events configurati per mobile');
         }
     }
+
+    // AGGIUNGI questa funzione per forzare scroll
+    function forceAndroidScroll() {
+        if (!isAndroidDevice()) return;
+
+        const messages = document.getElementById('rag-chat-messages');
+        if (!messages) return;
+
+        // MULTIPLI TENTATIVI DI SCROLL
+        messages.scrollTop = messages.scrollHeight;
+
+        setTimeout(() => {
+            messages.scrollTop = messages.scrollHeight;
+        }, 50);
+
+        setTimeout(() => {
+            messages.scrollTop = messages.scrollHeight;
+        }, 150);
+
+        setTimeout(() => {
+            messages.scrollTop = messages.scrollHeight;
+        }, 300);
+
+        console.log('🔄 Android scroll forzato multiplo');
+    }
+
 
     // Forza fullscreen su mobile
     function forceMobileFullscreen(chatWindow, isOpen) {
@@ -738,6 +782,12 @@ function formatResponseToHTML(text) {
             handleSafeArea();
             handleMobileKeyboard();
             handleTouchEvents();
+
+            // NUOVO: Gestione specifica per Android
+            if (isAndroidDevice()) {
+                handleAndroidKeyboard();
+                console.log('Features Android specifiche attivate');
+            }
 
             // Event listener per cambio orientamento
             window.addEventListener('orientationchange', handleOrientationChange);
@@ -999,18 +1049,15 @@ function formatResponseToHTML(text) {
 
             messages.appendChild(messageEl);
 
-            // Scroll automatico al bottom con gestione Android specifica
-            const scrollDelay = isAndroidDevice() ? 150 : 100;
+            // Scroll automatico al bottom con gestione Android specifica MIGLIORATA
             setTimeout(() => {
                 messages.scrollTop = messages.scrollHeight;
 
-                // NUOVO: Doppio scroll per Android per assicurarsi che funzioni
                 if (isAndroidDevice()) {
-                    setTimeout(() => {
-                        messages.scrollTop = messages.scrollHeight;
-                    }, 100);
+                    // ANDROID: scroll multiplo forzato
+                    forceAndroidScroll();
                 }
-            }, scrollDelay);
+            }, isAndroidDevice() ? 100 : 50);
 
             // Salva nella cronologia
             if (window.messageHistory) {
@@ -1023,6 +1070,27 @@ function formatResponseToHTML(text) {
             }
 
             console.log(`Messaggio aggiunto: ${sender} - ${text.substring(0, 50)}...`);
+        }
+
+        // AGGIUNGI questa funzione per debug Android
+        function debugAndroidLayout() {
+            if (!isAndroidDevice()) return;
+
+            const chatWindow = document.getElementById('rag-chat-window');
+            const messages = document.getElementById('rag-chat-messages');
+            const inputContainer = document.querySelector('.rag-input-container');
+
+            console.log('🔍 Android Debug Layout:');
+            console.log('- Window:', chatWindow?.getBoundingClientRect());
+            console.log('- Messages:', messages?.getBoundingClientRect());
+            console.log('- Input:', inputContainer?.getBoundingClientRect());
+            console.log('- Viewport:', window.innerWidth, 'x', window.innerHeight);
+            console.log('- Messages scroll:', messages?.scrollTop, '/', messages?.scrollHeight);
+        }
+
+        // AGGIUNGI questa chiamata per debug (RIMUOVI dopo test)
+        if (isAndroidDevice()) {
+            setInterval(debugAndroidLayout, 5000); // Debug ogni 5 secondi
         }
 
         // Typing indicator - VERSIONE SICURA

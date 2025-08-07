@@ -178,13 +178,13 @@ function formatResponseToHTML(text) {
         return isMobileUA || (isMobileScreen && hasTouchScreen);
     }
 
-    // NUOVO: Rileva specificamente Android
+    // Rileva specificamente Android
     function isAndroidDevice() {
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         return /android/i.test(userAgent.toLowerCase());
     }
 
-    // NUOVO: Rileva iOS
+    // Rileva iOS
     function isIOSDevice() {
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         return /iPad|iPhone|iPod/.test(userAgent);
@@ -422,8 +422,8 @@ function formatResponseToHTML(text) {
                 document.head.appendChild(viewport);
             }
 
-            const defaultContent = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-            if (!viewport.content || !viewport.content.includes('viewport-fit=cover')) {
+            const defaultContent = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+            if (!viewport.content || !viewport.content.includes('user-scalable=no')) {
                 viewport.setAttribute('data-rag-original', viewport.content || '');
                 viewport.content = defaultContent;
             }
@@ -432,385 +432,64 @@ function formatResponseToHTML(text) {
         }
     }
 
-    // NUOVO: Gestione keyboard Android migliorata
-    function handleAndroidKeyboard() {
-        if (!isAndroidDevice()) return;
-
-        console.log('🤖 Android keyboard handler attivato');
+    // Gestione keyboard mobile unificata
+    function handleMobileKeyboard() {
+        if (!isMobileDevice()) return;
 
         const input = document.getElementById('rag-chat-input');
         const messages = document.getElementById('rag-chat-messages');
         const chatWindow = document.getElementById('rag-chat-window');
-        const inputContainer = document.querySelector('.rag-input-container');
 
-        if (!input || !messages || !chatWindow || !inputContainer) {
-            console.error('❌ Elementi Android non trovati');
-            return;
-        }
+        if (!input || !messages || !chatWindow) return;
 
-        let initialViewportHeight = window.innerHeight;
         let isKeyboardOpen = false;
-        let scrollToBottomTimer = null;
+        let initialHeight = window.innerHeight;
 
-        // FORZA SCROLL AL BOTTOM - Android specific
-        function forceScrollToBottom() {
-            if (scrollToBottomTimer) clearTimeout(scrollToBottomTimer);
-
-            scrollToBottomTimer = setTimeout(() => {
-                messages.scrollTop = messages.scrollHeight;
-                console.log('📱 Scroll forzato Android:', messages.scrollTop, '/', messages.scrollHeight);
-            }, 50);
-        }
-
-        // GESTIONE VIEWPORT ANDROID MIGLIORATA
-        function handleViewportChange() {
+        // Funzione per gestire resize
+        function handleResize() {
             const currentHeight = window.innerHeight;
-            const heightDiff = initialViewportHeight - currentHeight;
-            const keyboardThreshold = 100; // Ridotto per Android
-            const newKeyboardState = heightDiff > keyboardThreshold;
+            const heightDiff = initialHeight - currentHeight;
+            const keyboardThreshold = 100;
 
-            console.log(`📱 Android viewport: ${currentHeight}px (diff: ${heightDiff}px)`);
+            if (heightDiff > keyboardThreshold && !isKeyboardOpen) {
+                // Keyboard aperta
+                isKeyboardOpen = true;
+                chatWindow.classList.add('keyboard-open');
 
-            if (newKeyboardState !== isKeyboardOpen) {
-                isKeyboardOpen = newKeyboardState;
+                // Forza scroll al bottom
+                setTimeout(() => {
+                    messages.scrollTop = messages.scrollHeight;
+                }, 100);
+            } else if (heightDiff <= keyboardThreshold && isKeyboardOpen) {
+                // Keyboard chiusa
+                isKeyboardOpen = false;
+                chatWindow.classList.remove('keyboard-open');
 
-                console.log(`⌨️ Android keyboard: ${isKeyboardOpen ? 'APERTA' : 'CHIUSA'}`);
-
-                if (isKeyboardOpen) {
-                    // KEYBOARD APERTA
-                    chatWindow.classList.add('rag-android-keyboard-open');
-
-                    // CALCOLA LAYOUT
-                    const headerHeight = 60;
-                    const inputHeight = 80;
-                    const availableHeight = currentHeight - headerHeight - inputHeight - 20;
-
-                    console.log(`📐 Layout Android: header=${headerHeight}, input=${inputHeight}, available=${availableHeight}`);
-
-                    // APPLICA STILI DIRETTI
-                    messages.style.height = `${Math.max(availableHeight, 200)}px`;
-                    messages.style.maxHeight = `${availableHeight}px`;
-                    messages.style.overflow = 'auto';
-                    messages.style.webkitOverflowScrolling = 'touch';
-
-                    // INPUT SEMPRE VISIBILE
-                    inputContainer.style.position = 'fixed';
-                    inputContainer.style.bottom = '0';
-                    inputContainer.style.left = '0';
-                    inputContainer.style.right = '0';
-                    inputContainer.style.zIndex = '1000';
-                    inputContainer.style.backgroundColor = 'white';
-                    inputContainer.style.borderTop = '2px solid #1f93ff';
-                    inputContainer.style.boxShadow = '0 -4px 20px rgba(0,0,0,0.1)';
-
-                    // FORZA SCROLL
-                    forceScrollToBottom();
-
-                } else {
-                    // KEYBOARD CHIUSA
-                    chatWindow.classList.remove('rag-android-keyboard-open');
-
-                    // RIPRISTINA LAYOUT
-                    messages.style.height = '';
-                    messages.style.maxHeight = '';
-                    inputContainer.style.position = '';
-                    inputContainer.style.bottom = '';
-                    inputContainer.style.left = '';
-                    inputContainer.style.right = '';
-                    inputContainer.style.zIndex = '';
-                    inputContainer.style.backgroundColor = '';
-                    inputContainer.style.borderTop = '';
-                    inputContainer.style.boxShadow = '';
-
-                    // SCROLL DOPO CHIUSURA
-                    setTimeout(forceScrollToBottom, 300);
-                }
+                // Ripristina scroll
+                setTimeout(() => {
+                    messages.scrollTop = messages.scrollHeight;
+                }, 100);
             }
         }
 
-        // EVENT LISTENERS ANDROID
-        window.addEventListener('resize', handleViewportChange);
-        window.addEventListener('orientationchange', () => {
-            setTimeout(() => {
-                initialViewportHeight = window.innerHeight;
-                handleViewportChange();
-            }, 500);
-        });
+        // Event listeners
+        window.addEventListener('resize', handleResize);
 
-        // FOCUS/BLUR ANDROID
+        // Focus/Blur
         input.addEventListener('focus', () => {
-            console.log('🎯 Android input focus');
-
             setTimeout(() => {
-                forceScrollToBottom();
+                messages.scrollTop = messages.scrollHeight;
 
-                // SCROLL INPUT IN VIEW
-                input.scrollIntoView({
-                    behavior: 'auto',
-                    block: 'end'
-                });
-            }, 100);
-
-            // SECONDO TENTATIVO
-            setTimeout(forceScrollToBottom, 400);
+                // Assicura che l'input sia visibile
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
         });
 
         input.addEventListener('blur', () => {
-            console.log('🎯 Android input blur');
-            setTimeout(forceScrollToBottom, 300);
+            setTimeout(() => {
+                messages.scrollTop = messages.scrollHeight;
+            }, 100);
         });
-
-        // INPUT TEXT ANDROID
-        input.addEventListener('input', () => {
-            if (isKeyboardOpen) {
-                forceScrollToBottom();
-            }
-        });
-
-        console.log('✅ Android keyboard handler configurato');
-    }
-
-    // Gestione keyboard mobile (mantenuta per iOS)
-    function handleMobileKeyboard() {
-        if (isMobileDevice() && !isAndroidDevice()) {
-            const input = document.getElementById('rag-chat-input');
-            if (!input) return;
-
-            let originalHeight = window.innerHeight;
-
-            window.addEventListener('resize', () => {
-                const currentHeight = window.innerHeight;
-                const chatWindow = document.getElementById('rag-chat-window');
-
-                if (currentHeight < originalHeight * 0.75) {
-                    // Keyboard aperta
-                    console.log('iOS keyboard rilevata');
-                    if (chatWindow) {
-                        chatWindow.classList.add('keyboard-open');
-                    }
-                } else {
-                    // Keyboard chiusa
-                    if (chatWindow) {
-                        chatWindow.classList.remove('keyboard-open');
-                    }
-                    originalHeight = currentHeight;
-                }
-            });
-        }
-    }
-
-    // Gestione touch events migliorata per Android
-    function handleTouchEvents() {
-        if (isMobileDevice()) {
-            let touchStartY = 0;
-            let touchStartTime = 0;
-
-            const messages = document.getElementById('rag-chat-messages');
-            if (!messages) return;
-
-            messages.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-                touchStartTime = Date.now();
-            }, { passive: true });
-
-            messages.addEventListener('touchmove', (e) => {
-                const touchY = e.touches[0].clientY;
-                const deltaY = touchY - touchStartY;
-
-                // Migliora il bounce su Android
-                if (isAndroidDevice()) {
-                    // Su Android, gestisci il scroll in modo più permissivo
-                    if (messages.scrollTop === 0 && deltaY > 0) {
-                        // Permetti un piccolo bounce in alto
-                        if (deltaY > 50) {
-                            e.preventDefault();
-                        }
-                    } else if (messages.scrollTop + messages.clientHeight >= messages.scrollHeight && deltaY < 0) {
-                        // Permetti un piccolo bounce in basso
-                        if (deltaY < -50) {
-                            e.preventDefault();
-                        }
-                    }
-                } else {
-                    // iOS - comportamento originale
-                    if ((messages.scrollTop === 0 && deltaY > 0) ||
-                        (messages.scrollTop + messages.clientHeight >= messages.scrollHeight && deltaY < 0)) {
-                        e.preventDefault();
-                    }
-                }
-            }, { passive: false });
-
-            console.log('Touch events configurati per mobile');
-        }
-    }
-
-    // AGGIUNGI questa funzione per forzare scroll
-    function forceAndroidScroll() {
-        if (!isAndroidDevice()) return;
-
-        const messages = document.getElementById('rag-chat-messages');
-        if (!messages) return;
-
-        // MULTIPLI TENTATIVI DI SCROLL
-        messages.scrollTop = messages.scrollHeight;
-
-        setTimeout(() => {
-            messages.scrollTop = messages.scrollHeight;
-        }, 50);
-
-        setTimeout(() => {
-            messages.scrollTop = messages.scrollHeight;
-        }, 150);
-
-        setTimeout(() => {
-            messages.scrollTop = messages.scrollHeight;
-        }, 300);
-
-        console.log('🔄 Android scroll forzato multiplo');
-    }
-
-
-    // Forza fullscreen su mobile
-    function forceMobileFullscreen(chatWindow, isOpen) {
-        if (isMobileDevice() && chatWindow) {
-            if (isOpen) {
-                chatWindow.style.position = 'fixed';
-                chatWindow.style.top = '0';
-                chatWindow.style.left = '0';
-                chatWindow.style.right = '0';
-                chatWindow.style.bottom = '0';
-                chatWindow.style.width = '100%';
-                chatWindow.style.height = '100%';
-                chatWindow.style.maxWidth = '100%';
-                chatWindow.style.maxHeight = '100%';
-                chatWindow.style.borderRadius = '0';
-                chatWindow.style.zIndex = '999999';
-
-                document.body.style.overflow = 'hidden';
-                document.documentElement.style.overflow = 'hidden';
-
-                // iOS specific
-                if (isIOSDevice()) {
-                    document.body.style.position = 'fixed';
-                    document.body.style.width = '100%';
-                    document.body.style.height = '100%';
-                }
-
-                // Android specific
-                if (isAndroidDevice()) {
-                    // Su Android, imposta l'altezza a 100vh invece di 100%
-                    chatWindow.style.height = '100vh';
-                    chatWindow.style.minHeight = '100vh';
-                }
-            } else {
-                // Ripristina stili originali
-                document.body.style.overflow = '';
-                document.documentElement.style.overflow = '';
-                document.body.style.position = '';
-                document.body.style.width = '';
-                document.body.style.height = '';
-            }
-
-            console.log('Mobile fullscreen', isOpen ? 'attivato' : 'disattivato');
-        }
-    }
-
-    // Gestione safe area (iOS)
-    function handleSafeArea() {
-        if (isMobileDevice() && CSS.supports('padding-top', 'env(safe-area-inset-top)')) {
-            const root = document.documentElement;
-            root.style.setProperty('--safe-area-inset-top', 'env(safe-area-inset-top)');
-            root.style.setProperty('--safe-area-inset-bottom', 'env(safe-area-inset-bottom)');
-            root.style.setProperty('--safe-area-inset-left', 'env(safe-area-inset-left)');
-            root.style.setProperty('--safe-area-inset-right', 'env(safe-area-inset-right)');
-            console.log('iOS Safe Area configurato');
-        }
-    }
-
-    // NUOVO: Gestione cambio orientamento migliorata per Android
-    function handleOrientationChange() {
-        if (isMobileDevice()) {
-            const handleResize = () => {
-                const messages = document.getElementById('rag-chat-messages');
-                const chatWindow = document.getElementById('rag-chat-window');
-
-                if (messages) {
-                    messages.scrollTop = messages.scrollHeight;
-                }
-
-                // Riapplica fullscreen se necessario
-                if (chatWindow && chatWindow.style.display === 'flex') {
-                    forceMobileFullscreen(chatWindow, true);
-                }
-
-                // Android specific: riaggiorna keyboard handling
-                if (isAndroidDevice()) {
-                    const input = document.getElementById('rag-chat-input');
-                    if (input && document.activeElement === input) {
-                        // Ritarda il rifocus per permettere al layout di stabilizzarsi
-                        input.blur();
-                        setTimeout(() => {
-                            input.focus();
-                        }, 300);
-                    }
-                }
-
-                // iOS specific
-                if (isIOSDevice()) {
-                    const input = document.getElementById('rag-chat-input');
-                    if (input && document.activeElement === input) {
-                        input.blur();
-                        setTimeout(() => input.focus(), 100);
-                    }
-                }
-
-                console.log('Orientamento cambiato, layout adattato');
-            };
-
-            // Usa un timeout più lungo per Android
-            const timeout = isAndroidDevice() ? 500 : 100;
-            setTimeout(handleResize, timeout);
-        }
-    }
-
-    // Inizializza features mobile
-    function initializeMobileFeatures() {
-        if (isMobileDevice()) {
-            console.log('Inizializzazione features mobile per:', navigator.userAgent);
-
-            handleMobileViewport();
-            handleSafeArea();
-            handleMobileKeyboard();
-            handleTouchEvents();
-
-            // NUOVO: Gestione specifica per Android
-            if (isAndroidDevice()) {
-                handleAndroidKeyboard();
-                console.log('Features Android specifiche attivate');
-            }
-
-            // Event listener per cambio orientamento
-            window.addEventListener('orientationchange', handleOrientationChange);
-
-            // Previeni zoom su doppio tap
-            let lastTouchEnd = 0;
-            document.addEventListener('touchend', function (event) {
-                const now = (new Date()).getTime();
-                if (now - lastTouchEnd <= 300) {
-                    event.preventDefault();
-                }
-                lastTouchEnd = now;
-            }, false);
-
-            // Previeni pinch zoom
-            document.addEventListener('touchmove', function (event) {
-                if (event.scale !== 1) {
-                    event.preventDefault();
-                }
-            }, { passive: false });
-
-            console.log('Features mobile inizializzate');
-        }
     }
 
     // Inizializza le funzionalità del widget
@@ -841,28 +520,27 @@ function formatResponseToHTML(text) {
                 // Reset notifica
                 bubble.classList.remove('has-notification');
 
-                // Mobile body lock per apertura
+                // Mobile fullscreen
                 if (isMobileDevice()) {
                     document.body.classList.add('rag-chat-mobile-open');
-                    document.getElementById('rag-chat-widget').classList.add('chat-open');
+                    chatWindow.classList.add('rag-mobile-fullscreen');
+
+                    // Imposta stili fullscreen
+                    chatWindow.style.position = 'fixed';
+                    chatWindow.style.top = '0';
+                    chatWindow.style.left = '0';
+                    chatWindow.style.right = '0';
+                    chatWindow.style.bottom = '0';
+                    chatWindow.style.width = '100%';
+                    chatWindow.style.height = '100%';
+                    chatWindow.style.zIndex = '999999';
                 }
 
-                // Focus su input con delay più lungo per Android
-                const focusDelay = isAndroidDevice() ? 300 : 100;
+                // Focus su input con delay
                 setTimeout(() => {
                     input.focus();
-
-                    // Su mobile, gestisci fullscreen
-                    if (isMobileDevice()) {
-                        forceMobileFullscreen(chatWindow, true);
-
-                        // Scroll al bottom con delay più lungo per Android
-                        const scrollDelay = isAndroidDevice() ? 200 : 100;
-                        setTimeout(() => {
-                            messages.scrollTop = messages.scrollHeight;
-                        }, scrollDelay);
-                    }
-                }, focusDelay);
+                    messages.scrollTop = messages.scrollHeight;
+                }, 100);
 
                 // Mostra messaggio di benvenuto se prima apertura
                 if (messages.children.length === 0) {
@@ -877,16 +555,19 @@ function formatResponseToHTML(text) {
                     });
                 }
             } else {
-
-                // Mobile body lock per chiusura
+                // Mobile cleanup
                 if (isMobileDevice()) {
                     document.body.classList.remove('rag-chat-mobile-open');
-                    document.getElementById('rag-chat-widget').classList.remove('chat-open');
-                }
+                    chatWindow.classList.remove('rag-mobile-fullscreen');
 
-                // Su mobile, rimuovi fullscreen
-                if (isMobileDevice()) {
-                    forceMobileFullscreen(chatWindow, false);
+                    // Reset stili
+                    chatWindow.style.position = '';
+                    chatWindow.style.top = '';
+                    chatWindow.style.left = '';
+                    chatWindow.style.right = '';
+                    chatWindow.style.bottom = '';
+                    chatWindow.style.width = '';
+                    chatWindow.style.height = '';
                 }
             }
 
@@ -911,12 +592,21 @@ function formatResponseToHTML(text) {
             }
         });
 
-        // Close button
+        // Close button - CORRECTED
         closeBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             toggleChat();
         });
+
+        // Previeni propagazione su mobile
+        if (isMobileDevice()) {
+            closeBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleChat();
+            });
+        }
 
         // Gestione dimensione textarea
         input.addEventListener('input', () => {
@@ -935,13 +625,6 @@ function formatResponseToHTML(text) {
                 input.style.borderColor = remaining < 0 ? '#dc3545' : '#ffc107';
             } else {
                 input.style.borderColor = '';
-            }
-
-            // NUOVO: Mantieni scroll per Android durante la digitazione
-            if (isAndroidDevice() && document.activeElement === input) {
-                setTimeout(() => {
-                    messages.scrollTop = messages.scrollHeight;
-                }, 50);
             }
         });
 
@@ -1004,16 +687,13 @@ function formatResponseToHTML(text) {
             }
         }
 
-        // Aggiunge messaggio alla chat - VERSIONE SICURA
+        // Aggiunge messaggio alla chat
         function addMessage(sender, text, isError = false) {
-            const messages = document.getElementById('rag-chat-messages');
-            if (!messages) return;
-
             const messageEl = document.createElement('div');
             messageEl.className = `rag-message ${sender}`;
             if (isError) messageEl.classList.add('rag-error');
 
-            // NOVITÀ: Formatta il testo se è un messaggio del bot
+            // Formatta il testo se è un messaggio del bot
             if (sender === 'bot' && !isError) {
                 const formattedHTML = formatResponseToHTML(text);
                 messageEl.innerHTML = formattedHTML;
@@ -1025,7 +705,6 @@ function formatResponseToHTML(text) {
                         link.setAttribute('target', '_blank');
                         link.setAttribute('rel', 'noopener noreferrer');
                     }
-                    // Aggiungi classe per lo styling
                     link.classList.add('rag-clickable-link');
                 });
             } else {
@@ -1033,7 +712,7 @@ function formatResponseToHTML(text) {
                 messageEl.textContent = text;
             }
 
-            // Aggiungi timestamp opzionale
+            // Aggiungi timestamp
             const now = new Date();
             const timeEl = document.createElement('div');
             timeEl.className = 'rag-message-time';
@@ -1049,58 +728,29 @@ function formatResponseToHTML(text) {
 
             messages.appendChild(messageEl);
 
-            // Scroll automatico al bottom con gestione Android specifica MIGLIORATA
+            // Scroll automatico al bottom
             setTimeout(() => {
                 messages.scrollTop = messages.scrollHeight;
-
-                if (isAndroidDevice()) {
-                    // ANDROID: scroll multiplo forzato
-                    forceAndroidScroll();
-                }
-            }, isAndroidDevice() ? 100 : 50);
+            }, 50);
 
             // Salva nella cronologia
-            if (window.messageHistory) {
-                window.messageHistory.push({
+            if (config.enableMessageHistory) {
+                messageHistory.push({
                     sender: sender,
                     text: text,
-                    timestamp: now.toISOString(),
-                    formatted: sender === 'bot' ? formattedHTML : text
+                    timestamp: now.toISOString()
                 });
             }
 
-            console.log(`Messaggio aggiunto: ${sender} - ${text.substring(0, 50)}...`);
+            console.log(`Messaggio aggiunto: ${sender}`);
         }
 
-        // AGGIUNGI questa funzione per debug Android
-        function debugAndroidLayout() {
-            if (!isAndroidDevice()) return;
-
-            const chatWindow = document.getElementById('rag-chat-window');
-            const messages = document.getElementById('rag-chat-messages');
-            const inputContainer = document.querySelector('.rag-input-container');
-
-            console.log('🔍 Android Debug Layout:');
-            console.log('- Window:', chatWindow?.getBoundingClientRect());
-            console.log('- Messages:', messages?.getBoundingClientRect());
-            console.log('- Input:', inputContainer?.getBoundingClientRect());
-            console.log('- Viewport:', window.innerWidth, 'x', window.innerHeight);
-            console.log('- Messages scroll:', messages?.scrollTop, '/', messages?.scrollHeight);
-        }
-
-        // AGGIUNGI questa chiamata per debug (RIMUOVI dopo test)
-        if (isAndroidDevice()) {
-            setInterval(debugAndroidLayout, 5000); // Debug ogni 5 secondi
-        }
-
-        // Typing indicator - VERSIONE SICURA
+        // Typing indicator
         function addTypingIndicator() {
             const typingEl = document.createElement('div');
             typingEl.className = 'rag-message bot rag-typing';
             typingEl.setAttribute('aria-label', 'L\'assistente sta scrivendo');
-            typingEl.setAttribute('data-typing', 'true');
 
-            // Crea elementi DOM invece di usare innerHTML
             const span = document.createElement('span');
             span.textContent = 'Sto pensando';
             typingEl.appendChild(span);
@@ -1117,25 +767,10 @@ function formatResponseToHTML(text) {
             typingEl.appendChild(dotsContainer);
             messages.appendChild(typingEl);
 
-            // Scroll ottimizzato per dispositivo
-            const scrollDelay = isAndroidDevice() ? 50 : 10;
+            // Scroll
             setTimeout(() => {
-                if (isMobileDevice()) {
-                    messages.scrollTop = messages.scrollHeight;
-                } else {
-                    messages.scrollTo({
-                        top: messages.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                }
-
-                // NUOVO: Doppio scroll per Android
-                if (isAndroidDevice()) {
-                    setTimeout(() => {
-                        messages.scrollTop = messages.scrollHeight;
-                    }, 100);
-                }
-            }, scrollDelay);
+                messages.scrollTop = messages.scrollHeight;
+            }, 10);
 
             console.log('Typing indicator aggiunto');
             return typingEl;
@@ -1165,115 +800,11 @@ function formatResponseToHTML(text) {
         input.addEventListener('paste', (e) => {
             setTimeout(() => {
                 const text = input.value;
-                if (text.length > 1000) {
-                    input.value = text.substring(0, 1000);
-                    addMessage('bot', 'Il testo incollato è stato troncato a 1000 caratteri.', true);
+                if (text.length > config.maxMessageLength) {
+                    input.value = text.substring(0, config.maxMessageLength);
+                    addMessage('bot', `Il testo incollato è stato troncato a ${config.maxMessageLength} caratteri.`, true);
                 }
             }, 10);
-        });
-
-        // NUOVO: Event listener per focus Android specifico
-        if (isAndroidDevice()) {
-            input.addEventListener('focus', () => {
-                console.log('Android input focus - gestione speciale');
-
-                // Assicura che la chat sia pronta per l'input
-                setTimeout(() => {
-                    const messages = document.getElementById('rag-chat-messages');
-                    if (messages && isOpen) {
-                        messages.scrollTop = messages.scrollHeight;
-                    }
-
-                    // Forza la visibilità dell'input su Android
-                    input.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'end',
-                        inline: 'nearest'
-                    });
-                }, 400);
-
-                // Secondo tentativo di scroll per Android
-                setTimeout(() => {
-                    const messages = document.getElementById('rag-chat-messages');
-                    if (messages) {
-                        messages.scrollTop = messages.scrollHeight;
-                    }
-                }, 600);
-            });
-
-            input.addEventListener('blur', () => {
-                console.log('Android input blur');
-
-                // Su Android, quando l'input perde il focus, aspetta un po' prima di riaggiustare
-                setTimeout(() => {
-                    const messages = document.getElementById('rag-chat-messages');
-                    if (messages && isOpen) {
-                        messages.scrollTop = messages.scrollHeight;
-                    }
-                }, 400);
-            });
-        }
-
-        // Event listener per focus (iOS e altri)
-        if (isMobileDevice() && !isAndroidDevice()) {
-            input.addEventListener('focus', () => {
-                // Assicura che la chat sia visibile quando keyboard apre
-                setTimeout(() => {
-                    const messages = document.getElementById('rag-chat-messages');
-                    if (messages && isOpen) {
-                        messages.scrollTop = messages.scrollHeight;
-                    }
-                    // iOS fix per keyboard
-                    if (isIOSDevice()) {
-                        window.scrollTo(0, 0);
-                        document.body.scrollTop = 0;
-                    }
-                }, 300);
-            });
-
-            // Fix per keyboard altri dispositivi
-            let previousHeight = window.innerHeight;
-            window.addEventListener('resize', () => {
-                const currentHeight = window.innerHeight;
-                const input = document.getElementById('rag-chat-input');
-
-                if (document.activeElement === input && currentHeight < previousHeight) {
-                    // Keyboard è aperta
-                    setTimeout(() => {
-                        const chatWindow = document.getElementById('rag-chat-window');
-                        if (chatWindow) {
-                            forceMobileFullscreen(chatWindow, true);
-                        }
-                    }, 10);
-                }
-                // Trigger input event per aggiornare UI
-                input.dispatchEvent(new Event('input'));
-            });
-        }
-
-        // Event listener per perdita di focus (mobile non Android)
-        if (isMobileDevice() && !isAndroidDevice()) {
-            input.addEventListener('blur', () => {
-                // Su mobile, quando l'input perde il focus, la keyboard si chiude
-                // Aspetta un po' per far sì che la transizione sia smooth
-                setTimeout(() => {
-                    const messages = document.getElementById('rag-chat-messages');
-                    if (messages && isOpen) {
-                        messages.scrollTop = messages.scrollHeight;
-                    }
-                }, 300);
-            });
-        }
-
-        // Gestione visibilità pagina
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && isOpen && isMobileDevice()) {
-                // Quando la pagina torna visibile su mobile, riapplica fullscreen
-                const delay = isAndroidDevice() ? 200 : 100;
-                setTimeout(() => {
-                    forceMobileFullscreen(chatWindow, true);
-                }, delay);
-            }
         });
 
         // Inizialmente disabilita send button
@@ -1290,9 +821,31 @@ function formatResponseToHTML(text) {
         }
 
         // Inizializza features mobile
-        initializeMobileFeatures();
+        if (isMobileDevice()) {
+            handleMobileViewport();
+            handleMobileKeyboard();
 
-        // API pubblica del widget SICURA
+            // Previeni zoom su doppio tap
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function (event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, false);
+
+            // Gestione orientamento
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    if (isOpen) {
+                        messages.scrollTop = messages.scrollHeight;
+                    }
+                }, 300);
+            });
+        }
+
+        // API pubblica del widget
         window.RAGWidget = {
             // Controlli base
             open: () => {
@@ -1321,10 +874,10 @@ function formatResponseToHTML(text) {
             // Messaggi
             sendMessage: (text) => {
                 if (text && text.trim()) {
-                    const cleanText = text.trim().substring(0, 1000);
+                    const cleanText = text.trim().substring(0, config.maxMessageLength);
                     input.value = cleanText;
                     input.dispatchEvent(new Event('input'));
-                    console.log('RAGWidget.sendMessage() chiamato:', cleanText.substring(0, 50) + '...');
+                    console.log('RAGWidget.sendMessage() chiamato');
                     sendMessage();
                 }
             },
@@ -1340,7 +893,6 @@ function formatResponseToHTML(text) {
 
             // Configurazione
             updateConfig: (newConfig) => {
-                // SICUREZZA: Solo alcuni campi UI possono essere aggiornati
                 const allowedFields = ['title', 'welcomeMessage', 'placeholderText', 'primaryColor'];
                 let updated = false;
 
@@ -1353,7 +905,6 @@ function formatResponseToHTML(text) {
                 });
 
                 if (updated) {
-                    // Aggiorna UI
                     if (newConfig.title) {
                         const titleEl = document.querySelector('.rag-header-title');
                         if (titleEl) titleEl.textContent = newConfig.title;
@@ -1371,7 +922,6 @@ function formatResponseToHTML(text) {
 
             // Eventi
             on: (event, callback) => {
-                // Supporta solo eventi sicuri
                 const allowedEvents = ['open', 'close', 'message', 'error'];
                 if (allowedEvents.includes(event) && typeof callback === 'function') {
                     window.addEventListener(`ragChat${event.charAt(0).toUpperCase()}${event.slice(1)}`, callback);
@@ -1380,7 +930,7 @@ function formatResponseToHTML(text) {
             },
 
             // Utility
-            version: '2.1.0',
+            version: '2.2.0',
             isSupported: () => {
                 return 'fetch' in window && 'Promise' in window;
             }
@@ -1423,17 +973,6 @@ function formatResponseToHTML(text) {
                 if (response.success && response.answer) {
                     addMessage('bot', response.answer);
 
-                    // NUOVO: Scroll aggiuntivo per Android dopo aver aggiunto la risposta
-                    if (isAndroidDevice()) {
-                        setTimeout(() => {
-                            messages.scrollTop = messages.scrollHeight;
-                        }, 200);
-
-                        setTimeout(() => {
-                            messages.scrollTop = messages.scrollHeight;
-                        }, 500);
-                    }
-
                     // Analytics
                     if (window.gtag) {
                         window.gtag('event', 'message_sent', {
@@ -1449,8 +988,7 @@ function formatResponseToHTML(text) {
                             message,
                             response: response.answer,
                             duration: endTime - startTime,
-                            isMobile: isMobileDevice(),
-                            isAndroid: isAndroidDevice()
+                            isMobile: isMobileDevice()
                         }
                     }));
                 } else {
@@ -1481,8 +1019,7 @@ function formatResponseToHTML(text) {
                     detail: {
                         error: error.message,
                         message,
-                        isMobile: isMobileDevice(),
-                        isAndroid: isAndroidDevice()
+                        isMobile: isMobileDevice()
                     }
                 }));
 
@@ -1504,18 +1041,10 @@ function formatResponseToHTML(text) {
                 sendBtn.disabled = false;
                 input.placeholder = originalPlaceholder;
 
-                // Focus con delay specifico per dispositivo
-                const focusDelay = isAndroidDevice() ? 200 : 50;
+                // Focus
                 setTimeout(() => {
                     input.focus();
-
-                    // NUOVO: Assicura scroll finale per Android
-                    if (isAndroidDevice()) {
-                        setTimeout(() => {
-                            messages.scrollTop = messages.scrollHeight;
-                        }, 100);
-                    }
-                }, focusDelay);
+                }, 50);
             }
         }
 
@@ -1531,14 +1060,8 @@ function formatResponseToHTML(text) {
 
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
-        // Salva stato se necessario
         if (config.enableMessageHistory && messageHistory.length > 0) {
-            try {
-                // Non usa localStorage per rispettare CSP
-                console.log('Chat history:', messageHistory.length, 'messaggi');
-            } catch (e) {
-                console.error('Errore salvataggio storia:', e);
-            }
+            console.log('Chat history:', messageHistory.length, 'messaggi');
         }
     });
 

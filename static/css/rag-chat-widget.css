@@ -84,24 +84,6 @@
     direction: ltr;
 }
 
-/* Posizionamento widget */
-#rag-chat-widget.bottom-left {
-    left: 20px;
-    right: auto;
-}
-
-#rag-chat-widget.top-right {
-    top: 20px;
-    bottom: auto;
-}
-
-#rag-chat-widget.top-left {
-    top: 20px;
-    bottom: auto;
-    left: 20px;
-    right: auto;
-}
-
 /* ===============================================
    FLOATING ACTION BUTTON (FAB)
    =============================================== */
@@ -188,27 +170,6 @@
     border: 1px solid var(--rag-border-color);
     transition: all var(--rag-animation-timing);
     transform-origin: bottom right;
-}
-
-/* Posizionamento finestra per diverse posizioni */
-#rag-chat-widget.bottom-left #rag-chat-window {
-    left: 0;
-    right: auto;
-    transform-origin: bottom left;
-}
-
-#rag-chat-widget.top-right #rag-chat-window {
-    top: calc(var(--rag-bubble-size) + 10px);
-    bottom: auto;
-    transform-origin: top right;
-}
-
-#rag-chat-widget.top-left #rag-chat-window {
-    top: calc(var(--rag-bubble-size) + 10px);
-    bottom: auto;
-    left: 0;
-    right: auto;
-    transform-origin: top left;
 }
 
 /* ===============================================
@@ -317,6 +278,8 @@
     transition: background var(--rag-animation-timing);
     flex-shrink: 0;
     outline: none;
+    position: relative;
+    z-index: 10;
 }
 
 #rag-chat-close:hover {
@@ -353,6 +316,7 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(0,0,0,0.2) transparent;
     position: relative;
+    min-height: 0;
 }
 
 /* Scrollbar personalizzata */
@@ -505,23 +469,11 @@
     display: block !important;
 }
 
-.rag-message.bot h1 {
-    color: var(--rag-secondary-color) !important;
-    font-size: 20px !important;
-    font-weight: 700 !important;
-    margin: 24px 0 16px 0 !important;
-    border-bottom: 3px solid var(--rag-primary-color) !important;
-    padding-bottom: 8px !important;
-    line-height: 1.2 !important;
-    display: block !important;
-}
-
 /* Primo titolo senza margine top */
 .rag-message.bot .main-title:first-child,
 .rag-message.bot h2:first-child,
 .rag-message.bot .section-title:first-child,
-.rag-message.bot h3:first-child,
-.rag-message.bot h1:first-child {
+.rag-message.bot h3:first-child {
     margin-top: 0 !important;
 }
 
@@ -541,15 +493,6 @@
     margin: 8px 0 !important;
     line-height: 1.5 !important;
     color: var(--rag-text-color) !important;
-}
-
-.rag-message.bot ul li::marker {
-    color: var(--rag-primary-color) !important;
-}
-
-.rag-message.bot ol li::marker {
-    color: var(--rag-primary-color) !important;
-    font-weight: 600 !important;
 }
 
 /* ===============================================
@@ -576,11 +519,6 @@
     gap: 6px !important;
 }
 
-.rag-message.bot .rag-sources-title::before {
-    content: '🔗' !important;
-    font-size: 13px !important;
-}
-
 .rag-message.bot .rag-source-link {
     display: block !important;
     margin: 8px 0 !important;
@@ -603,17 +541,6 @@
     border-color: var(--rag-primary-color) !important;
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 12px rgba(31, 147, 255, 0.15) !important;
-}
-
-.rag-message.bot .rag-source-link:active {
-    transform: translateY(0) !important;
-}
-
-.rag-message.bot .rag-source-link:before {
-    content: '↗' !important;
-    margin-right: 8px !important;
-    font-size: 12px !important;
-    opacity: 0.7 !important;
 }
 
 /* ===============================================
@@ -642,48 +569,6 @@
 .rag-message.bot em {
     color: var(--rag-text-muted) !important;
     font-style: italic !important;
-}
-
-.rag-message.bot code {
-    background: #F1F3F4 !important;
-    padding: 2px 6px !important;
-    border-radius: var(--rag-button-radius) !important;
-    font-family: 'Courier New', monospace !important;
-    font-size: 13px !important;
-    color: #D63384 !important;
-    border: 1px solid #E9ECEF !important;
-}
-
-/* Blocchi di codice */
-.rag-message.bot pre {
-    background: #2D3748 !important;
-    color: #E2E8F0 !important;
-    padding: 16px !important;
-    border-radius: var(--rag-border-radius) !important;
-    margin: 12px 0 !important;
-    overflow-x: auto !important;
-    font-family: 'Courier New', monospace !important;
-    font-size: 13px !important;
-    line-height: 1.5 !important;
-    border: 1px solid #4A5568 !important;
-}
-
-.rag-message.bot pre code {
-    background: none !important;
-    border: none !important;
-    color: inherit !important;
-    padding: 0 !important;
-}
-
-/* Quote */
-.rag-message.bot blockquote {
-    border-left: 4px solid var(--rag-primary-color) !important;
-    background: rgba(31, 147, 255, 0.05) !important;
-    padding: 12px 16px !important;
-    margin: 16px 0 !important;
-    border-radius: 0 var(--rag-border-radius) var(--rag-border-radius) 0 !important;
-    font-style: italic !important;
-    color: var(--rag-text-color) !important;
 }
 
 /* ===============================================
@@ -908,6 +793,228 @@
 }
 
 /* ===============================================
+   RESPONSIVE - MOBILE FIRST
+   =============================================== */
+
+/* MOBILE BASE */
+@media screen and (max-width: 768px) {
+    /* Widget container quando chat è aperta */
+    #rag-chat-widget {
+        bottom: 20px;
+        right: 20px;
+    }
+
+    /* Bubble sempre visibile su mobile */
+    #rag-chat-bubble {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 999998;
+    }
+
+    /* Finestra chat fullscreen quando aperta */
+    #rag-chat-window.rag-mobile-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        max-width: none !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+        border: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        z-index: 999999 !important;
+        overflow: hidden !important;
+    }
+
+    /* Header mobile */
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-header {
+        height: calc(60px + var(--rag-safe-top));
+        padding-top: var(--rag-safe-top);
+        flex-shrink: 0;
+        position: relative;
+        z-index: 100;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen .rag-header-content {
+        padding: 0 16px;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-close {
+        width: 48px;
+        height: 48px;
+        margin-right: 8px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        position: relative;
+        z-index: 101;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-close svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Area messaggi mobile - CORREZIONE SCROLL */
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-messages {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 16px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        position: relative;
+    }
+
+    /* Input container mobile */
+    #rag-chat-window.rag-mobile-fullscreen .rag-input-container {
+        min-height: calc(80px + var(--rag-safe-bottom));
+        padding-bottom: var(--rag-safe-bottom);
+        flex-shrink: 0;
+        background: white;
+        border-top: 1px solid var(--rag-border-color);
+        position: relative;
+        z-index: 100;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen .rag-input-wrapper {
+        padding: 12px 16px;
+        gap: 12px;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-input {
+        font-size: 16px; /* Previene zoom su iOS/Android */
+        padding: 12px 16px;
+        min-height: 44px;
+        border-radius: 24px;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-send {
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        min-height: 48px;
+    }
+
+    /* Messaggi mobile */
+    #rag-chat-window.rag-mobile-fullscreen .rag-message {
+        max-width: 85%;
+        font-size: 15px;
+        margin-bottom: 16px;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen .rag-message.user {
+        padding: 12px 16px;
+        border-radius: 20px 20px 4px 20px;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen .rag-message.bot {
+        padding: 14px 16px;
+        border-radius: 20px 20px 20px 4px;
+    }
+
+    /* Gestione keyboard mobile */
+    #rag-chat-window.keyboard-open {
+        height: 100vh;
+        height: 100dvh;
+    }
+
+    #rag-chat-window.keyboard-open #rag-chat-messages {
+        flex: 1;
+        min-height: 100px;
+        overflow-y: auto;
+    }
+
+    #rag-chat-window.keyboard-open .rag-input-container {
+        position: relative;
+        bottom: 0;
+    }
+
+    /* Body lock quando chat aperta */
+    body.rag-chat-mobile-open {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        touch-action: none;
+    }
+
+    /* Scrollbar visibile su mobile */
+    #rag-chat-messages::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    #rag-chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.3);
+        border-radius: 3px;
+    }
+}
+
+/* LANDSCAPE MOBILE */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-header {
+        height: 50px;
+        padding-top: 0;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen .rag-input-container {
+        min-height: 60px;
+        padding-bottom: 0;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen .rag-input-wrapper {
+        padding: 8px 16px;
+    }
+
+    #rag-chat-window.rag-mobile-fullscreen #rag-chat-messages {
+        padding: 12px;
+    }
+}
+
+/* TABLET */
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+    :root {
+        --rag-chat-width: 400px;
+        --rag-chat-height: 650px;
+        --rag-bubble-size: 64px;
+    }
+
+    .rag-message {
+        font-size: 15px;
+    }
+
+    #rag-chat-input {
+        font-size: 15px;
+    }
+}
+
+/* DESKTOP LARGE */
+@media screen and (min-width: 1200px) {
+    :root {
+        --rag-chat-width: 400px;
+        --rag-chat-height: 700px;
+    }
+
+    .rag-message.bot {
+        font-size: 15px;
+        line-height: 1.7;
+    }
+
+    #rag-chat-messages {
+        padding: 20px 16px;
+    }
+}
+
+/* ===============================================
    ANIMAZIONI DI APERTURA/CHIUSURA
    =============================================== */
 @keyframes rag-chat-window-open {
@@ -940,454 +1047,19 @@
     animation: rag-chat-window-close var(--rag-animation-timing);
 }
 
-/* ===============================================
-   RESPONSIVE - MOBILE FIRST CON CORREZIONI ANDROID
-   =============================================== */
+/* Mobile slide animation */
+@keyframes rag-mobile-slide-up {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
 
-/* MOBILE GENERALE - Base per tutti i dispositivi mobili */
 @media screen and (max-width: 768px) {
-    /* Widget occupa tutto lo schermo su mobile */
-    #rag-chat-widget {
-        position: fixed;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 999999;
-    }
-
-    /* Bubble nascosto quando finestra aperta su mobile */
-    #rag-chat-widget.chat-open #rag-chat-bubble {
-        display: none !important;
-    }
-
-    /* Finestra chat a schermo intero su mobile */
-    #rag-chat-window {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        max-width: none !important;
-        max-height: none !important;
-        border-radius: 0 !important;
-        border: none !important;
-        transform-origin: center !important;
+    #rag-chat-window.rag-mobile-fullscreen.opening {
         animation: rag-mobile-slide-up var(--rag-animation-slow);
-        display: flex !important;
-        flex-direction: column !important;
-    }
-
-    @keyframes rag-mobile-slide-up {
-        from {
-            opacity: 0;
-            transform: translateY(100%);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    /* Header mobile con safe area */
-    #rag-chat-header {
-        height: calc(var(--rag-header-height) + var(--rag-safe-top)) !important;
-        padding-top: var(--rag-safe-top) !important;
-        position: relative;
-        flex-shrink: 0 !important;
-    }
-
-    .rag-header-content {
-        padding: 0 20px !important;
-    }
-
-    .rag-bot-avatar {
-        width: 36px !important;
-        height: 36px !important;
-        font-size: 16px !important;
-    }
-
-    .rag-header-title {
-        font-size: 18px !important;
-        font-weight: 600 !important;
-    }
-
-    .rag-header-status {
-        font-size: 13px !important;
-    }
-
-    #rag-chat-close {
-        width: 48px !important;
-        height: 48px !important;
-        margin-right: 4px !important;
-    }
-
-    #rag-chat-close svg {
-        width: 24px !important;
-        height: 24px !important;
-    }
-
-    /* Area messaggi mobile MIGLIORATA PER ANDROID */
-    #rag-chat-messages {
-        flex: 1 !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        padding: 20px 16px 8px 16px !important;
-        background: linear-gradient(to bottom, #f8f9fa 0%, #f1f3f4 100%) !important;
-        scroll-behavior: smooth !important;
-        -webkit-overflow-scrolling: touch !important;
-        /* NUOVO: Proprietà specifiche per Android */
-        overscroll-behavior-y: contain !important;
-        position: relative !important;
-        min-height: 0 !important;
-    }
-
-    /* NUOVO: Gestione keyboard Android */
-    #rag-chat-window.rag-android-keyboard-open #rag-chat-messages {
-        flex: 1 !important;
-        overflow-y: auto !important;
-        overscroll-behavior-y: contain !important;
-        height: auto !important;
-        min-height: 200px !important;
-        max-height: none !important;
-    }
-
-    #rag-chat-window.rag-android-keyboard-open .rag-input-container {
-        position: sticky !important;
-        bottom: 0 !important;
-        z-index: 1000 !important;
-        background: white !important;
-        border-top: 2px solid var(--rag-border-color) !important;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.1) !important;
-    }
-
-    /* Messaggi mobile */
-    .rag-message {
-        max-width: 90% !important;
-        font-size: 15px !important;
-        margin-bottom: 16px !important;
-    }
-
-    .rag-message.user,
-    .rag-message.bot {
-        padding: 12px 16px !important;
-        line-height: 1.5 !important;
-        min-height: 40px !important;
-    }
-
-    .rag-message.user {
-        border-radius: 20px 20px 8px 20px !important;
-    }
-
-    .rag-message.bot {
-        border-radius: 20px 20px 20px 8px !important;
-        max-width: 90% !important;
-        font-size: 15px !important;
-        padding: 14px 16px !important;
-        line-height: 1.6 !important;
-    }
-
-    /* Link cliccabili mobile */
-    .rag-message.bot .rag-clickable-link,
-    .rag-message.bot a {
-        font-size: 15px !important;
-        padding: 6px 8px !important;
-        margin: 2px 0 !important;
-        display: inline-block !important;
-        word-break: break-word !important;
-        min-height: 44px !important;
-        min-width: 44px !important;
-        text-align: center !important;
-        line-height: 1.4 !important;
-    }
-
-    /* Titoli mobile */
-    .rag-message.bot .section-title,
-    .rag-message.bot h3 {
-        font-size: 17px !important;
-        margin: 20px 0 10px 0 !important;
-        padding: 10px 0 10px 12px !important;
-    }
-
-    .rag-message.bot .main-title,
-    .rag-message.bot h2 {
-        font-size: 19px !important;
-        margin: 24px 0 14px 0 !important;
-    }
-
-    .rag-message.bot h1 {
-        font-size: 21px !important;
-        margin: 28px 0 18px 0 !important;
-    }
-
-    /* Liste mobile */
-    .rag-message.bot .rag-list,
-    .rag-message.bot ul,
-    .rag-message.bot ol {
-        padding-left: 18px !important;
-        margin: 14px 0 !important;
-    }
-
-    .rag-message.bot .rag-list li,
-    .rag-message.bot ul li,
-    .rag-message.bot ol li {
-        margin: 10px 0 !important;
-        font-size: 15px !important;
-        line-height: 1.5 !important;
-    }
-
-    /* Sezione fonti mobile */
-    .rag-message.bot .rag-sources {
-        margin: 16px -2px 0 -2px !important;
-        padding: 12px !important;
-    }
-
-    .rag-message.bot .rag-source-link {
-        padding: 14px !important;
-        font-size: 15px !important;
-        margin: 10px 0 !important;
-        min-height: 48px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-    }
-
-    /* Typing indicator mobile */
-    .rag-typing {
-        max-width: 90% !important;
-        font-size: 15px !important;
-        padding: 14px 18px !important;
-        border-radius: 20px 20px 20px 8px !important;
-    }
-
-    .rag-typing-dot {
-        width: 8px !important;
-        height: 8px !important;
-    }
-
-    /* Area input mobile con safe area MIGLIORATA PER ANDROID */
-    .rag-input-container {
-        min-height: calc(var(--rag-input-area-height) + var(--rag-safe-bottom)) !important;
-        padding-bottom: var(--rag-safe-bottom) !important;
-        flex-shrink: 0 !important;
-        background: white !important;
-        border-top: 1px solid var(--rag-border-color) !important;
-        position: relative !important;
-        z-index: 10 !important;
-    }
-
-    .rag-input-wrapper {
-        padding: 16px 20px !important;
-        gap: 16px !important;
-        display: flex !important;
-        align-items: flex-end !important;
-    }
-
-    /* Input field mobile OTTIMIZZATO PER ANDROID */
-    #rag-chat-input {
-        font-size: 16px !important; /* Evita zoom su iOS e Android */
-        padding: 12px 18px !important;
-        min-height: 24px !important;
-        border-radius: 25px !important;
-        border-width: 1.5px !important;
-        flex: 1 !important;
-        /* NUOVO: Proprietà specifiche per Android */
-        touch-action: manipulation !important;
-        -webkit-user-select: text !important;
-        user-select: text !important;
-        max-height: 120px !important;
-    }
-
-    /* Send button mobile */
-    #rag-chat-send {
-        width: 48px !important;
-        height: 48px !important;
-        font-size: 18px !important;
-        box-shadow: 0 4px 12px rgba(31, 147, 255, 0.3) !important;
-        flex-shrink: 0 !important;
-    }
-
-    #rag-chat-send svg {
-        width: 22px !important;
-        height: 22px !important;
-    }
-
-    /* Branding mobile */
-    .rag-branding {
-        padding: 12px 20px !important;
-        font-size: 12px !important;
-    }
-
-    /* NUOVO: Prevenire scroll del body quando chat è aperta - migliorato per Android */
-    body.rag-chat-mobile-open {
-        overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-        height: 100% !important;
-        top: 0 !important;
-        left: 0 !important;
-        /* Android specific */
-        touch-action: none !important;
-        -webkit-overflow-scrolling: touch !important;
-    }
-
-    /* NUOVO: Gestione viewport dinamico Android */
-    #rag-chat-window.keyboard-open {
-        height: 100vh !important;
-        height: calc(100vh - env(keyboard-inset-height, 0px)) !important;
-    }
-
-    #rag-chat-window.keyboard-open #rag-chat-messages {
-        padding-bottom: 20px !important;
-        flex: 1 !important;
-        overflow-y: auto !important;
-    }
-}
-
-/* ===============================================
-   ANDROID SPECIFICO - Media queries aggiuntive
-   =============================================== */
-
-/* Android Chrome - gestione specifica della keyboard */
-@media screen and (max-width: 768px) {
-    /* Forza altezze minime su Android quando keyboard è aperta */
-    .rag-android-keyboard-open #rag-chat-messages {
-        min-height: 200px !important;
-        height: auto !important;
-        max-height: calc(100vh - 200px) !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        overscroll-behavior: contain !important;
-    }
-
-    /* Input sempre visibile su Android */
-    .rag-android-keyboard-open .rag-input-container {
-        position: sticky !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        z-index: 1001 !important;
-        background: white !important;
-        border-top: 2px solid var(--rag-border-color) !important;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.15) !important;
-    }
-
-    /* Miglioramenti scroll per Android */
-    .rag-android-keyboard-open #rag-chat-messages::-webkit-scrollbar {
-        width: 6px !important;
-    }
-
-    .rag-android-keyboard-open #rag-chat-messages::-webkit-scrollbar-thumb {
-        background: rgba(0,0,0,0.4) !important;
-        border-radius: 3px !important;
-    }
-
-    /* Padding aggiuntivo per evitare sovrapposizioni su Android */
-    .rag-android-keyboard-open .rag-message:last-child {
-        margin-bottom: 20px !important;
-    }
-
-    /* Focus migliorato per Android */
-    .rag-android-keyboard-open #rag-chat-input:focus {
-        border-color: var(--rag-primary-color) !important;
-        box-shadow: 0 0 0 3px rgba(31, 147, 255, 0.2) !important;
-        outline: none !important;
-    }
-}
-
-/* ===============================================
-   LANDSCAPE MOBILE ADJUSTMENTS
-   =============================================== */
-@media screen and (max-width: 768px) and (orientation: landscape) {
-    #rag-chat-header {
-        height: 50px !important;
-        padding-top: 0 !important;
-    }
-
-    .rag-input-wrapper {
-        padding: 12px 20px !important;
-    }
-
-    .rag-input-container {
-        min-height: 60px !important;
-    }
-
-    .rag-header-title {
-        font-size: 16px !important;
-    }
-
-    .rag-bot-avatar {
-        width: 32px !important;
-        height: 32px !important;
-        font-size: 14px !important;
-    }
-
-    /* Android landscape - keyboard handling */
-    .rag-android-keyboard-open #rag-chat-messages {
-        min-height: 150px !important;
-        max-height: calc(100vh - 150px) !important;
-    }
-}
-
-/* ===============================================
-   TABLET ADJUSTMENTS (769px - 1024px)
-   =============================================== */
-@media screen and (min-width: 769px) and (max-width: 1024px) {
-    :root {
-        --rag-chat-width: 400px;
-        --rag-chat-height: 650px;
-        --rag-bubble-size: 64px;
-    }
-
-    #rag-chat-bubble {
-        font-size: 28px;
-    }
-
-    #rag-chat-bubble svg {
-        width: 32px !important;
-        height: 32px !important;
-    }
-
-    .rag-message {
-        font-size: 15px;
-    }
-
-    .rag-message.bot .section-title,
-    .rag-message.bot h3 {
-        font-size: 17px !important;
-    }
-
-    .rag-message.bot .main-title,
-    .rag-message.bot h2 {
-        font-size: 19px !important;
-    }
-
-    #rag-chat-input {
-        font-size: 15px;
-    }
-}
-
-/* ===============================================
-   DESKTOP LARGE (1200px+)
-   =============================================== */
-@media screen and (min-width: 1200px) {
-    :root {
-        --rag-chat-width: 400px;
-        --rag-chat-height: 700px;
-    }
-
-    .rag-message.bot {
-        font-size: 15px;
-        line-height: 1.7;
-    }
-
-    #rag-chat-messages {
-        padding: 20px 16px 12px 16px;
     }
 }
 
@@ -1403,16 +1075,11 @@
 }
 
 /* Focus states per navigazione da tastiera */
-#rag-chat-bubble:focus,
-#rag-chat-close:focus,
-#rag-chat-send:focus,
-#rag-chat-input:focus {
+#rag-chat-bubble:focus-visible,
+#rag-chat-close:focus-visible,
+#rag-chat-send:focus-visible {
     outline: 2px solid var(--rag-primary-color);
     outline-offset: 2px;
-}
-
-#rag-chat-input:focus {
-    outline: none; /* Già gestito con box-shadow */
 }
 
 /* ===============================================
@@ -1426,11 +1093,7 @@
         --rag-secondary-color: #000080;
     }
 
-    .rag-message.bot {
-        border: 2px solid #000000 !important;
-    }
-
-    .rag-message.user {
+    .rag-message {
         border: 2px solid #000000 !important;
     }
 
@@ -1450,60 +1113,32 @@
         --rag-text-muted: #B0B0B0;
         --rag-border-color: #404040;
         --rag-input-bg: #2D2D2D;
-        --rag-header-bg: #1f93ff;
     }
 
     #rag-chat-window {
-        background: #1F1F1F !important;
-        border-color: var(--rag-border-color) !important;
+        background: #1F1F1F;
+        border-color: var(--rag-border-color);
     }
 
     #rag-chat-messages {
-        background: linear-gradient(to bottom, #1A1A1A 0%, #0D0D0D 100%) !important;
+        background: linear-gradient(to bottom, #1A1A1A 0%, #0D0D0D 100%);
     }
 
     #rag-chat-input {
-        background: var(--rag-input-bg) !important;
-        color: var(--rag-text-color) !important;
-        border-color: var(--rag-border-color) !important;
+        background: var(--rag-input-bg);
+        color: var(--rag-text-color);
+        border-color: var(--rag-border-color);
     }
 
     .rag-input-container {
-        background: #1F1F1F !important;
-        border-top-color: var(--rag-border-color) !important;
-    }
-
-    .rag-branding {
-        background: #1A1A1A !important;
-        border-top-color: var(--rag-border-color) !important;
-        color: var(--rag-text-muted) !important;
+        background: #1F1F1F;
+        border-top-color: var(--rag-border-color);
     }
 
     .rag-message.bot {
-        background: #2D2D2D !important;
-        border-color: #404040 !important;
-        color: var(--rag-text-color) !important;
-    }
-
-    .rag-message.bot .rag-sources {
-        background: rgba(31, 147, 255, 0.1) !important;
-        border-color: rgba(31, 147, 255, 0.3) !important;
-    }
-
-    .rag-message.bot .rag-source-link {
-        background: #3D3D3D !important;
-        border-color: rgba(31, 147, 255, 0.4) !important;
-        color: #4FC3F7 !important;
-    }
-
-    .rag-message.bot .rag-source-link:hover {
-        background: #4A4A4A !important;
-    }
-
-    /* Dark mode per Android keyboard */
-    .rag-android-keyboard-open .rag-input-container {
-        background: #1F1F1F !important;
-        border-top-color: var(--rag-border-color) !important;
+        background: #2D2D2D;
+        border-color: #404040;
+        color: var(--rag-text-color);
     }
 }
 
@@ -1524,390 +1159,13 @@
 }
 
 .rag-sr-only {
-    position: absolute !important;
-    width: 1px !important;
-    height: 1px !important;
-    padding: 0 !important;
-    margin: -1px !important;
-    overflow: hidden !important;
-    clip: rect(0, 0, 0, 0) !important;
-    white-space: nowrap !important;
-    border: 0 !important;
-}
-
-/* ===============================================
-   COMPATIBILITÀ BROWSER LEGACY
-   =============================================== */
-@supports not (display: flex) {
-    #rag-chat-window {
-        display: block;
-    }
-
-    #rag-chat-header {
-        display: block;
-        height: auto;
-        padding: 15px 20px;
-    }
-
-    .rag-input-wrapper {
-        display: block;
-    }
-
-    #rag-chat-input {
-        width: calc(100% - 60px);
-        display: inline-block;
-        vertical-align: top;
-    }
-
-    #rag-chat-send {
-        display: inline-block;
-        vertical-align: top;
-        margin-left: 12px;
-    }
-}
-
-/* ===============================================
-   FIX SPECIFICI PER ANDROID
-   =============================================== */
-
-/* Fix per Android Chrome - gestione viewport units */
-@supports (-webkit-appearance: none) {
-    @media screen and (max-width: 768px) {
-        #rag-chat-window {
-            height: 100vh !important;
-            height: -webkit-fill-available !important;
-        }
-
-        .rag-android-keyboard-open #rag-chat-window {
-            height: 100vh !important;
-            height: calc(var(--vh, 1vh) * 100) !important;
-        }
-    }
-}
-
-/* Fix per iOS Safari viewport */
-@supports (-webkit-touch-callout: none) {
-    @media screen and (max-width: 768px) {
-        #rag-chat-window {
-            height: 100vh !important;
-            height: -webkit-fill-available !important;
-        }
-    }
-}
-
-/* Fix per Android Chrome address bar - gestione dinamica altezza viewport */
-@media screen and (max-width: 768px) {
-    #rag-chat-window {
-        height: 100vh;
-        height: calc(var(--vh, 1vh) * 100);
-    }
-
-    /* Android specific - forza scroll container */
-    .rag-android-keyboard-open {
-        height: 100vh !important;
-        height: calc(var(--vh, 1vh) * 100) !important;
-        overflow: hidden !important;
-    }
-
-    .rag-android-keyboard-open #rag-chat-messages {
-        height: auto !important;
-        flex: 1 !important;
-        min-height: 200px !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        overscroll-behavior-y: contain !important;
-        touch-action: pan-y !important;
-    }
-}
-
-/* ===============================================
-   FINE DEL FILE CSS
-   =============================================== */
-
-
-/* ===============================================
-   CORREZIONI ANDROID URGENTI - Aggiungi queste al CSS esistente
-   =============================================== */
-
-/* Android specific - forza layout corretto */
-@media screen and (max-width: 768px) {
-
-    /* FORZA LAYOUT ANDROID */
-    #rag-chat-window {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        height: 100dvh !important; /* Dynamic viewport height per Android */
-        min-height: 100vh !important;
-        min-height: 100dvh !important;
-        max-height: none !important;
-        overflow: hidden !important;
-        display: flex !important;
-        flex-direction: column !important;
-        background: white !important;
-        z-index: 2147483647 !important;
-    }
-
-    /* Header fisso Android */
-    #rag-chat-header {
-        position: relative !important;
-        flex-shrink: 0 !important;
-        height: 60px !important;
-        min-height: 60px !important;
-        max-height: 60px !important;
-        padding: 8px 16px !important;
-        background: var(--rag-primary-color) !important;
-        z-index: 100 !important;
-    }
-
-    /* Area messaggi - LAYOUT FISSO per Android */
-    #rag-chat-messages {
-        flex: 1 !important;
-        min-height: 0 !important;
-        height: auto !important;
-        max-height: none !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        padding: 16px !important;
-        background: #f8f9fa !important;
-        position: relative !important;
-        /* ANDROID: forza scroll */
-        -webkit-overflow-scrolling: touch !important;
-        overscroll-behavior: contain !important;
-        scroll-behavior: auto !important; /* Smooth può causare problemi su Android */
-    }
-
-    /* Input container - SEMPRE VISIBILE */
-    .rag-input-container {
-        position: relative !important;
-        flex-shrink: 0 !important;
-        width: 100% !important;
-        min-height: 80px !important;
-        max-height: 120px !important;
-        background: white !important;
-        border-top: 2px solid #e0e0e0 !important;
-        z-index: 200 !important;
-        box-sizing: border-box !important;
-        /* ANDROID: forza sempre in fondo */
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-    }
-
-    /* Input wrapper */
-    .rag-input-wrapper {
-        padding: 12px 16px !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 12px !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-    }
-
-    /* Input field ANDROID */
-    #rag-chat-input {
-        flex: 1 !important;
-        min-height: 44px !important;
-        max-height: 80px !important;
-        padding: 12px 16px !important;
-        border: 2px solid #ddd !important;
-        border-radius: 22px !important;
-        font-size: 16px !important; /* Previene zoom */
-        background: white !important;
-        outline: none !important;
-        resize: none !important;
-        overflow-y: auto !important;
-        line-height: 1.4 !important;
-        /* ANDROID: forza visibilità */
-        position: relative !important;
-        z-index: 10 !important;
-        width: auto !important;
-        box-sizing: border-box !important;
-    }
-
-    #rag-chat-input:focus {
-        border-color: var(--rag-primary-color) !important;
-        box-shadow: 0 0 0 2px rgba(31, 147, 255, 0.2) !important;
-    }
-
-    /* Send button ANDROID */
-    #rag-chat-send {
-        width: 48px !important;
-        height: 48px !important;
-        min-width: 48px !important;
-        min-height: 48px !important;
-        flex-shrink: 0 !important;
-        border-radius: 50% !important;
-        background: var(--rag-primary-color) !important;
-        border: none !important;
-        color: white !important;
-        font-size: 18px !important;
-        position: relative !important;
-        z-index: 10 !important;
-    }
-
-    /* GESTIONE KEYBOARD ANDROID SPECIFICA */
-    #rag-chat-window.rag-android-keyboard-open {
-        height: 100vh !important;
-        height: 100dvh !important;
-        min-height: 100vh !important;
-        min-height: 100dvh !important;
-        overflow: hidden !important;
-    }
-
-    #rag-chat-window.rag-android-keyboard-open #rag-chat-messages {
-        height: auto !important;
-        max-height: none !important;
-        flex: 1 !important;
-        min-height: 200px !important;
-        overflow-y: auto !important;
-        padding-bottom: 20px !important;
-    }
-
-    #rag-chat-window.rag-android-keyboard-open .rag-input-container {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100vw !important;
-        z-index: 1000 !important;
-        background: white !important;
-        border-top: 2px solid var(--rag-primary-color) !important;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
-    }
-
-    /* SCROLLBAR VISIBILE SU ANDROID */
-    #rag-chat-messages::-webkit-scrollbar {
-        width: 8px !important;
-        background: transparent !important;
-    }
-
-    #rag-chat-messages::-webkit-scrollbar-thumb {
-        background: rgba(0,0,0,0.3) !important;
-        border-radius: 4px !important;
-        border: 1px solid rgba(255,255,255,0.5) !important;
-    }
-
-    #rag-chat-messages::-webkit-scrollbar-track {
-        background: rgba(0,0,0,0.1) !important;
-        border-radius: 4px !important;
-    }
-
-    /* MESSAGGI - layout migliorato */
-    .rag-message {
-        margin-bottom: 16px !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        max-width: 90% !important;
-        clear: both !important;
-    }
-
-    .rag-message.bot {
-        float: left !important;
-        background: white !important;
-        padding: 12px 16px !important;
-        border-radius: 18px 18px 18px 4px !important;
-        border: 1px solid #e0e0e0 !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-    }
-
-    .rag-message.user {
-        float: right !important;
-        background: var(--rag-primary-color) !important;
-        color: white !important;
-        padding: 12px 16px !important;
-        border-radius: 18px 18px 4px 18px !important;
-    }
-
-    /* FORZA CLEARFIX dopo ogni messaggio */
-    .rag-message::after {
-        content: "";
-        display: table;
-        clear: both;
-    }
-
-    /* BODY LOCK per Android */
-    body.rag-chat-mobile-open {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        overflow: hidden !important;
-        overscroll-behavior: none !important;
-        -webkit-overflow-scrolling: auto !important;
-    }
-}
-
-/* ===============================================
-   FIX ANDROID CHROME SPECIFICI
-   =============================================== */
-
-/* Android Chrome - gestione address bar */
-@supports (height: 100dvh) {
-    @media screen and (max-width: 768px) {
-        #rag-chat-window {
-            height: 100dvh !important;
-            min-height: 100dvh !important;
-        }
-
-        #rag-chat-window.rag-android-keyboard-open {
-            height: 100dvh !important;
-            min-height: 100dvh !important;
-        }
-    }
-}
-
-/* Android speciale - forza layout quando keyboard è visibile */
-@media screen and (max-width: 768px) and (max-height: 500px) {
-    /* Probabilmente keyboard aperta in landscape */
-    #rag-chat-messages {
-        height: auto !important;
-        max-height: calc(100vh - 140px) !important;
-        overflow-y: auto !important;
-        flex: 1 !important;
-    }
-
-    .rag-input-container {
-        min-height: 60px !important;
-        position: fixed !important;
-        bottom: 0 !important;
-        z-index: 1000 !important;
-    }
-}
-
-/* ===============================================
-   DEBUG PER ANDROID - RIMUOVI DOPO TEST
-   =============================================== */
-@media screen and (max-width: 768px) {
-    /* Aggiungi bordi colorati per debug - RIMUOVERE */
-    #rag-chat-messages {
-        border: 2px solid red !important;
-    }
-
-    .rag-input-container {
-        border: 2px solid blue !important;
-    }
-
-    #rag-chat-input {
-        border: 2px solid green !important;
-    }
-
-    /* Overlay debug info */
-    #rag-chat-window::before {
-        content: "Android Layout Active" !important;
-        position: fixed !important;
-        top: 10px !important;
-        left: 10px !important;
-        background: rgba(255,0,0,0.8) !important;
-        color: white !important;
-        padding: 4px 8px !important;
-        font-size: 10px !important;
-        z-index: 9999 !important;
-        border-radius: 4px !important;
-    }
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }

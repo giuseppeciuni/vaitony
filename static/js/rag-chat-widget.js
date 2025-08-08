@@ -2,7 +2,7 @@
     const widgetId = window.VAITONY_WIDGET_ID || null;
     if (!widgetId) return;
 
-    let chatWindow, chatMessages, chatInput, chatSend, chatButton;
+    let chatWindow, chatMessages, chatInput, chatSend, chatButton, chatFooter;
 
     function createChatUI() {
         // Pulsante apertura
@@ -30,7 +30,9 @@
         chatMessages = chatWindow.querySelector('.rag-chat-messages');
         chatInput = chatWindow.querySelector('#rag-chat-input');
         chatSend = chatWindow.querySelector('#rag-chat-send');
+        chatFooter = document.getElementById('rag-chat-footer');
 
+        // Eventi
         chatButton.addEventListener('click', () => toggleChat(true));
         chatWindow.querySelector('#rag-chat-close').addEventListener('click', () => toggleChat(false));
         chatSend.addEventListener('click', sendMessage);
@@ -97,24 +99,23 @@
             });
     }
 
+    // Fix tastiera mobile
     function fixMobileKeyboard() {
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         if (!isMobile) return;
 
-        const footer = document.getElementById('rag-chat-footer');
-
         chatInput.addEventListener('focus', () => {
+            chatFooter.style.position = 'fixed';
+            chatFooter.style.bottom = '0';
             chatWindow.style.height = window.innerHeight + 'px';
-            footer.style.position = 'fixed';
-            footer.style.bottom = '0';
             scrollToBottom();
         });
 
         chatInput.addEventListener('blur', () => {
             setTimeout(() => {
-                chatWindow.style.height = '100vh';
-                footer.style.position = 'absolute';
-                footer.style.bottom = '0';
+                chatFooter.style.position = 'fixed';
+                chatFooter.style.bottom = '0';
+                chatWindow.style.height = '100dvh';
                 scrollToBottom();
             }, 100);
         });

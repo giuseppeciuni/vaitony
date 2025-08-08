@@ -1,23 +1,22 @@
 /* ================================
    RAG Chat Widget CSS
-   Stile ispirato a Telegram e WhatsApp
-   Ottimizzato per Android, iOS e Desktop
+   Stile Telegram/WhatsApp
+   Compatibile Android, iOS, Desktop
 =================================== */
 
-/* Root variables per colori e stile */
 :root {
-  --rag-primary: #0088cc; /* Telegram blue */
-  --rag-secondary: #34b7f1; /* WhatsApp light blue */
-  --rag-user-bg: #dcf8c6; /* WhatsApp green bubble */
-  --rag-bot-bg: #ffffff; /* White bubble */
-  --rag-bg: #e5ddd5; /* Chat background */
+  --rag-primary: #0088cc;
+  --rag-secondary: #34b7f1;
+  --rag-user-bg: #dcf8c6;
+  --rag-bot-bg: #ffffff;
+  --rag-bg: #e5ddd5;
   --rag-border: #ddd;
   --rag-text: #333;
   --rag-bot-text: #000;
   --rag-radius: 16px;
 }
 
-/* Pulsante di apertura */
+/* Pulsante apertura */
 #rag-chat-button {
   position: fixed;
   bottom: 20px;
@@ -97,7 +96,7 @@
   scroll-behavior: smooth;
 }
 
-/* Bolle messaggi */
+/* Messaggi */
 .rag-message {
   max-width: 80%;
   padding: 8px 12px;
@@ -157,16 +156,23 @@
 @media (max-width: 768px) {
   #rag-chat-window {
     top: 0 !important;
-    bottom: 0;
-    right: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border-radius: 0;
+    bottom: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
   }
   .rag-chat-messages {
     padding-top: 0 !important;
     margin-top: 0 !important;
+    padding-bottom: 60px; /* spazio per input */
+  }
+  #rag-chat-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
   }
 }

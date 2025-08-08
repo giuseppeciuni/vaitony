@@ -1,19 +1,9 @@
-/* ==========================================================
-   RAG Chat Widget JS
-   Stile ispirato a Telegram e WhatsApp
-   Compatibile Android, iOS e Desktop
-   Versione pulita, senza debug
-========================================================== */
-
 (function () {
     const widgetId = window.VAITONY_WIDGET_ID || null;
     if (!widgetId) return;
 
     let chatWindow, chatMessages, chatInput, chatSend, chatButton;
 
-    /* ==========================
-       CREAZIONE UI
-    ========================== */
     function createChatUI() {
         // Pulsante apertura
         chatButton = document.createElement('button');
@@ -37,12 +27,10 @@
         `;
         document.body.appendChild(chatWindow);
 
-        // Riferimenti
         chatMessages = chatWindow.querySelector('.rag-chat-messages');
         chatInput = chatWindow.querySelector('#rag-chat-input');
         chatSend = chatWindow.querySelector('#rag-chat-send');
 
-        // Eventi UI
         chatButton.addEventListener('click', () => toggleChat(true));
         chatWindow.querySelector('#rag-chat-close').addEventListener('click', () => toggleChat(false));
         chatSend.addEventListener('click', sendMessage);
@@ -50,13 +38,9 @@
             if (e.key === 'Enter') sendMessage();
         });
 
-        // Fix Android keyboard
-        fixAndroidKeyboard();
+        fixMobileKeyboard();
     }
 
-    /* ==========================
-       APERTURA/CHIUSURA CHAT
-    ========================== */
     function toggleChat(open) {
         if (open) {
             chatWindow.classList.add('open');
@@ -69,9 +53,6 @@
         }
     }
 
-    /* ==========================
-       INVIO MESSAGGIO
-    ========================== */
     function sendMessage() {
         const text = chatInput.value.trim();
         if (!text) return;
@@ -81,9 +62,6 @@
         sendToServer(text);
     }
 
-    /* ==========================
-       AGGIUNTA MESSAGGIO IN CHAT
-    ========================== */
     function addMessage(text, sender) {
         const msg = document.createElement('div');
         msg.className = `rag-message ${sender}`;
@@ -96,18 +74,12 @@
         scrollToBottom();
     }
 
-    /* ==========================
-       SCROLL TO BOTTOM
-    ========================== */
     function scrollToBottom() {
         setTimeout(() => {
             chatMessages.scrollTop = chatMessages.scrollHeight;
-        }, 100);
+        }, 50);
     }
 
-    /* ==========================
-       INVIO AL SERVER
-    ========================== */
     function sendToServer(text) {
         fetch(`/widget/${widgetId}/send`, {
             method: 'POST',
@@ -125,38 +97,42 @@
             });
     }
 
-    /* ==========================
-       FIX ANDROID KEYBOARD
-    ========================== */
-    function fixAndroidKeyboard() {
-        const isAndroid = /Android/i.test(navigator.userAgent);
-        if (isAndroid) {
-            chatInput.addEventListener('focus', () => {
-                setTimeout(() => {
-                    chatMessages.style.paddingBottom = '300px';
-                    scrollToBottom();
-                }, 300);
-            });
-            chatInput.addEventListener('blur', () => {
-                chatMessages.style.paddingBottom = '0px';
-            });
-        }
+    function fixMobileKeyboard() {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (!isMobile) return;
+
+        const footer = document.getElementById('rag-chat-footer');
+
+        chatInput.addEventListener('focus', () => {
+            chatWindow.style.height = window.innerHeight + 'px';
+            footer.style.position = 'fixed';
+            footer.style.bottom = '0';
+            scrollToBottom();
+        });
+
+        chatInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                chatWindow.style.height = '100vh';
+                footer.style.position = 'absolute';
+                footer.style.bottom = '0';
+                scrollToBottom();
+            }, 100);
+        });
+
+        window.addEventListener('resize', () => {
+            chatWindow.style.height = window.innerHeight + 'px';
+        });
     }
 
-    /* ==========================
-       UTILS
-    ========================== */
     function escapeHTML(str) {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
     }
+
     function formatTime(date) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    /* ==========================
-       INIT
-    ========================== */
     createChatUI();
 })();

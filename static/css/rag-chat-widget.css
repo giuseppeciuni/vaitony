@@ -1,175 +1,172 @@
-/* rag-chat-widget.css
-   UX ispirata a Telegram / WhatsApp
-   Mobile-friendly, safe-area aware, Android keyboard fixes
-   --- */
+/* ================================
+   RAG Chat Widget CSS
+   Stile ispirato a Telegram e WhatsApp
+   Ottimizzato per Android, iOS e Desktop
+=================================== */
 
-:root{
-  --r-color-primary: #1f8ef7;    /* blu Telegram-like */
-  --r-color-accent: #e9f5ff;
-  --r-color-user: #dcf8c6;       /* verde WhatsApp-like */
-  --r-color-bot: #ffffff;
-  --r-text: #1f2a37;
-  --r-muted: #7b8794;
-  --r-border: #e6eefc;
-  --r-radius: 18px;
-  --r-radius-small: 8px;
-  --r-shadow: 0 6px 20px rgba(20,30,50,0.12);
-  --r-width: 380px;
-  --r-height: 640px;
-  --r-header-h: 64px;
-  --r-input-h: 68px;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+/* Root variables per colori e stile */
+:root {
+  --rag-primary: #0088cc; /* Telegram blue */
+  --rag-secondary: #34b7f1; /* WhatsApp light blue */
+  --rag-user-bg: #dcf8c6; /* WhatsApp green bubble */
+  --rag-bot-bg: #ffffff; /* White bubble */
+  --rag-bg: #e5ddd5; /* Chat background */
+  --rag-border: #ddd;
+  --rag-text: #333;
+  --rag-bot-text: #000;
+  --rag-radius: 16px;
 }
 
-/* RESET e base */
-#rag-chat-widget, #rag-chat-widget * { box-sizing: border-box; font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial; -webkit-tap-highlight-color: transparent; }
-.rag-sr { position: absolute !important; width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
-
-/* CONTENITORE GLOBALE (fisso in pagina) */
-#rag-chat-widget {
+/* Pulsante di apertura */
+#rag-chat-button {
   position: fixed;
-  right: 20px;
   bottom: 20px;
-  z-index: 999999;
-  width: var(--r-width);
-  max-width: calc(100% - 40px);
-  font-size: 14px;
-  direction: ltr;
-  -webkit-user-select: none; user-select: none;
-}
-
-/* BUBBLE (l'icona flottante) */
-#rag-chat-bubble {
-  width: 64px; height: 64px;
+  right: 20px;
+  background: var(--rag-primary);
+  color: white;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--r-color-primary), #0b63c6);
-  display:flex; align-items:center; justify-content:center;
-  box-shadow: var(--r-shadow);
-  cursor:pointer; border: 3px solid #fff;
-  transition: transform .15s ease, box-shadow .15s ease;
+  width: 56px;
+  height: 56px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  z-index: 99999;
+  transition: background 0.3s;
 }
-#rag-chat-bubble:active{ transform: scale(.96); }
-#rag-chat-bubble svg{ width:26px; height:26px; fill:#fff; pointer-events:none; }
+#rag-chat-button:hover {
+  background: var(--rag-secondary);
+}
 
-/* FINESTRA CHAT (desktop) */
+/* Finestra chat */
 #rag-chat-window {
-  position: absolute;
-  right: 0;
-  bottom: calc(64px + 12px);
-  width: var(--r-width);
-  height: var(--r-height);
-  max-height: calc(100vh - 120px);
-  border-radius: 14px;
-  background: linear-gradient(180deg,#f7fbff,#ffffff);
-  box-shadow: var(--r-shadow);
-  border: 1px solid var(--r-border);
-  display: none;
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 360px;
+  max-width: 100%;
+  height: 500px;
+  max-height: 80%;
+  display: flex;
   flex-direction: column;
+  background: var(--rag-bg);
+  border-radius: var(--rag-radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   overflow: hidden;
-  transform-origin: bottom right;
+  z-index: 99998;
+  transform: translateY(120%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+#rag-chat-window.open {
+  transform: translateY(0);
+  opacity: 1;
 }
 
-/* HEADER */
-.rag-chat-header {
-  height: var(--r-header-h);
-  min-height: var(--r-header-h);
-  display:flex; align-items:center; gap:12px;
-  padding: 12px 14px;
-  background: linear-gradient(90deg,var(--r-color-primary), #0b63c6);
-  color: #fff;
-  flex-shrink: 0;
+/* Header */
+#rag-chat-header {
+  background: var(--rag-primary);
+  color: white;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.rag-bot-avatar{ width:44px; height:44px; border-radius:50%; background: #fff; display:flex;align-items:center;justify-content:center;color:var(--r-color-primary); box-shadow: 0 1px 3px rgba(0,0,0,.06);}
-.rag-header-info{ display:flex; flex-direction:column; min-width:0; }
-.rag-header-title{ font-weight:700; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.rag-header-sub{ font-size:12px; opacity:.9; color: rgba(255,255,255,.95); }
-.rag-close-btn { background: transparent; border: none; color: white; width:44px;height:44px;border-radius:50%; display:flex;align-items:center;justify-content:center; cursor:pointer; }
+#rag-chat-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+}
 
-/* AREA MESSAGGI */
+/* Area messaggi */
 .rag-chat-messages {
-  padding: 14px 12px 18px 12px;
+  flex: 1;
   overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   -webkit-overflow-scrolling: touch;
-  background: linear-gradient(180deg,#f6fbff, #f8fbff);
-  flex:1;
   scroll-behavior: smooth;
 }
 
-/* BOLLE MESSAGGI */
-.rag-message { margin:10px 0; max-width:84%; clear:both; display:block; word-wrap:break-word; }
-
-.rag-message.bot {
-  float:left;
-  background: var(--r-color-bot);
-  color: var(--r-text);
-  padding: 12px 14px;
-  border-radius: var(--r-radius) var(--r-radius) var(--r-radius-small) var(--r-radius);
-  box-shadow: 0 1px 4px rgba(20,30,50,0.04);
-  border: 1px solid rgba(0,0,0,0.03);
-  font-size: 14px; line-height:1.45;
+/* Bolle messaggi */
+.rag-message {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: var(--rag-radius);
+  font-size: 14px;
+  line-height: 1.4;
+  word-wrap: break-word;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.1);
 }
-
 .rag-message.user {
-  float:right;
-  background: var(--r-color-user);
-  color: var(--r-text);
-  padding: 10px 14px;
-  border-radius: var(--r-radius) var(--r-radius) var(--r-radius) var(--r-radius-small);
-  box-shadow: 0 1px 4px rgba(20,30,50,0.04);
-  font-size: 14px; line-height:1.3;
-  border: 1px solid rgba(0,0,0,0.02);
+  background: var(--rag-user-bg);
+  align-self: flex-end;
+}
+.rag-message.bot {
+  background: var(--rag-bot-bg);
+  align-self: flex-start;
 }
 
-/* timestamp */
-.rag-message-time { display:block; text-align:right; color:var(--r-muted); font-size:11px; margin-top:6px; opacity:.9; }
-
-/* link and titles inside bot messages */
-.rag-message.bot a { color: var(--r-color-primary); text-decoration: none; font-weight:500; word-break:break-word; }
-.rag-message.bot h2, .rag-message.bot h3 { margin:6px 0; color:var(--r-color-primary); }
-
-/* typing indicator */
-.rag-typing{ display:flex; gap:8px; align-items:center; justify-content:flex-start; padding:10px 12px; border-radius:14px; background: linear-gradient(90deg, rgba(0,0,0,0.02), rgba(0,0,0,0.01)); }
-.rag-typing-dot{ width:8px; height:8px; border-radius:50%; background:var(--r-muted); animation: rag-pulse .9s infinite ease-in-out; }
-.rag-typing-dot:nth-child(2){ animation-delay:.12s } .rag-typing-dot:nth-child(3){ animation-delay:.24s }
-@keyframes rag-pulse { 0% { transform:scale(.7); opacity:.4 } 50% { transform:scale(1.2); opacity:1 } 100% { transform:scale(.7); opacity:.4 } }
-
-/* AREA INPUT */
-.rag-input-container {
-  padding: 12px;
-  background: #fff;
-  border-top: 1px solid var(--r-border);
-  flex-shrink:0;
+/* Timestamp */
+.rag-timestamp {
+  font-size: 10px;
+  color: #888;
+  margin-top: 4px;
+  text-align: right;
 }
-.rag-input-wrapper { display:flex; gap:10px; align-items:flex-end; }
-.rag-chat-input {
-  flex:1; min-height:42px; max-height:120px; resize:none;
-  padding:10px 14px; border-radius:22px; border:1px solid #e9eefc; outline:none;
-  font-size:14px; line-height:1.3; overflow:auto; background:#fbfeff;
+
+/* Footer input */
+#rag-chat-footer {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--rag-border);
+  background: white;
+  padding: 6px;
 }
-.rag-chat-input:focus{ box-shadow: 0 4px 18px rgba(31,142,247,0.08); border-color: var(--r-color-primary); }
-.rag-send-btn{ width:52px; height:52px; border-radius:50%; border:none; background:var(--r-color-primary); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow: 0 6px 18px rgba(31,142,247,0.16); }
-.rag-send-btn:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
+#rag-chat-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--rag-border);
+  border-radius: var(--rag-radius);
+  outline: none;
+}
+#rag-chat-send {
+  margin-left: 8px;
+  background: var(--rag-primary);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: var(--rag-radius);
+  cursor: pointer;
+}
+#rag-chat-send:hover {
+  background: var(--rag-secondary);
+}
 
-/* BRANDING (piccolo) */
-.rag-branding{ font-size:11px; color:var(--r-muted); text-align:center; padding-top:6px; }
-
-/* MOBILE: fullscreen experience */
+/* Mobile fullscreen */
 @media (max-width: 768px) {
-  #rag-chat-widget{ left:0; right:0; bottom:0; top:0; width:100vw; height:100vh; padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
-  #rag-chat-bubble{ position: fixed; right: 18px; bottom: 18px; z-index: 999999; }
-  #rag-chat-window{ position: fixed; top:0; left:0; right:0; bottom:0; width:100vw; height:100vh; max-height:100vh; border-radius:0; display:flex; flex-direction:column; }
-  .rag-input-container{ padding: calc(10px + var(--safe-bottom)) 12px 12px 12px; background: linear-gradient(180deg,#ffffff,#fbfeff); position: relative; z-index: 1001; }
-  .rag-input-wrapper { align-items:flex-end; }
-  .rag-chat-messages{ padding-bottom: 8px; }
-}
-
-/* ACCESSIBILITA' */
-@media (prefers-reduced-motion: reduce) {
-  * { transition:none !important; animation:none !important; scroll-behavior: auto !important; }
-}
-
-/* Small screens/Tablet tweaks */
-@media (min-width: 769px) and (max-width: 1199px) {
-  :root { --r-width: 420px; --r-height: 680px; }
+  #rag-chat-window {
+    top: 0 !important;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+  .rag-chat-messages {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
 }

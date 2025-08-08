@@ -1,577 +1,497 @@
 /* rag-chat-widget.js
-   Re-implementazione widget:
-   - UI DOM creation (no innerHTML for bot content)
-   - Mobile keyboard handling (visualViewport) to prevent input being hidden on Android
-   - Auto-resize textarea, accessible controls, CSP-friendly
-   - No debug/console logs left
+   Re-implementazione pulita del widget chat:
+   - Compatibilità iOS / Android / Desktop
+   - Fix Android keyboard + reliable scrolling
+   - Nessun codice di debug (no console.log)
+   - Funzioni documentate in italiano
 */
 
+/* ---------------------------
+   CONFIG INIZIALE (usa window.VAITONY_WIDGET_ID e window.VAITONY_WIDGET_CONFIG)
+   - window.VAITONY_WIDGET_ID: id del widget assegnato dal server (string)
+   - window.VAITONY_WIDGET_CONFIG: oggetto opzionale per sovrascrivere opzioni
+   --------------------------- */
 (function () {
   'use strict';
 
-  /* --------------------
-     CONFIG default + merge
-     -------------------- */
-  const serverConfig = window.RAG_WIDGET_CONFIG || {};
-  const defaultConfig = {
+  // DEFAULT CONFIGURAZIONE
+  const DEFAULT_CONFIG = {
     title: 'Assistente',
-    welcomeMessage: 'Ciao! Come posso aiutarti?',
+    welcomeMessage: 'Ciao! Come posso aiutarti oggi?',
     placeholder: 'Scrivi un messaggio...',
-    sendButtonLabel: 'Invia',
-    primaryColor: '#00A884',
-    chatWidth: '370px',
-    chatHeight: '600px',
-    mobileBreakpoint: 768,
-    apiEndpoint: null,             // se null, verrà costruito da origin + '/api/chat/secure/'
-    apiTimeout: 30000,
+    primaryColor: '#1f8ef7',
+    chatWidth: '380px',
+    chatHeight: '640px',
     maxMessageLength: 2000,
+    apiPath: '/widget/chat/',    // verrà concatenato con widgetId (es. /widget/chat/<id>/)
+    enableBranding: true,
+    showWelcomeOnce: true,
     enableTypingIndicator: true,
-    showBranding: true,
-    historyLimit: 200,
-    debug: false
+    typingDelay: 800,
+    androidKeyboardThreshold: 120, // px minore soglia di riconoscimento
+    enableMessageHistory: true,
+    historyLimit: 100,
+    debug: false // non usato per logs ma può abilitare alcuni comportamenti opzionali
   };
-  const config = Object.assign({}, defaultConfig, serverConfig);
 
-  /* widget "token" or widget id — permissivo: legge VAITONY_WIDGET_ID se presente */
-  const WIDGET_ID = window.VAITONY_WIDGET_ID || config.widgetId || null;
-  const TOKEN = config.token || null;
+  // Merge config omettendo proprietà pericolose
+  const widgetId = (window.VAITONY_WIDGET_ID || '').toString();
+  const serverCfg = (window.VAITONY_WIDGET_CONFIG && typeof window.VAITONY_WIDGET_CONFIG === 'object') ? window.VAITONY_WIDGET_CONFIG : {};
+  const CONFIG = Object.assign({}, DEFAULT_CONFIG, serverCfg);
 
-  /* costruzione endpoint di default (se non fornito) */
-  const baseOrigin = config.baseOrigin || window.location.origin;
-  const API_ENDPOINT = config.apiEndpoint || (baseOrigin + '/api/chat/secure/');
+  /* ---------------------------
+     UTILITY FUNCTIONS
+     --------------------------- */
 
-  /* --------------------
-     helper DOM
-     -------------------- */
-  function el(tag, className, attrs) {
-    const d = document.createElement(tag);
-    if (className) d.className = className;
-    if (attrs && typeof attrs === 'object') {
-      Object.keys(attrs).forEach(k => {
-        if (k === 'text') d.appendChild(document.createTextNode(attrs[k]));
-        else d.setAttribute(k, attrs[k]);
-      });
-    }
-    return d;
+  // Controlla se siamo su mobile (touch + small width)
+  function isMobile() {
+    const ua = navigator.userAgent || '';
+    const touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    return touch || window.innerWidth <= 768 || /android|iphone|ipad|ipod/i.test(ua);
   }
 
-  function setVar(name, value) {
-    document.documentElement.style.setProperty(name, value);
+  function isAndroid() {
+    const ua = navigator.userAgent || '';
+    return /android/i.test(ua);
   }
 
-  /* --------------------
-     Accessibility: create visually safe content nodes
-     Convert simple markdown-ish text to DocumentFragment:
-     - Headers (##, ###)
-     - Lists (- )
-     - Links [text](url)
-     - Bold **text**, Italic *text*
-     This returns a DocumentFragment composed with createTextNode / element nodes (no innerHTML)
-     -------------------- */
-  function formatToFragment(text) {
-    const frag = document.createDocumentFragment();
-    if (!text && text !== '') {
-      return frag;
-    }
-    // Normalize newlines
-    const lines = String(text).replace(/\r/g, '').split('\n');
-
-    let listEl = null;
-    function flushList() { if (listEl) { frag.appendChild(listEl); listEl = null; } }
-
-    for (let rawLine of lines) {
-      const line = rawLine.trim();
-      if (line === '') {
-        flushList();
-        // add blank paragraph gap
-        frag.appendChild(el('div', 'rag-paragraph', { role: 'presentation', text: '' }));
-        continue;
-      }
-
-      // headers
-      if (line.startsWith('## ')) {
-        flushList();
-        const node = el('div', 'rag-main-title');
-        node.appendChild(document.createTextNode(line.substring(3).trim()));
-        frag.appendChild(node);
-        continue;
-      }
-      if (line.startsWith('### ')) {
-        flushList();
-        const node = el('div', 'rag-section-title');
-        node.appendChild(document.createTextNode(line.substring(4).trim()));
-        frag.appendChild(node);
-        continue;
-      }
-
-      // list item
-      if (line.startsWith('- ')) {
-        if (!listEl) listEl = el('ul', 'rag-list');
-        const li = el('li', null);
-        appendInlineParts(li, line.substring(2).trim());
-        listEl.appendChild(li);
-        continue;
-      }
-
-      // normal paragraph: create p and parse inline
-      flushList();
-      const p = el('p', null);
-      appendInlineParts(p, line);
-      frag.appendChild(p);
-    }
-
-    flushList();
-    return frag;
+  function isIOS() {
+    const ua = navigator.userAgent || '';
+    return /iphone|ipad|ipod/i.test(ua) && !/android/i.test(ua);
   }
 
-  // parse inline simple markdown: **bold**, *italic*, [text](url)
-  function appendInlineParts(container, text) {
-    let s = text;
-    // We'll parse sequentially by locating next special pattern
-    const pattern = /\*\*(.+?)\*\*|\*(.+?)\*|\[([^\]]+)\]\(([^)]+)\)/;
-    while (s.length) {
-      const m = s.match(pattern);
-      if (!m) {
-        container.appendChild(document.createTextNode(s));
-        break;
+  // Applica stile personalizzato root (variabili CSS)
+  function applyRootStyles() {
+    const el = document.createElement('style');
+    el.textContent = `
+      :root {
+        --r-color-primary: ${sanitizeColor(CONFIG.primaryColor)};
+        --r-width: ${sanitizeCssValue(CONFIG.chatWidth)};
+        --r-height: ${sanitizeCssValue(CONFIG.chatHeight)};
       }
-      const idx = m.index;
-      if (idx > 0) container.appendChild(document.createTextNode(s.slice(0, idx)));
-      if (m[1]) { // bold
-        const strong = el('strong', null); strong.appendChild(document.createTextNode(m[1])); container.appendChild(strong);
-      } else if (m[2]) { // italic
-        const em = el('em', null); em.appendChild(document.createTextNode(m[2])); container.appendChild(em);
-      } else if (m[3] && m[4]) { // link
-        const a = el('a', 'rag-link', { href: m[4] });
-        a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer');
-        a.appendChild(document.createTextNode(m[3]));
-        container.appendChild(a);
-      }
-      s = s.slice(idx + m[0].length);
-    }
+    `;
+    document.head.appendChild(el);
   }
 
-  /* --------------------
-     CREATE WIDGET DOM
-     -------------------- */
-  function createWidgetDOM() {
-    const container = el('div', null); container.id = 'rag-chat-widget';
+  // Semplice sanitizzazione per valori CSS passati dinamicamente
+  function sanitizeCssValue(v) {
+    if (typeof v !== 'string') return '';
+    return v.replace(/[^0-9a-zA-Z%().,#\s-]/g, '');
+  }
 
-    // bubble
-    const bubble = el('button', null, { id: 'rag-chat-bubble', 'aria-label': 'Apri chat', 'aria-haspopup': 'dialog' });
-    const bubbleSvg = el('div', 'rag-bubble-icon');
-    // minimal svg icon (paper plane)
-    bubbleSvg.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"></path></svg>';
-    bubble.appendChild(bubbleSvg);
-    const notif = el('span', 'rag-notification'); notif.style.display = 'none'; bubble.appendChild(notif);
+  function sanitizeColor(c) {
+    if (typeof c !== 'string') return '#1f8ef7';
+    return c.replace(/[^#(),a-zA-Z0-9.%\s-]/g, '');
+  }
 
-    // chat window
-    const chatWindow = el('div', null); chatWindow.id = 'rag-chat-window'; chatWindow.setAttribute('role','dialog'); chatWindow.setAttribute('aria-label', config.title);
+  // Sostituisce innerHTML sicuro per il bot: consente solo tag specifici convertendo markdown-like
+  function formatMessageToHTML(text) {
+    if (!text) return '';
+    // Escape iniziale per evitare XSS: sostituisce < e >
+    const esc = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let t = esc(text);
+
+    // Simple markdown-like replacements (titoli, bold, italic, links, lists)
+    t = t.replace(/###\s*(.+)/g, '<h3>$1</h3>');
+    t = t.replace(/##\s*(.+)/g, '<h2>$1</h2>');
+    t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Liste
+    t = t.replace(/(^|\n)-\s+/g, '$1<li>');
+    if (t.indexOf('<li>') !== -1) {
+      t = '<ul>' + t.replace(/(<li>.*?)(?=(<li>|$))/g, function(m){ return m.replace(/<li>/g,'').trim() + '</li>'; }) + '</ul>';
+    }
+    // Doppie newline => paragrafo
+    t = t.replace(/\n{2,}/g, '</p><p>');
+    // wrap se non tags
+    if (!t.match(/<\/?(h2|h3|ul|li|p|strong|em|a)/)) {
+      t = '<p>' + t + '</p>';
+    }
+    // assicurati che non ci siano tag non permessi (già escaped), quindi restituisci
+    return t;
+  }
+
+  // scroll affidabile: prova più volte (utile per Android)
+  function safeScrollToBottom(messagesEl) {
+    if (!messagesEl) return;
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    setTimeout(()=> { messagesEl.scrollTop = messagesEl.scrollHeight; }, 60);
+    setTimeout(()=> { messagesEl.scrollTop = messagesEl.scrollHeight; }, 220);
+  }
+
+  /* ---------------------------
+     CREAZIONE DOM WIDGET (senza innerHTML diretto per elementi sensibili)
+     --------------------------- */
+
+  function createWidget() {
+    const container = document.createElement('div');
+    container.id = 'rag-chat-widget';
+
+    // BUBBLE
+    const bubble = document.createElement('div');
+    bubble.id = 'rag-chat-bubble';
+    bubble.setAttribute('role','button');
+    bubble.setAttribute('aria-label','Apri chat');
+    bubble.tabIndex = 0;
+    bubble.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.5 2 2 6.48 2 12c0 1.54.36 3 .97 4.29L1 23l6.71-1.97C9 21.64 10.46 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2z"/></svg>`;
+    container.appendChild(bubble);
+
+    // CHAT WINDOW
+    const chatWindow = document.createElement('div');
+    chatWindow.id = 'rag-chat-window';
+    chatWindow.setAttribute('role','dialog');
+    chatWindow.setAttribute('aria-hidden','true');
+
     // header
-    const header = el('div', 'rag-chat-header');
-    const avatar = el('div','rag-bot-avatar'); avatar.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-3.3 0-6 1.7-6 3.8V20h12v-2.2c0-2.1-2.7-3.8-6-3.8z"></path></svg>';
-    const hinfo = el('div','rag-header-info');
-    const title = el('div','rag-header-title'); title.appendChild(document.createTextNode(config.title));
-    const sub = el('div','rag-header-sub'); sub.appendChild(document.createTextNode('Online'));
-    hinfo.appendChild(title); hinfo.appendChild(sub);
-    const closeBtn = el('button','rag-close-btn', { 'aria-label':'Chiudi chat', 'type':'button' }); closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"></path></svg>';
+    const header = document.createElement('div');
+    header.className = 'rag-chat-header';
 
-    header.appendChild(avatar); header.appendChild(hinfo); header.appendChild(closeBtn);
+    const avatar = document.createElement('div');
+    avatar.className = 'rag-bot-avatar';
+    avatar.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/></svg>`;
 
-    // messages
-    const messages = el('div','rag-chat-messages'); messages.id = 'rag-chat-messages';
-    messages.setAttribute('role','log'); messages.setAttribute('aria-live','polite');
+    const headerInfo = document.createElement('div');
+    headerInfo.className = 'rag-header-info';
+    const title = document.createElement('div');
+    title.className = 'rag-header-title';
+    title.textContent = CONFIG.title || 'Assistente';
+    const subtitle = document.createElement('div');
+    subtitle.className = 'rag-header-sub';
+    subtitle.textContent = 'Online';
 
-    // input area
-    const inputContainer = el('div','rag-input-container');
-    const inputBox = el('div','rag-input');
-    const textarea = el('textarea','rag-chat-input', { id: 'rag-chat-input', maxlength: String(config.maxMessageLength), placeholder: config.placeholder, 'aria-label':'Messaggio' });
+    headerInfo.appendChild(title);
+    headerInfo.appendChild(subtitle);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'rag-close-btn';
+    closeBtn.setAttribute('aria-label','Chiudi chat');
+    closeBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>`;
+
+    header.appendChild(avatar);
+    header.appendChild(headerInfo);
+    header.appendChild(closeBtn);
+
+    // messages container
+    const messages = document.createElement('div');
+    messages.id = 'rag-chat-messages';
+    messages.className = 'rag-chat-messages';
+    messages.setAttribute('role','log');
+    messages.setAttribute('aria-live','polite');
+
+    // input container
+    const inputContainer = document.createElement('div');
+    inputContainer.className = 'rag-input-container';
+
+    const inputWrapper = document.createElement('div');
+    inputWrapper.className = 'rag-input-wrapper';
+
+    const textarea = document.createElement('textarea');
+    textarea.id = 'rag-chat-input';
+    textarea.className = 'rag-chat-input';
+    textarea.placeholder = CONFIG.placeholder;
     textarea.rows = 1;
-    textarea.setAttribute('inputmode','text');
-    textarea.style.height = 'auto';
-    const sendBtn = el('button','rag-send-btn', { id:'rag-chat-send', 'aria-label':config.sendButtonLabel, 'type':'button' });
+    textarea.maxLength = CONFIG.maxMessageLength;
+    textarea.setAttribute('aria-label','Messaggio');
+
+    const sendBtn = document.createElement('button');
+    sendBtn.id = 'rag-chat-send';
+    sendBtn.className = 'rag-send-btn';
+    sendBtn.setAttribute('aria-label','Invia messaggio');
     sendBtn.disabled = true;
-    sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"></path></svg>';
+    sendBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>`;
 
-    inputBox.appendChild(textarea); inputBox.appendChild(sendBtn);
-    inputContainer.appendChild(inputBox);
+    inputWrapper.appendChild(textarea);
+    inputWrapper.appendChild(sendBtn);
 
-    if (config.showBranding) {
-      const brand = el('div','rag-branding'); brand.appendChild(document.createTextNode('Powered by Vaitony AI'));
-      inputContainer.appendChild(brand);
+    if (CONFIG.enableBranding) {
+      const branding = document.createElement('div');
+      branding.className = 'rag-branding';
+      branding.textContent = 'Powered by Vaitony AI';
+      inputContainer.appendChild(inputWrapper);
+      inputContainer.appendChild(branding);
+    } else {
+      inputContainer.appendChild(inputWrapper);
     }
 
-    // assemble
     chatWindow.appendChild(header);
     chatWindow.appendChild(messages);
     chatWindow.appendChild(inputContainer);
 
-    container.appendChild(bubble);
     container.appendChild(chatWindow);
-
-    // styles customization via CSS variables from config
-    chatWindow.style.setProperty('--rag-primary', config.primaryColor || defaultConfig.primaryColor);
-    return { container, bubble, chatWindow, messages, textarea, sendBtn, closeBtn, inputContainer, notif, title };
+    return container;
   }
 
-  /* --------------------
-     UI helpers: add messages, typing, auto-scroll
-     -------------------- */
-  function createMessageNode(sender, text, time) {
-    const wrapper = el('div', 'rag-message ' + sender);
-    const bubble = el('div', 'rag-text');
-    // format text into fragment
-    const frag = formatToFragment(text);
-    // if fragment empty -> text node
-    if (!frag.childNodes.length) bubble.appendChild(document.createTextNode(String(text)));
-    else bubble.appendChild(frag);
-    wrapper.appendChild(bubble);
-    if (time) {
-      const meta = el('div','rag-meta'); meta.appendChild(document.createTextNode(time)); wrapper.appendChild(meta);
-    }
-    return wrapper;
-  }
+  /* ---------------------------
+     INIZIALIZZAZIONE EVENTI E LOGICA
+     --------------------------- */
 
-  function addUserMessage(messagesEl, text) {
-    const now = new Date();
-    const t = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    const node = createMessageNode('user', text, t);
-    messagesEl.appendChild(node);
-    ensureScrollBottom(messagesEl);
-  }
+  function initWidgetBehaviour(widgetEl) {
+    const bubble = widgetEl.querySelector('#rag-chat-bubble');
+    const chatWindow = widgetEl.querySelector('#rag-chat-window');
+    const closeBtn = widgetEl.querySelector('.rag-close-btn');
+    const messages = widgetEl.querySelector('#rag-chat-messages');
+    const textarea = widgetEl.querySelector('#rag-chat-input');
+    const sendBtn = widgetEl.querySelector('#rag-chat-send');
 
-  function addBotMessage(messagesEl, text, isError) {
-    const now = new Date();
-    const t = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    const node = createMessageNode('bot', text, t);
-    if (isError) node.querySelector('.rag-text').style.border = '1px solid rgba(255,59,48,0.12)';
-    messagesEl.appendChild(node);
-    ensureScrollBottom(messagesEl);
-  }
-
-  function addTyping(messagesEl) {
-    const t = el('div', 'rag-typing');
-    const dots = el('div'); dots.style.display = 'flex'; dots.style.gap = '6px';
-    dots.appendChild(el('div','rag-typing-dot')); dots.appendChild(el('div','rag-typing-dot')); dots.appendChild(el('div','rag-typing-dot'));
-    const think = el('div', null); think.appendChild(document.createTextNode('Sta scrivendo...'));
-    t.appendChild(think); t.appendChild(dots);
-    messagesEl.appendChild(t);
-    ensureScrollBottom(messagesEl);
-    return t;
-  }
-
-  function removeNodeSafe(node) { if (node && node.parentNode) node.parentNode.removeChild(node); }
-
-  function ensureScrollBottom(messagesEl, instant) {
-    if (!messagesEl) return;
-    // prefer smooth in desktop, instant on mobile/Android
-    try {
-      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-      } else {
-        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
-      }
-    } catch (e) {
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-  }
-
-  /* --------------------
-     API call (fetch) with abort + widget id support
-     - body contains question, widget_id (if any), token (if any)
-     -------------------- */
-  async function callApi(question, history = []) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.apiTimeout);
-
-    const body = {
-      question: String(question),
-      history: history.slice(-config.historyLimit),
-      widget_id: WIDGET_ID || undefined,
-      timestamp: Date.now()
-    };
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
-
-    try {
-      const res = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-        credentials: 'include'
-      });
-      clearTimeout(timeout);
-      if (!res.ok) {
-        // try to parse json error
-        let json = null;
-        try { json = await res.json(); } catch (e) {}
-        const err = json && json.error ? json.error : 'HTTP ' + res.status;
-        throw new Error(err);
-      }
-      const json = await res.json();
-      return json;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  /* --------------------
-     Mobile keyboard & visualViewport handling
-     - sets --vh variable (fix mobile 100vh)
-     - when keyboard opens on Android, moves input above the keyboard
-     - when keyboard closes, restores layout
-     -------------------- */
-  function installViewportHandlers(nodes) {
-    const { chatWindow, messages, textarea, inputContainer } = nodes;
-
-    // set CSS variable --vh to handle mobile address bar
-    function setVH() {
-      setVar('--vh', (window.innerHeight * 0.01) + 'px');
-    }
-    setVH();
-    window.addEventListener('resize', setVH);
-    // visualViewport (best)
-    const vv = window.visualViewport;
-    let lastVVHeight = vv ? vv.height : window.innerHeight;
-
-    function adjustForVisualViewport() {
-      const viewportHeight = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-      const fullHeight = window.innerHeight;
-      const keyboardHeight = Math.max(0, fullHeight - viewportHeight);
-      // If keyboard is visible, lift inputContainer above keyboard
-      if (keyboardHeight > 80) {
-        inputContainer.style.position = 'fixed';
-        inputContainer.style.left = '0';
-        inputContainer.style.right = '0';
-        inputContainer.style.bottom = (keyboardHeight + parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rag-safe-bottom')) || 0) + 'px';
-        inputContainer.style.zIndex = 1000001;
-        // shrink messages area
-        const headerRect = chatWindow.querySelector('.rag-chat-header')?.getBoundingClientRect();
-        const headerH = headerRect ? headerRect.height : 60;
-        const newMessagesH = Math.max(120, viewportHeight - headerH - inputContainer.getBoundingClientRect().height - 10);
-        messages.style.height = newMessagesH + 'px';
-        ensureScrollBottom(messages);
-      } else {
-        // restore
-        inputContainer.style.position = '';
-        inputContainer.style.left = '';
-        inputContainer.style.right = '';
-        inputContainer.style.bottom = '';
-        inputContainer.style.zIndex = '';
-        messages.style.height = '';
-        ensureScrollBottom(messages);
-      }
-      lastVVHeight = viewportHeight;
-    }
-
-    if (vv) {
-      vv.addEventListener('resize', adjustForVisualViewport, { passive: true });
-      vv.addEventListener('scroll', adjustForVisualViewport, { passive: true });
-    } else {
-      // fallback: window resize
-      window.addEventListener('resize', adjustForVisualViewport, { passive: true });
-    }
-
-    // when textarea focus, ensure it's visible and scroll to bottom
-    textarea.addEventListener('focus', () => {
-      setTimeout(() => {
-        adjustForVisualViewport();
-        textarea.scrollIntoView({ block:'end', behavior: 'auto' });
-        ensureScrollBottom(messages);
-      }, 50);
-    });
-
-    textarea.addEventListener('blur', () => {
-      setTimeout(adjustForVisualViewport, 120);
-    });
-
-    // touchstart inside messages should not propagate to page (allow scrolling inside)
-    messages.addEventListener('touchstart', (e) => {
-      e.stopPropagation();
-    }, { passive: true });
-
-    // initial adjust
-    setTimeout(adjustForVisualViewport, 10);
-  }
-
-  /* --------------------
-     Auto-resize textarea and enable/disable send
-     -------------------- */
-  function installInputBehavior(nodes, state) {
-    const { textarea, sendBtn, messages } = nodes;
-    function resize() {
-      textarea.style.height = 'auto';
-      const sh = Math.min(textarea.scrollHeight, 140);
-      textarea.style.height = sh + 'px';
-      // keep messages scroll with typing on mobile
-      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-        setTimeout(() => ensureScrollBottom(messages), 40);
-      }
-    }
-    textarea.addEventListener('input', () => {
-      resize();
-      const has = textarea.value.trim().length > 0;
-      sendBtn.disabled = !has;
-    }, { passive: true });
-
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!sendBtn.disabled) {
-          sendBtn.click();
-        }
-      }
-    });
-
-    // paste truncation guard
-    textarea.addEventListener('paste', () => {
-      setTimeout(() => {
-        if (textarea.value.length > config.maxMessageLength) {
-          textarea.value = textarea.value.slice(0, config.maxMessageLength);
-        }
-        sendBtn.disabled = textarea.value.trim().length === 0;
-        resize();
-      }, 10);
-    });
-
-    // initial resize
-    resize();
-  }
-
-  /* --------------------
-     Main insertion & setup
-     -------------------- */
-  function insertWidget() {
-    if (document.getElementById('rag-chat-widget')) return;
-
-    const nodes = createWidgetDOM();
-    document.body.appendChild(nodes.container);
-
-    // attach references
-    const bubble = nodes.bubble;
-    const chatWindow = nodes.chatWindow;
-    const messages = nodes.messages;
-    const textarea = nodes.textarea;
-    const sendBtn = nodes.sendBtn;
-    const closeBtn = nodes.closeBtn;
-    const inputContainer = nodes.inputContainer;
-    const notif = nodes.notif;
-
-    // ensure CSS variable for vh is live
-    function setVHcss() { setVar('--vh', (window.innerHeight * 0.01) + 'px'); }
-    setVHcss();
-
-    // Toggle open/close
-    let open = false;
+    let isOpen = false;
     let messageHistory = [];
 
-    function openChat() {
-      chatWindow.style.display = 'flex';
-      chatWindow.classList.add('open');
-      // mobile fullscreen class handled in CSS @media
-      open = true;
-      textarea.focus();
-      // welcome message on first open
-      if (!messages.children.length) {
-        addBotMessage(messages, config.welcomeMessage || '');
+    // Funzione che mostra/nasconde la finestra chat
+    function toggleChat(show) {
+      isOpen = (typeof show === 'boolean') ? show : !isOpen;
+      chatWindow.style.display = isOpen ? 'flex' : 'none';
+      chatWindow.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+
+      if (isOpen) {
+        // in mobile imposta fullscreen e blocca body scroll
+        if (isMobile()) {
+          document.documentElement.style.overflow = 'hidden';
+          document.body.style.overflow = 'hidden';
+          chatWindow.style.position = 'fixed';
+          chatWindow.style.top = 0;
+          chatWindow.style.left = 0;
+          chatWindow.style.right = 0;
+          chatWindow.style.bottom = 0;
+          chatWindow.style.width = '100vw';
+          chatWindow.style.height = '100vh';
+        }
+        // focus input con un piccolo delay su Android per permettere al keyboard di aprirsi correttamente
+        setTimeout(()=> { textarea.focus(); safeScrollToBottom(messages); }, isAndroid() ? 260 : 80);
+
+        // welcome message (solo la prima apertura se configurato)
+        if (CONFIG.showWelcomeOnce && messages.children.length === 0) {
+          addBotMessage(CONFIG.welcomeMessage || '');
+        } else if (!CONFIG.showWelcomeOnce && messages.children.length === 0) {
+          addBotMessage(CONFIG.welcomeMessage || '');
+        }
+      } else {
+        // restore page scrolling
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
       }
-      // update vh
-      setVHcss();
-      ensureScrollBottom(messages);
-    }
-    function closeChat() {
-      chatWindow.style.display = 'none';
-      chatWindow.classList.remove('open');
-      open = false;
-    }
-    function toggleChat() {
-      if (open) closeChat(); else openChat();
     }
 
-    // events
-    bubble.addEventListener('click', (e) => { e.stopPropagation(); toggleChat(); });
-    bubble.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleChat(); } });
-    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeChat(); });
+    // Aggiunge un messaggio (sender: 'bot'|'user'), testo semplice
+    function appendMessage(sender, text, options = {}) {
+      if (!messages) return;
+      const el = document.createElement('div');
+      el.className = `rag-message ${sender}`;
+      // if bot => format HTML safely
+      if (sender === 'bot') {
+        const html = formatMessageToHTML(text);
+        // INSERISCO contenuto come DOM sicuro: uso template per parsing
+        const tmp = document.createElement('template');
+        tmp.innerHTML = html;
+        el.appendChild(tmp.content);
+      } else {
+        // user text: textContent per sicurezza
+        el.textContent = text;
+      }
 
-    // send message handler
-    async function sendMessageHandler() {
-      const raw = textarea.value || '';
-      const text = raw.trim();
-      if (!text) return;
-      // append user message
-      addUserMessage(messages, text);
-      // store history
-      messageHistory.push({ role: 'user', text, ts: Date.now() });
-      if (messageHistory.length > config.historyLimit) messageHistory.shift();
-      // reset input
+      // timestamp
+      const time = document.createElement('div');
+      time.className = 'rag-message-time';
+      const now = new Date();
+      time.textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      el.appendChild(time);
+
+      messages.appendChild(el);
+      if (CONFIG.enableMessageHistory) {
+        messageHistory.push({sender, text, ts: now.toISOString()});
+        if (messageHistory.length > CONFIG.historyLimit) messageHistory.shift();
+      }
+      safeScrollToBottom(messages);
+    }
+
+    // Aggiunge messaggio bot (wrapper)
+    function addBotMessage(text) {
+      if (CONFIG.enableTypingIndicator) {
+        const typing = showTyping();
+        setTimeout(()=> {
+          hideTyping(typing);
+          appendMessage('bot', text || '');
+        }, CONFIG.typingDelay);
+      } else {
+        appendMessage('bot', text || '');
+      }
+    }
+
+    // Aggiunge messaggio user e invia a server
+    function sendUserMessage(text) {
+      if (!text || !text.trim()) return;
+      appendMessage('user', text);
       textarea.value = '';
       sendBtn.disabled = true;
-      textarea.style.height = 'auto';
-      // typing indicator
-      let typingEl = null;
-      if (config.enableTypingIndicator) typingEl = addTyping(messages);
-
-      // call API (if configured)
-      try {
-        // If API endpoint present, call it; otherwise show simulated response
-        if (API_ENDPOINT) {
-          const payload = await callApi(text, messageHistory);
-          removeNodeSafe(typingEl);
-          const answer = (payload && (payload.answer || payload.text)) ? (payload.answer || payload.text) : (payload.message || 'Risposta non valida dal server.');
-          addBotMessage(messages, String(answer));
-          messageHistory.push({ role: 'bot', text: String(answer), ts: Date.now() });
-        } else {
-          // fallback: simulated reply when no API (useful for local testing)
-          removeNodeSafe(typingEl);
-          addBotMessage(messages, 'Simulazione: widget non configurato con endpoint.');
-        }
-      } catch (err) {
-        removeNodeSafe(typingEl);
-        const m = (err && err.message) ? err.message : 'Errore di rete';
-        addBotMessage(messages, m, true);
-      } finally {
-        ensureScrollBottom(messages);
-        textarea.focus();
+      // invio verso backend (se presente widgetId)
+      if (widgetId) {
+        sendToBackend(text).then(respText => {
+          if (respText) addBotMessage(respText);
+        }).catch(err => {
+          appendMessage('bot', 'Si è verificato un errore nella risposta. Riprova più tardi.');
+        });
+      } else {
+        // fallback: risposta placeholder se non configurato
+        addBotMessage('Ricevuto: "' + text.slice(0,120) + '". (Widget non collegato al backend)');
       }
     }
 
-    sendBtn.addEventListener('click', sendMessageHandler);
-    installInputBehavior({ textarea, sendBtn, messages }, {});
-    installViewportHandlers({ chatWindow, messages, textarea, inputContainer });
+    // Mostra typing indicator e restituisce elemento per rimuoverlo
+    function showTyping() {
+      const el = document.createElement('div');
+      el.className = 'rag-message bot rag-typing';
+      const txt = document.createElement('div');
+      txt.textContent = 'Sta scrivendo...';
+      const dots = document.createElement('div');
+      dots.className = 'rag-typing-dots';
+      for (let i=0;i<3;i++){ const d = document.createElement('div'); d.className='rag-typing-dot'; dots.appendChild(d); }
+      el.appendChild(txt); el.appendChild(dots);
+      messages.appendChild(el);
+      safeScrollToBottom(messages);
+      return el;
+    }
 
-    // public API
-    window.RAGWidget = window.RAGWidget || {};
-    window.RAGWidget.open = () => { openChat(); };
-    window.RAGWidget.close = () => { closeChat(); };
-    window.RAGWidget.toggle = () => { toggleChat(); };
-    window.RAGWidget.sendMessage = (txt) => {
-      if (typeof txt === 'string' && txt.trim()) {
-        nodes.textarea.value = txt.trim();
-        nodes.sendBtn.disabled = false;
-        nodes.sendBtn.click();
-      }
-    };
-    window.RAGWidget.getHistory = () => messageHistory.slice();
-    window.RAGWidget.clearHistory = () => { messageHistory = []; messages.innerHTML = ''; addBotMessage(messages, config.welcomeMessage || ''); };
-    window.RAGWidget.updateConfig = (newConf) => {
+    function hideTyping(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
+
+    // INVIO A BACKEND: POST JSON a /widget/chat/<widgetId>/
+    async function sendToBackend(messageText) {
+      const endpoint = sanitizeCssValue(CONFIG.apiPath) + encodeURIComponent(widgetId) + '/';
+      const url = (window.location.origin || '') + endpoint;
+      const payload = {
+        question: messageText,
+        history: CONFIG.enableMessageHistory ? messageHistory.slice(-10) : []
+      };
+      const controller = new AbortController();
+      const timeout = setTimeout(()=> controller.abort(), 30000);
+
       try {
-        Object.assign(config, newConf || {});
-        if (newConf && newConf.title) nodes.title.textContent = newConf.title;
-      } catch (e) { /* no logging */ }
-    };
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+          credentials: 'include'
+        });
+        clearTimeout(timeout);
+        if (!res.ok) {
+          // non throw dettagli sensibili
+          throw new Error('Network error');
+        }
+        const data = await res.json();
+        // ci aspettiamo campo 'answer' oppure 'text'
+        return (data && (data.answer || data.text || data.message)) || '';
+      } catch (e) {
+        clearTimeout(timeout);
+        throw e;
+      }
+    }
 
-    // auto-open if requested
-    if (config.autoOpen) setTimeout(() => { if (!open) openChat(); }, config.openDelay || 500);
+    /* EVENT LISTENERS */
 
-    // initial welcome message (if not waiting for open)
-    if (!messages.children.length && !config.deferWelcome) addBotMessage(messages, config.welcomeMessage);
+    // open/close
+    bubble.addEventListener('click', (ev)=> { ev.preventDefault(); toggleChat(true); });
+    bubble.addEventListener('keydown', (ev)=> { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleChat(true); } });
 
-  } // insertWidget
+    closeBtn.addEventListener('click', (ev)=> { ev.preventDefault(); toggleChat(false); });
 
-  // start when DOM ready
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', insertWidget);
-  else insertWidget();
+    // textarea autosize + enable send button
+    textarea.addEventListener('input', ()=> {
+      textarea.style.height = 'auto';
+      const h = Math.min(textarea.scrollHeight, 120);
+      textarea.style.height = h + 'px';
+      sendBtn.disabled = textarea.value.trim().length === 0;
+      // during typing on Android keep scroll at bottom
+      if (isAndroid()) safeScrollToBottom(messages);
+    });
+
+    // Enter invia (Shift+Enter -> newline)
+    textarea.addEventListener('keydown', (ev)=> {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        if (!sendBtn.disabled) sendUserMessage(textarea.value.trim());
+      }
+    });
+
+    // Click send
+    sendBtn.addEventListener('click', (ev)=> { ev.preventDefault(); if (!sendBtn.disabled) sendUserMessage(textarea.value.trim()); });
+
+    // TOUCH & SCROLL BEHAVIORS: previene overscroll e migliora bounce su Android
+    messages.addEventListener('touchstart', ()=> { /* passive - reserved for future if needed */ }, {passive:true});
+    messages.addEventListener('touchmove', (ev)=> {
+      // lascia al browser la gestione tranne che per casi estremi
+    }, {passive:true});
+
+    // gestione resize (keyboard open/close)
+    let lastInnerHeight = window.innerHeight;
+    function onResize() {
+      const current = window.innerHeight;
+      // se riduzione significativa => probabile keyboard aperta su mobile
+      if (isMobile() && (lastInnerHeight - current) > (isAndroid() ? CONFIG.androidKeyboardThreshold : 80)) {
+        // fix input sul bottom per Android
+        const inputContainer = widgetEl.querySelector('.rag-input-container');
+        if (inputContainer) {
+          inputContainer.style.position = 'fixed';
+          inputContainer.style.left = 0;
+          inputContainer.style.right = 0;
+          inputContainer.style.bottom = 'env(safe-area-inset-bottom, 0px)';
+          inputContainer.style.zIndex = 1001;
+          // ridimensiona area messaggi
+          messages.style.paddingBottom = (CONFIG.androidKeyboardThreshold + 20) + 'px';
+        }
+        safeScrollToBottom(messages);
+      } else {
+        // ripristino
+        const inputContainer = widgetEl.querySelector('.rag-input-container');
+        if (inputContainer) {
+          inputContainer.style.position = '';
+          inputContainer.style.left = '';
+          inputContainer.style.right = '';
+          inputContainer.style.bottom = '';
+          inputContainer.style.zIndex = '';
+          messages.style.paddingBottom = '';
+        }
+      }
+      lastInnerHeight = current;
+    }
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', ()=> { setTimeout(()=> { safeScrollToBottom(messages); }, 220); });
+
+    // initial scroll on messages container
+    setTimeout(()=> safeScrollToBottom(messages), 120);
+
+    // expose a small API on window for host page if necessario
+    window.RAG_CHAT_WIDGET_API = window.RAG_CHAT_WIDGET_API || {};
+    window.RAG_CHAT_WIDGET_API.open = ()=> toggleChat(true);
+    window.RAG_CHAT_WIDGET_API.close = ()=> toggleChat(false);
+    window.RAG_CHAT_WIDGET_API.addMessage = (sender, text)=> appendMessage(sender, text);
+
+    // return internal references if necessario
+    return {toggleChat, appendMessage, addBotMessage, sendUserMessage};
+  }
+
+  /* ---------------------------
+     MOUNT WIDGET ON DOCUMENT READY
+     --------------------------- */
+  function mount() {
+    // evita multiple mount
+    if (document.getElementById('rag-chat-widget')) return;
+
+    applyRootStyles();
+    const widget = createWidget();
+    document.body.appendChild(widget);
+    const api = initWidgetBehaviour(widget);
+
+    // se è mobile e preferito aprire automaticamente
+    if (isMobile() && (CONFIG.openOnMobile === true || CONFIG.autoOpen)) {
+      api.toggleChat(true);
+    }
+  }
+
+  // Attendi DOMContentLoaded o mount subito se già pronto
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount);
+  } else {
+    mount();
+  }
 
 })();

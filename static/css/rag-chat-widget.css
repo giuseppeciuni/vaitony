@@ -1,376 +1,150 @@
-/* RAG Chat Widget - CSS Stabile v2.1 (Mobile-First) */
+/* rag-chat-widget.css
+   Re-implementazione UI ispirata a Telegram / WhatsApp
+   - bolle chiaramente distinte (utente a destra, bot a sinistra)
+   - input sempre visibile su iOS/Android (visualViewport handling + JS)
+   - fullscreen mobile, safe-area aware
+   - nessun codice di debug
+*/
 
-/* ===============================================
-   VARIABILI CSS
-   =============================================== */
-:root {
-    --rag-primary-color: #1f93ff;
-    --rag-secondary-color: #0066cc;
-    --rag-user-bubble-color: #1f93ff;
-    --rag-bot-bubble-color: #FFFFFF;
-    --rag-header-bg: #1f93ff;
-    --rag-text-color: #303030;
-    --rag-text-light: #FFFFFF;
-    --rag-text-muted: #8696A0;
-    --rag-border-color: #E1E5E9;
-    --rag-error-color: #dc3545;
-    --rag-success-color: #28a745;
-    --rag-shadow-heavy: 0 8px 32px rgba(0,0,0,0.15);
-    --rag-shadow-light: 0 1px 3px rgba(0,0,0,0.1);
-    --rag-border-radius: 12px;
-    --rag-bubble-radius: 18px;
-    --rag-animation-slow: 0.3s ease-out;
-    --rag-chat-width: 380px;
-    --rag-chat-height: 600px;
-    --rag-bubble-size: 60px;
+/* ---------- VARIABILI ---------- */
+:root{
+  --rag-primary: #00A884;            /* verde-telegram/wa */
+  --rag-primary-600: #008d72;
+  --rag-bg: #ffffff;
+  --rag-surface: #f5f7f9;
+  --rag-user-bubble: #DCF8C6;        /* WA-like user bubble */
+  --rag-bot-bubble: #FFFFFF;
+  --rag-text: #0f1720;
+  --rag-muted: #6b7280;
+  --rag-border: rgba(15,23,32,0.06);
+  --rag-radius: 18px;
+  --rag-radius-small: 8px;
+  --rag-shadow: 0 6px 22px rgba(2,6,23,0.12);
+  --rag-header-h: 60px;
+  --rag-input-h: 64px;
+  --rag-width: 370px;
+  --rag-bubble-size: 62px;
+  --rag-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --vh: 1vh; /* JS aggiorna --vh dinamicamente per mobile  */
 }
 
-/* ===============================================
-   RESET E BASE
-   =============================================== */
-#rag-chat-widget,
-#rag-chat-widget * {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-}
+/* ---------- RESET e basici ---------- */
+#rag-chat-widget, #rag-chat-widget * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+#rag-chat-widget { position: fixed; right: 20px; bottom: 20px; z-index: 999999; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 
-/* Permetti selezione testo nei messaggi e input */
-#rag-chat-widget .rag-message,
-#rag-chat-widget #rag-chat-input,
-#rag-chat-widget a {
-    user-select: text;
-    -webkit-user-select: text;
-}
-
-/* Blocca lo scroll della pagina quando la chat è aperta su mobile */
-body.rag-chat-open {
-    overflow: hidden;
-    position: fixed; /* Previene lo scroll su iOS */
-    width: 100%;
-    height: 100%;
-}
-
-/* ===============================================
-   CONTENITORE PRINCIPALE
-   =============================================== */
-#rag-chat-widget {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 99999;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-    font-size: 14px;
-    line-height: 1.4;
-}
-
-/* ===============================================
-   CHAT BUBBLE (FAB)
-   =============================================== */
+/* ---------- FLOATING BUBBLE ---------- */
 #rag-chat-bubble {
-    width: var(--rag-bubble-size);
-    height: var(--rag-bubble-size);
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--rag-primary-color), var(--rag-secondary-color));
-    box-shadow: var(--rag-shadow-heavy);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--rag-text-light);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    border: 3px solid white;
+  width: var(--rag-bubble-size); height: var(--rag-bubble-size);
+  border-radius: 50%;
+  background: linear-gradient(135deg,var(--rag-primary),var(--rag-primary-600));
+  display:flex; align-items:center; justify-content:center;
+  color: white; cursor:pointer; box-shadow: var(--rag-shadow);
+  border: 3px solid white;
+  transition: transform .14s ease, box-shadow .14s ease;
 }
-#rag-chat-bubble:hover {
-    transform: scale(1.05);
-}
-#rag-chat-bubble svg {
-    width: 50%;
-    height: 50%;
-    fill: currentColor;
-}
+#rag-chat-bubble:active { transform: scale(.96); }
+#rag-chat-bubble .rag-notification { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:12px; background:#ff3b30; color:white; font-size:11px; display:none; align-items:center; justify-content:center; }
 
-/* ===============================================
-   FINESTRA CHAT - DESKTOP
-   =============================================== */
+/* ---------- CHAT WINDOW ---------- */
 #rag-chat-window {
-    width: var(--rag-chat-width);
-    height: var(--rag-chat-height);
-    background: white;
-    border-radius: var(--rag-border-radius);
-    box-shadow: var(--rag-shadow-heavy);
-    display: none; /* Inizialmente nascosta */
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid var(--rag-border-color);
-    position: absolute;
-    bottom: calc(var(--rag-bubble-size) + 10px);
-    right: 0;
+  position: absolute; right: 0; bottom: calc(var(--rag-bubble-size) + 12px);
+  width: var(--rag-width); max-width: calc(100vw - 36px);
+  height: calc(var(--vh,1vh) * 100 - 40px);
+  max-height: 90vh;
+  background: var(--rag-bg);
+  border-radius: 14px;
+  box-shadow: var(--rag-shadow);
+  border: 1px solid var(--rag-border);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* ===============================================
-   STRUTTURA INTERNA (HEADER, MESSAGES, INPUT)
-   =============================================== */
+/* ---------- HEADER (look: Telegram/WA) ---------- */
 .rag-chat-header {
-    background: var(--rag-header-bg);
-    color: var(--rag-text-light);
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0; /* Altezza fissa */
-    height: 60px;
+  display:flex; align-items:center; gap:12px;
+  padding: 10px 14px; height: var(--rag-header-h); min-height: var(--rag-header-h);
+  background: linear-gradient(90deg, rgba(0,168,132,0.98), rgba(0,141,114,0.98));
+  color: #fff;
 }
-.rag-header-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.rag-bot-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.rag-bot-avatar svg {
-    width: 24px;
-    height: 24px;
-    color: var(--rag-primary-color);
-    fill: currentColor;
-}
-.rag-header-title {
-    font-size: 16px;
-    font-weight: 600;
-}
-.rag-header-status {
-    font-size: 12px;
-    opacity: 0.8;
-}
-.rag-status-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--rag-success-color);
-    margin-right: 6px;
-}
-.rag-close-btn {
-    background: none;
-    border: none;
-    color: var(--rag-text-light);
-    cursor: pointer;
-    padding: 8px;
-    border-radius: 50%;
-    transition: background 0.2s;
-}
-.rag-close-btn:hover {
-    background: rgba(255,255,255,0.1);
-}
-.rag-close-btn svg {
-    width: 24px;
-    height: 24px;
-    fill: currentColor;
-}
+.rag-bot-avatar { width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.rag-header-info { min-width:0; overflow:hidden; display:flex; flex-direction:column; }
+.rag-header-title { font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rag-header-sub { font-size:12px; opacity:.9; color:rgba(255,255,255,0.9); }
 
+/* close button */
+.rag-close-btn { margin-left: auto; background:none; border:0; color:inherit; cursor:pointer; padding:8px; display:flex; align-items:center; justify-content:center; border-radius:10px; }
+.rag-close-btn:focus { outline:2px solid rgba(255,255,255,0.18); outline-offset:2px; }
+
+/* ---------- MESSAGES AREA ---------- */
 .rag-chat-messages {
-    flex-grow: 1; /* Occupa tutto lo spazio rimanente */
-    overflow-y: auto;
-    background: #f4f5f8;
-    padding: 16px;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch; /* Scrolling fluido su iOS */
+  padding: 12px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  background: linear-gradient(180deg, var(--rag-surface) 0%, #f1f4f7 100%);
+  flex:1; display:flex; flex-direction:column; gap:10px;
+  scroll-behavior: smooth;
 }
 
+/* message items */
+.rag-message { max-width:85%; word-wrap:break-word; overflow-wrap:break-word; display:inline-flex; flex-direction:column; gap:6px; }
+.rag-message .rag-text { font-size:14px; line-height:1.46; color:var(--rag-text); padding:10px 12px; border-radius:12px; box-shadow: 0 1px 2px rgba(2,6,23,0.04); }
+.rag-message.bot { align-self:flex-start; text-align:left; }
+.rag-message.user { align-self:flex-end; text-align:right; }
+
+/* bubble styling */
+.rag-message.bot .rag-text { background: var(--rag-bot-bubble); border-radius: 14px 14px 14px 6px; border:1px solid rgba(15,23,32,0.04); }
+.rag-message.user .rag-text { background: var(--rag-user-bubble); border-radius: 14px 14px 6px 14px; border:1px solid rgba(0,0,0,0.03); color:var(--rag-text); }
+
+/* timestamp */
+.rag-meta { font-size:11px; color:var(--rag-muted); opacity:0.9; }
+
+/* clickable links & sources */
+.rag-message .rag-link { color:var(--rag-primary); text-decoration:none; font-weight:600; }
+
+/* typing indicator */
+.rag-typing { display:flex; gap:6px; align-items:center; padding:8px 12px; border-radius:14px; background:var(--rag-bot-bubble); border:1px solid rgba(15,23,32,0.04); }
+.rag-typing-dot { width:6px;height:6px;background:var(--rag-muted); border-radius:50%; animation: rag-bounce 1.2s infinite; }
+.rag-typing-dot:nth-child(2){ animation-delay:.12s } .rag-typing-dot:nth-child(3){ animation-delay:.24s }
+@keyframes rag-bounce{ 0%,80%,100%{ transform:scale(.7); opacity:.6 } 40%{ transform:scale(1.2); opacity:1 } }
+
+/* ---------- INPUT AREA ---------- */
 .rag-input-container {
-    background: white;
-    border-top: 1px solid var(--rag-border-color);
-    flex-shrink: 0; /* Altezza fissa */
-    padding: 8px 12px;
+  border-top:1px solid var(--rag-border);
+  padding: 10px; display:flex; gap:10px; align-items:flex-end; background:var(--rag-bg);
+  /* We keep the input container flexible; JS may change to position:fixed on mobile keyboard */
 }
-.rag-input-wrapper {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
+.rag-input {
+  flex:1; display:flex; gap:8px; align-items:center;
+  background: #fff; border-radius: 20px; padding:8px 12px; border:1px solid rgba(0,0,0,0.04);
 }
 .rag-chat-input {
-    flex-grow: 1;
-    border: 1px solid var(--rag-border-color);
-    border-radius: 20px;
-    padding: 10px 16px;
-    font-size: 15px;
-    resize: none;
-    max-height: 120px;
-    line-height: 1.4;
-    outline: none;
-    transition: border-color 0.2s;
+  flex:1; resize:none; border:0; padding:8px 6px; font-size:15px; line-height:1.3; background:transparent; color:var(--rag-text);
+  max-height:140px; min-height:36px; overflow:auto;
 }
-.rag-chat-input:focus {
-    border-color: var(--rag-primary-color);
-}
+.rag-chat-input:focus{ outline:none; }
 .rag-send-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: none;
-    background: var(--rag-primary-color);
-    color: var(--rag-text-light);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s;
+  background: var(--rag-primary); color:white; border:0; padding:10px 12px; border-radius:12px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+  min-width:44px; min-height:44px;
 }
-.rag-send-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-}
-.rag-send-btn svg {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
-}
-.rag-branding {
-    text-align: center;
-    font-size: 11px;
-    color: var(--rag-text-muted);
-    padding-top: 8px;
-}
+.rag-send-btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
 
-/* ===============================================
-   MESSAGGI
-   =============================================== */
-.rag-message {
-    max-width: 85%;
-    margin-bottom: 12px;
-    padding: 10px 14px;
-    border-radius: var(--rag-bubble-radius);
-    line-height: 1.5;
-    word-wrap: break-word;
-    display: flex;
-    flex-direction: column;
-}
-.rag-message.user {
-    background: var(--rag-user-bubble-color);
-    color: var(--rag-text-light);
-    align-self: flex-end;
-    margin-left: auto;
-    border-bottom-right-radius: 4px;
-}
-.rag-message.bot {
-    background: var(--rag-bot-bubble-color);
-    color: var(--rag-text-color);
-    align-self: flex-start;
-    margin-right: auto;
-    border-bottom-left-radius: 4px;
-    box-shadow: var(--rag-shadow-light);
-}
-.rag-message-time {
-    font-size: 11px;
-    margin-top: 8px;
-    align-self: flex-end;
-    opacity: 0.7;
-}
-.rag-message.bot .rag-message-time {
-    color: var(--rag-text-muted);
-}
-.rag-message.user .rag-message-time {
-    color: var(--rag-text-light);
-}
+/* branding small */
+.rag-branding { font-size:11px; color:var(--rag-muted); text-align:center; padding:6px 0 0 0; }
 
-/* Contenuto formattato nei messaggi del bot */
-.rag-message.bot p { margin: 0 0 8px; }
-.rag-message.bot p:last-child { margin-bottom: 0; }
-.rag-message.bot h2, .rag-message.bot h3 {
-    margin: 16px 0 8px;
-    font-weight: 600;
-    color: var(--rag-primary-color);
-}
-.rag-message.bot ul {
-    padding-left: 20px;
-    margin: 8px 0;
-}
-.rag-message.bot strong {
-    font-weight: 600;
-    color: var(--rag-primary-color);
-}
-.rag-message.bot a {
-    color: var(--rag-primary-color);
-    text-decoration: underline;
-    font-weight: 500;
-}
-.rag-message.bot .rag-sources {
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--rag-border-color);
-}
-.rag-message.bot .rag-sources-title {
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-.rag-message.rag-error {
-    background-color: #fde8e8;
-    color: var(--rag-error-color);
-    border: 1px solid var(--rag-error-color);
-}
-.rag-typing {
-    gap: 8px;
-}
-.rag-typing-dots {
-    display: flex;
-    gap: 3px;
-}
-.rag-typing-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--rag-text-muted);
-    animation: rag-typing-bounce 1.4s infinite ease-in-out;
-}
-.rag-typing-dot:nth-child(1) { animation-delay: -0.32s; }
-.rag-typing-dot:nth-child(2) { animation-delay: -0.16s; }
-@keyframes rag-typing-bounce {
-    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-    40% { transform: scale(1.2); opacity: 1; }
-}
-
-/* ===============================================
-   RESPONSIVE - MOBILE (max-width: 768px)
-   =============================================== */
+/* ---------- MOBILE: fullscreen behavior ---------- */
 @media (max-width: 768px) {
-    /* Il widget principale non è più visibile, solo la finestra aperta */
-    #rag-chat-widget {
-        bottom: 0;
-        right: 0;
-        left: 0;
-        top: 0;
-    }
+  #rag-chat-widget { left:0; right:0; bottom:0; top:0; display:block; pointer-events:auto; }
+  #rag-chat-bubble { position: fixed; right: 18px; bottom: 18px; z-index: 1000000; }
+  #rag-chat-window { position: fixed; right:0; left:0; bottom:0; top:0; width:100vw; height:calc(var(--vh,1vh) * 100); border-radius:0; max-width:none; max-height:none; }
+  .rag-chat-header { height: calc(var(--rag-header-h) + var(--rag-safe-top)); padding-top: var(--rag-safe-top); }
+  .rag-input-container { padding: 12px; padding-bottom: calc(12px + var(--rag-safe-bottom)); }
+  .rag-chat-messages { padding-left: 14px; padding-right: 14px; padding-bottom: 6px; }
+}
 
-    /* La bolla scompare quando la chat è aperta */
-    body.rag-chat-open #rag-chat-bubble {
-        display: none;
-    }
+/* ---------- ACCESSIBILITY ---------- */
+.rag-sr-only { position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+:focus { outline-offset: 2px; }
 
-    /* La finestra della chat occupa tutto lo schermo */
-    #rag-chat-window {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100vh; /* Altezza viewport stabile */
-        height: 100dvh; /* Altezza viewport dinamica (prioritaria) */
-        max-width: 100%;
-        max-height: 100%;
-        border-radius: 0;
-        border: none;
-        bottom: auto;
-        right: auto;
-        z-index: 1000;
-    }
-
-    /* L'input per i messaggi DEVE avere una dimensione del font di almeno 16px per evitare lo zoom automatico su iOS */
-    .rag-chat-input {
-        font-size: 16px;
-    }
+/* ---------- SMALL LAYOUT TWEAKS ---------- */
+@media (min-width: 1000px) {
+  #rag-chat-window { width: var(--rag-width); }
 }
